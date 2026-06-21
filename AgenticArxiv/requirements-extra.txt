@@ -1,0 +1,6 @@
+# ===== 可选依赖（仅 eval/demo 时需要） =====
+pdf2zh  # PDF 翻译（训练时用 mock）
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+pymysql
