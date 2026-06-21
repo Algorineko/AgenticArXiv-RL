@@ -23,7 +23,7 @@
 
 - Python 3.9+
 - LLM API（支持 OpenAI API 格式，如 Claude、Gemini、Qwen 等）
-- 必须使用 `.venv` 虚拟环境（不可用 conda）
+- 使用 `.venv` 虚拟环境
 
 ### 1️⃣ 克隆项目
 

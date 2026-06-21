@@ -32,3 +32,6 @@ data/mock_arxiv_snapshot.json
 # 原 Web 应用产物（已归档）
 output/
 *.db
+
+# cc
+.claude/
