@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# RL 训练产物
+traces/
+outputs/
+data/sft/*.jsonl
+data/dpo/*.jsonl
+data/mock_arxiv_snapshot.json
+
+# 环境配置
+.env
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# 原 Web 应用产物（已归档）
+output/
+*.db

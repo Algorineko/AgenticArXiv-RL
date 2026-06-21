@@ -1,0 +1,22 @@
+# Web框架
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# HTTP客户端
+requests>=2.31.0
+httpx>=0.25.0
+
+# 数据验证
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# 日志
+loguru>=0.7.2
+
+# 工具类
+tenacity>=8.2.0
+python-dotenv>=1.0.0
+
+# CORS
+fastapi-cors==0.0.6

@@ -1,0 +1,108 @@
+:root{
+  --bg: #0b0b10;
+  --bg2: rgba(255,255,255,0.03);
+  --fg: #eaeaf2;
+  --muted: rgba(234,234,242,0.65);
+  --border: rgba(255,255,255,0.10);
+  --sidebar-bg: rgba(8,8,12,0.95);
+  --modal-bg: rgba(12,12,16,0.96);
+  --card-bg: rgba(255,255,255,0.02);
+  --hover-bg: rgba(255,255,255,0.06);
+  --accent: #59f;
+  --scrollbar-thumb: rgba(255,255,255,0.18);
+  --scrollbar-thumb-hover: rgba(255,255,255,0.26);
+}
+
+:root[data-theme="light"]{
+  --bg: #f5f5f8;
+  --bg2: rgba(0,0,0,0.04);
+  --fg: #1a1a2e;
+  --muted: rgba(26,26,46,0.55);
+  --border: rgba(0,0,0,0.10);
+  --sidebar-bg: rgba(235,235,240,0.95);
+  --modal-bg: rgba(245,245,248,0.96);
+  --card-bg: rgba(0,0,0,0.02);
+  --hover-bg: rgba(0,0,0,0.06);
+  --accent: #3b7ddd;
+  --scrollbar-thumb: rgba(0,0,0,0.18);
+  --scrollbar-thumb-hover: rgba(0,0,0,0.26);
+}
+
+*{ box-sizing: border-box; }
+html, body { margin:0; padding:0; background: var(--bg); min-height: 100vh; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+a{ color:#7db2ff; text-decoration: none; }
+a:hover{ text-decoration: underline; }
+code { padding: 2px 6px; border:1px solid var(--border); border-radius: 8px; background: var(--bg2); }
+
+.card{
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255,255,255,0.02);
+  min-height: 0;
+}
+.card-header{ margin-bottom: 10px; }
+
+.btn{
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--fg);
+  cursor: pointer;
+}
+.btn:hover{ background: var(--hover-bg); }
+.btn:disabled{ opacity: 0.55; cursor: not-allowed; }
+.btn.primary{ border-color: rgba(89,153,255,0.35); background: rgba(89,153,255,0.12); }
+.btn.ghost{ background: transparent; }
+
+.btn.danger{
+  border-color: rgba(255,107,107,0.40);
+  background: rgba(255,107,107,0.10);
+}
+.btn.danger:hover{
+  background: rgba(255,107,107,0.16);
+}
+
+/* icon 按钮：方形、只放图标 */
+.btn.icon {
+  width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.btn.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn.icon.small {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+
+/* 暗色细滚动条，观感更统一 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}

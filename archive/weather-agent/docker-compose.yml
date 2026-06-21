@@ -1,0 +1,25 @@
+services:
+  weather-agent:
+    build: .
+    container_name: weather-agent-demo
+    working_dir: /app
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./main.py:/app/main.py
+    ports:
+      - "8080:8080"
+    environment:
+      - LLM_API_URL=http://10.26.69.92:8000/v1/chat/completions
+      - LLM_MODEL=qwen2.5-7b-instruct
+      - WEATHER_API_KEY=${WEATHER_API_KEY:-demo_key}
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    networks:
+      - agent-network
+
+networks:
+  agent-network:
+    driver: bridge
+    
