@@ -260,6 +260,8 @@ sudo systemctl start agentic-arxiv-api
 
 ❌ **错误**：Agent 重复搜索论文 → 会话上下文注入工作正常，LLM 有时会忽略
 
+❌ **错误**：启动时表未创建 → 确认 MySQL 已启动且 `.env` 中 `MYSQL_URI` 正确，然后重新启动（`init_db()` 会自动建表；若仍失败可重建空库 `agentic_arxiv` 后重启）
+
 ## 文档位置
 
 - 📄 主 README：`README.md`（整体架构、快速开始、部署）
@@ -281,3 +283,4 @@ sudo systemctl start agentic-arxiv-api
 | 工具注册 | `tools/tool_registry.py` | - |
 | 日志记录 | `services/log_service.py` | - |
 | SSE 推送 | `services/event_bus.py` | - |
+
