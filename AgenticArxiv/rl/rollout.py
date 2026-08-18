@@ -20,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from benchmark.tasks import get_task_by_id, get_all_tasks
 from agents.agent_engine import ReActAgent
-from agents.side_effects import NoOpSideEffectManager
 from utils.llm_client import get_env_llm_client
 from rl.reward import RewardCalculator
 from rl.trajectory import create_trajectory, save_trajectory
@@ -48,7 +47,7 @@ def rollout_single_task(
 
     # 2. 创建 Agent（使用 NoOpSideEffectManager）
     llm_client = get_env_llm_client()
-    agent = ReActAgent(llm_client, side_effect_mgr=NoOpSideEffectManager())
+    agent = ReActAgent(llm_client)
 
     # 3. 执行 Agent
     print(f"🤖 执行 Agent...")

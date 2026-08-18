@@ -13,5 +13,13 @@ loguru
 pydantic>=2.0
 fire
 
+# ===== 当前 RL 路径实际仍需要的依赖 =====
+# agents/base_agent.py 顶层 import 了 models.store（SQLAlchemy）与
+# services.runtime（FastAPI 的 jsonable_encoder），因此 rl.rollout 也会拉进这三个包。
+# 注：解除这层耦合后即可移除，见 README 的"依赖说明"。
+sqlalchemy>=2.0
+pymysql
+fastapi
+
 # ===== 可选依赖（eval/demo 时需要，训练时不需要） =====
 # pdf2zh  # PDF 翻译（训练时用 mock）
