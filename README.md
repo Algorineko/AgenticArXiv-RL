@@ -63,8 +63,7 @@ EOF
 ### 3️⃣ 测试 Rollout
 
 ```bash
-cd AgenticArxiv
-python -m rl.rollout search_01 ../traces/train/
+python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ```
 
 **期望输出**：
@@ -123,7 +122,7 @@ python -m rl.rollout search_01 ../traces/train/
    ```
 2. 训练：
    ```bash
-   python -m rl.train_sft
+   python -m AgenticArxiv.rl.train_sft
    ```
 3. 产出：`./outputs/sft/final` 模型
 
@@ -151,7 +150,7 @@ python -m rl.rollout search_01 ../traces/train/
    ```
 2. 训练：
    ```bash
-   python -m rl.train_dpo
+   python -m AgenticArxiv.rl.train_dpo
    ```
 3. 产出：`./outputs/dpo/final` 模型
 
@@ -172,7 +171,7 @@ python -m rl.rollout search_01 ../traces/train/
 
 **步骤**：
 ```bash
-python -m rl.train_grpo
+python -m AgenticArxiv.rl.train_grpo
 ```
 
 **产出**：`./outputs/grpo/final` 模型
@@ -249,13 +248,11 @@ AgenticArXiv-RL/
 ### 1. Rollout（收集 trajectory）
 
 ```bash
-cd AgenticArxiv
-
 # 单个任务
-python -m rl.rollout search_01 ../traces/train/
+python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 # 批量 rollout
-python -m rl.rollout --all ../traces/train/
+python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/
 ```
 
 ### 2. 训练流程（SFT → DPO → GRPO）
@@ -265,16 +262,16 @@ python -m rl.rollout --all ../traces/train/
 python scripts/generate_sft_data.py
 
 # Step 2: SFT 训练
-python -m rl.train_sft
+python -m AgenticArxiv.rl.train_sft
 
 # Step 3: 生成 DPO 数据（需要 SFT 模型）
 python scripts/generate_dpo_data.py
 
 # Step 4: DPO 训练
-python -m rl.train_dpo
+python -m AgenticArxiv.rl.train_dpo
 
 # Step 5: GRPO 训练
-python -m rl.train_grpo
+python -m AgenticArxiv.rl.train_grpo
 ```
 
 ### 3. Reward 计算测试

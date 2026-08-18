@@ -6,14 +6,17 @@ SFT（Supervised Fine-Tuning）：
 - 输出：SFT 模型（作为 DPO/GRPO 的起点）
 
 使用方式：
-    python -m rl.train_sft
+    python -m AgenticArxiv.rl.train_sft
 """
 
 import sys
 from pathlib import Path
 
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PACKAGE_ROOT.parent
+
 # 添加 AgenticArxiv 到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(PACKAGE_ROOT))
 
 from trl import SFTConfig, SFTTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -25,8 +28,8 @@ def main():
 
     # 1. 配置
     model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # 基座模型
-    train_data_path = "data/sft/sft_train.jsonl"
-    output_dir = "./outputs/sft"
+    train_data_path = REPO_ROOT / "data" / "sft" / "sft_train.jsonl"
+    output_dir = REPO_ROOT / "outputs" / "sft"
 
     print(f"📦 加载模型: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -39,12 +42,12 @@ def main():
         print(f"请先运行: python scripts/generate_sft_data.py")
         return
 
-    train_dataset = load_dataset("json", data_files=train_data_path, split="train")
+    train_dataset = load_dataset("json", data_files=str(train_data_path), split="train")
     print(f"   样本数: {len(train_dataset)}")
 
     # 3. 配置 SFT
     config = SFTConfig(
-        output_dir=output_dir,
+        output_dir=str(output_dir),
         num_train_epochs=3,
         per_device_train_batch_size=4,
         gradient_accumulation_steps=4,
@@ -67,8 +70,8 @@ def main():
     trainer.train()
 
     # 5. 保存
-    final_output_dir = f"{output_dir}/final"
-    trainer.save_model(final_output_dir)
+    final_output_dir = output_dir / "final"
+    trainer.save_model(str(final_output_dir))
     print(f"✅ SFT 训练完成，模型已保存: {final_output_dir}")
 
 
