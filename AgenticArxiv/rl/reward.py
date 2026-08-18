@@ -176,7 +176,7 @@ class RewardCalculator:
     @staticmethod
     def _argument_score(
         history: Sequence[Dict[str, Any]],
-        expected_args: Optional[Sequence[Mapping[str, Any]]],
+        expected_args: Optional[Sequence[Optional[Mapping[str, Any]]]],
     ) -> Optional[float]:
         if expected_args is None:
             return None
@@ -187,6 +187,8 @@ class RewardCalculator:
                 actual.append(action.get("parameters", action.get("args", {})))
         scores = []
         for index, expected in enumerate(expected_args):
+            if expected is None:
+                continue
             predicted = actual[index] if index < len(actual) else {}
             keys = set(expected)
             if not keys:
