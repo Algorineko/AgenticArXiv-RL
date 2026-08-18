@@ -141,14 +141,10 @@ def _extract_tool_sequence(history: List[Dict]) -> List[str]:
 
 
 def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
-    """检查实际工具调用是否包含所有预期工具（顺序匹配）"""
+    """检查实际工具调用是否与预期序列完全一致（严格顺序、无多余/重复调用）"""
     if not expected:
         return True
-    ei = 0
-    for tool in actual:
-        if ei < len(expected) and tool == expected[ei]:
-            ei += 1
-    return ei == len(expected)
+    return actual == expected
 
 
 def _count_parse_failures(history: List[Dict]) -> int:
