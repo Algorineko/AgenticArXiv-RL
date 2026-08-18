@@ -2,13 +2,22 @@
 
 DPO 数据格式：
 - 每条数据包含 (prompt, chosen, rejected)
-- chosen: reward 最高的 action
-- rejected: reward 最低的 action
+- chosen: reward 最高那条轨迹的首个工具调用
+- rejected: reward 最低那条轨迹的首个工具调用
 
 策略：
 1. 用 SFT 模型对每个 task rollout 多次（如 5 次）
-2. 按 reward 排序，reward 最高的作为 chosen，最低的作为 rejected
-3. 构造 DPO 格式
+2. 按 reward 排序，取最高与最低两条轨迹
+3. 从各自轨迹中取**首个工具调用**作为 chosen / rejected
+
+为什么取首个工具调用，而不是最后一步：
+    正常结束的轨迹，最后一步 action 恒为字符串 "FINISH"
+    （见 agents/base_agent.py 的执行循环），因此若取 history[-1]，
+    chosen 与 rejected 会同时等于 "FINISH"、被判为无效而全部跳过，
+    实际产出 0 条样本。
+
+    首个工具调用则是可比的：此时两条轨迹的历史都为空，
+    面对的是同一个状态，差异只来自策略选择的动作本身。
 
 运行方式：
     python scripts/generate_dpo_data.py
@@ -30,6 +39,45 @@ from agents.agent_engine import ReActAgent
 from agents.side_effects import LocalSideEffectManager
 from utils.llm_client import get_env_llm_client
 from rl.reward import RewardCalculator
+
+
+# 终止标记，不是真实的工具调用
+TERMINAL_ACTIONS = ("FINISH", "FORCE_STOP", "ERROR")
+
+
+def first_tool_action(result: dict) -> str:
+    """取轨迹中第一个真实的工具调用 action（JSON 字符串）。
+
+    没有任何工具调用时返回空字符串（例如模型直接 FINISH）。
+    """
+    for step in (result or {}).get("history", []) or []:
+        action = step.get("action", "")
+        if action and action not in TERMINAL_ACTIONS:
+            return action
+    return ""
+
+
+def build_preference_pair(rollouts: list, task_def: dict):
+    """从同一任务的多条 rollout 构造一条偏好样本，无法构造时返回 None。"""
+    if len(rollouts) < 2:
+        return None
+
+    ordered = sorted(rollouts, key=lambda x: x["reward"], reverse=True)
+    best, worst = ordered[0], ordered[-1]
+
+    chosen = first_tool_action(best["result"])
+    rejected = first_tool_action(worst["result"])
+
+    if not chosen or not rejected or chosen == rejected:
+        return None
+    if best["reward"] <= worst["reward"]:
+        return None      # 奖励无差异，没有偏好信息
+
+    return {
+        "prompt": task_def["task"],
+        "chosen": chosen,
+        "rejected": rejected,
+    }
 
 
 def generate_dpo_dataset(num_rollouts_per_task: int = 5):
@@ -83,28 +131,15 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
             print(f"   ⚠️  rollout 数量不足，跳过")
             continue
 
-        # 排序
-        rollouts.sort(key=lambda x: x["reward"], reverse=True)
-
-        # 取最优和最差
-        best = rollouts[0]
-        worst = rollouts[-1]
-
-        # 提取最后一步的 action（或第一步，取决于策略）
-        best_action = best["result"]["history"][-1].get("action", "") if best["result"]["history"] else ""
-        worst_action = worst["result"]["history"][-1].get("action", "") if worst["result"]["history"] else ""
-
-        if not best_action or not worst_action or best_action == worst_action:
-            print(f"   ⚠️  chosen/rejected 无效，跳过")
+        pair = build_preference_pair(rollouts, task_def)
+        if pair is None:
+            print(f"   ⚠️  chosen/rejected 无效（无工具调用、动作相同或奖励无差异），跳过")
             continue
 
-        dpo_data.append({
-            "prompt": task_def["task"],
-            "chosen": best_action,
-            "rejected": worst_action,
-        })
+        dpo_data.append(pair)
+        rewards = [r["reward"] for r in rollouts]
 
-        print(f"   ✅ chosen_reward={best['reward']:.2f}, rejected_reward={worst['reward']:.2f}")
+        print(f"   ✅ chosen_reward={max(rewards):.2f}, rejected_reward={min(rewards):.2f}")
 
     # 保存到 JSONL
     output_path = Path("data/dpo/dpo_train.jsonl")
