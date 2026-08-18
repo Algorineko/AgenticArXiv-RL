@@ -20,6 +20,11 @@ Every active component is bounded to `[-1, 1]`:
 | `r_process` | 1 | Dense valid-step credit minus parse, execution, and unnecessary-call penalties. |
 | `r_outcome` | 3 | `1` for correct completion, `0.25` for completion with a wrong tool path, `-0.5` for forced stop, and `-1` for error. |
 
+Benchmark tasks provide `expected_tools` for tool selection verification and,
+where arguments are statically knowable, `expected_tool_args` for exact
+argument verification. A `None` entry skips a dynamic tool step whose arguments
+depend on an earlier result.
+
 The curriculum follows LLM-TIR's coarse-to-fine idea. Before step 30, tool,
 argument, and outcome weights are multiplied by `1/3`; format and process
 weights remain unchanged. From step 30 onward all weights are active. This

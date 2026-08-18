@@ -10,6 +10,9 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
         "id": "search_01",
         "task": "检索最近7天内人工智能(cs.AI)方向的论文，最多5篇",
         "expected_tools": ["get_recently_submitted_cs_papers"],
+        "expected_tool_args": [
+            {"aspect": "AI", "days": 7, "max_results": 5}
+        ],
         "expected_termination": "FINISH",
         "category": "search",
     },
@@ -17,6 +20,9 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
         "id": "search_02",
         "task": "获取最近3天机器学习(cs.LG)方向的最新论文，最多10篇",
         "expected_tools": ["get_recently_submitted_cs_papers"],
+        "expected_tool_args": [
+            {"aspect": "LG", "days": 3, "max_results": 10}
+        ],
         "expected_termination": "FINISH",
         "category": "search",
     },
@@ -24,6 +30,9 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
         "id": "search_03",
         "task": "搜索最近7天自然语言处理(cs.CL)方向的论文，最多5篇",
         "expected_tools": ["get_recently_submitted_cs_papers"],
+        "expected_tool_args": [
+            {"aspect": "CL", "days": 7, "max_results": 5}
+        ],
         "expected_termination": "FINISH",
         "category": "search",
     },
@@ -63,6 +72,10 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
         "id": "composite_01",
         "task": "搜索最近7天计算机视觉(cs.CV)的论文(最多3篇)，然后下载第1篇",
         "expected_tools": ["get_recently_submitted_cs_papers", "download_arxiv_pdf"],
+        "expected_tool_args": [
+            {"aspect": "CV", "days": 7, "max_results": 3},
+            None,
+        ],
         "expected_termination": "FINISH",
         "category": "composite",
     },
