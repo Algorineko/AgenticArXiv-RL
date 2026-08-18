@@ -1,7 +1,9 @@
 # ===== RL 训练核心依赖 =====
 torch>=2.0.0
-transformers>=4.35.0
-trl>=0.8.0
+transformers>=4.45.0
+# 训练脚本使用 TRL 现行 API（SFTConfig.max_length、Trainer(processing_class=...)），
+# 这些在 trl<0.20 上不存在。下限按实际验证过的版本给出（已在 trl 0.29.1 上验证）。
+trl>=0.20.0
 datasets>=2.14.0
 accelerate>=0.25.0
 
