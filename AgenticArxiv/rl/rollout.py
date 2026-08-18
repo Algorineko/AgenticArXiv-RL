@@ -56,9 +56,10 @@ def rollout_single_task(
 
     # 4. 计算 reward
     reward_calc = RewardCalculator()
-    reward, metrics = reward_calc.compute_reward(
+    reward_breakdown, metrics = reward_calc.compute_reward_breakdown(
         task_def, result, agent_type="regex", trial=0, session_id=session_id
     )
+    reward = reward_breakdown.total
 
     print(f"✅ 任务完成")
     print(f"   Reward: {reward:.2f}")
@@ -85,6 +86,7 @@ def rollout_single_task(
         },
         model=llm_client.model if hasattr(llm_client, "model") else "",
         termination_type=metrics.termination_type,
+        reward_components=reward_breakdown.to_dict(),
     )
 
     # 6. 保存 trajectory
