@@ -17,8 +17,8 @@ from utils.logger import log
 class ReActAgent(BaseAgent):
     """方案 A: ReAct + 正则解析 Agent"""
 
-    def __init__(self, llm_client: LLMClient):
-        super().__init__(llm_client)
+    def __init__(self, llm_client: LLMClient, side_effect_mgr=None, max_iterations: int = 5):
+        super().__init__(llm_client, side_effect_mgr=side_effect_mgr, max_iterations=max_iterations)
         try:
             import tools.arxiv_tool  # noqa: F401
             import tools.pdf_download_tool  # noqa: F401
