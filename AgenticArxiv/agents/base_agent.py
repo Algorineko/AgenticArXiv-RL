@@ -22,6 +22,7 @@ class BaseAgent(ABC):
         self,
         llm_client: LLMClient,
         side_effect_mgr: Optional[SideEffectManager] = None,
+        env: Optional[Any] = None,
         max_iterations: int = 5,
     ):
         """
@@ -29,10 +30,13 @@ class BaseAgent(ABC):
             llm_client: LLM 调用客户端
             side_effect_mgr: 副作用管理器；默认 LocalSideEffectManager（无 DB/SSE）。
                 Web 应用请显式传入 MySQLSideEffectManager 以保持原行为。
+            env: 可选的工具执行环境（需实现 execute_tool(name, args)）。
+                传入 MockArxivEnv 即可让 rollout 走快照回放而非真实 API。
             max_iterations: ReAct 最大迭代轮数
         """
         self.llm_client = llm_client
         self.side_effects = side_effect_mgr or LocalSideEffectManager()
+        self.env = env
         self.max_iterations = max_iterations
         self.session_id = "default"
 
@@ -230,6 +234,14 @@ class BaseAgent(ABC):
             pass
         return task
 
+    # ---------- 工具执行（可被 env 接管） ----------
+
+    def _dispatch_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
+        """统一的工具执行入口：注入了 env 就走 env（快照回放），否则走子类实现。"""
+        if self.env is not None:
+            return self.env.execute_tool(tool_name, args)
+        return self.invoke_tool(tool_name, args)
+
     # ---------- 通用副作用逻辑 ----------
 
     def _execute_with_side_effects(self, action_dict: Dict[str, Any]) -> str:
@@ -273,8 +285,8 @@ class BaseAgent(ABC):
                     f"任务完成后刷新 /translate/assets 或 /pdf/assets。"
                 )
 
-            # 调用子类实现的工具执行
-            result = self.invoke_tool(tool_name, args)
+            # 调用工具（注入了 env 则优先走 env）
+            result = self._dispatch_tool(tool_name, args)
 
             # paper_id 写入 last_active
             try:
