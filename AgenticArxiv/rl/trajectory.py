@@ -7,7 +7,7 @@
 """
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
@@ -39,6 +39,7 @@ class Trajectory:
     timestamp: str
     model: str = ""
     termination_type: str = ""  # "FINISH" | "FORCE_STOP" | "ERROR"
+    reward_components: Dict[str, Any] = field(default_factory=dict)
 
 
 def save_trajectory(traj: Trajectory, filepath: Path) -> None:
@@ -95,6 +96,7 @@ def create_trajectory(
     metrics: Dict[str, Any],
     model: str = "",
     termination_type: str = "FINISH",
+    reward_components: Optional[Dict[str, Any]] = None,
 ) -> Trajectory:
     """从 Agent 执行结果构造 Trajectory
 
@@ -134,4 +136,5 @@ def create_trajectory(
         timestamp=datetime.now().isoformat(),
         model=model,
         termination_type=termination_type,
+        reward_components=reward_components or {},
     )
