@@ -9,10 +9,8 @@ from utils.llm_client import LLMClient
 from utils.logger import log
 from config import settings
 from models.schemas import Paper
-from models.store import store
-from services.log_service import log_service
-from services.runtime import translate_runner, event_bus
 from tools.tool_registry import registry
+from agents.side_effects import SideEffectManager, LocalSideEffectManager
 
 
 class BaseAgent(ABC):
@@ -20,9 +18,22 @@ class BaseAgent(ABC):
 
     agent_type: str = "regex"  # 子类覆写
 
-    def __init__(self, llm_client: LLMClient):
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        side_effect_mgr: Optional[SideEffectManager] = None,
+        max_iterations: int = 5,
+    ):
+        """
+        Args:
+            llm_client: LLM 调用客户端
+            side_effect_mgr: 副作用管理器；默认 LocalSideEffectManager（无 DB/SSE）。
+                Web 应用请显式传入 MySQLSideEffectManager 以保持原行为。
+            max_iterations: ReAct 最大迭代轮数
+        """
         self.llm_client = llm_client
-        self.max_iterations = 5
+        self.side_effects = side_effect_mgr or LocalSideEffectManager()
+        self.max_iterations = max_iterations
         self.session_id = "default"
 
     # ---------- 子类必须实现 ----------
@@ -75,7 +86,9 @@ class BaseAgent(ABC):
             agent_model = settings.models.agent_model
 
         try:
-            log_service.create_chat_log(session_id, msg_id, "user", task, model=agent_model, agent_type=self.agent_type)
+            self.side_effects.create_chat_log(
+                session_id, msg_id, "user", task, model=agent_model, agent_type=self.agent_type
+            )
         except Exception as e:
             log.warning(f"Failed to log user message: {e}")
 
@@ -171,7 +184,10 @@ class BaseAgent(ABC):
         reply = reply or final_observation
 
         try:
-            log_service.create_chat_log(session_id, msg_id + "_reply", "assistant", reply, model=agent_model, agent_type=self.agent_type)
+            self.side_effects.create_chat_log(
+                session_id, msg_id + "_reply", "assistant", reply,
+                model=agent_model, agent_type=self.agent_type,
+            )
         except Exception as e:
             log.warning(f"Failed to log assistant reply: {e}")
 
@@ -204,7 +220,7 @@ class BaseAgent(ABC):
     def _enrich_task_with_context(self, task: str, session_id: str) -> str:
         """向任务描述注入当前会话状态，帮助 LLM 避免重复操作"""
         try:
-            papers = store.get_last_papers(session_id)
+            papers = self.side_effects.get_last_papers(session_id)
             if papers:
                 titles = [f"  {i+1}. {p.title}" for i, p in enumerate(papers[:10])]
                 ctx = f"\n\n[会话上下文] 当前会话已有 {len(papers)} 篇论文:\n" + "\n".join(titles)
@@ -240,7 +256,7 @@ class BaseAgent(ABC):
 
             # 翻译工具异步 enqueue
             if tool_name == "translate_arxiv_pdf":
-                t = translate_runner.enqueue(
+                t = self.side_effects.enqueue_translate(
                     session_id=self.session_id,
                     ref=args.get("ref", None),
                     force=bool(args.get("force", False)),
@@ -265,7 +281,7 @@ class BaseAgent(ABC):
                 if isinstance(result, dict):
                     pid = result.get("paper_id")
                     if isinstance(pid, str) and pid.strip():
-                        store.set_last_active_paper_id(self.session_id, pid.strip())
+                        self.side_effects.set_last_active_paper_id(self.session_id, pid.strip())
             except Exception:
                 pass
 
@@ -281,7 +297,7 @@ class BaseAgent(ABC):
                 if isinstance(result, list):
                     if result:
                         papers_obj = [Paper(**p) for p in result]
-                        store.set_last_papers(self.session_id, papers_obj)
+                        self.side_effects.set_last_papers(self.session_id, papers_obj)
                         papers_count = len(result)
                         paper_titles = [paper.get("title", "无标题") for paper in result[:3]]
                         titles_str = "\n".join([f"  - {title}" for title in paper_titles])
@@ -319,13 +335,13 @@ class BaseAgent(ABC):
         session_id: str,
     ):
         try:
-            log_service.save_agent_step(
+            self.side_effects.save_agent_step(
                 msg_id=msg_id, step_index=step_index,
                 thought=thought, action_name=action_name,
                 action_args=action_args, observation=observation,
                 llm_latency_ms=llm_ms, tool_latency_ms=tool_ms,
             )
-            event_bus.publish(session_id, {
+            self.side_effects.publish_sse(session_id, {
                 "type": "agent_step",
                 "step": {
                     "thought": thought, "action_name": action_name,

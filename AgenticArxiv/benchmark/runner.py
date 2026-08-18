@@ -51,6 +51,7 @@ class BenchmarkRunner:
             session_prefix = f"bench_r{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.session_prefix = session_prefix
         self._llm_client: Optional[LLMClient] = None
+        self._side_fx = None
         # 缓存已执行的依赖任务，避免重复
         self._dep_done: Dict[str, bool] = {}
 
@@ -115,16 +116,24 @@ class BenchmarkRunner:
 
         return results
 
+    def _side_effects(self):
+        """Benchmark 沿用原行为（MySQL 落库 + SSE）；无数据库时自动降级到本地内存。"""
+        if self._side_fx is None:
+            from agents.side_effects import default_side_effect_manager
+            self._side_fx = default_side_effect_manager()
+        return self._side_fx
+
     def _create_agent(self, agent_type: str):
+        side_fx = self._side_effects()
         if agent_type == "mcp":
             from mcp_protocol.mcp_agent import MCPAgent
-            return MCPAgent(self.llm_client)
+            return MCPAgent(self.llm_client, side_effect_mgr=side_fx)
         elif agent_type == "skill_cli":
             from skill_cli.skill_agent import SkillAgent
-            return SkillAgent(self.llm_client)
+            return SkillAgent(self.llm_client, side_effect_mgr=side_fx)
         else:
             from agents.agent_engine import ReActAgent
-            return ReActAgent(self.llm_client)
+            return ReActAgent(self.llm_client, side_effect_mgr=side_fx)
 
     @staticmethod
     def _cleanup_paper_artifacts(session_id: str):
