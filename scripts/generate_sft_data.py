@@ -9,6 +9,7 @@ SFT 数据格式：
     python scripts/generate_sft_data.py
 """
 
+import os
 import sys
 import json
 from pathlib import Path
@@ -16,8 +17,12 @@ from pathlib import Path
 # 添加 AgenticArxiv 到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "AgenticArxiv"))
 
+# RL 路径不依赖数据库：会话状态走内存 store
+os.environ.setdefault("STORE_BACKEND", "memory")
+
 from benchmark.tasks import get_all_tasks
 from agents.agent_engine import ReActAgent
+from agents.side_effects import LocalSideEffectManager
 from utils.llm_client import get_env_llm_client
 
 
@@ -25,7 +30,7 @@ def generate_sft_dataset():
     """执行所有 benchmark tasks，收集成功的 trajectories 作为 expert demos"""
 
     llm_client = get_env_llm_client()
-    agent = ReActAgent(llm_client)
+    agent = ReActAgent(llm_client, side_effect_mgr=LocalSideEffectManager())
 
     sft_data = []
     tasks = get_all_tasks()

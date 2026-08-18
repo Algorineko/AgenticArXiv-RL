@@ -392,9 +392,10 @@ def run_agent(req: AgentRunRequest) -> AgentRunResponse:
     try:
         from utils.llm_client import get_env_llm_client
         from agents.agent_engine import ReActAgent
+        from agents.side_effects import MySQLSideEffectManager
 
         llm_client = get_env_llm_client()
-        agent = ReActAgent(llm_client)
+        agent = ReActAgent(llm_client, side_effect_mgr=MySQLSideEffectManager())
         result = agent.run(
             task=req.task, agent_model=req.agent_model, session_id=req.session_id
         )
@@ -470,18 +471,20 @@ def pdf_translate_async(req: TranslatePdfRequest) -> CreateTranslateTaskResponse
 def chat(req: ChatRequest) -> ChatResponse:
     try:
         from utils.llm_client import get_env_llm_client
+        from agents.side_effects import MySQLSideEffectManager
 
         llm_client = get_env_llm_client()
+        side_fx = MySQLSideEffectManager()
 
         if req.agent_type == "mcp":
             from mcp_protocol.mcp_agent import MCPAgent
-            agent = MCPAgent(llm_client)
+            agent = MCPAgent(llm_client, side_effect_mgr=side_fx)
         elif req.agent_type == "skill_cli":
             from skill_cli.skill_agent import SkillAgent
-            agent = SkillAgent(llm_client)
+            agent = SkillAgent(llm_client, side_effect_mgr=side_fx)
         else:
             from agents.agent_engine import ReActAgent
-            agent = ReActAgent(llm_client)
+            agent = ReActAgent(llm_client, side_effect_mgr=side_fx)
 
         result = agent.run(
             task=req.message, agent_model=req.agent_model, session_id=req.session_id
