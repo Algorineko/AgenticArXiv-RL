@@ -31,8 +31,8 @@ class MCPAgent(BaseAgent):
     """通过 MCP 协议调用工具的 Agent"""
     agent_type = "mcp"
 
-    def __init__(self, llm_client: LLMClient):
-        super().__init__(llm_client)
+    def __init__(self, llm_client: LLMClient, side_effect_mgr=None, max_iterations: int = 5):
+        super().__init__(llm_client, side_effect_mgr=side_effect_mgr, max_iterations=max_iterations)
         self._session: Optional[ClientSession] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._mcp_tools: List[Dict[str, Any]] = []
