@@ -1,33 +1,88 @@
-"""奖励计算器（复用 benchmark/metrics.py 的 verifiable 组件）
+"""Multi-granular, verifiable rewards for agentic RL.
 
-Verifiable Reward 设计：
-- 任务成功: +1.0
-- 工具调用准确: +0.5
-- 解析错误: -0.2 per failure
-- 工具执行失败: -0.3 per failure
-- 超时: -0.5
-- 错误终止: -1.0
-- 不必要调用: -0.1 per call
+The reward keeps the public ``RewardCalculator.compute_reward`` API used by
+the rollout code, while exposing a component breakdown for logging and tests.
+It adapts LLM-TIR's format/correctness/process curriculum to ReAct trajectories.
 """
 
-from typing import Dict, Any, Tuple
-from benchmark.metrics import TaskMetrics, compute_metrics
+import json
+import math
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+
+from benchmark.metrics import TaskMetrics, extract_metrics
+
+
+TERMINAL_ACTIONS = {"FINISH", "FORCE_STOP", "ERROR"}
+
+
+@dataclass(frozen=True)
+class RewardSchedule:
+    """Curriculum weights at one training step."""
+
+    format: float
+    tool: float
+    argument: float
+    process: float
+    outcome: float
+
+
+@dataclass(frozen=True)
+class RewardBreakdown:
+    """Auditable reward components, each bounded to ``[-1, 1]``."""
+
+    total: float
+    format: float
+    tool: float
+    argument: float
+    process: float
+    outcome: float
+    weights: RewardSchedule
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data["weights"] = asdict(self.weights)
+        return data
 
 
 class RewardCalculator:
-    """基于 verifiable metrics 的奖励计算器"""
+    """Compute hierarchical rewards from a complete ReAct trajectory.
 
-    def __init__(self):
-        """初始化奖励权重"""
+    The default 30-step curriculum mirrors LLM-TIR: structural behavior is
+    learned first, then semantic correctness receives its full weight.
+    """
+
+    def __init__(
+        self,
+        curriculum_steps: int = 30,
+        early_correctness_scale: float = 1.0 / 3.0,
+        weights: Optional[Mapping[str, float]] = None,
+    ) -> None:
+        self.curriculum_steps = max(0, curriculum_steps)
+        self.early_correctness_scale = early_correctness_scale
         self.weights = {
-            "task_completed": 1.0,
-            "tool_call_accurate": 0.5,
-            "parse_failure_penalty": -0.2,
-            "tool_exec_failure_penalty": -0.3,
-            "force_stop_penalty": -0.5,
-            "error_penalty": -1.0,
-            "unnecessary_call_penalty": -0.1,
+            "format": 1.0,
+            "tool": 3.0,
+            "argument": 2.0,
+            "process": 1.0,
+            "outcome": 3.0,
         }
+        if weights:
+            self.set_weights(dict(weights))
+
+    def schedule(self, training_step: int = 0) -> RewardSchedule:
+        scale = (
+            self.early_correctness_scale
+            if training_step < self.curriculum_steps
+            else 1.0
+        )
+        return RewardSchedule(
+            format=self.weights["format"],
+            tool=self.weights["tool"] * scale,
+            argument=self.weights["argument"] * scale,
+            process=self.weights["process"],
+            outcome=self.weights["outcome"] * scale,
+        )
 
     def compute_reward(
         self,
@@ -36,88 +91,205 @@ class RewardCalculator:
         agent_type: str = "regex",
         trial: int = 0,
         session_id: str = "rl_train",
+        training_step: int = 0,
     ) -> Tuple[float, TaskMetrics]:
-        """计算 reward + 返回 TaskMetrics
+        breakdown, metrics = self.compute_reward_breakdown(
+            task_def, result, agent_type, trial, session_id, training_step
+        )
+        return breakdown.total, metrics
 
-        Args:
-            task_def: 任务定义（来自 benchmark/tasks.py）
-            result: Agent 执行结果（history/timing/token_usage/iteration_count）
-            agent_type: Agent 类型（默认 "regex"）
-            trial: 试验次数（默认 0）
-            session_id: 会话 ID
-
-        Returns:
-            (reward, metrics) 元组
-        """
-        # 复用 benchmark/metrics.py 的 compute_metrics
-        metrics = compute_metrics(task_def, result, agent_type, trial, session_id)
-
-        # 基于 metrics 计算 reward
-        reward = 0.0
-
-        # 正向奖励
-        if metrics.task_completed:
-            reward += self.weights["task_completed"]
-
-        if metrics.tool_call_accurate:
-            reward += self.weights["tool_call_accurate"]
-
-        # 负向惩罚
-        reward += self.weights["parse_failure_penalty"] * metrics.parse_failures
-        reward += self.weights["tool_exec_failure_penalty"] * metrics.tool_exec_failures
-
-        # 终止类型惩罚
-        if metrics.termination_type == "FORCE_STOP":
-            reward += self.weights["force_stop_penalty"]
-        elif metrics.termination_type == "ERROR":
-            reward += self.weights["error_penalty"]
-
-        # 不必要调用惩罚（调用了不在 expected_tools 中的工具）
-        if metrics.expected_tools:
-            extra_calls = len(metrics.tool_call_sequence) - len(metrics.expected_tools)
-            if extra_calls > 0:
-                reward += self.weights["unnecessary_call_penalty"] * extra_calls
-
-        return reward, metrics
+    def compute_reward_breakdown(
+        self,
+        task_def: Dict[str, Any],
+        result: Dict[str, Any],
+        agent_type: str = "regex",
+        trial: int = 0,
+        session_id: str = "rl_train",
+        training_step: int = 0,
+    ) -> Tuple[RewardBreakdown, TaskMetrics]:
+        metrics = extract_metrics(task_def, result, agent_type, trial, session_id)
+        history = result.get("history", [])
+        components = {
+            "format": self._format_score(history),
+            "tool": self._tool_score(metrics.tool_call_sequence, metrics.expected_tools),
+            "argument": self._argument_score(history, task_def.get("expected_tool_args")),
+            "process": self._process_score(history, metrics),
+            "outcome": self._outcome_score(metrics),
+        }
+        schedule = self.schedule(training_step)
+        active = {
+            name: weight
+            for name, weight in asdict(schedule).items()
+            if not (name == "argument" and components[name] is None)
+        }
+        denominator = sum(abs(weight) for weight in active.values()) or 1.0
+        total = sum(active[name] * components[name] for name in active) / denominator
+        breakdown = RewardBreakdown(
+            total=round(_clip(total), 6),
+            format=round(components["format"], 6),
+            tool=round(components["tool"], 6),
+            argument=round(components["argument"] or 0.0, 6),
+            process=round(components["process"], 6),
+            outcome=round(components["outcome"], 6),
+            weights=schedule,
+        )
+        return breakdown, metrics
 
     def get_weights(self) -> Dict[str, float]:
-        """返回当前奖励权重配置"""
         return self.weights.copy()
 
     def set_weights(self, new_weights: Dict[str, float]) -> None:
-        """更新奖励权重配置
-
-        Args:
-            new_weights: 新的权重字典（部分更新）
-        """
+        unknown = set(new_weights) - set(self.weights)
+        if unknown:
+            raise ValueError(f"Unknown reward weights: {sorted(unknown)}")
+        if any(value < 0 for value in new_weights.values()):
+            raise ValueError("Reward weights must be non-negative")
         self.weights.update(new_weights)
 
+    @staticmethod
+    def _format_score(history: Sequence[Dict[str, Any]]) -> float:
+        if not history:
+            return -1.0
+        valid = 0
+        for step in history:
+            action = step.get("action", "")
+            if action in TERMINAL_ACTIONS:
+                valid += 1
+                continue
+            parsed = _parse_action(action)
+            if parsed and isinstance(parsed.get("name"), str) and isinstance(
+                parsed.get("parameters", parsed.get("args", {})), dict
+            ):
+                valid += 1
+        return _scale_ratio(valid, len(history))
 
-def compute_step_reward(
-    step_dict: Dict[str, Any], metrics: TaskMetrics
-) -> float:
-    """计算单步奖励（可选，用于 step-wise RL）
+    @staticmethod
+    def _tool_score(actual: Sequence[str], expected: Sequence[str]) -> float:
+        if not expected:
+            return 1.0 if not actual else 0.0
+        lcs = _lcs_length(actual, expected)
+        precision = lcs / len(actual) if actual else 0.0
+        recall = lcs / len(expected)
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        return 2 * f1 - 1
 
-    Args:
-        step_dict: 单步数据（thought/action/observation）
-        metrics: 当前累积的 metrics
+    @staticmethod
+    def _argument_score(
+        history: Sequence[Dict[str, Any]],
+        expected_args: Optional[Sequence[Mapping[str, Any]]],
+    ) -> Optional[float]:
+        if expected_args is None:
+            return None
+        actual = []
+        for step in history:
+            action = _parse_action(step.get("action", ""))
+            if action:
+                actual.append(action.get("parameters", action.get("args", {})))
+        scores = []
+        for index, expected in enumerate(expected_args):
+            predicted = actual[index] if index < len(actual) else {}
+            keys = set(expected)
+            if not keys:
+                scores.append(1.0 if not predicted else 0.0)
+                continue
+            key_recall = len(keys & set(predicted)) / len(keys)
+            value_accuracy = sum(predicted.get(k) == v for k, v in expected.items()) / len(keys)
+            scores.append((key_recall + value_accuracy) / 2)
+        return 2 * (sum(scores) / len(scores) if scores else 1.0) - 1
 
-    Returns:
-        单步奖励
+    @staticmethod
+    def _process_score(history: Sequence[Dict[str, Any]], metrics: TaskMetrics) -> float:
+        if not history:
+            return -1.0
+        good_steps = 0.0
+        for step in history:
+            action = step.get("action", "")
+            observation = str(step.get("observation", ""))
+            if action in TERMINAL_ACTIONS or _parse_action(action):
+                good_steps += 1.0
+            if step.get("parse_failed") or "无法解析" in observation:
+                good_steps -= 1.0
+        failures = metrics.parse_failures + metrics.tool_exec_failures
+        extras = max(0, len(metrics.tool_call_sequence) - len(metrics.expected_tools))
+        return _clip(good_steps / len(history) - 0.25 * failures - 0.1 * extras)
+
+    @staticmethod
+    def _outcome_score(metrics: TaskMetrics) -> float:
+        if metrics.termination_type == "ERROR":
+            return -1.0
+        if metrics.termination_type == "FORCE_STOP":
+            return -0.5
+        if metrics.task_completed and metrics.tool_call_accurate:
+            return 1.0
+        if metrics.task_completed:
+            return 0.25
+        return -0.25
+
+
+def compute_step_reward(step_dict: Dict[str, Any], metrics: TaskMetrics) -> float:
+    """Backward-compatible dense reward for one environment transition."""
+    action = step_dict.get("action", "")
+    observation = str(step_dict.get("observation", ""))
+    reward = 0.1 if action in TERMINAL_ACTIONS or _parse_action(action) else -0.2
+    if step_dict.get("parse_failed") or "无法解析" in observation:
+        reward -= 0.2
+    if any(marker in observation for marker in ("错误:", "工具执行失败:", "Error")):
+        reward -= 0.3
+    return _clip(reward)
+
+
+def compute_group_relative_advantages(
+    rewards: Sequence[float], group_ids: Sequence[Any], epsilon: float = 1e-6
+) -> list:
+    """Normalize rewards within each prompt group, as used by GRPO.
+
+    Returning zero for a constant-reward group avoids unstable gradients and
+    makes this helper useful in lightweight trainers and unit tests.
     """
-    step_reward = 0.0
+    if len(rewards) != len(group_ids):
+        raise ValueError("rewards and group_ids must have the same length")
+    grouped: Dict[Any, list] = {}
+    for index, group_id in enumerate(group_ids):
+        grouped.setdefault(group_id, []).append(index)
+    advantages = [0.0] * len(rewards)
+    for indices in grouped.values():
+        values = [float(rewards[index]) for index in indices]
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / len(values)
+        std = math.sqrt(variance)
+        if std <= epsilon:
+            continue
+        for index, value in zip(indices, values):
+            advantages[index] = (value - mean) / (std + epsilon)
+    return advantages
 
-    # 解析失败惩罚
-    if step_dict.get("parse_failed", False):
-        step_reward -= 0.2
 
-    # 工具执行失败惩罚（根据 observation 判断）
-    observation = step_dict.get("observation", "")
-    if "错误" in observation or "Error" in observation or "失败" in observation:
-        step_reward -= 0.3
+def _parse_action(action: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(action, dict):
+        return action
+    if not isinstance(action, str) or action in TERMINAL_ACTIONS:
+        return None
+    try:
+        parsed = json.loads(action)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
-    # 正常执行奖励（小奖励，鼓励有效推进）
-    if not step_dict.get("parse_failed", False) and "成功" in observation:
-        step_reward += 0.1
 
-    return step_reward
+def _lcs_length(left: Sequence[str], right: Sequence[str]) -> int:
+    row = [0] * (len(right) + 1)
+    for left_item in left:
+        previous = 0
+        for j, right_item in enumerate(right, 1):
+            saved = row[j]
+            row[j] = previous + 1 if left_item == right_item else max(row[j], row[j - 1])
+            previous = saved
+    return row[-1]
+
+
+def _scale_ratio(numerator: int, denominator: int) -> float:
+    return 2 * numerator / denominator - 1 if denominator else -1.0
+
+
+def _clip(value: float) -> float:
+    return max(-1.0, min(1.0, value))
