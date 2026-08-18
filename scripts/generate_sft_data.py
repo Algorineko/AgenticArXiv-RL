@@ -18,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "AgenticArxiv"))
 
 from benchmark.tasks import get_all_tasks
 from agents.agent_engine import ReActAgent
-from agents.side_effects import NoOpSideEffectManager
 from utils.llm_client import get_env_llm_client
 
 
@@ -26,7 +25,7 @@ def generate_sft_dataset():
     """执行所有 benchmark tasks，收集成功的 trajectories 作为 expert demos"""
 
     llm_client = get_env_llm_client()
-    agent = ReActAgent(llm_client, side_effect_mgr=NoOpSideEffectManager())
+    agent = ReActAgent(llm_client)
 
     sft_data = []
     tasks = get_all_tasks()

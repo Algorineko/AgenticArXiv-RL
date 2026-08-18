@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "AgenticArxiv"))
 
 from benchmark.tasks import get_all_tasks
 from agents.agent_engine import ReActAgent
-from agents.side_effects import NoOpSideEffectManager
 from utils.llm_client import get_env_llm_client
 from rl.reward import RewardCalculator
 
@@ -45,7 +44,7 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
     # TODO: 加载 SFT 模型（需要修改 llm_client 支持本地模型）
     # 目前占位：使用原始 LLM
     llm_client = get_env_llm_client()
-    agent = ReActAgent(llm_client, side_effect_mgr=NoOpSideEffectManager())
+    agent = ReActAgent(llm_client)
 
     reward_calc = RewardCalculator()
     dpo_data = []
