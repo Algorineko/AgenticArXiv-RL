@@ -7,7 +7,7 @@
 4. 保存 trajectory（JSONL 格式）
 
 使用方式：
-    python -m rl.rollout search_01 traces/train/
+    python -m AgenticArxiv.rl.rollout search_01 traces/train/
 """
 
 import os
@@ -136,8 +136,8 @@ def main(
         all: 是否对所有任务执行 rollout
 
     Examples:
-        python -m rl.rollout search_01 traces/train/
-        python -m rl.rollout --all --output_dir traces/train/
+        python -m AgenticArxiv.rl.rollout search_01 traces/train/
+        python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/
     """
     if all:
         rollout_all_tasks(output_dir)
@@ -145,8 +145,8 @@ def main(
         rollout_single_task(task_id, output_dir)
     else:
         print("用法:")
-        print("  python -m rl.rollout <task_id> <output_dir>")
-        print("  python -m rl.rollout --all --output_dir <output_dir>")
+        print("  python -m AgenticArxiv.rl.rollout <task_id> <output_dir>")
+        print("  python -m AgenticArxiv.rl.rollout --all --output_dir <output_dir>")
 
 
 if __name__ == "__main__":

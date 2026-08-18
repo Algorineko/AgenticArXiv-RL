@@ -14,8 +14,11 @@ import sys
 import json
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_ROOT = REPO_ROOT / "AgenticArxiv"
+
 # 添加 AgenticArxiv 到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent / "AgenticArxiv"))
+sys.path.insert(0, str(PACKAGE_ROOT))
 
 # RL 路径不依赖数据库：会话状态走内存 store
 os.environ.setdefault("STORE_BACKEND", "memory")
@@ -76,7 +79,7 @@ def generate_sft_dataset():
             print(f"   ❌ 执行出错: {e}")
 
     # 保存到 JSONL
-    output_path = Path("data/sft/sft_train.jsonl")
+    output_path = REPO_ROOT / "data" / "sft" / "sft_train.jsonl"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:

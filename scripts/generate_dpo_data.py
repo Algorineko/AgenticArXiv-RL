@@ -28,8 +28,11 @@ import sys
 import json
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_ROOT = REPO_ROOT / "AgenticArxiv"
+
 # 添加 AgenticArxiv 到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent / "AgenticArxiv"))
+sys.path.insert(0, str(PACKAGE_ROOT))
 
 # RL 路径不依赖数据库：会话状态走内存 store
 os.environ.setdefault("STORE_BACKEND", "memory")
@@ -88,10 +91,10 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
         num_rollouts_per_task: 每个任务 rollout 次数
     """
 
-    sft_model_path = Path("outputs/sft/final")
+    sft_model_path = REPO_ROOT / "outputs" / "sft" / "final"
     if not sft_model_path.exists():
         print(f"❌ SFT 模型不存在: {sft_model_path}")
-        print(f"请先运行: python -m rl.train_sft")
+        print(f"请先运行: python -m AgenticArxiv.rl.train_sft")
         return
 
     # TODO: 加载 SFT 模型（需要修改 llm_client 支持本地模型）
@@ -142,7 +145,7 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
         print(f"   ✅ chosen_reward={max(rewards):.2f}, rejected_reward={min(rewards):.2f}")
 
     # 保存到 JSONL
-    output_path = Path("data/dpo/dpo_train.jsonl")
+    output_path = REPO_ROOT / "data" / "dpo" / "dpo_train.jsonl"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
