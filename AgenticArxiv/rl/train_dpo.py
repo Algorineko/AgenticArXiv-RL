@@ -20,6 +20,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 
 
+def _precision_flags():
+    """只有 CUDA 才开 fp16；CPU / Apple MPS 上开 fp16 会训练失败。"""
+    import torch
+    return {"fp16": True} if torch.cuda.is_available() else {}
+
+
 def main():
     """DPO 训练主函数"""
 
@@ -59,7 +65,7 @@ def main():
         logging_steps=10,
         save_steps=100,
         save_total_limit=3,
-        fp16=True,
+        **_precision_flags(),     # 只有 CUDA 才开 fp16
     )
 
     # 4. 训练
@@ -69,7 +75,7 @@ def main():
         ref_model=ref_model,
         args=config,
         train_dataset=train_dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,   # TRL>=0.13 用 processing_class（旧名 tokenizer 已移除）
     )
     trainer.train()
 
