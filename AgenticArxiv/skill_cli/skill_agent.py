@@ -38,8 +38,9 @@ class SkillAgent(BaseAgent):
     """通过 Skill 文档 + CLI 子进程执行工具的 Agent"""
     agent_type = "skill_cli"
 
-    def __init__(self, llm_client: LLMClient, side_effect_mgr=None, env=None, max_iterations: int = 5):
-        super().__init__(llm_client, side_effect_mgr=side_effect_mgr, env=env, max_iterations=max_iterations)
+    def __init__(self, llm_client: LLMClient, side_effect_mgr=None, env=None, max_iterations: int = 5, llm_extra=None):
+        super().__init__(llm_client, side_effect_mgr=side_effect_mgr, env=env,
+                         max_iterations=max_iterations, llm_extra=llm_extra)
         self._skill_doc = self._load_skill_doc()
 
         # 确保底层工具已注册（供 _execute_with_side_effects 使用）
