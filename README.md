@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a>
+</p>
+
 # AgenticArXiv-RL — Agentic RL 训练环境
 
 > **基于 ReAct Agent + arXiv 工具的 Agentic RL 训练环境**  
