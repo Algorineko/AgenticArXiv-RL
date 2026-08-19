@@ -1,5 +1,9 @@
 
 
+<p align="center">
+  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a>
+</p>
+
 # AgenticArXiv-RL — Entorno de Entrenamiento para RL Agentic
 
 > **Entorno de entrenamiento de RL Agentic basado en Agente ReAct + herramientas de arXiv**  
