@@ -42,6 +42,14 @@ class BenchmarkReport:
                 "completion_rate": _rate(items, "task_completed"),
                 "tool_accuracy": _rate(items, "tool_call_accurate"),
                 "arg_accuracy": _avg(items, "arg_score"),
+                # 两个分母各有用途：对全部运行取率可跨 Agent 比较；
+                # 对 FINISH 运行取率回答「它说完成时有多少次在撒谎」。
+                "false_finish_rate": _rate(items, "false_finish"),
+                "false_finish_of_completed": (
+                    sum(1 for m in items if m.false_finish)
+                    / sum(1 for m in items if m.task_completed)
+                    if any(m.task_completed for m in items) else 0.0
+                ),
                 "avg_parse_failures": _avg(items, "parse_failures"),
                 "avg_tool_failures": _avg(items, "tool_exec_failures"),
             }
@@ -137,6 +145,7 @@ class BenchmarkReport:
                 "termination": m.termination_type,
                 "tool_accurate": m.tool_call_accurate,
                 "arg_score": m.arg_score,
+                "false_finish": m.false_finish,
                 "tools": ",".join(m.tool_call_sequence),
                 "expected": ",".join(m.expected_tools),
                 "parse_fail": m.parse_failures,
@@ -215,6 +224,7 @@ class BenchmarkReport:
             ("任务完成率", "completion_rate"),
             ("工具调用准确率", "tool_accuracy"),
             ("参数准确率", "arg_accuracy"),
+            ("假完成率", "false_finish_rate"),
             ("平均解析失败", "avg_parse_failures"),
             ("平均工具失败", "avg_tool_failures"),
         ]
