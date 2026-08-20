@@ -46,6 +46,8 @@ class TaskMetrics:
     # 声称完成但期望工具没做全。与 tool_call_accurate 的区别见 is_false_finish：
     # 后者对「做多了」也判 False，这里只抓「做少了」。
     false_finish: bool = False
+    # 指代解析准确率。未声明 expected_paper 的任务恒为 1.0，不参与扣分。
+    ref_score: float = 1.0
 
     # --- 原始数据 ---
     error: Optional[str] = None
@@ -99,6 +101,10 @@ def extract_metrics(
 
     false_finish = is_false_finish(termination_type, tool_sequence, expected_tools)
 
+    ref_score = reference_resolution_score(history, task_def.get("expected_paper"))
+    if ref_score is None:
+        ref_score = 1.0
+
     error = None
     if termination_type == "ERROR" and history:
         error = history[-1].get("observation", "")
@@ -127,6 +133,7 @@ def extract_metrics(
         tool_exec_failures=tool_exec_failures,
         arg_score=arg_score,
         false_finish=false_finish,
+        ref_score=ref_score,
         error=error,
     )
 
@@ -224,6 +231,65 @@ def is_false_finish(
     if termination_type != "FINISH" or not expected_tools:
         return False
     return lcs_length(tool_sequence, expected_tools) < len(expected_tools)
+
+
+# observation 里 paper_id 出现过三种写法，都要认：
+#   {'paper_id': '2608.14539v1', ...}      dict 的 str()，单引号
+#   {"paper_id": "2608.14539v1", ...}      JSON，双引号
+#   已创建翻译任务 task_id=..., paper_id=None    工具自己拼的可读文本
+_PAPER_ID_PATTERNS = (
+    re.compile(r"""['"]paper_id['"]\s*:\s*['"]([^'"]+)['"]"""),
+    re.compile(r"""\bpaper_id\s*=\s*([A-Za-z0-9._/-]+)"""),
+)
+_VERSION_SUFFIX = re.compile(r"v\d+$")
+
+
+def resolved_paper_id(observation: Any) -> Optional[str]:
+    """从 observation 里取出工具**实际解析到**的 paper_id，取不到返回 None。"""
+    text = observation if isinstance(observation, str) else str(observation or "")
+    for pattern in _PAPER_ID_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            value = match.group(1).strip()
+            return None if value.lower() in ("none", "null", "") else value
+    return None
+
+
+def _same_paper(left: str, right: str) -> bool:
+    """比较论文身份时忽略版本号：v1 与 v2 是同一篇论文的不同版本。"""
+    return _VERSION_SUFFIX.sub("", left.strip()) == _VERSION_SUFFIX.sub("", right.strip())
+
+
+def reference_resolution_score(
+    history: Sequence[Dict[str, Any]], expected_paper: Optional[str]
+) -> Optional[float]:
+    """指代解析准确率：工具解析到的论文，是不是任务指的那篇。
+
+    返回 [0,1]，任务未声明 expected_paper 时返回 None。
+
+    `ref` 支持序号 / arXiv ID / 标题子串 / null，是本 agent 真正的难点，
+    而按字符串比对参数对它**同时会假阳性和假阴性**：
+
+        假阳性  期望 {"ref":"Learning State"} 实际 {"ref":"Learning State"}
+                参数分满分，但子串匹配到了另一篇 —— 下错了论文
+        假阴性  期望 {"ref":"Decoding the Past"} 实际 {"ref":3}
+                参数分接近 0，但两者解析到同一篇 —— 其实做对了
+
+    所以不比参数，比工具返回值里的 paper_id：**指代形式随便用，
+    但必须落到正确的那篇论文**。
+
+    只统计观测里带 paper_id 的步骤 —— 检索类工具不解析单篇论文，不计入。
+    一步都没解析到，说明 agent 压根没碰论文，记 0。
+    """
+    if not expected_paper:
+        return None
+    resolved = [
+        pid for step in (history or [])
+        if (pid := resolved_paper_id(step.get("observation"))) is not None
+    ]
+    if not resolved:
+        return 0.0
+    return sum(_same_paper(pid, expected_paper) for pid in resolved) / len(resolved)
 
 
 def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
