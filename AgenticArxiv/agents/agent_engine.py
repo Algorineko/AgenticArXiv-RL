@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.llm_client import LLMClient
 from tools.tool_registry import registry
-from agents.base_agent import BaseAgent
+from agents.base_agent import BaseAgent, is_terminal_action
 from agents.prompt_templates import get_react_prompt, format_tool_description
 from utils.logger import log
 
@@ -71,7 +71,7 @@ class ReActAgent(BaseAgent):
 
         log.info(f"提取到的Action文本: {action_text}")
 
-        if action_text.upper() == "FINISH":
+        if is_terminal_action(action_text):
             log.info("Agent决定结束任务")
             return thought, None
 
@@ -81,6 +81,10 @@ class ReActAgent(BaseAgent):
             if json_match:
                 action_json = json.loads(json_match.group(1))
                 if isinstance(action_json, dict):
+                    # 终止动作也可能被包成 JSON，先拦下来，别当工具调用
+                    if is_terminal_action(action_json.get("name")):
+                        log.info("Agent决定结束任务（JSON 形式的终止动作）")
+                        return thought, None
                     if "name" in action_json and "args" in action_json:
                         action_dict = {
                             "name": action_json["name"],

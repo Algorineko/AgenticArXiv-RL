@@ -18,7 +18,7 @@ if PROJECT_ROOT not in sys.path:
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from agents.base_agent import BaseAgent
+from agents.base_agent import BaseAgent, is_terminal_action
 from agents.prompt_templates import get_react_prompt, format_tool_description
 from utils.llm_client import LLMClient
 from utils.logger import log
@@ -178,7 +178,7 @@ class MCPAgent(BaseAgent):
         )
         action_text = action_match.group(1).strip() if action_match else ""
 
-        if action_text.upper() == "FINISH":
+        if is_terminal_action(action_text):
             return thought, None
 
         try:
@@ -186,6 +186,9 @@ class MCPAgent(BaseAgent):
             if json_match:
                 action_json = json.loads(json_match.group(1))
                 if isinstance(action_json, dict):
+                    # 终止动作也可能被包成 JSON，先拦下来，别当工具调用
+                    if is_terminal_action(action_json.get("name")):
+                        return thought, None
                     if "name" in action_json and "args" in action_json:
                         return thought, {"name": action_json["name"], "args": action_json["args"]}
                     else:
