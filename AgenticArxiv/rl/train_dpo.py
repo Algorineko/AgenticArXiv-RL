@@ -7,8 +7,10 @@ DPO（Direct Preference Optimization）：
 
 使用方式：
     python -m AgenticArxiv.rl.train_dpo
+    python -m AgenticArxiv.rl.train_dpo --verify --min_reward -0.2
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -22,6 +24,8 @@ from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 
+from rl.stage_verifier import StageVerifier
+
 
 def _precision_flags():
     """见 rl/precision.py：CUDA 上优先 bf16，退回 fp16；CPU / MPS 不开混合精度。"""
@@ -29,14 +33,20 @@ def _precision_flags():
     return precision_flags()
 
 
-def main():
+def main(
+    model: str = None,
+    data: str = None,
+    output_dir: str = None,
+    verify: bool = False,
+    min_reward: float = -0.3,
+):
     """DPO 训练主函数"""
 
     # 1. 配置
-    model_path = REPO_ROOT / "outputs" / "sft" / "final"  # 从 SFT 模型继续
+    model_path = Path(model) if model else REPO_ROOT / "outputs" / "sft" / "final"
     model_name = str(model_path)
-    train_data_path = REPO_ROOT / "data" / "dpo" / "dpo_train.jsonl"
-    output_dir = REPO_ROOT / "outputs" / "dpo"
+    train_data_path = Path(data) if data else REPO_ROOT / "data" / "dpo" / "dpo_train.jsonl"
+    out_dir = Path(output_dir) if output_dir else REPO_ROOT / "outputs" / "dpo"
 
     print(f"📦 加载 SFT 模型: {model_name}")
     if not model_path.exists():
@@ -45,6 +55,8 @@ def main():
         return
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(model_name)
     ref_model = AutoModelForCausalLM.from_pretrained(model_name)  # reference model
 
@@ -60,7 +72,7 @@ def main():
 
     # 3. 配置 DPO
     config = DPOConfig(
-        output_dir=str(output_dir),
+        output_dir=str(out_dir),
         num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=8,
@@ -84,10 +96,36 @@ def main():
     trainer.train()
 
     # 5. 保存
-    final_output_dir = output_dir / "final"
+    final_output_dir = out_dir / "final"
     trainer.save_model(str(final_output_dir))
+    tokenizer.save_pretrained(str(final_output_dir))
     print(f"✅ DPO 训练完成，模型已保存: {final_output_dir}")
+
+    # --- 阶段验证：检查模型是否达到最低奖励阈值 ---
+    if verify:
+        print(f"\n🔍 运行 DPO 阶段验证...")
+        verifier = StageVerifier(dpo_min_reward=min_reward)
+        report = verifier.verify_dpo(model_path=str(final_output_dir))
+        verifier.save_report(report, final_output_dir)
+        print(report.summary())
+        if not report.passed:
+            print(
+                f"\n⚠️  DPO 阶段验证未通过，但模型已保存。"
+                f"请在继续 GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
+            )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="DPO 训练")
+    parser.add_argument("--model", default=None, help="SFT 模型路径")
+    parser.add_argument("--data", default=None, help="DPO 数据集路径")
+    parser.add_argument("--output_dir", default=None, help="输出目录")
+    parser.add_argument(
+        "--verify", action="store_true", default=False,
+        help="训练结束后运行阶段验证（检查模型奖励是否达标）",
+    )
+    parser.add_argument(
+        "--min_reward", type=float, default=-0.3,
+        help="DPO 验证的最低平均奖励阈值（默认 -0.3）",
+    )
+    main(**vars(parser.parse_args()))

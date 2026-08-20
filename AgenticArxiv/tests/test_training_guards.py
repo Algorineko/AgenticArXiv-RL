@@ -138,5 +138,88 @@ class PrecisionFlagsTest(unittest.TestCase):
         self.assertEqual(dpo(), grpo())
 
 
+class StageVerifierTest(unittest.TestCase):
+    """阶段验证器的逻辑测试（不需要真实模型）。"""
+
+    def test_report_passed_formatting(self):
+        from rl.stage_verifier import VerificationReport
+        report = VerificationReport(
+            stage="sft", model_path="/tmp/model",
+            passed=True, metrics={"parse_rate": 0.8},
+            thresholds={"parse_rate": 0.3},
+        )
+        summary = report.summary()
+        self.assertIn("PASS", summary)
+        self.assertIn("SFT", summary)
+        self.assertIn("0.8", summary)
+
+    def test_report_failed_formatting(self):
+        from rl.stage_verifier import VerificationReport
+        report = VerificationReport(
+            stage="dpo", model_path="/tmp/model",
+            passed=False, metrics={"mean_reward": -0.5},
+            thresholds={"mean_reward": -0.3},
+            failures=["mean_reward too low"],
+        )
+        summary = report.summary()
+        self.assertIn("FAIL", summary)
+        self.assertIn("DPO", summary)
+        self.assertIn("too low", summary)
+
+    def test_thresholds_configurable(self):
+        from rl.stage_verifier import StageVerifier
+        v = StageVerifier(
+            sft_min_parse_rate=0.5,
+            dpo_min_reward=0.0,
+            grpo_min_reward=0.1,
+        )
+        self.assertEqual(v.thresholds["sft"]["parse_rate"], 0.5)
+        self.assertEqual(v.thresholds["dpo"]["mean_reward"], 0.0)
+        self.assertEqual(v.thresholds["grpo"]["mean_reward"], 0.1)
+
+    def test_verify_sft_model_load_failure(self):
+        """模型路径不存在时返回 failed report 而非抛异常。"""
+        from rl.stage_verifier import StageVerifier
+        v = StageVerifier()
+        report = v.verify_sft(model_path="/nonexistent/path/model")
+        self.assertFalse(report.passed)
+        self.assertIn("模型加载失败", report.failures[0])
+
+    def test_verify_dpo_model_load_failure(self):
+        from rl.stage_verifier import StageVerifier
+        v = StageVerifier()
+        report = v.verify_dpo(model_path="/nonexistent/path/model")
+        self.assertFalse(report.passed)
+        self.assertIn("模型加载失败", report.failures[0])
+
+    def test_verify_grpo_model_load_failure(self):
+        from rl.stage_verifier import StageVerifier
+        v = StageVerifier()
+        report = v.verify_grpo(model_path="/nonexistent/path/model")
+        self.assertFalse(report.passed)
+        self.assertIn("模型加载失败", report.failures[0])
+
+    def test_save_report_writes_file(self):
+        import tempfile
+        import json
+        from pathlib import Path
+        from rl.stage_verifier import StageVerifier, VerificationReport
+
+        report = VerificationReport(
+            stage="sft", model_path="/tmp/model",
+            passed=True, metrics={"parse_rate": 0.8},
+            thresholds={"parse_rate": 0.3},
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir)
+            StageVerifier.save_report(report, out)
+            report_path = out / "verification_report.json"
+            self.assertTrue(report_path.exists())
+            data = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["stage"], "sft")
+            self.assertTrue(data["passed"])
+            self.assertEqual(data["metrics"]["parse_rate"], 0.8)
+
+
 if __name__ == "__main__":
     unittest.main()

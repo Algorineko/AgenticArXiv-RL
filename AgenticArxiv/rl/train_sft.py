@@ -8,6 +8,7 @@ SFT（Supervised Fine-Tuning）：
 使用方式：
     python -m AgenticArxiv.rl.train_sft
     python -m AgenticArxiv.rl.train_sft --model HuggingFaceTB/SmolLM2-135M-Instruct --max_length 3072
+    python -m AgenticArxiv.rl.train_sft --verify --min_parse_rate 0.5
 """
 
 import argparse
@@ -23,6 +24,8 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 from trl import SFTConfig, SFTTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
+
+from rl.stage_verifier import StageVerifier
 
 
 def _precision_flags():
@@ -81,6 +84,8 @@ def main(
     grad_accum: int = 4,
     lr: float = 2e-5,
     max_length: int = 3072,
+    verify: bool = False,
+    min_parse_rate: float = 0.3,
 ):
     train_data_path = Path(data) if data else REPO_ROOT / "data" / "sft" / "sft_train.jsonl"
     out_path = REPO_ROOT / output_dir if not Path(output_dir).is_absolute() else Path(output_dir)
@@ -131,6 +136,19 @@ def main(
     tokenizer.save_pretrained(str(final_output_dir))
     print(f"✅ SFT 训练完成，模型已保存: {final_output_dir}")
 
+    # --- 阶段验证：检查模型是否能产出可解析的输出 ---
+    if verify:
+        print(f"\n🔍 运行 SFT 阶段验证...")
+        verifier = StageVerifier(sft_min_parse_rate=min_parse_rate)
+        report = verifier.verify_sft(model_path=str(final_output_dir))
+        verifier.save_report(report, final_output_dir)
+        print(report.summary())
+        if not report.passed:
+            print(
+                f"\n⚠️  SFT 阶段验证未通过，但模型已保存。"
+                f"请在继续 DPO/GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
+            )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SFT 训练")
@@ -145,5 +163,13 @@ if __name__ == "__main__":
         "--max_length", type=int, default=3072,
         help="超过此长度的样本会被从右截断，而右边正是 assistant 目标；"
              "训练前会做长度体检，不匹配直接报错",
+    )
+    parser.add_argument(
+        "--verify", action="store_true", default=False,
+        help="训练结束后运行阶段验证（检查模型产出可解析率）",
+    )
+    parser.add_argument(
+        "--min_parse_rate", type=float, default=0.3,
+        help="SFT 验证的最低可解析率阈值（默认 0.3）",
     )
     main(**vars(parser.parse_args()))
