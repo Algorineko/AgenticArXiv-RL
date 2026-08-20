@@ -9,9 +9,13 @@ GRPO（Group Relative Policy Optimization）：
 奖励定义见 rl/grpo_reward.py：把模型生成的一步补成最小完整轨迹，
 再交给 rl/reward.py 已有的 RewardCalculator 打分，不引入第二套标准。
 
+训练中每 N 步自动运行 canary 评估（在固定小任务集上验证模型未退化），
+训练结束后可选运行阶段验证（检查模型是否达到最低质量阈值）。
+
 使用方式：
     python -m AgenticArxiv.rl.train_grpo
     python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --num_generations 8
+    python -m AgenticArxiv.rl.train_grpo --canary_steps 20 --min_canary_reward -0.3
 """
 
 import argparse
@@ -40,12 +44,15 @@ import tools.pdf_download_tool  # noqa: F401
 import tools.pdf_translate_tool  # noqa: F401
 
 from benchmark.tasks import get_all_tasks
+from rl.canary import CanaryEvaluator, CanaryCallback
 from rl.grpo_reward import (
     build_prompt_dataset,
     load_mock_env,
     make_grpo_reward_fn,
     parse_react_action,
 )
+from rl.reward import RewardCalculator
+from rl.stage_verifier import StageVerifier
 
 DEFAULT_SNAPSHOT = REPO_ROOT / "data" / "mock_arxiv_snapshot.json"
 
@@ -137,6 +144,10 @@ def main(
     temperature: float = 1.0,
     snapshot: str = None,
     allow_zero_variance: bool = False,
+    canary_steps: int = 50,
+    min_canary_reward: float = -1.0,
+    canary_patience: int = 3,
+    verify: bool = True,
 ):
     model_path = REPO_ROOT / model
     if model_path.exists():
@@ -216,6 +227,28 @@ def main(
         train_dataset=train_dataset,
         processing_class=tokenizer,
     )
+
+    # --- Canary 回调：每 N 步在固定任务上评估，检测性能退化 ---
+    canary_cb = None
+    if canary_steps > 0:
+        canary_evaluator = CanaryEvaluator(
+            model=policy,
+            tokenizer=tokenizer,
+            reward_calc=RewardCalculator(),
+            env=env,
+            num_generations=num_generations,
+            max_new_tokens=max_completion_length,
+            temperature=temperature,
+        )
+        canary_cb = CanaryCallback(
+            evaluator=canary_evaluator,
+            steps=canary_steps,
+            min_reward=min_canary_reward,
+            patience=canary_patience,
+        )
+        trainer.add_callback(canary_cb)
+        print(f"🐤 Canary: 每 {canary_steps} 步评估，阈值={min_canary_reward}，patience={canary_patience}")
+
     guard = None
     if not allow_zero_variance:
         guard = RewardVarianceGuard()
@@ -224,11 +257,31 @@ def main(
 
     if guard is not None and guard.tripped:
         raise SystemExit(1)
+    if canary_cb is not None and canary_cb.tripped:
+        raise SystemExit(1)
 
     final_dir = REPO_ROOT / output_dir / "final"
     trainer.save_model(str(final_dir))
     tokenizer.save_pretrained(str(final_dir))
     print(f"✅ GRPO 训练完成，模型已保存: {final_dir}")
+
+    # --- 阶段验证：训练后检查模型是否达到最低质量阈值 ---
+    if verify:
+        print(f"\n🔍 运行 GRPO 阶段验证...")
+        verifier = StageVerifier()
+        report = verifier.verify_grpo(
+            model_path=str(final_dir),
+            tokenizer=tokenizer,
+            env=env,
+        )
+        verifier.save_report(report, final_dir)
+        print(report.summary())
+        if not report.passed:
+            raise SystemExit(
+                f"\n❌ GRPO 阶段验证失败，模型未达到最低质量阈值。\n"
+                f"   检查 {final_dir / 'verification_report.json'} 了解详情。\n"
+                f"   跳过验证用 --no-verify。"
+            )
 
 
 if __name__ == "__main__":
@@ -249,6 +302,25 @@ if __name__ == "__main__":
     p.add_argument("--max_completion_length", type=int, default=256)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--snapshot", default=None)
+    p.add_argument(
+        "--canary_steps", type=int, default=50,
+        help="每隔多少步运行 canary 评估（0 表示禁用）",
+    )
+    p.add_argument(
+        "--min_canary_reward", type=float, default=-1.0,
+        help="Canary 奖励下限。低于此值连续 patience 次则停止训练。"
+             "默认 -1.0（理论最低分）表示禁用检查",
+    )
+    p.add_argument(
+        "--canary_patience", type=int, default=3,
+        help="Canary 奖励连续低于阈值多少次后停止训练",
+    )
+    p.add_argument(
+        "--verify", action=argparse.BooleanOptionalAction, default=True,
+        help="训练结束后运行阶段验证（默认开启）",
+    )
     a = p.parse_args()
     main(a.model, a.output_dir, a.epochs, a.batch_size, a.grad_accum, a.lr, a.beta,
-         a.num_generations, a.max_completion_length, a.temperature, a.snapshot)
+         a.num_generations, a.max_completion_length, a.temperature, a.snapshot,
+         a.allow_zero_variance, a.canary_steps, a.min_canary_reward,
+         a.canary_patience, a.verify)
