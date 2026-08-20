@@ -43,11 +43,16 @@ class BenchmarkRunner:
         model: Optional[str] = None,
         session_prefix: Optional[str] = None,
         llm_extra: Optional[Dict[str, Any]] = None,
+        offline: bool = False,
+        snapshot: Optional[str] = None,
     ):
         self.agent_types = agent_types or self.AGENT_TYPES
         self.repeat = repeat
         self.model = model
         self.llm_extra = dict(llm_extra or {})
+        self.offline = offline
+        self.snapshot = snapshot
+        self._env = None
         if session_prefix is None:
             from datetime import datetime
             session_prefix = f"bench_r{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -82,6 +87,7 @@ class BenchmarkRunner:
                     try:
                         # 确保依赖任务已执行
                         self._ensure_dependencies(task_def, session_id, agent_type)
+                        self._apply_setup(task_def, session_id)
 
                         # 下载/翻译任务：清理上一次试验留下的文件和 DB 记录
                         if task_def.get("category") in ("download", "translate"):
@@ -119,23 +125,50 @@ class BenchmarkRunner:
         return results
 
     def _side_effects(self):
-        """Benchmark 沿用原行为（MySQL 落库 + SSE）；无数据库时自动降级到本地内存。"""
+        """Benchmark 沿用原行为（MySQL 落库 + SSE）；无数据库时自动降级到本地内存。
+
+        离线模式必须用 LocalSideEffectManager：否则翻译任务仍会起线程调 pdf2zh、
+        会话状态仍写 MySQL，"离线"就只离了一半。
+        """
         if self._side_fx is None:
-            from agents.side_effects import default_side_effect_manager
-            self._side_fx = default_side_effect_manager()
+            if self.offline:
+                from agents.side_effects import LocalSideEffectManager
+                self._side_fx = LocalSideEffectManager()
+            else:
+                from agents.side_effects import default_side_effect_manager
+                self._side_fx = default_side_effect_manager()
         return self._side_fx
+
+    def _tool_env(self):
+        """离线模式下用 MockArxivEnv 回放快照，取代真实 arXiv 请求。"""
+        if not self.offline:
+            return None
+        if self._env is None:
+            from pathlib import Path as _Path
+            from rl.env import MockArxivEnv
+            path = _Path(self.snapshot) if self.snapshot else (
+                _Path(PROJECT_ROOT).parent / "data" / "mock_arxiv_snapshot.json")
+            if not path.exists():
+                raise SystemExit(
+                    f"离线模式需要快照，但未找到: {path}\n"
+                    f"请先运行: python -m AgenticArxiv.rl.build_snapshot"
+                )
+            self._env = MockArxivEnv(snapshot_path=path, mode="replay")
+            log.info(f"[Benchmark] 离线模式，回放快照 {path}")
+        return self._env
 
     def _create_agent(self, agent_type: str):
         side_fx = self._side_effects()
+        env = self._tool_env()
         if agent_type == "mcp":
             from mcp_protocol.mcp_agent import MCPAgent
-            return MCPAgent(self.llm_client, side_effect_mgr=side_fx, llm_extra=self.llm_extra)
+            return MCPAgent(self.llm_client, side_effect_mgr=side_fx, env=env, llm_extra=self.llm_extra)
         elif agent_type == "skill_cli":
             from skill_cli.skill_agent import SkillAgent
-            return SkillAgent(self.llm_client, side_effect_mgr=side_fx, llm_extra=self.llm_extra)
+            return SkillAgent(self.llm_client, side_effect_mgr=side_fx, env=env, llm_extra=self.llm_extra)
         else:
             from agents.agent_engine import ReActAgent
-            return ReActAgent(self.llm_client, side_effect_mgr=side_fx, llm_extra=self.llm_extra)
+            return ReActAgent(self.llm_client, side_effect_mgr=side_fx, env=env, llm_extra=self.llm_extra)
 
     @staticmethod
     def _cleanup_paper_artifacts(session_id: str):
@@ -161,6 +194,38 @@ class BenchmarkRunner:
             log_path = os.path.join(app_settings.pdf_translated_log_path, f"{pid}.pdf2zh.log")
             if os.path.exists(log_path):
                 os.remove(log_path)
+
+    def _apply_setup(self, task_def: Dict, session_id: str):
+        """执行任务的 setup 动作，把会话状态铺好。
+
+        与 depends_on 的区别：depends_on 会再跑一遍完整 Agent（含 LLM 调用），
+        setup 直接调用工具铺状态。后者更适合"被测任务本身不该包含这些步骤"的场景 ——
+        例如「下载标题含 X 的那篇」，论文列表应当是既有前提，
+        而不是让被测 Agent 先检索一次（那样 expected_tools 就必须包含检索，
+        ref 参数的正确性反而测不出来了）。
+        """
+        setup = task_def.get("setup")
+        if not setup:
+            return
+
+        from models.schemas import Paper
+        from tools.tool_registry import registry
+
+        env = self._tool_env()
+        side_fx = self._side_effects()
+        for action in setup:
+            args = dict(action.get("args") or {})
+            args["session_id"] = session_id
+            name = action["name"]
+            if name == "translate_arxiv_pdf":
+                side_fx.enqueue_translate(**args)
+                continue
+            result = env.execute_tool(name, args) if env else registry.execute_tool(name, args)
+            if name == "get_recently_submitted_cs_papers" and isinstance(result, list) and result:
+                side_fx.set_last_papers(session_id, [Paper(**p) for p in result])
+            if isinstance(result, dict) and isinstance(result.get("paper_id"), str):
+                side_fx.set_last_active_paper_id(session_id, result["paper_id"])
+        log.info(f"  已铺设会话状态: {[a['name'] for a in setup]}")
 
     def _ensure_dependencies(self, task_def: Dict, session_id: str, agent_type: str):
         """如果任务有依赖，先执行依赖任务确保上下文（论文列表等）存在"""
