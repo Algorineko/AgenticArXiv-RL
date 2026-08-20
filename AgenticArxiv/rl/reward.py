@@ -10,7 +10,7 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
-from benchmark.metrics import TaskMetrics, argument_match_score, extract_metrics
+from benchmark.metrics import TaskMetrics, argument_match_score, extract_metrics, lcs_length
 
 
 TERMINAL_ACTIONS = {"FINISH", "FORCE_STOP", "ERROR"}
@@ -174,7 +174,7 @@ class RewardCalculator:
         # 「本该什么都不做却动了手」不该比「做错了」罚得更轻。
         if not expected:
             return 1.0 if not actual else -1.0
-        lcs = _lcs_length(actual, expected)
+        lcs = lcs_length(actual, expected)
         precision = lcs / len(actual) if actual else 0.0
         recall = lcs / len(expected)
         f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
@@ -275,17 +275,6 @@ def _parse_action(action: Any) -> Optional[Dict[str, Any]]:
     except (json.JSONDecodeError, TypeError):
         return None
     return parsed if isinstance(parsed, dict) else None
-
-
-def _lcs_length(left: Sequence[str], right: Sequence[str]) -> int:
-    row = [0] * (len(right) + 1)
-    for left_item in left:
-        previous = 0
-        for j, right_item in enumerate(right, 1):
-            saved = row[j]
-            row[j] = previous + 1 if left_item == right_item else max(row[j], row[j - 1])
-            previous = saved
-    return row[-1]
 
 
 def _scale_ratio(numerator: int, denominator: int) -> float:

@@ -4,7 +4,7 @@
 import json
 import re
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Sequence
 
 
 # 非工具调用的动作标记
@@ -43,6 +43,9 @@ class TaskMetrics:
     # 只看工具名的话，「下载标题含 X 的那篇」即使下错论文，
     # 工具序列仍是 [download_arxiv_pdf]，会被判为准确。
     arg_score: float = 1.0
+    # 声称完成但期望工具没做全。与 tool_call_accurate 的区别见 is_false_finish：
+    # 后者对「做多了」也判 False，这里只抓「做少了」。
+    false_finish: bool = False
 
     # --- 原始数据 ---
     error: Optional[str] = None
@@ -94,6 +97,8 @@ def extract_metrics(
     if arg_score is None:
         arg_score = 1.0
 
+    false_finish = is_false_finish(termination_type, tool_sequence, expected_tools)
+
     error = None
     if termination_type == "ERROR" and history:
         error = history[-1].get("observation", "")
@@ -121,6 +126,7 @@ def extract_metrics(
         parse_failures=parse_failures,
         tool_exec_failures=tool_exec_failures,
         arg_score=arg_score,
+        false_finish=false_finish,
         error=error,
     )
 
@@ -177,6 +183,47 @@ def _extract_tool_sequence(history: List[Dict]) -> List[str]:
         if name:
             tools.append(name)
     return tools
+
+
+def lcs_length(left: Sequence[Any], right: Sequence[Any]) -> int:
+    """最长公共子序列长度。
+
+    与 rl/reward.py 共用一份实现。此前两处各有一份 —— 同一个 helper
+    在多处复制，是 _precision_flags 那个 bug 的成因（三份里两份没跟上修复）。
+    """
+    row = [0] * (len(right) + 1)
+    for left_item in left:
+        previous = 0
+        for j, right_item in enumerate(right, 1):
+            saved = row[j]
+            row[j] = previous + 1 if left_item == right_item else max(row[j], row[j - 1])
+            previous = saved
+    return row[-1]
+
+
+def is_false_finish(
+    termination_type: str,
+    tool_sequence: Sequence[str],
+    expected_tools: Sequence[str],
+) -> bool:
+    """声称完成，但期望的工具调用没做全。
+
+    与 `not tool_call_accurate` 不是一回事，两者刻意区分：
+    严格序列比对对「做多了」和「做少了」一视同仁，而这里只抓「做少了」。
+
+        搜索 → 下载 → 多查一次缓存 → FINISH     召回率 1，不算假完成（只是绕路）
+        查缓存 → FINISH（本该还要下载）          召回率 <1，**假完成**
+
+    抓的是「不做事也能拿分」这条奖励漏洞。实测 state_cache_before_dl
+    24 次运行里 18 次属于此类（75%）：查完缓存直接 FINISH，
+    task_completed=True，任务根本没做。
+
+    判据只用任务已声明的 expected_tools，不引入终态谓词，
+    也不需要为每个任务写检查逻辑。
+    """
+    if termination_type != "FINISH" or not expected_tools:
+        return False
+    return lcs_length(tool_sequence, expected_tools) < len(expected_tools)
 
 
 def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
