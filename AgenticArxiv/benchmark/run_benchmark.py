@@ -67,6 +67,13 @@ def main():
              "而 token 用量是本 benchmark 的核心对比指标之一，"
              "混入后三种范式之间的差异会被淹没。",
     )
+    parser.add_argument(
+        "--offline", action="store_true",
+        help="用 data/mock_arxiv_snapshot.json 回放工具调用，不请求真实 arXiv。"
+             "结果可复现，且去掉网络耗时后「框架开销」才真正可比；"
+             "代价是不再覆盖真实 API 集成。",
+    )
+    parser.add_argument("--snapshot", default=None, help="指定快照路径（默认 data/mock_arxiv_snapshot.json）")
     args = parser.parse_args()
 
     llm_extra = {}
@@ -95,6 +102,8 @@ def main():
         model=model,
         session_prefix=args.prefix,
         llm_extra=llm_extra,
+        offline=args.offline,
+        snapshot=args.snapshot,
     )
 
     print("=" * 60)
@@ -106,6 +115,7 @@ def main():
     print(f"  重复次数: {args.repeat}")
     print(f"  总运行数: {len(task_list) * len(args.agents) * args.repeat}")
     print(f"  输出目录: {args.output}")
+    print(f"  工具执行: {'离线快照回放' if args.offline else '真实 arXiv API'}")
     print("=" * 60)
 
     results = runner.run_all(task_list)
