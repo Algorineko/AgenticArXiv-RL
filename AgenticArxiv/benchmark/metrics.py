@@ -6,6 +6,10 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional
 
 
+# 非工具调用的动作标记
+NON_TOOL_ACTIONS = ("FINISH", "FORCE_STOP", "ERROR")
+
+
 @dataclass
 class TaskMetrics:
     """单次任务执行的完整指标"""
@@ -123,20 +127,43 @@ def _get_termination_type(history: List[Dict]) -> str:
     return "INCOMPLETE"
 
 
+def _parse_tool_action(action: Any) -> Optional[Dict[str, Any]]:
+    """把 history 里的 action 解析成工具调用 dict；不是工具调用则返回 None。
+
+    终止动作既可能是裸字符串 `FINISH`，也可能被模型包成和其他动作一样的
+    JSON 外壳 `{"name": "FINISH", "args": {}}`。后者若不排除，会在
+    tool_call_sequence 里多出一个 "FINISH"，把完全正确的轨迹判成
+    accurate=False。Agent 侧已在解析阶段拦截（见
+    agents/base_agent.py::is_terminal_action），这里再兜一层，
+    以便正确处理历史结果文件和第三方 Agent 的轨迹。
+    """
+    if isinstance(action, str) and action.strip().upper() in NON_TOOL_ACTIONS:
+        return None
+    if isinstance(action, dict):
+        parsed = action
+    else:
+        try:
+            parsed = json.loads(action)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(parsed, dict):
+        return None
+    name = parsed.get("name")
+    if isinstance(name, str) and name.strip().upper() in NON_TOOL_ACTIONS:
+        return None
+    return parsed
+
+
 def _extract_tool_sequence(history: List[Dict]) -> List[str]:
     """从 history 中提取实际调用的工具名序列"""
     tools = []
     for step in history:
-        action = step.get("action", "")
-        if action in ("FINISH", "FORCE_STOP", "ERROR"):
+        parsed = _parse_tool_action(step.get("action", ""))
+        if parsed is None:
             continue
-        try:
-            action_dict = json.loads(action)
-            name = action_dict.get("name", "")
-            if name:
-                tools.append(name)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        name = parsed.get("name", "")
+        if name:
+            tools.append(name)
     return tools
 
 
@@ -167,7 +194,7 @@ def _count_tool_failures(history: List[Dict]) -> int:
     error_markers = ["错误:", "工具执行失败:", "命令失败", "命令执行超时", "命令执行异常"]
     for step in history:
         action = step.get("action", "")
-        if action in ("FINISH", "FORCE_STOP", "ERROR"):
+        if action in NON_TOOL_ACTIONS:
             continue
         obs = step.get("observation", "")
         if any(marker in obs for marker in error_markers):

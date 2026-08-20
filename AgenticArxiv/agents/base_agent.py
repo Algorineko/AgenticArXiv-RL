@@ -13,6 +13,19 @@ from tools.tool_registry import registry
 from agents.side_effects import SideEffectManager, LocalSideEffectManager
 
 
+# 循环终止标记。模型有时不写裸 `Action: FINISH`，而是套上和其他动作一样的
+# JSON 外壳 `{"name": "FINISH", "args": {}}` —— prompt 里其余动作都是 JSON，
+# 这么写很自然。若不识别，它会被当成一次工具调用：白跑一轮迭代，
+# 还会在 benchmark 的 tool_call_sequence 里多出一个 "FINISH"，
+# 把本来完全正确的轨迹判成 accurate=False。
+TERMINAL_ACTIONS = ("FINISH", "FORCE_STOP", "ERROR")
+
+
+def is_terminal_action(name: Any) -> bool:
+    """判断解析出的动作名是否代表「结束」而非一次工具调用。"""
+    return isinstance(name, str) and name.strip().upper() in TERMINAL_ACTIONS
+
+
 class BaseAgent(ABC):
     """所有 Agent 方案的基类，封装通用的循环控制、日志、SSE、副作用逻辑"""
 
