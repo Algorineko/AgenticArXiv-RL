@@ -40,6 +40,7 @@ class BenchmarkReport:
                 "avg_tokens": _avg(items, "total_tokens"),
                 "completion_rate": _rate(items, "task_completed"),
                 "tool_accuracy": _rate(items, "tool_call_accurate"),
+                "arg_accuracy": _avg(items, "arg_score"),
                 "avg_parse_failures": _avg(items, "parse_failures"),
                 "avg_tool_failures": _avg(items, "tool_exec_failures"),
             }
@@ -78,6 +79,7 @@ class BenchmarkReport:
                 "completed": m.task_completed,
                 "termination": m.termination_type,
                 "tool_accurate": m.tool_call_accurate,
+                "arg_score": m.arg_score,
                 "tools": ",".join(m.tool_call_sequence),
                 "expected": ",".join(m.expected_tools),
                 "parse_fail": m.parse_failures,
@@ -132,6 +134,7 @@ class BenchmarkReport:
         acc_rows = [
             ("任务完成率", "completion_rate"),
             ("工具调用准确率", "tool_accuracy"),
+            ("参数准确率", "arg_accuracy"),
             ("平均解析失败", "avg_parse_failures"),
             ("平均工具失败", "avg_tool_failures"),
         ]
