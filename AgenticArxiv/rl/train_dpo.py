@@ -24,9 +24,9 @@ from datasets import load_dataset
 
 
 def _precision_flags():
-    """只有 CUDA 才开 fp16；CPU / Apple MPS 上开 fp16 会训练失败。"""
-    import torch
-    return {"fp16": True} if torch.cuda.is_available() else {}
+    """见 rl/precision.py：CUDA 上优先 bf16，退回 fp16；CPU / MPS 不开混合精度。"""
+    from rl.precision import precision_flags
+    return precision_flags()
 
 
 def main():
