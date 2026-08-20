@@ -10,7 +10,7 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
-from benchmark.metrics import TaskMetrics, extract_metrics
+from benchmark.metrics import TaskMetrics, argument_match_score, extract_metrics
 
 
 TERMINAL_ACTIONS = {"FINISH", "FORCE_STOP", "ERROR"}
@@ -178,26 +178,10 @@ class RewardCalculator:
         history: Sequence[Dict[str, Any]],
         expected_args: Optional[Sequence[Optional[Mapping[str, Any]]]],
     ) -> Optional[float]:
-        if expected_args is None:
-            return None
-        actual = []
-        for step in history:
-            action = _parse_action(step.get("action", ""))
-            if action:
-                actual.append(action.get("parameters", action.get("args", {})))
-        scores = []
-        for index, expected in enumerate(expected_args):
-            if expected is None:
-                continue
-            predicted = actual[index] if index < len(actual) else {}
-            keys = set(expected)
-            if not keys:
-                scores.append(1.0 if not predicted else 0.0)
-                continue
-            key_recall = len(keys & set(predicted)) / len(keys)
-            value_accuracy = sum(predicted.get(k) == v for k, v in expected.items()) / len(keys)
-            scores.append((key_recall + value_accuracy) / 2)
-        return 2 * (sum(scores) / len(scores) if scores else 1.0) - 1
+        # 比对逻辑已提取到 benchmark/metrics.py，供 benchmark 报告共用；
+        # 这里只做 [0,1] → [-1,1] 的缩放，语义与原实现一致。
+        score = argument_match_score(history, expected_args)
+        return None if score is None else 2 * score - 1
 
     @staticmethod
     def _process_score(history: Sequence[Dict[str, Any]], metrics: TaskMetrics) -> float:

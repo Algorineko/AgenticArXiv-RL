@@ -38,6 +38,10 @@ class TaskMetrics:
     tool_call_accurate: bool = False
     parse_failures: int = 0
     tool_exec_failures: int = 0
+    # 参数级准确率（0~1）。没有 expected_tool_args 的任务恒为 1.0，不参与扣分。
+    # 只看工具名的话，「下载标题含 X 的那篇」即使下错论文，
+    # 工具序列仍是 [download_arxiv_pdf]，会被判为准确。
+    arg_score: float = 1.0
 
     # --- 原始数据 ---
     error: Optional[str] = None
@@ -83,6 +87,10 @@ def extract_metrics(
     parse_failures = _count_parse_failures(history)
     tool_exec_failures = _count_tool_failures(history)
 
+    arg_score = argument_match_score(history, task_def.get("expected_tool_args"))
+    if arg_score is None:
+        arg_score = 1.0
+
     error = None
     if termination_type == "ERROR" and history:
         error = history[-1].get("observation", "")
@@ -109,6 +117,7 @@ def extract_metrics(
         tool_call_accurate=tool_call_accurate,
         parse_failures=parse_failures,
         tool_exec_failures=tool_exec_failures,
+        arg_score=arg_score,
         error=error,
     )
 
@@ -172,6 +181,41 @@ def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
     if not expected:
         return True
     return actual == expected
+
+
+def argument_match_score(history, expected_args):
+    """参数级匹配度，返回 [0,1] 或 None（任务未声明 expected_tool_args）。
+
+    从 rl/reward.py 的 _argument_score 提取，语义保持一致：
+    每一步取 (键覆盖率 + 取值正确率) / 2，再对各步取平均。
+    expected_args 中为 None 的项表示该步不校验参数。
+
+    提取到此处是为了让 benchmark 报告也能反映参数准确率 ——
+    此前它只存在于 RL 奖励里，TaskMetrics 中没有对应字段，
+    于是「工具选对了但参数选错了」在 benchmark 里完全不可见。
+    """
+    if expected_args is None:
+        return None
+
+    actual = []
+    for step in history or []:
+        parsed = _parse_tool_action(step.get("action", ""))
+        if parsed is not None:
+            actual.append(parsed.get("parameters", parsed.get("args", {})) or {})
+
+    scores = []
+    for index, expected in enumerate(expected_args):
+        if expected is None:
+            continue
+        predicted = actual[index] if index < len(actual) else {}
+        keys = set(expected)
+        if not keys:
+            scores.append(1.0 if not predicted else 0.0)
+            continue
+        key_recall = len(keys & set(predicted)) / len(keys)
+        value_accuracy = sum(predicted.get(k) == v for k, v in expected.items()) / len(keys)
+        scores.append((key_recall + value_accuracy) / 2)
+    return sum(scores) / len(scores) if scores else 1.0
 
 
 def _count_parse_failures(history: List[Dict]) -> int:
