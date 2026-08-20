@@ -93,6 +93,47 @@ class BenchmarkReport:
             summary[agent_type] = row
         return summary
 
+    def cost_by_agent(self, criterion: str = "accurate") -> Dict[str, Dict[str, Any]]:
+        """交付一个成功结果的代价，以及失败时的代价形态。
+
+        分母取成功数而非运行数，分子取**全部**运行的用量：失败的尝试同样
+        烧 token 和时间，把它们排除在外会让「经常失败但失败得很快」的
+        Agent 显得便宜。
+
+        另外按成功/失败分开报迭代数。对全部运行取平均会双向污染：
+        撞上限的失败跑满迭代（拉高），提前放弃的失败只跑一两步（拉低），
+        混在一起既不代表成功时的效率，也不代表失败的代价。
+        """
+        is_success = SUCCESS_CRITERIA[criterion]
+        grouped: Dict[str, List[TaskMetrics]] = defaultdict(list)
+        for m in self.metrics:
+            grouped[m.agent_type].append(m)
+
+        summary: Dict[str, Dict[str, Any]] = {}
+        for agent_type, items in grouped.items():
+            wins = [m for m in items if is_success(m)]
+            losses = [m for m in items if not is_success(m)]
+            n_win = len(wins)
+            total_tokens = sum(m.total_tokens for m in items)
+            total_calls = sum(len(m.tool_call_sequence) for m in items)
+            total_ms = sum(m.total_time_ms for m in items)
+            summary[agent_type] = {
+                "runs": len(items),
+                "successes": n_win,
+                # 一次成功也没有时，「每次成功的代价」无从谈起 —— 返回 None
+                # 而不是 0 或无穷大，两者都会在排序里给出错误结论。
+                "tokens_per_success": total_tokens / n_win if n_win else None,
+                "calls_per_success": total_calls / n_win if n_win else None,
+                "ms_per_success": total_ms / n_win if n_win else None,
+                "median_iterations_success": _median([m.iteration_count for m in wins]),
+                "median_iterations_failure": _median([m.iteration_count for m in losses]),
+                # 失败形态：撞上限（死循环）与提前放弃是两种不同的病
+                "failed_at_limit": sum(1 for m in losses if m.termination_type == "FORCE_STOP"),
+                "failed_claiming_done": sum(1 for m in losses if m.termination_type == "FINISH"),
+                "failed_with_error": sum(1 for m in losses if m.termination_type == "ERROR"),
+            }
+        return summary
+
     def difficulty_bands(self, criterion: str = "accurate") -> Dict[str, List[str]]:
         """按成功率把任务分三档，跨 Agent 合并统计。
 
@@ -243,6 +284,38 @@ class BenchmarkReport:
 
         lines.append("")
 
+        # 代价（按成功归一化）
+        cost = self.cost_by_agent()
+        if cost:
+            lines.append("### 代价（按成功次数归一化）")
+            lines.append("")
+            lines.append(header)
+            lines.append(sep)
+            cost_rows = [
+                ("Token / 成功", "tokens_per_success"),
+                ("工具调用 / 成功", "calls_per_success"),
+                ("耗时(ms) / 成功", "ms_per_success"),
+                ("迭代数中位·成功", "median_iterations_success"),
+                ("迭代数中位·失败", "median_iterations_failure"),
+            ]
+            for label, key in cost_rows:
+                vals = []
+                for a in agents:
+                    v = cost.get(a, {}).get(key)
+                    vals.append("n/a" if v is None else _fmt(v))
+                lines.append(f"| {label} | " + " | ".join(vals) + " |")
+            lines.append("")
+            lines.append("失败形态：")
+            lines.append("")
+            lines.append(header)
+            lines.append(sep)
+            for label, key in [("撞迭代上限", "failed_at_limit"),
+                               ("声称完成但错", "failed_claiming_done"),
+                               ("异常终止", "failed_with_error")]:
+                vals = [str(cost.get(a, {}).get(key, 0)) for a in agents]
+                lines.append(f"| {label} | " + " | ".join(vals) + " |")
+            lines.append("")
+
         # 难度分档
         bands_md = self.difficulty_bands_md()
         if bands_md:
@@ -374,6 +447,17 @@ def pass_hat_k(n: int, c: int, k: int) -> Optional[float]:
     if c < k:
         return 0.0
     return math.comb(c, k) / math.comb(n, k)
+
+
+def _median(values: List[float]) -> Optional[float]:
+    """中位数。用中位而非均值：迭代数的分布被撞上限的样本拉出长尾。"""
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return float(ordered[mid])
+    return (ordered[mid - 1] + ordered[mid]) / 2
 
 
 def _avg(items: List[TaskMetrics], attr: str) -> float:
