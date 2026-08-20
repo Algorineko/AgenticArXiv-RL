@@ -42,10 +42,12 @@ class BenchmarkRunner:
         repeat: int = 3,
         model: Optional[str] = None,
         session_prefix: Optional[str] = None,
+        llm_extra: Optional[Dict[str, Any]] = None,
     ):
         self.agent_types = agent_types or self.AGENT_TYPES
         self.repeat = repeat
         self.model = model
+        self.llm_extra = dict(llm_extra or {})
         if session_prefix is None:
             from datetime import datetime
             session_prefix = f"bench_r{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -127,13 +129,13 @@ class BenchmarkRunner:
         side_fx = self._side_effects()
         if agent_type == "mcp":
             from mcp_protocol.mcp_agent import MCPAgent
-            return MCPAgent(self.llm_client, side_effect_mgr=side_fx)
+            return MCPAgent(self.llm_client, side_effect_mgr=side_fx, llm_extra=self.llm_extra)
         elif agent_type == "skill_cli":
             from skill_cli.skill_agent import SkillAgent
-            return SkillAgent(self.llm_client, side_effect_mgr=side_fx)
+            return SkillAgent(self.llm_client, side_effect_mgr=side_fx, llm_extra=self.llm_extra)
         else:
             from agents.agent_engine import ReActAgent
-            return ReActAgent(self.llm_client, side_effect_mgr=side_fx)
+            return ReActAgent(self.llm_client, side_effect_mgr=side_fx, llm_extra=self.llm_extra)
 
     @staticmethod
     def _cleanup_paper_artifacts(session_id: str):

@@ -61,7 +61,17 @@ def main():
         "--prefix", type=str, default=None,
         help="Session ID 前缀，用于区分不同测试轮次 (默认: bench_r<timestamp>)",
     )
+    parser.add_argument(
+        "--no-thinking", action="store_true",
+        help="关闭 Qwen3 等推理模型的思维链。思维链会让生成 token 数翻倍，"
+             "而 token 用量是本 benchmark 的核心对比指标之一，"
+             "混入后三种范式之间的差异会被淹没。",
+    )
     args = parser.parse_args()
+
+    llm_extra = {}
+    if args.no_thinking:
+        llm_extra["chat_template_kwargs"] = {"enable_thinking": False}
 
     # 筛选任务
     if args.task_ids:
@@ -84,6 +94,7 @@ def main():
         repeat=args.repeat,
         model=model,
         session_prefix=args.prefix,
+        llm_extra=llm_extra,
     )
 
     print("=" * 60)
