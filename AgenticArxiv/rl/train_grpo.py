@@ -31,7 +31,7 @@ os.environ.setdefault("STORE_BACKEND", "memory")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import GRPOConfig, GRPOTrainer
 
 import tools.arxiv_tool  # noqa: F401  触发工具注册
@@ -51,11 +51,9 @@ DEFAULT_SNAPSHOT = REPO_ROOT / "data" / "mock_arxiv_snapshot.json"
 
 
 def _precision_flags():
-    """只有 CUDA 才开 bf16/fp16；CPU / Apple MPS 上开混合精度会训练失败。"""
-    import torch
-    if torch.cuda.is_available():
-        return {"bf16": torch.cuda.is_bf16_supported(), "fp16": not torch.cuda.is_bf16_supported()}
-    return {}
+    """见 rl/precision.py：CUDA 上优先 bf16，退回 fp16；CPU / MPS 不开混合精度。"""
+    from rl.precision import precision_flags
+    return precision_flags()
 
 
 def _gold_completion_tokens(tokenizer, tasks) -> int:
@@ -74,6 +72,58 @@ def _gold_completion_tokens(tokenizer, tasks) -> int:
     return max(lengths)
 
 
+class RewardVarianceGuard(TrainerCallback):
+    """组内奖励方差为 0 时中止训练。
+
+    GRPO 的梯度来自同一 prompt 采样出的若干条轨迹之间的奖励差异。
+    若一组内所有样本拿到同一个奖励，优势归零，这一步不产生任何梯度。
+    最常见的成因是基座模型还吐不出可解析的动作 —— 每条采样都落到解析
+    失败的地板分，方差恒为 0。
+
+    这种失败是静默的：训练照常跑完、loss 看着像在收敛（其实只是 KL 项）、
+    checkpoint 照常保存，唯一的迹象是日志里 frac_reward_zero_std 恒为 1，
+    而这一栏很容易被忽略。这里把它变成一次响亮的失败。
+    """
+
+    def __init__(self, patience: int = 5):
+        self.patience = patience
+        self.streak = 0
+        self.tripped = False
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs:
+            return
+        frac = logs.get("frac_reward_zero_std")
+        std = logs.get("reward_std")
+        if frac is None and std is None:
+            return
+        dead = (frac is not None and float(frac) >= 1.0) or (
+            frac is None and std is not None and float(std) == 0.0
+        )
+        if not dead:
+            self.streak = 0
+            return
+
+        self.streak += 1
+        if self.streak < self.patience:
+            return
+
+        self.tripped = True
+        control.should_training_stop = True
+        mean = logs.get("reward")
+        print(
+            f"\n❌ 连续 {self.streak} 步组内奖励方差为 0"
+            + (f"（奖励恒为 {float(mean):.4f}）" if mean is not None else "")
+            + "，优势全零，训练不产生任何梯度。\n"
+            "   最常见原因：基座模型还产不出可解析的 ReAct 动作，每条采样都落到解析失败的地板分。\n"
+            "   处理办法：\n"
+            "     1) 先跑 SFT 让模型学会输出格式，再用 --model outputs/sft/final 起 GRPO\n"
+            "     2) 换更强的基座模型\n"
+            "     3) 若确认是任务全在难度谱两端（全对或全错），换一批成功率居中的任务\n"
+            "   确实想继续跑，用 --allow_zero_variance 跳过本检查。"
+        )
+
+
 def main(
     model: str = "outputs/dpo/final",
     output_dir: str = "outputs/grpo",
@@ -86,6 +136,7 @@ def main(
     max_completion_length: int = 256,
     temperature: float = 1.0,
     snapshot: str = None,
+    allow_zero_variance: bool = False,
 ):
     model_path = REPO_ROOT / model
     if model_path.exists():
@@ -165,7 +216,14 @@ def main(
         train_dataset=train_dataset,
         processing_class=tokenizer,
     )
+    guard = None
+    if not allow_zero_variance:
+        guard = RewardVarianceGuard()
+        trainer.add_callback(guard)
     trainer.train()
+
+    if guard is not None and guard.tripped:
+        raise SystemExit(1)
 
     final_dir = REPO_ROOT / output_dir / "final"
     trainer.save_model(str(final_dir))
@@ -183,6 +241,11 @@ if __name__ == "__main__":
     p.add_argument("--lr", type=float, default=1e-5)
     p.add_argument("--beta", type=float, default=0.04)
     p.add_argument("--num_generations", type=int, default=4)
+    p.add_argument(
+        "--allow_zero_variance", action="store_true",
+        help="跳过「组内奖励方差为 0」检查。默认开启该检查：方差为 0 时"
+             "GRPO 不产生任何梯度，训练会静默空转",
+    )
     p.add_argument("--max_completion_length", type=int, default=256)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--snapshot", default=None)
