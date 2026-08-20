@@ -4,6 +4,7 @@
 import csv
 import json
 import os
+import math
 from collections import defaultdict
 from typing import List, Dict, Any, Optional
 
@@ -45,6 +46,62 @@ class BenchmarkReport:
                 "avg_tool_failures": _avg(items, "tool_exec_failures"),
             }
         return summary
+
+    def reliability_by_agent(
+        self, ks=(1, 2, 3), criterion: str = "accurate"
+    ) -> Dict[str, Dict[str, Any]]:
+        """按 Agent 聚合 pass^k：先在每个任务内估计，再对任务取平均。
+
+        必须先按任务估计再平均 —— 直接把所有运行混在一起算，
+        「一个任务稳定成功、另一个稳定失败」会和「两个任务各成功一半」
+        得到相同的数字，而这两种情况的可靠性完全不同。
+        """
+        if criterion not in SUCCESS_CRITERIA:
+            raise ValueError(f"未知判据 {criterion}，可选 {sorted(SUCCESS_CRITERIA)}")
+        is_success = SUCCESS_CRITERIA[criterion]
+
+        grouped: Dict[str, Dict[str, List[TaskMetrics]]] = defaultdict(lambda: defaultdict(list))
+        for m in self.metrics:
+            grouped[m.agent_type][m.task_id].append(m)
+
+        summary: Dict[str, Dict[str, Any]] = {}
+        for agent_type, by_task in grouped.items():
+            row: Dict[str, Any] = {"criterion": criterion, "tasks": len(by_task)}
+            trials = [len(items) for items in by_task.values()]
+            row["min_trials"] = min(trials) if trials else 0
+            for k in ks:
+                scores = []
+                skipped = 0
+                for items in by_task.values():
+                    value = pass_hat_k(len(items), sum(1 for m in items if is_success(m)), k)
+                    if value is None:
+                        skipped += 1
+                    else:
+                        scores.append(value)
+                row[f"pass^{k}"] = sum(scores) / len(scores) if scores else None
+                # 试验次数不足的任务单独记账，不混进平均值
+                row[f"pass^{k}_skipped"] = skipped
+            summary[agent_type] = row
+        return summary
+
+    def difficulty_bands(self, criterion: str = "accurate") -> Dict[str, List[str]]:
+        """按成功率把任务分三档，跨 Agent 合并统计。
+
+        GRPO 的梯度来自组内奖励方差：成功率贴近 0 或 1 的任务，
+        同一 prompt 采样出的轨迹奖励一致，优势为零、不产生梯度。
+        中间带才是有效的训练样本，两端更适合留作评测的上下限。
+        """
+        is_success = SUCCESS_CRITERIA[criterion]
+        by_task: Dict[str, List[TaskMetrics]] = defaultdict(list)
+        for m in self.metrics:
+            by_task[m.task_id].append(m)
+
+        bands: Dict[str, List[str]] = {"floor": [], "middle": [], "ceiling": []}
+        for task_id, items in sorted(by_task.items()):
+            rate = sum(1 for m in items if is_success(m)) / len(items)
+            key = "floor" if rate < 0.2 else "ceiling" if rate > 0.8 else "middle"
+            bands[key].append(task_id)
+        return bands
 
     def summary_by_task(self) -> Dict[str, Dict[str, Any]]:
         """按任务 ID 聚合"""
@@ -125,6 +182,29 @@ class BenchmarkReport:
 
         lines.append("")
 
+        # 可靠性对比表
+        rel = self.reliability_by_agent()
+        if rel:
+            lines.append("### 可靠性（pass^k：k 次试验全部成功）")
+            lines.append("")
+            lines.append(header)
+            lines.append(sep)
+            for k in (1, 2, 3):
+                vals = []
+                for a in agents:
+                    v = rel.get(a, {}).get(f"pass^{k}")
+                    vals.append("n/a" if v is None else f"{v:.0%}")
+                lines.append(f"| pass^{k} | " + " | ".join(vals) + " |")
+            skipped = max(rel[a].get("pass^3_skipped", 0) for a in agents)
+            min_trials = min(rel[a].get("min_trials", 0) for a in agents)
+            if skipped:
+                lines.append("")
+                lines.append(
+                    f"> {skipped} 个任务的试验次数不足 3，未计入 pass^3"
+                    f"（最少的任务只有 {min_trials} 次）。"
+                )
+            lines.append("")
+
         # 准确性对比表
         lines.append("### 准确性对比")
         lines.append("")
@@ -150,6 +230,12 @@ class BenchmarkReport:
 
         lines.append("")
 
+        # 难度分档
+        bands_md = self.difficulty_bands_md()
+        if bands_md:
+            lines.append(bands_md)
+            lines.append("")
+
         # 按任务对比
         task_summary = self.summary_by_task()
         if task_summary:
@@ -163,6 +249,19 @@ class BenchmarkReport:
                     f"| {s['completion_rate']:.0%} | {s['tool_accuracy']:.0%} |"
                 )
 
+        return "\n".join(lines)
+
+    def difficulty_bands_md(self) -> str:
+        bands = self.difficulty_bands()
+        total = sum(len(v) for v in bands.values())
+        if not total:
+            return ""
+        lines = ["### 任务难度分档（跨 Agent 合并成功率）", ""]
+        lines.append("| 档位 | 成功率 | 任务数 | 用途 |")
+        lines.append("|---|---|---|---|")
+        lines.append(f"| floor | < 20% | {len(bands['floor'])} | 评测下限；GRPO 无梯度 |")
+        lines.append(f"| middle | 20~80% | {len(bands['middle'])} | **GRPO 训练集**；奖励方差最大 |")
+        lines.append(f"| ceiling | > 80% | {len(bands['ceiling'])} | 评测上限；GRPO 无梯度 |")
         return "\n".join(lines)
 
     def to_csv(self, path: str):
@@ -231,6 +330,38 @@ class BenchmarkReport:
 
 
 # ---- 工具函数 ----
+
+# 可靠性判据。pass^k 对「成功」的定义敏感，所以显式列出而不是写死一个。
+SUCCESS_CRITERIA = {
+    "completed": lambda m: m.task_completed,
+    "accurate": lambda m: m.task_completed and m.tool_call_accurate,
+}
+
+
+def pass_hat_k(n: int, c: int, k: int) -> Optional[float]:
+    """pass^k：从 n 次试验里随机抽 k 次，全部成功的概率。
+
+    采用 τ-bench 的 pass^k（**全部**成功），而非 HumanEval 的 pass@k
+    （**至少一次**成功）。前者衡量可靠性，k 越大越低；后者衡量能力上界，
+    k 越大越高。Agent 关心的是前者 —— 一个「三次里对一次」的 Agent
+    不能用，哪怕它的单次成功率看着不错。
+
+        pass^k = C(c, k) / C(n, k)
+
+    这是无偏估计，用上了全部 n 次试验，而不是只取前 k 次。
+    pass^1 恒等于朴素成功率 c/n，可作自检。
+
+    n < k 时无法估计，返回 None（由调用方决定跳过还是报缺失），
+    静默按 0 计会把「样本不够」和「真的做不到」混为一谈。
+    """
+    if k <= 0:
+        raise ValueError("k 必须为正")
+    if n < k:
+        return None
+    if c < k:
+        return 0.0
+    return math.comb(c, k) / math.comb(n, k)
+
 
 def _avg(items: List[TaskMetrics], attr: str) -> float:
     if not items:
