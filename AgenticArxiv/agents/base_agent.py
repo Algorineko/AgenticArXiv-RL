@@ -18,12 +18,25 @@ class BaseAgent(ABC):
 
     agent_type: str = "regex"  # 子类覆写
 
+    # ReAct 循环里，Observation 必须由工具真实执行产生。
+    # 不设 stop 时模型会自己往下编造 Observation 与后续步骤，例如：
+    #     Action: {...}
+    #     Observation: 成功获取5篇论文列表，已保存至 output/...   ← 编的
+    #     Thought: 任务已完成
+    #     Action: FINISH
+    # 解析用的正则恰好在 Observation 前截断，所以第一个动作仍能取出，
+    # 但这些续写既浪费 token（实测多耗约一倍），也让"多跳任务"退化成
+    # 模型自说自话，而非真的与环境交互。三种 Agent 的 prompt 都用
+    # Observation: 作分隔，故在此统一设置。
+    stop_sequences: Tuple[str, ...] = ("Observation:",)
+
     def __init__(
         self,
         llm_client: LLMClient,
         side_effect_mgr: Optional[SideEffectManager] = None,
         env: Optional[Any] = None,
         max_iterations: int = 5,
+        llm_extra: Optional[Dict[str, Any]] = None,
     ):
         """
         Args:
@@ -33,11 +46,17 @@ class BaseAgent(ABC):
             env: 可选的工具执行环境（需实现 execute_tool(name, args)）。
                 传入 MockArxivEnv 即可让 rollout 走快照回放而非真实 API。
             max_iterations: ReAct 最大迭代轮数
+            llm_extra: 透传给 LLM 接口的额外参数，会合并进每次请求。
+                例如关闭 Qwen3 系列的思维链：
+                    {"chat_template_kwargs": {"enable_thinking": False}}
+                思维链会让生成 token 数翻倍，而 token 用量是 benchmark 的
+                核心对比指标之一，混入后三种范式之间的差异会被淹没。
         """
         self.llm_client = llm_client
         self.side_effects = side_effect_mgr or LocalSideEffectManager()
         self.env = env
         self.max_iterations = max_iterations
+        self.llm_extra = dict(llm_extra or {})
         self.session_id = "default"
 
     # ---------- 子类必须实现 ----------
@@ -111,6 +130,7 @@ class BaseAgent(ABC):
 
             history_text = self.format_history(history)
             messages, extra = self.build_messages(enriched_task, tools_description, history_text)
+            extra = self._merge_llm_extra(extra)
 
             llm_ms = 0
             tool_ms = 0
@@ -218,6 +238,17 @@ class BaseAgent(ABC):
         log.info(f"任务执行完成，共 {len(history)} 步, 总耗时 {total_time_ms}ms (LLM {total_llm_ms}ms + Tool {total_tool_ms}ms)")
         log.info("-" * 80)
         return result
+
+    # ---------- LLM 请求参数 ----------
+
+    def _merge_llm_extra(self, extra: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """合并 stop 序列与 llm_extra；build_messages 返回的 extra 优先级最高。"""
+        merged: Dict[str, Any] = {}
+        if self.stop_sequences:
+            merged["stop"] = list(self.stop_sequences)
+        merged.update(self.llm_extra)
+        merged.update(extra or {})
+        return merged
 
     # ---------- 会话上下文 ----------
 
