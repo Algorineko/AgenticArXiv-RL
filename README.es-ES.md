@@ -91,8 +91,8 @@ python -m rl.rollout search_01 ../traces/train/
 |------|------|
 | **State** | Descripción de la tarea + historial de diálogo + resultados de herramientas |
 | **Action** | 4 herramientas (búsqueda/descarga/traducción/consulta de caché de arxiv) + FINISH |
-| **Reward** | Verificable (tarea exitosa +1.0, herramienta precisa +0.5, error de parseo -0.2, etc.) |
-| **Transition** | `execute_tool(action) → observation` |
+| **Reward** | Recompensa verificable multigranular de cinco componentes (format / tool / argument / process / outcome, ver más abajo) |
+| **Transition** | `execute_tool(action) → observation` (`MockArxivEnv` con replay de snapshot offline, determinista y reproducible) |
 
 ### Espacio de Acciones (4 herramientas)
 
@@ -103,16 +103,19 @@ python -m rl.rollout search_01 ../traces/train/
 
 ### Componentes de Verifiable Reward
 
-| Dimensión | Recompensa | Fuente |
-|------|------|------|
-| Tarea exitosa | +1.0 | `task_completed` |
-| Llamada a herramienta precisa | +0.5 | `tool_call_accurate` (`_check_tool_sequence`) |
-| Error de parseo | -0.2 | `parse_failures` |
-| Fallo en ejecución de herramienta | -0.3 | `tool_exec_failures` |
-| Tiempo de espera agotado | -0.5 | `termination_type == "FORCE_STOP"` |
-| Terminación por error | -1.0 | `termination_type == "ERROR"` |
+**Recompensa verificable multigranular de cinco componentes** (`rl/reward.py`, inspirada en la recompensa jerárquica de LLM-TIR). Cada componente se normaliza a `[-1, 1]` y se combina como suma ponderada dividida por la suma de pesos:
 
-**Clave**: Todas las recompensas son **verificables** (basadas en reglas), sin necesidad de anotación humana → corresponde al marco RLVR (Reinforcement Learning with Verifiable Reward).
+| Componente | Peso por defecto | Señal |
+|------|:---:|------|
+| `format` (formato) | 1 | Fracción de pasos cuya acción es una llamada JSON válida o un token de terminación |
+| `tool` (secuencia de herramientas) | 3 | **LCS-F1** sensible al orden entre las secuencias predicha y esperada (`benchmark/metrics.py` coincidencia estricta) |
+| `argument` (parámetros) | 2 | Recall de claves de parámetros × exactitud del valor; se omite automáticamente cuando la tarea no tiene `expected_tool_args` |
+| `process` (proceso) | 1 | Crédito por pasos válidos menos penalizaciones por fallos de parseo/ejecución y llamadas innecesarias |
+| `outcome` (resultado) | 3 | Completado correcto +1, completado con ruta de herramientas errónea +0.25, detención forzosa −0.5, error −1 |
+
+**Aprendizaje curricular**: durante los primeros 30 pasos de entrenamiento los pesos de `tool` / `argument` / `outcome` se multiplican por 1/3 (primero el protocolo ReAct, después la semántica); desde el paso 30 todos los pesos están activos (`RewardCalculator.schedule`).
+
+**Clave**: Todas las recompensas son **verificables** (basadas en reglas), sin necesidad de anotación humana → corresponde al marco RLVR (Reinforcement Learning with Verifiable Reward). Cada trayectoria guarda un desglose `reward_components` para auditar y detectar reward hacking.
 
 ---
 
@@ -185,8 +188,20 @@ python -m rl.train_grpo
 
 **Ventajas**:
 - Sin necesidad de reward model (desventaja de DPO: no puede aprender online)
-- Sin necesidad de value model (desventaja de PPO: alto consumo de memoria VRAM)
+- Sin necesidad de value model (desventaja de PPO: alto consumo de VRAM)
 - Adecuado para modelos pequeños (como Qwen2.5-1.5B)
+
+**Puntuación de recompensa** (`rl/grpo_reward.py`): el `completion` de un solo paso se parsea como acción ReAct, se ejecuta con `MockArxivEnv` y se completa hasta formar una "trayectoria mínima completa" antes de que la puntúe el `RewardCalculator` de cinco componentes — el mismo estándar que usan rollout y benchmark, sin una segunda definición de recompensa.
+
+### Garantías de calidad del entrenamiento (verificación automática)
+
+El pipeline de entrenamiento incorpora varias capas de validación automática que convierten los "fallos de entrenamiento silenciosos" en errores sonoros:
+
+- **Chequeo de longitud de generación**: antes de entrenar comprueba que `max_completion_length` pueda contener la acción canónica, evitando vueltas con gradientes nulos en las que el modelo nunca emite una acción completa
+- **Guardia de varianza nula**: interrumpe el entrenamiento (con sugerencias de solución) cuando la varianza de recompensa dentro del grupo se mantiene en 0, es decir, todas las ventajas son cero (`RewardVarianceGuard`)
+- **Evaluación canary**: muestrea sobre tareas fijas cada N pasos y detiene antes de tiempo si el desempeño degrada bajo el umbral repetidamente (`CanaryCallback`)
+- **Verificación por etapa**: el modelo saliente de cada fase debe superar un umbral mínimo de calidad — tasa de parseo SFT ≥ 0.3, reward promedio DPO ≥ −0.3, reward promedio GRPO ≥ −0.2 (`StageVerifier`, se omite con `--no-verify`)
+- **Precisión mixta adaptativa**: bf16 primero en CUDA, con respaldo a fp16, desactivada en CPU / MPS (`rl/precision.py`)
 
 ---
 
@@ -194,58 +209,60 @@ python -m rl.train_grpo
 
 ```
 AgenticArXiv-RL/
-├─ AgenticArxiv/                     # Paquete Python
+├─ AgenticArxiv/                     # ⭐ Paquete Python (entorno de entrenamiento RL)
 │  ├─ agents/                        # Núcleo del Agente
 │  │  ├─ base_agent.py              # Bucle ReAct genérico
 │  │  ├─ agent_engine.py            # ReActAgent (política RL)
+│  │  ├─ context_manager.py
 │  │  ├─ prompt_templates.py
-│  │  └─ side_effects.py            # Interfaz desacoplada para efectos secundarios
+│  │  └─ side_effects.py           # Interfaz desacoplada para efectos secundarios
 │  ├─ tools/                         # Capa de herramientas (espacio de acciones)
-│  │  ├─ tool_registry.py
-│  │  ├─ arxiv_tool.py
-│  │  ├─ pdf_download_tool.py
-│  │  ├─ pdf_translate_tool.py
-│  │  └─ cache_status_tool.py
+│  │  ├─ tool_registry.py          # Registro de herramientas
+│  │  ├─ arxiv_tool.py             # Búsqueda en arXiv
+│  │  ├─ pdf_download_tool.py      # Descarga de PDF
+│  │  ├─ pdf_translate_tool.py     # Traducción de PDF
+│  │  └─ cache_status_tool.py      # Consulta de caché
 │  ├─ benchmark/                     # ⭐ Fuente de Verifiable Reward
-│  │  ├─ metrics.py                 # TaskMetrics, _check_tool_sequence
-│  │  ├─ tasks.py                   # BENCHMARK_TASKS (semillas del conjunto de tareas)
-│  │  └─ runner.py
+│  │  ├─ metrics.py               # TaskMetrics, coincidencia estricta de herramientas y parámetros
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS (7 semillas de tareas)
+│  │  ├─ runner.py                 # Ejecutor de benchmarks
+│  │  ├─ run_benchmark.py          # Entrada de benchmark por CLI
+│  │  └─ report.py                 # Informe de métricas
 │  ├─ rl/                            # ⭐ Núcleo de RL
-│  │  ├─ env.py                     # RLEnv + MockArxivEnv
-│  │  ├─ policy.py
-│  │  ├─ reward.py                  # RewardCalculator
-│  │  ├─ trajectory.py              # Trajectory + lectura/escritura JSONL
-│  │  ├─ rollout.py
-│  │  ├─ tasks.py
-│  │  ├─ train_sft.py               # ⭐ Entrenamiento SFT
-│  │  ├─ train_dpo.py               # ⭐ Entrenamiento DPO
-│  │  └─ train_grpo.py              # ⭐ Entrenamiento GRPO
-│  ├─ utils/
-│  │  ├─ llm_client.py
-│  │  └─ logger.py
+│  │  ├─ train_sft.py              # ⭐ Entrenamiento SFT
+│  │  ├─ train_dpo.py              # ⭐ Entrenamiento DPO
+│  │  ├─ train_grpo.py             # ⭐ Entrenamiento GRPO (con guardias de entrenamiento)
+│  │  ├─ env.py                    # RLEnv + MockArxivEnv (entorno de snapshot offline)
+│  │  ├─ reward.py                 # RewardCalculator (recompensa de 5 componentes + currículum)
+│  │  ├─ grpo_reward.py            # Adaptador de recompensa GRPO (completion de un paso → trayectoria)
+│  │  ├─ rollout.py                # Recopilación de datos de rollout offline
+│  │  ├─ trajectory.py             # Trajectory + lectura/escritura JSONL
+│  │  ├─ build_snapshot.py         # Genera snapshot offline de arXiv (único paso con red)
+│  │  ├─ canary.py                 # Evaluación periódica en entrenamiento (detención temprana)
+│  │  ├─ stage_verifier.py         # Verificación de umbral de calidad por fase
+│  │  └─ precision.py              # Estrategia de precisión mixta (bf16/fp16/CPU)
+│  ├─ models/                        # Capa de almacenamiento (store_memory para RL, store_mysql para Web)
+│  ├─ services/                      # Servicios de efectos secundarios (event_bus / log / runtime)
+│  ├─ api/ · mcp_protocol/ · skill_cli/   # Capas de compatibilidad Web / MCP / Skill archivadas
+│  ├─ utils/                         # llm_client, logger, utilidades PDF
+│  ├─ tests/                         # 16 tests unitarios (unittest)
 │  └─ requirements.txt
-├─ traces/                           # Almacenamiento de Trajectory (JSONL)
-│  ├─ train/
-│  └─ eval/
-├─ data/
-│  ├─ sft/                           # Dataset SFT
-│  ├─ dpo/                           # Dataset DPO
-│  └─ mock_arxiv_snapshot.json       # Snapshot del MockEnv
-├─ eval/
-│  ├─ eval_cases.jsonl
-│  └─ badcase_replay.py
-├─ scripts/
-│  ├─ generate_sft_data.py
-│  └─ generate_dpo_data.py
-├─ archive/                          # Archivado (aplicación web original)
-│  ├─ api/
-│  ├─ AgenticArxivWeb/
-│  ├─ mcp_protocol/
-│  └─ skill_cli/
+├─ scripts/                          # Generación de datos
+│  ├─ generate_sft_data.py          # Trayectorias expertas con LLM API
+│  └─ generate_dpo_data.py          # Pares de preferencia muestreando el modelo SFT local
 ├─ docs/
-│  └─ rl_building.md                # Plan de refactorización completo
-├─ .venv/                            # Entorno virtual Python
-└─ README.md                         # Este documento
+│  ├─ rl_building.md               # Plan de refactorización completo
+│  ├─ multigranular_rl.md         # Diseño de recompensa multigranular (5 componentes + currículum)
+│  └─ metric_stats.md            # Plan de estadísticas/métricas
+├─ data/                             # Datasets (sft/ y dpo/ están en .gitignore — generarlos primero)
+│  ├─ sft/                           # Dataset SFT (JSONL)
+│  ├─ dpo/                           # Pares DPO (JSONL)
+│  └─ mock_arxiv_snapshot.json       # Snapshot del MockEnv
+├─ traces/                           # Almacenamiento de Trajectory (JSONL, gitignored)
+├─ archive/                          # Archivado (app web original: PDFMathTranslate / arxiv-api / weather-agent)
+├─ AgenticArxivWeb/                  # Frontend Vue3 original (archivado)
+├─ bin/ · Makefile · Overview.md     # Scripts de arranque Web heredados y docs (a modernizar)
+└─ README.md / README.en.md / README.es-ES.md   # 🇨🇳 🇬🇧 🇪🇸
 ```
 
 ---
@@ -351,8 +368,8 @@ tensorboard --logdir ./outputs/grpo/logs
 **Dependencias principales** (`requirements.txt`):
 ```txt
 torch>=2.0.0
-transformers>=4.35.0
-trl>=0.8.0                # TRL (SFT/DPO/GRPO/PPO)
+transformers>=4.45.0
+trl>=0.20.0               # TRL (SFT/DPO/GRPO), verificado en 0.29.1
 datasets>=2.14.0
 accelerate>=0.25.0
 arxiv
@@ -442,6 +459,49 @@ GRPO es más adecuado para proyectos de aprendizaje ligeros:
 - ✅ Implementación simple, fácil de depurar
 
 PPO es más adecuado para entrenamiento de modelos grandes de nivel producción (7B+), este proyecto como demo de aprendizaje no lo cubre.
+
+---
+
+## 📝 TODO (Hoja de Ruta de Desarrollo)
+
+Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribuir)!
+
+### P0 — Corto plazo (cerrar brechas clave)
+
+- [ ] **Rollout Agentic Multiturno**: el GRPO actual solo puntúa el `completion` de **un solo paso** del modelo como una "trayectoria mínima sintetizada" — no existe una interacción real de múltiples turnos "actuar → observar → actuar". Usa el soporte de tool-calling / multi-turn de TRL con `MockArxivEnv` como backend de herramientas y enmascarado de loss solo de asistente, para cerrar la brecha más visible frente al nombre de "Agentic RL".
+- [ ] **Observabilidad del entrenamiento**: conectar wandb / TensorBoard (actualmente `report_to=[]`, sin monitorización) y registrar curvas de reward / advantage / KL / componentes antes de ajustar hiperparámetros.
+
+### P1 — Medio plazo (datos y evaluación)
+
+- [ ] **Ampliar el conjunto de tareas**: `benchmark/tasks.py` tiene solo 7 tareas; ampliarlo a 50+ y derivar automáticamente `expected_tools` / `expected_tool_args`.
+- [ ] **eval/ badcase replay (reproducción de casos malos)**: el directorio `eval/` del árbol no existe aún; implementar `eval_cases.jsonl` + `badcase_replay.py` para cerrar el bucle.
+- [ ] **Investigación de reward hacking**: ampliar `RewardVarianceGuard` / `CanaryCallback` con una biblioteca de casos de reward hacking y ajuste de pesos del currículum.
+
+### P2 — Rendimiento y escala
+
+- [ ] **Muestreo acelerado con vLLM**: sustituir HF generate para aumentar el throughput del rollout (la prioridad sube cuando aterrice el rollout multiturno).
+- [ ] **Soporte multi-GPU**: configuración accelerate / FSDP (accelerate ya es dependencia, pero sin configurar).
+
+### P3 — Largo plazo (evolución algorítmica)
+
+- [ ] **Mejoras estilo DAPO**: clip-higher, dynamic sampling, filtro de overlong, loss a nivel de token (loss/clip viven dentro de TRL; requieren un fork o sobrescribir `compute_loss`).
+- [ ] **Framework de entrenamiento asíncrono**: migrar a verl `fully_async_policy` / AReaL para alojar SAO (abajo).
+
+### 🔭 SAO: el algoritmo RL agéntico asíncrono de próxima generación
+
+> **SAO (Single-Rollout Asynchronous Optimization; Optimización Asíncrona de Rollout Único)** fue propuesto por el KEG Lab de la Universidad de Tsinghua (2026-07) como evolución de GRPO para el entrenamiento **agéntico asíncrono**. Motivación: el rollout es el cuello de botella en tareas agénticas de largo horizonte, y el muestreo por grupos de GRPO se vuelve off-policy e inestable bajo asincronía (normalmente colapsa en menos de 200 pasos).
+>
+> Componentes técnicos clave:
+> 1. **Muestreo de rollout único**: una trayectoria por prompt, consumida en cuanto llega, en lugar de comparación por grupos;
+> 2. **DIS (Direct Bilateral Importance Sampling)**: calcula `r_t = π_θ / π_rollout` a partir de los log-probs por token registrados durante el rollout y **enmascara los tokens fuera del intervalo de confianza `[1−ε_l, 1+ε_h]`** (no como el recorte unilateral de PPO);
+> 3. **Actualizaciones desacopladas del value model**: el value model se actualiza dos veces por cada actualización de política (1:2), con las **capas de atención congeladas** durante su entrenamiento (solo se entrenan las proyecciones MoE);
+> 4. **GAE con omisión de observaciones**: las ventajas se propagan solo entre los tokens generados por el modelo, omitiendo los tokens de observación del entorno para filtrar ruido.
+>
+> Resultados: entrenamiento estable durante ~1000 pasos; **97.3%** en AIME2025 (vs 84.2% en GRPO), 29.8% en SWE-Bench Verified; ya usado para entrenar GLM-5.2 (750B).
+>
+> Ruta de adopción: cerrar la brecha del rollout multiturno de P0 → introducir la omisión de observaciones y el recorte bilateral DIS → migrar a verl `fully_async_policy` (`gen_batch_size=1` / `staleness_threshold` / TIS a nivel de token, alineado con SAO) o AReaL v1.0 para entrenamiento totalmente asíncrono + value model.
+>
+> 📄 **Paper**: [Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning (arXiv:2607.07508)](https://arxiv.org/abs/2607.07508) (Tsinghua KEG; código oficial aún no liberado)
 
 ---
 
