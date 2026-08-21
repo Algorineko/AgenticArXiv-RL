@@ -229,7 +229,7 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # Cache query
 │  ├─ benchmark/                     # ⭐ Verifiable Reward source
 │  │  ├─ metrics.py               # TaskMetrics, strict tool-sequence & argument matching
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS (7 task seeds)
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 task seeds)
 │  │  ├─ runner.py                 # Benchmark executor
 │  │  ├─ run_benchmark.py          # CLI benchmark entry
 │  │  └─ report.py                 # Metrics report
@@ -332,13 +332,14 @@ print(f'Reward: {reward:.2f}')  # Expected: ~1.5
 
 ## 🧪 Test Task Set
 
-From `benchmark/tasks.py`, containing 7 tasks:
+From `benchmark/tasks.py`, containing 8 tasks:
 
 | ID | Task | Type | Expected Tool |
 |----|------|------|---------------|
 | `search_01` | Search for AI papers from the last 7 days | Search | `get_recently_submitted_cs_papers` |
 | `search_02` | Get ML papers from the last 3 days | Search | `get_recently_submitted_cs_papers` |
 | `search_03` | Search for NLP papers from the last 7 days | Search | `get_recently_submitted_cs_papers` |
+| `search_04` | Search for robotics papers from the last 14 days | Search | `get_recently_submitted_cs_papers` |
 | `download_01` | Download the 1st paper as PDF | Download | `download_arxiv_pdf` |
 | `translate_01` | Translate the 1st paper | Translation | `translate_arxiv_pdf` |
 | `cache_01` | Check cache status of the 1st paper | Cache | `get_paper_cache_status` |
@@ -478,7 +479,7 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 
 ### P1 — Mid term (data & evaluation)
 
-- [ ] **Expand the task set**: `benchmark/tasks.py` has only 7 tasks; grow it to 50+ and auto-derive `expected_tools` / `expected_tool_args`.
+- [ ] **Expand the task set**: `benchmark/tasks.py` has only 8 tasks; grow it to 50+ and auto-derive `expected_tools` / `expected_tool_args`.
 - [ ] **eval/ badcase replay**: the `eval/` directory listed in the tree does not exist yet; implement `eval_cases.jsonl` + `badcase_replay.py` to close the bad-case replay loop.
 - [ ] **Reward-hacking triage**: build on `RewardVarianceGuard` / `CanaryCallback` with a reward-hacking case library and curriculum weight tuning.
 
