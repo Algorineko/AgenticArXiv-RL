@@ -36,6 +36,9 @@ git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
 ```
 
+All following commands are intended to be run from the repository root
+`AgenticArXiv-RL/`.
+
 ### 2️⃣ Environment Setup
 
 **Create a virtual environment**:
@@ -67,8 +70,7 @@ EOF
 ### 3️⃣ Test Rollout
 
 ```bash
-cd AgenticArxiv
-python -m rl.rollout search_01 ../traces/train/
+python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ```
 
 **Expected output**:
@@ -130,7 +132,7 @@ python -m rl.rollout search_01 ../traces/train/
    ```
 2. Train:
    ```bash
-   python -m rl.train_sft
+   python -m AgenticArxiv.rl.train_sft
    ```
 3. Output: `./outputs/sft/final` model
 
@@ -165,7 +167,7 @@ reproducibility; otherwise generation falls back to the live tools. Only
 different first actions whose reward gap exceeds `--min_reward_gap` are paired.
 2. Train:
    ```bash
-   python -m rl.train_dpo
+   python -m AgenticArxiv.rl.train_dpo
    ```
 3. Output: `./outputs/dpo/final` model
 
@@ -186,7 +188,7 @@ different first actions whose reward gap exceeds `--min_reward_gap` are paired.
 
 **Steps**:
 ```bash
-python -m rl.train_grpo
+python -m AgenticArxiv.rl.train_grpo
 ```
 
 **Output**: `./outputs/grpo/final` model
@@ -277,13 +279,11 @@ AgenticArXiv-RL/
 ### 1. Rollout (Collect Trajectories)
 
 ```bash
-cd AgenticArxiv
-
 # Single task
-python -m rl.rollout search_01 ../traces/train/
+python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 # Batch rollout
-python -m rl.rollout --all ../traces/train/
+python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/
 ```
 
 ### 2. Training Pipeline (SFT → DPO → GRPO)
@@ -293,16 +293,16 @@ python -m rl.rollout --all ../traces/train/
 python scripts/generate_sft_data.py
 
 # Step 2: SFT training
-python -m rl.train_sft
+python -m AgenticArxiv.rl.train_sft
 
 # Step 3: Generate DPO data (requires SFT model)
 python scripts/generate_dpo_data.py
 
 # Step 4: DPO training
-python -m rl.train_dpo
+python -m AgenticArxiv.rl.train_dpo
 
 # Step 5: GRPO training
-python -m rl.train_grpo
+python -m AgenticArxiv.rl.train_grpo
 ```
 
 ### 3. Reward Computation Test
