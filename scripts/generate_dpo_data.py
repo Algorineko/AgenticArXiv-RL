@@ -26,6 +26,7 @@ DPO 数据格式：
 import os
 import sys
 import json
+import argparse
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -40,8 +41,9 @@ os.environ.setdefault("STORE_BACKEND", "memory")
 from benchmark.tasks import get_all_tasks
 from agents.agent_engine import ReActAgent
 from agents.side_effects import LocalSideEffectManager
-from utils.llm_client import get_env_llm_client
+from utils.llm_client import TransformersLLMClient
 from rl.reward import RewardCalculator
+from rl.env import MockArxivEnv
 
 
 # 终止标记，不是真实的工具调用
@@ -60,21 +62,27 @@ def first_tool_action(result: dict) -> str:
     return ""
 
 
-def build_preference_pair(rollouts: list, task_def: dict):
+def build_preference_pair(rollouts: list, task_def: dict, min_reward_gap: float = 0.0):
     """从同一任务的多条 rollout 构造一条偏好样本，无法构造时返回 None。"""
     if len(rollouts) < 2:
         return None
 
-    ordered = sorted(rollouts, key=lambda x: x["reward"], reverse=True)
-    best, worst = ordered[0], ordered[-1]
-
-    chosen = first_tool_action(best["result"])
-    rejected = first_tool_action(worst["result"])
-
-    if not chosen or not rejected or chosen == rejected:
+    # Extremes can have the same first action even when a useful, different
+    # action exists in the middle. Search every valid pair and keep the largest
+    # reward gap instead of silently throwing that preference signal away.
+    candidates = []
+    for chosen_rollout in rollouts:
+        chosen = first_tool_action(chosen_rollout["result"])
+        if not chosen:
+            continue
+        for rejected_rollout in rollouts:
+            rejected = first_tool_action(rejected_rollout["result"])
+            gap = chosen_rollout["reward"] - rejected_rollout["reward"]
+            if rejected and chosen != rejected and gap > min_reward_gap:
+                candidates.append((gap, chosen, rejected))
+    if not candidates:
         return None
-    if best["reward"] <= worst["reward"]:
-        return None      # 奖励无差异，没有偏好信息
+    _, chosen, rejected = max(candidates, key=lambda item: item[0])
 
     return {
         "prompt": task_def["task"],
@@ -83,7 +91,17 @@ def build_preference_pair(rollouts: list, task_def: dict):
     }
 
 
-def generate_dpo_dataset(num_rollouts_per_task: int = 5):
+def generate_dpo_dataset(
+    num_rollouts_per_task: int = 5,
+    model: str = None,
+    output: str = None,
+    snapshot: str = None,
+    device: str = "auto",
+    dtype: str = "auto",
+    temperature: float = 0.8,
+    seed: int = 42,
+    min_reward_gap: float = 0.05,
+):
     """
     从 SFT 模型 rollout 生成 DPO 数据集
 
@@ -91,16 +109,32 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
         num_rollouts_per_task: 每个任务 rollout 次数
     """
 
-    sft_model_path = REPO_ROOT / "outputs" / "sft" / "final"
+    sft_model_path = Path(model) if model else REPO_ROOT / "outputs" / "sft" / "final"
     if not sft_model_path.exists():
         print(f"❌ SFT 模型不存在: {sft_model_path}")
         print(f"请先运行: python -m AgenticArxiv.rl.train_sft")
         return
 
-    # TODO: 加载 SFT 模型（需要修改 llm_client 支持本地模型）
-    # 目前占位：使用原始 LLM
-    llm_client = get_env_llm_client()
-    agent = ReActAgent(llm_client, side_effect_mgr=LocalSideEffectManager())
+    print(f"📦 加载本地 SFT 模型: {sft_model_path}")
+    llm_client = TransformersLLMClient(
+        str(sft_model_path), device=device, dtype=dtype, seed=seed
+    )
+    snapshot_path = Path(snapshot) if snapshot else REPO_ROOT / "data" / "mock_arxiv_snapshot.json"
+    env = None
+    if snapshot_path.exists():
+        env = MockArxivEnv(snapshot_path=snapshot_path, mode="replay")
+        print(f"🗂 使用离线快照: {snapshot_path}")
+    else:
+        print(
+            f"⚠️ 未找到离线快照 {snapshot_path}，工具将使用实时网络。"
+            "如需可复现生成，请先运行 python -m AgenticArxiv.rl.build_snapshot"
+        )
+    agent = ReActAgent(
+        llm_client,
+        side_effect_mgr=LocalSideEffectManager(),
+        env=env,
+        llm_extra={"temperature": temperature},
+    )
 
     reward_calc = RewardCalculator()
     dpo_data = []
@@ -134,7 +168,7 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
             print(f"   ⚠️  rollout 数量不足，跳过")
             continue
 
-        pair = build_preference_pair(rollouts, task_def)
+        pair = build_preference_pair(rollouts, task_def, min_reward_gap=min_reward_gap)
         if pair is None:
             print(f"   ⚠️  chosen/rejected 无效（无工具调用、动作相同或奖励无差异），跳过")
             continue
@@ -145,7 +179,7 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
         print(f"   ✅ chosen_reward={max(rewards):.2f}, rejected_reward={min(rewards):.2f}")
 
     # 保存到 JSONL
-    output_path = REPO_ROOT / "data" / "dpo" / "dpo_train.jsonl"
+    output_path = Path(output) if output else REPO_ROOT / "data" / "dpo" / "dpo_train.jsonl"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
@@ -156,4 +190,14 @@ def generate_dpo_dataset(num_rollouts_per_task: int = 5):
 
 
 if __name__ == "__main__":
-    generate_dpo_dataset()
+    parser = argparse.ArgumentParser(description="从本地 SFT 模型生成 DPO 偏好数据")
+    parser.add_argument("--model", default=None, help="本地 SFT 模型路径")
+    parser.add_argument("--output", default=None, help="输出 JSONL 路径")
+    parser.add_argument("--snapshot", default=None, help="离线 arXiv 快照路径")
+    parser.add_argument("--num_rollouts_per_task", type=int, default=5)
+    parser.add_argument("--device", default="auto", help="auto/cpu/cuda/cuda:0")
+    parser.add_argument("--dtype", choices=["auto", "float16", "bfloat16", "float32"], default="auto")
+    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--min_reward_gap", type=float, default=0.05)
+    generate_dpo_dataset(**vars(parser.parse_args()))
