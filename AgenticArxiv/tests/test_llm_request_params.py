@@ -22,6 +22,7 @@ import tools.pdf_translate_tool  # noqa: F401,E402
 
 from agents.agent_engine import ReActAgent  # noqa: E402
 from agents.side_effects import LocalSideEffectManager  # noqa: E402
+from utils.llm_client import TransformersLLMClient  # noqa: E402
 
 
 class CapturingClient:
@@ -71,6 +72,47 @@ class TestLlmExtra(unittest.TestCase):
     def test_default_is_empty_dict_not_none(self):
         agent = ReActAgent(CapturingClient(), side_effect_mgr=LocalSideEffectManager())
         self.assertEqual(agent.llm_extra, {})
+
+
+class TestTransformersClientResponse(unittest.TestCase):
+    def test_adapts_local_generation_to_openai_response(self):
+        import torch
+
+        class Tokenizer:
+            pad_token_id = 0
+
+            def apply_chat_template(self, messages, **kwargs):
+                return "prompt"
+
+            def __call__(self, prompt, return_tensors=None):
+                return {"input_ids": torch.tensor([[1, 2]])}
+
+            def decode(self, ids, skip_special_tokens=True):
+                return "Thought: x\nAction: FINISH\nObservation: invented"
+
+        class Model:
+            def parameters(self):
+                return iter([torch.nn.Parameter(torch.zeros(1))])
+
+            def generate(self, **kwargs):
+                return torch.tensor([[1, 2, 3, 4, 5]])
+
+        client = TransformersLLMClient.__new__(TransformersLLMClient)
+        client.tokenizer = Tokenizer()
+        client.model = Model()
+        client.seed = 7
+        client._calls = 0
+        response = client.chat_completions(
+            model="local",
+            messages=[{"role": "user", "content": "x"}],
+            extra={"stop": ["Observation:"]},
+        )
+        self.assertEqual(
+            response["choices"][0]["message"]["content"],
+            "Thought: x\nAction: FINISH\n",
+        )
+        self.assertEqual(response["usage"]["prompt_tokens"], 2)
+        self.assertEqual(response["usage"]["completion_tokens"], 3)
 
 
 if __name__ == "__main__":
