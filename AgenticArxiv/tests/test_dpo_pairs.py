@@ -68,6 +68,16 @@ class TestBuildPreferencePair(unittest.TestCase):
         self.assertEqual(pair["chosen"], SEARCH)
         self.assertEqual(pair["rejected"], DOWNLOAD)
 
+    def test_finds_distinct_middle_action_when_extremes_match(self):
+        rollouts = [rollout(2.0, SEARCH), rollout(1.0, DOWNLOAD), rollout(0.0, SEARCH)]
+        pair = build_preference_pair(rollouts, TASK)
+        self.assertEqual(pair["chosen"], SEARCH)
+        self.assertEqual(pair["rejected"], DOWNLOAD)
+
+    def test_respects_minimum_reward_gap(self):
+        rollouts = [rollout(1.01, SEARCH), rollout(1.0, DOWNLOAD)]
+        self.assertIsNone(build_preference_pair(rollouts, TASK, min_reward_gap=0.05))
+
     def test_none_when_actions_identical(self):
         rollouts = [rollout(1.5, SEARCH, "FINISH"), rollout(0.5, SEARCH, "FINISH")]
         self.assertIsNone(build_preference_pair(rollouts, TASK))
