@@ -88,8 +88,8 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 |------|------|
 | **State** | 任务描述 + 对话历史 + 工具结果 |
 | **Action** | 4 个工具（arxiv搜索/下载/翻译/缓存查询）+ FINISH |
-| **Reward** | Verifiable（任务成功+1.0、工具准确+0.5、解析错误-0.2 等） |
-| **Transition** | `execute_tool(action) → observation` |
+| **Reward** | 五分量多粒度可验证奖励（format / tool / argument / process / outcome，见下节） |
+| **Transition** | `execute_tool(action) → observation`（`MockArxivEnv` 离线快照回放，确定性可复现） |
 
 ### 动作空间（4 个工具）
 
@@ -100,16 +100,19 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 ### Verifiable Reward 组件
 
-| 维度 | 奖励 | 来源 |
-|------|------|------|
-| 任务成功 | +1.0 | `task_completed` |
-| 工具调用准确 | +0.5 | `tool_call_accurate`（`_check_tool_sequence`） |
-| 解析错误 | -0.2 | `parse_failures` |
-| 工具执行失败 | -0.3 | `tool_exec_failures` |
-| 超时 | -0.5 | `termination_type == "FORCE_STOP"` |
-| 错误终止 | -1.0 | `termination_type == "ERROR"` |
+**多粒度五分量可验证奖励**（`rl/reward.py`，借鉴 LLM-TIR 的分层奖励），每个分量归一化到 `[-1, 1]`，加权求和后除以权重和：
 
-**关键**：所有奖励都是 **可验证的**（rule-based），无需人类标注 → 对应 RLVR（Reinforcement Learning with Verifiable Reward）框架。
+| 分量 | 默认权重 | 信号 |
+|------|:---:|------|
+| `format`（格式） | 1 | 每一步 action 是否为合法 JSON 工具调用或终止符 |
+| `tool`（工具序列） | 3 | 预测与期望工具序列的**顺序感知 LCS-F1**（`benchmark/metrics.py` 严格匹配） |
+| `argument`（参数） | 2 | 参数键召回率 × 精确值准确率；任务无 `expected_tool_args` 时自动跳过 |
+| `process`（过程） | 1 | 合法步骤加分 − 解析失败 / 执行失败 / 多余调用惩罚 |
+| `outcome`（结果） | 3 | 正确完成 +1、工具路径错误的完成 +0.25、强制停止 −0.5、错误 −1 |
+
+**课程学习**：前 30 个训练步将 `tool` / `argument` / `outcome` 权重乘以 1/3（先学 ReAct 结构、后学语义正确性），30 步后全权重生效（`RewardCalculator.schedule`）。
+
+**关键**：所有奖励都是 **可验证的**（rule-based），无需人类标注 → 对应 RLVR（Reinforcement Learning with Verifiable Reward）框架。每条轨迹记录 `reward_components` 分量明细，便于审计与 reward-hacking 排查。
 
 ---
 
@@ -200,64 +203,78 @@ python -m AgenticArxiv.rl.train_grpo
 - 无需 value model（PPO 的缺点：显存开销大）
 - 适合小模型（如 Qwen2.5-1.5B）
 
+**奖励打分**（`rl/grpo_reward.py`）：把模型生成的单步 completion 解析为 ReAct 动作，用 `MockArxivEnv` 执行工具后补成「最小完整轨迹」，再交给五分量 `RewardCalculator` 打分——与 rollout / benchmark 共用同一套标准，不引入第二套奖励。
+
+### 训练质量保障（自动校验）
+
+训练链路内置多层自动校验，把「静默训练失败」变成响亮报错：
+
+- **生成长度体检**：训练前校验 `max_completion_length` 是否放得下标准动作，防「永远吐不出完整动作」的零梯度空转
+- **零方差守护**：组内奖励方差连续为 0（优势全零）时中止训练并给出修复建议（`RewardVarianceGuard`）
+- **Canary 评估**：训练中每 N 步在固定任务上采样评估，性能退化达到阈值连续多次则提前停止（`CanaryCallback`）
+- **阶段验证**：每个阶段产出模型须过最低质量阈值——SFT 可解析率 ≥ 0.3、DPO 平均奖励 ≥ −0.3、GRPO 平均奖励 ≥ −0.2（`StageVerifier`，`--no-verify` 可跳过）
+- **混合精度自适应**：CUDA 优先 bf16、回退 fp16，CPU / MPS 关闭（`rl/precision.py`）
+
 ---
 
 ## 📂 目录结构
 
 ```
 AgenticArXiv-RL/
-├─ AgenticArxiv/                     # Python 包
+├─ AgenticArxiv/                     # ⭐ Python 包（RL 训练环境）
 │  ├─ agents/                        # Agent 核心
 │  │  ├─ base_agent.py              # 通用 ReAct 循环
 │  │  ├─ agent_engine.py            # ReActAgent（RL 策略）
+│  │  ├─ context_manager.py
 │  │  ├─ prompt_templates.py
-│  │  └─ side_effects.py            # 副作用解耦接口
+│  │  └─ side_effects.py           # 副作用解耦接口
 │  ├─ tools/                         # 工具层（动作空间）
-│  │  ├─ tool_registry.py
-│  │  ├─ arxiv_tool.py
-│  │  ├─ pdf_download_tool.py
-│  │  ├─ pdf_translate_tool.py
-│  │  └─ cache_status_tool.py
+│  │  ├─ tool_registry.py          # 工具注册表
+│  │  ├─ arxiv_tool.py             # arXiv 搜索
+│  │  ├─ pdf_download_tool.py      # PDF 下载
+│  │  ├─ pdf_translate_tool.py     # PDF 翻译
+│  │  └─ cache_status_tool.py      # 缓存查询
 │  ├─ benchmark/                     # ⭐ Verifiable Reward 来源
-│  │  ├─ metrics.py                 # TaskMetrics、_check_tool_sequence
-│  │  ├─ tasks.py                   # BENCHMARK_TASKS（任务集种子）
-│  │  └─ runner.py
+│  │  ├─ metrics.py               # TaskMetrics、工具序列严格匹配、参数匹配
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS（7 个任务种子）
+│  │  ├─ runner.py                 # 基准执行器
+│  │  ├─ run_benchmark.py          # 命令行基准入口
+│  │  └─ report.py                 # 指标统计报告
 │  ├─ rl/                            # ⭐ RL 核心
-│  │  ├─ env.py                     # RLEnv + MockArxivEnv
-│  │  ├─ policy.py
-│  │  ├─ reward.py                  # RewardCalculator
-│  │  ├─ trajectory.py              # Trajectory + JSONL 读写
-│  │  ├─ rollout.py
-│  │  ├─ tasks.py
-│  │  ├─ train_sft.py               # ⭐ SFT 训练
-│  │  ├─ train_dpo.py               # ⭐ DPO 训练
-│  │  └─ train_grpo.py              # ⭐ GRPO 训练
-│  ├─ utils/
-│  │  ├─ llm_client.py
-│  │  └─ logger.py
+│  │  ├─ train_sft.py              # ⭐ SFT 训练
+│  │  ├─ train_dpo.py              # ⭐ DPO 训练
+│  │  ├─ train_grpo.py             # ⭐ GRPO 训练（含训练守卫）
+│  │  ├─ env.py                    # RLEnv + MockArxivEnv（离线快照环境）
+│  │  ├─ reward.py                 # RewardCalculator（五分量可验证奖励 + 课程）
+│  │  ├─ grpo_reward.py            # GRPO 奖励适配（单步 completion → 合成轨迹）
+│  │  ├─ rollout.py                # 离线 rollout 数据收集
+│  │  ├─ trajectory.py             # Trajectory + JSONL 读写
+│  │  ├─ build_snapshot.py         # 生成 arXiv 离线快照（唯一联网步骤）
+│  │  ├─ canary.py                 # 训练中周期性评估（防退化早停）
+│  │  ├─ stage_verifier.py         # 阶段产出模型质量阈值验证
+│  │  └─ precision.py              # 混合精度策略（bf16/fp16/CPU）
+│  ├─ models/                        # 存储层（RL 用 store_memory，Web 版用 store_mysql）
+│  ├─ services/                      # 副作用服务（event_bus / log / runtime）
+│  ├─ api/ · mcp_protocol/ · skill_cli/   # 归档的 Web / MCP / Skill 兼容层
+│  ├─ utils/                         # llm_client、logger、PDF 工具
+│  ├─ tests/                         # 16 个单元测试（unittest）
 │  └─ requirements.txt
-├─ traces/                           # Trajectory 存储（JSONL）
-│  ├─ train/
-│  └─ eval/
-├─ data/
-│  ├─ sft/                           # SFT 数据集
-│  ├─ dpo/                           # DPO 数据集
-│  └─ mock_arxiv_snapshot.json       # MockEnv 快照
-├─ eval/
-│  ├─ eval_cases.jsonl
-│  └─ badcase_replay.py
-├─ scripts/
-│  ├─ generate_sft_data.py
-│  └─ generate_dpo_data.py
-├─ archive/                          # 归档（原 Web 应用）
-│  ├─ api/
-│  ├─ AgenticArxivWeb/
-│  ├─ mcp_protocol/
-│  └─ skill_cli/
+├─ scripts/                          # 数据生成
+│  ├─ generate_sft_data.py          # 用 LLM API 生成 expert 轨迹
+│  └─ generate_dpo_data.py          # 用本地 SFT 模型采样构造偏好对
 ├─ docs/
-│  └─ rl_building.md                # 完整改造计划
-├─ .venv/                            # Python 虚拟环境
-└─ README.md                         # 本文档
+│  ├─ rl_building.md               # 完整改造计划
+│  ├─ multigranular_rl.md         # 多粒度奖励设计（五分量 + 课程学习）
+│  └─ metric_stats.md            # 指标统计方案
+├─ data/                             # 数据集（sft/ 与 dpo/ 为 gitignored，需自行生成）
+│  ├─ sft/                           # SFT 数据集（JSONL）
+│  ├─ dpo/                           # DPO 偏好对（JSONL）
+│  └─ mock_arxiv_snapshot.json       # MockEnv 离线快照
+├─ traces/                           # Trajectory 存储（JSONL，gitignored）
+├─ archive/                          # 归档（原 Web 应用：PDFMathTranslate / arxiv-api / weather-agent）
+├─ AgenticArxivWeb/                  # 原 Vue3 前端（已归档）
+├─ bin/ · Makefile · Overview.md     # 遗留的 Web 启动脚本与文档（待现代化）
+└─ README.md / README.en.md / README.es-ES.md   # 🇨🇳 🇬🇧 🇪🇸 三语说明
 ```
 
 ---
@@ -361,8 +378,8 @@ tensorboard --logdir ./outputs/grpo/logs
 **核心依赖**（`requirements.txt`）：
 ```txt
 torch>=2.0.0
-transformers>=4.35.0
-trl>=0.8.0                # TRL (SFT/DPO/GRPO/PPO)
+transformers>=4.45.0
+trl>=0.20.0               # TRL (SFT/DPO/GRPO)，已在 0.29.1 上验证
 datasets>=2.14.0
 accelerate>=0.25.0
 arxiv
@@ -452,6 +469,48 @@ GRPO 更适合轻量级学习项目：
 - ✅ 实现简单，调试容易
 
 PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不涉及。
+
+---
+## 📝 TODO（开发路线图）
+
+按优先级排列。
+
+### P0 — 近期（填补核心缺口）
+
+- [ ] **多轮 Agentic Rollout**：当前 GRPO 只对模型生成的**单步** completion 做「合成最小轨迹」打分，未实现真正的多轮「行动 → 环境反馈 → 再行动」交互采样。用 TRL 的 tool-calling / multi-turn 机制 + `MockArxivEnv` 作工具后端，配合 assistant-only loss mask（只让模型 token 参与训练），补齐与「Agentic RL」之名最不相称的缺口。
+- [ ] **训练可观测性**：接入 wandb / TensorBoard（当前 `report_to=[]`，无任何监控），记录 reward / advantage / kl / 各奖励分量曲线，再谈超参调优。
+
+### P1 — 中期（数据与评测）
+
+- [ ] **任务集扩充**：`benchmark/tasks.py` 仅 7 个任务，扩充到 50+，并支持自动派生 `expected_tools` / `expected_tool_args`，奖励才有区分度。
+- [ ] **eval/ badcase replay**：目录树中的 `eval/`（`eval_cases.jsonl`、`badcase_replay.py`）实际尚不存在，需实现坏例回放闭环。
+- [ ] **Reward hacking 排查**：在现有 `RewardVarianceGuard` / `CanaryCallback` 基础上补 reward-hacking 案例库与多粒度权重课程调优。
+
+### P2 — 性能与规模
+
+- [ ] **vLLM 加速采样**：替换 HF generate，提升 rollout 吞吐（多轮 rollout 落地后优先级上升）。
+- [ ] **多卡支持**：accelerate / FSDP 配置（依赖已有 accelerate，但当前零配置、单卡单进程）。
+
+### P3 — 长期（算法演进）
+
+- [ ] **DAPO 系改进**：clip-higher、dynamic sampling、overlong filtering、token-level loss（loss/clip 在 TRL 内部，需 fork 或覆写 `compute_loss`）。
+- [ ] **异步训练框架**：迁移 verl `fully_async_policy` / AReaL 全异步架构，承接 SAO（见下）。
+
+### 🔭 SAO：下一代异步 Agentic RL 算法
+
+> **SAO（Single-Rollout Asynchronous Optimization，单 rollout 异步优化）** 由清华大学 KEG 实验室提出（2026-07），是 GRPO 在**异步 agentic 训练**场景下的演进方向。核心动机：长程 agent 任务的 rollout 是训练瓶颈，GRPO 的组式采样在异步下会 off-policy、不稳定（典型 <200 步即崩）。
+>
+> 五个关键技术点：
+> 1. **单 rollout 采样**：每个 prompt 只生成一条轨迹、随到随训，替代组式对比；
+> 2. **DIS 直接双边重要性采样**：用 rollout 时记录的 token logprob 计算 `r_t = π_θ / π_rollout`，越出信任区间 `[1−ε_l, 1+ε_h]` 的 token **直接掩码为 0**（非 PPO 式单侧 clip）；
+> 3. **value model 解耦更新**：策略:value = 1:2 更新频率，value 训练时**冻结注意力层**（只训 MoE 投影层）；
+> 4. **skip-observation GAE**：优势只在模型生成的 token 之间传播，跳过环境观察 token，滤除环境噪声。
+>
+> 效果：稳定训练 ~1000 步，AIME2025 达 **97.3%**（vs GRPO 84.2%），SWE-Bench Verified 29.8%，已用于 GLM-5.2（750B）训练。
+>
+> 引入路径：先做 P0 多轮 rollout → 引入 skip-observation 掩码与 DIS 双边裁剪 → 迁移 verl `fully_async_policy`（`gen_batch_size=1` / `staleness_threshold` / token 级 TIS 裁剪，与 SAO 思路一致）或 AReaL v1.0 实现全异步 + value model。
+>
+> 📄 **论文**：[Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning（arXiv:2607.07508）](https://arxiv.org/abs/2607.07508)（清华 KEG，官方代码尚未开源）
 
 ---
 
