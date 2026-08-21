@@ -36,6 +36,16 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
         "expected_termination": "FINISH",
         "category": "search",
     },
+    {
+        "id": "search_04",
+        "task": "检索最近14天机器人学(cs.RO)方向的论文，最多8篇",
+        "expected_tools": ["get_recently_submitted_cs_papers"],
+        "expected_tool_args": [
+            {"aspect": "RO", "days": 14, "max_results": 8}
+        ],
+        "expected_termination": "FINISH",
+        "category": "search",
+    },
 
     # === 类型 2: 下载 PDF（依赖搜索） ===
     {
