@@ -38,6 +38,9 @@ git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
 ```
 
+Todos los comandos siguientes deben ejecutarse desde la raíz del repositorio
+`AgenticArXiv-RL/`.
+
 ### 2️⃣ Configuración del Entorno
 
 **Crear entorno virtual**:
@@ -69,8 +72,7 @@ EOF
 ### 3️⃣ Prueba de Rollout
 
 ```bash
-cd AgenticArxiv
-python -m rl.rollout search_01 ../traces/train/
+python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ```
 
 **Salida esperada**:
@@ -132,7 +134,7 @@ python -m rl.rollout search_01 ../traces/train/
    ```
 2. Entrenar:
    ```bash
-   python -m rl.train_sft
+   python -m AgenticArxiv.rl.train_sft
    ```
 3. Salida: Modelo en `./outputs/sft/final`
 
@@ -160,7 +162,7 @@ python -m rl.rollout search_01 ../traces/train/
    ```
 2. Entrenar:
    ```bash
-   python -m rl.train_dpo
+   python -m AgenticArxiv.rl.train_dpo
    ```
 3. Salida: Modelo en `./outputs/dpo/final`
 
@@ -181,7 +183,7 @@ python -m rl.rollout search_01 ../traces/train/
 
 **Pasos**:
 ```bash
-python -m rl.train_grpo
+python -m AgenticArxiv.rl.train_grpo
 ```
 
 **Salida**: Modelo en `./outputs/grpo/final`
@@ -272,13 +274,11 @@ AgenticArXiv-RL/
 ### 1. Rollout (recopilar trajectory)
 
 ```bash
-cd AgenticArxiv
-
 # Tarea individual
-python -m rl.rollout search_01 ../traces/train/
+python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 # Rollout por lotes
-python -m rl.rollout --all ../traces/train/
+python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/
 ```
 
 ### 2. Flujo de Entrenamiento (SFT → DPO → GRPO)
@@ -288,16 +288,16 @@ python -m rl.rollout --all ../traces/train/
 python scripts/generate_sft_data.py
 
 # Paso 2: Entrenamiento SFT
-python -m rl.train_sft
+python -m AgenticArxiv.rl.train_sft
 
 # Paso 3: Generar datos DPO (requiere modelo SFT)
 python scripts/generate_dpo_data.py
 
 # Paso 4: Entrenamiento DPO
-python -m rl.train_dpo
+python -m AgenticArxiv.rl.train_dpo
 
 # Paso 5: Entrenamiento GRPO
-python -m rl.train_grpo
+python -m AgenticArxiv.rl.train_grpo
 ```
 
 ### 3. Prueba de cálculo de Reward

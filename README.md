@@ -36,6 +36,8 @@ git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
 ```
 
+后续命令默认均在仓库根目录 `AgenticArXiv-RL/` 下执行。
+
 ### 2️⃣ 环境配置
 
 **创建虚拟环境**：
