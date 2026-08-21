@@ -153,6 +153,13 @@ python -m rl.rollout search_01 ../traces/train/
    ```bash
    python scripts/generate_dpo_data.py
    ```
+
+This command samples the local Hugging Face model at `outputs/sft/final` and
+does not require `LLM_API_KEY`. Use `--model`, `--num_rollouts_per_task`,
+`--temperature`, and `--seed` to customize generation. When
+`data/mock_arxiv_snapshot.json` exists, tool calls are replayed offline for
+reproducibility; otherwise generation falls back to the live tools. Only
+different first actions whose reward gap exceeds `--min_reward_gap` are paired.
 2. Train:
    ```bash
    python -m rl.train_dpo

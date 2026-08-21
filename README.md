@@ -152,6 +152,21 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
    ```bash
    python scripts/generate_dpo_data.py
    ```
+
+该命令直接加载 `outputs/sft/final` 的本地 Hugging Face 模型进行多次采样，
+不需要 `LLM_API_KEY`。常用可选参数：
+
+```bash
+python scripts/generate_dpo_data.py \
+  --model outputs/sft/final \
+  --num_rollouts_per_task 8 \
+  --temperature 0.8 \
+  --seed 42
+```
+
+若已生成 `data/mock_arxiv_snapshot.json`，工具调用会自动使用离线回放，
+保证数据生成可复现；否则会回退到实时网络。只有奖励差超过
+`--min_reward_gap`（默认 0.05）且首个工具动作不同的轨迹才会组成偏好对。
 2. 训练：
    ```bash
    python -m AgenticArxiv.rl.train_dpo
