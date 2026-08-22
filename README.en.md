@@ -339,7 +339,7 @@ From `benchmark/tasks.py`, containing 8 tasks:
 | `search_01` | Search for AI papers from the last 7 days | Search | `get_recently_submitted_cs_papers` |
 | `search_02` | Get ML papers from the last 3 days | Search | `get_recently_submitted_cs_papers` |
 | `search_03` | Search for NLP papers from the last 7 days | Search | `get_recently_submitted_cs_papers` |
-| `search_04` | Search for robotics papers from the last 14 days | Search | `get_recently_submitted_cs_papers` |
+| `search_04` | Search all computer science categories from the last 7 days | Search | `get_recently_submitted_cs_papers` |
 | `download_01` | Download the 1st paper as PDF | Download | `download_arxiv_pdf` |
 | `translate_01` | Translate the 1st paper | Translation | `translate_arxiv_pdf` |
 | `cache_01` | Check cache status of the 1st paper | Cache | `get_paper_cache_status` |
