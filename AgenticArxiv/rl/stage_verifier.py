@@ -29,6 +29,7 @@ from rl.reward import RewardCalculator
 # 工具导入（触发注册）
 import tools.arxiv_tool  # noqa: F401
 import tools.cache_status_tool  # noqa: F401
+import tools.code_repository_tool  # noqa: F401
 import tools.pdf_download_tool  # noqa: F401
 import tools.pdf_translate_tool  # noqa: F401
 

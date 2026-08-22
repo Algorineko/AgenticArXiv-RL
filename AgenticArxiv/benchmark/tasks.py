@@ -89,6 +89,87 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
         "expected_termination": "FINISH",
         "category": "composite",
     },
+
+    # === 类型 6: 开源代码仓库检索与下载 ===
+    {
+        "id": "github_search_01",
+        "task": "在 GitHub 搜索 Python 实现的 RAG 项目，按 stars 降序返回前5个",
+        "expected_tools": ["search_github_repositories"],
+        "expected_tool_args": [{"query": "RAG", "language": "Python", "sort": "stars", "order": "desc", "max_results": 5}],
+        "expected_termination": "FINISH", "category": "code_search",
+    },
+    {
+        "id": "github_search_02",
+        "task": "去 GitHub 找最近更新的 TypeScript MCP server 项目，最多3个",
+        "expected_tools": ["search_github_repositories"],
+        "expected_tool_args": [{"query": "MCP server", "language": "TypeScript", "sort": "updated", "order": "desc", "max_results": 3}],
+        "expected_termination": "FINISH", "category": "code_search",
+    },
+    {
+        "id": "gitee_search_01",
+        "task": "在 Gitee 搜索 Java 微服务项目，按 stars 降序返回前5个",
+        "expected_tools": ["search_gitee_repositories"],
+        "expected_tool_args": [{"query": "微服务", "language": "Java", "sort": "stars", "order": "desc", "max_results": 5}],
+        "expected_termination": "FINISH", "category": "code_search",
+    },
+    {
+        "id": "gitee_search_02",
+        "task": "去 Gitee 找 Python 大模型应用项目，按最近更新排序，最多3个",
+        "expected_tools": ["search_gitee_repositories"],
+        "expected_tool_args": [{"query": "大模型应用", "language": "Python", "sort": "updated", "order": "desc", "max_results": 3}],
+        "expected_termination": "FINISH", "category": "code_search",
+    },
+    {
+        "id": "github_download_direct_01",
+        "task": "下载 GitHub 仓库 langchain-ai/langchain 的 main 分支源码",
+        "expected_tools": ["download_github_repository"],
+        "expected_tool_args": [{"repository": "langchain-ai/langchain", "ref": "main"}],
+        "expected_termination": "FINISH", "category": "code_download",
+    },
+    {
+        "id": "gitee_download_direct_01",
+        "task": "下载 Gitee 仓库 dromara/hutool 的 v5-master 分支源码",
+        "expected_tools": ["download_gitee_repository"],
+        "expected_tool_args": [{"repository": "dromara/hutool", "ref": "v5-master"}],
+        "expected_termination": "FINISH", "category": "code_download",
+    },
+    {
+        "id": "github_search_download_01",
+        "task": "在 GitHub 搜索 Python Agent 框架，按 stars 排序取前3个，然后下载第1个仓库",
+        "expected_tools": ["search_github_repositories", "download_github_repository"],
+        "expected_tool_args": [
+            {"query": "AI agent framework", "language": "Python", "sort": "stars", "order": "desc", "max_results": 3},
+            {"repository": 1},
+        ],
+        "expected_termination": "FINISH", "category": "code_composite",
+    },
+    {
+        "id": "gitee_search_download_01",
+        "task": "在 Gitee 搜索 Java 工作流引擎，返回前3个，然后下载第2个仓库",
+        "expected_tools": ["search_gitee_repositories", "download_gitee_repository"],
+        "expected_tool_args": [
+            {"query": "工作流引擎", "language": "Java", "sort": "stars", "order": "desc", "max_results": 3},
+            {"repository": 2},
+        ],
+        "expected_termination": "FINISH", "category": "code_composite",
+    },
+    {
+        "id": "cross_platform_search_01",
+        "task": "分别在 GitHub 和 Gitee 搜索向量数据库项目，各返回3个，不要下载",
+        "expected_tools": ["search_github_repositories", "search_gitee_repositories"],
+        "expected_tool_args": [
+            {"query": "vector database", "max_results": 3},
+            {"query": "向量数据库", "max_results": 3},
+        ],
+        "expected_termination": "FINISH", "category": "code_composite",
+    },
+    {
+        "id": "github_tag_download_01",
+        "task": "从 GitHub 下载 psf/requests 仓库的 v2.32.3 标签源码，不需要先搜索",
+        "expected_tools": ["download_github_repository"],
+        "expected_tool_args": [{"repository": "psf/requests", "ref": "v2.32.3"}],
+        "expected_termination": "FINISH", "category": "code_download",
+    },
 ]
 
 

@@ -48,6 +48,14 @@ class Settings:
         "TRANSLATE_CACHE_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "translate_cache.json")
     )
 
+    # --- source repository search/download ---
+    repository_download_path: str = os.getenv(
+        "REPOSITORY_DOWNLOAD_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "repositories")
+    )
+    repository_max_download_mb: int = int(
+        os.getenv("REPOSITORY_MAX_DOWNLOAD_MB", "100")
+    )
+
     # --- pdf2zh CLI ---
     pdf2zh_bin: str = os.getenv("PDF2ZH_BIN", "pdf2zh")
     pdf2zh_service: str = os.getenv("PDF2ZH_SERVICE", "bing")

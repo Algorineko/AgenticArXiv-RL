@@ -54,6 +54,9 @@ def format_tool_description(tools) -> str:
         if 'parameters' in tool and 'properties' in tool['parameters']:
             params = []
             for param_name, param_spec in tool['parameters']['properties'].items():
+                # Framework-injected values must not become model decisions.
+                if param_spec.get('x-internal'):
+                    continue
                 param_type = param_spec.get('type', 'unknown')
                 param_desc = param_spec.get('description', '')
                 default_val = param_spec.get('default', '无默认值')

@@ -267,16 +267,30 @@ class BaseAgent(ABC):
 
     def _enrich_task_with_context(self, task: str, session_id: str) -> str:
         """向任务描述注入当前会话状态，帮助 LLM 避免重复操作"""
+        contexts = []
         try:
             papers = self.side_effects.get_last_papers(session_id)
             if papers:
                 titles = [f"  {i+1}. {p.title}" for i, p in enumerate(papers[:10])]
                 ctx = f"\n\n[会话上下文] 当前会话已有 {len(papers)} 篇论文:\n" + "\n".join(titles)
                 ctx += "\n可直接用 ref 序号引用，无需重新搜索。"
-                return task + ctx
+                contexts.append(ctx)
         except Exception:
             pass
-        return task
+        try:
+            from tools.code_repository_tool import get_repository_results
+            for platform in ("github", "gitee"):
+                repos = get_repository_results(session_id, platform)
+                if repos:
+                    names = [f"  {i+1}. {r.get('full_name', 'unknown')}" for i, r in enumerate(repos[:10])]
+                    contexts.append(
+                        f"\n\n[会话上下文] 最近的 {platform.title()} 仓库搜索结果:\n"
+                        + "\n".join(names)
+                        + "\n下载工具可直接使用 repository 序号引用。"
+                    )
+        except Exception:
+            pass
+        return task + "".join(contexts)
 
     # ---------- 工具执行（可被 env 接管） ----------
 
@@ -365,6 +379,24 @@ class BaseAgent(ABC):
                         return "未获取到任何论文记录，请尝试调整搜索参数（如增加天数范围）"
                 else:
                     return f"工具返回结果格式异常: {type(result)}, 内容: {str(result)[:200]}"
+
+            elif tool_name in ("search_github_repositories", "search_gitee_repositories"):
+                platform = "github" if "github" in tool_name else "gitee"
+                if isinstance(result, dict) and "error" in result:
+                    return f"工具执行失败: {result['error']}"
+                if not isinstance(result, list):
+                    return f"工具返回结果格式异常: {type(result)}, 内容: {str(result)[:200]}"
+                from tools.code_repository_tool import remember_repository_results
+                remember_repository_results(self.session_id, platform, result)
+                if not result:
+                    return f"在 {platform.title()} 未找到匹配仓库，请调整关键词或筛选条件"
+                lines = []
+                for i, repo in enumerate(result[:5], 1):
+                    lines.append(
+                        f"  {i}. {repo.get('full_name', 'unknown')} "
+                        f"(stars={repo.get('stars', 0)}, language={repo.get('language') or 'unknown'})"
+                    )
+                return f"在 {platform.title()} 找到 {len(result)} 个仓库:\n" + "\n".join(lines)
 
             elif tool_name == "format_papers_console":
                 return "FINISH"

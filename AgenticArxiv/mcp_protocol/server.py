@@ -28,6 +28,7 @@ import tools.arxiv_tool  # noqa: F401
 import tools.pdf_download_tool  # noqa: F401
 import tools.pdf_translate_tool  # noqa: F401
 import tools.cache_status_tool  # noqa: F401
+import tools.code_repository_tool  # noqa: F401
 
 from tools.tool_registry import registry
 

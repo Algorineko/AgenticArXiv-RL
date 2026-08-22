@@ -24,10 +24,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("STORE_BACKEND", "memory")
 
 import tools.arxiv_tool  # noqa: F401  触发工具注册
+import tools.code_repository_tool  # noqa: F401
 from rl.env import MockArxivEnv
 
 # 覆盖 benchmark/rl 任务集里出现过的所有方向
 DEFAULT_ASPECTS = ["*", "AI", "LG", "CL", "CV", "RO", "CR"]
+DEFAULT_REPOSITORY_QUERIES = [
+    ("search_github_repositories", "RAG", "Python"),
+    ("search_github_repositories", "MCP server", "TypeScript"),
+    ("search_github_repositories", "AI agent framework", "Python"),
+    ("search_github_repositories", "vector database", None),
+    ("search_gitee_repositories", "微服务", "Java"),
+    ("search_gitee_repositories", "大模型应用", "Python"),
+    ("search_gitee_repositories", "工作流引擎", "Java"),
+    ("search_gitee_repositories", "向量数据库", None),
+]
 
 
 def build(
@@ -59,6 +70,19 @@ def build(
             ok += 1
         except Exception as e:
             print(f"  [FAIL] aspect={aspect:<3} → {e}")
+            fail += 1
+
+    print("  repository search pools:")
+    for tool_name, query, language in DEFAULT_REPOSITORY_QUERIES:
+        try:
+            call_args = {"query": query, "max_results": min(max_results, 20)}
+            if language:
+                call_args["language"] = language
+            repos = env.execute_tool(tool_name, call_args)
+            print(f"  [OK]   {tool_name} query={query!r} → {len(repos)} 个")
+            ok += 1
+        except Exception as e:
+            print(f"  [FAIL] {tool_name} query={query!r} → {e}")
             fail += 1
 
     env.save_snapshot()

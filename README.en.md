@@ -9,6 +9,28 @@
 
 ---
 
+## Source repository tools
+
+The agent can search and download source code from GitHub and Gitee:
+
+- `search_github_repositories` / `search_gitee_repositories` normalize metadata and remember results in the session.
+- `download_github_repository` / `download_gitee_repository` accept a 1-based search-result index, `owner/name`, or a repository URL.
+- Downloads are size-limited ZIP archives; they are never executed or automatically extracted.
+
+Public repositories work without credentials where the platform permits it. Set
+`GITHUB_TOKEN` or `GITEE_TOKEN` to raise API limits or access resources permitted
+by that token. Optional settings are `REPOSITORY_DOWNLOAD_PATH` and
+`REPOSITORY_MAX_DOWNLOAD_MB` (default: 100).
+
+After changing repository tasks, regenerate the offline training snapshot:
+
+```bash
+cd AgenticArxiv
+python -m rl.build_snapshot
+```
+
+---
+
 ## 🎯 Project Overview
 
 This project transforms arXiv paper retrieval/download/translation tasks into a **trainable reinforcement learning environment**, with a focus on:
@@ -231,7 +253,7 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # Cache query
 │  ├─ benchmark/                     # ⭐ Verifiable Reward source
 │  │  ├─ metrics.py               # TaskMetrics, strict tool-sequence & argument matching
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 task seeds)
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS (paper and repository seeds)
 │  │  ├─ runner.py                 # Benchmark executor
 │  │  ├─ run_benchmark.py          # CLI benchmark entry
 │  │  └─ report.py                 # Metrics report
@@ -332,7 +354,7 @@ print(f'Reward: {reward:.2f}')  # Expected: ~1.5
 
 ## 🧪 Test Task Set
 
-From `benchmark/tasks.py`, containing 8 tasks:
+From `benchmark/tasks.py`, containing 18 tasks: 8 paper tasks and 10 source-repository tasks.
 
 | ID | Task | Type | Expected Tool |
 |----|------|------|---------------|
@@ -344,6 +366,11 @@ From `benchmark/tasks.py`, containing 8 tasks:
 | `translate_01` | Translate the 1st paper | Translation | `translate_arxiv_pdf` |
 | `cache_01` | Check cache status of the 1st paper | Cache | `get_paper_cache_status` |
 | `composite_01` | Search + Download | Composite | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
+| `github_search_*` | Search GitHub repositories | Code search | `search_github_repositories` |
+| `gitee_search_*` | Search Gitee repositories | Code search | `search_gitee_repositories` |
+| `*_download_*` | Download a repository/tag | Code download | Platform download tool |
+| `*_search_download_*` | Search then download by index | Code composite | Platform search + download |
+| `cross_platform_search_01` | Search both platforms | Code composite | Both search tools |
 
 ---
 
@@ -479,7 +506,7 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 
 ### P1 — Mid term (data & evaluation)
 
-- [ ] **Expand the task set**: `benchmark/tasks.py` has only 8 tasks; grow it to 50+ and auto-derive `expected_tools` / `expected_tool_args`.
+- [ ] **Continue expanding the task set**: `benchmark/tasks.py` now has 18 tasks; grow it to 50+ and auto-derive `expected_tools` / `expected_tool_args`.
 - [ ] **eval/ badcase replay**: the `eval/` directory listed in the tree does not exist yet; implement `eval_cases.jsonl` + `badcase_replay.py` to close the bad-case replay loop.
 - [ ] **Reward-hacking triage**: build on `RewardVarianceGuard` / `CanaryCallback` with a reward-hacking case library and curriculum weight tuning.
 
