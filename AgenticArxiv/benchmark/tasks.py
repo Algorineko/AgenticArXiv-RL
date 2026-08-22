@@ -38,10 +38,10 @@ BENCHMARK_TASKS: List[Dict[str, Any]] = [
     },
     {
         "id": "search_04",
-        "task": "检索最近14天机器人学(cs.RO)方向的论文，最多8篇",
+        "task": "检索最近7天计算机科学全部方向的论文，最多10篇",
         "expected_tools": ["get_recently_submitted_cs_papers"],
         "expected_tool_args": [
-            {"aspect": "RO", "days": 14, "max_results": 8}
+            {"aspect": "*", "days": 7, "max_results": 10}
         ],
         "expected_termination": "FINISH",
         "category": "search",
