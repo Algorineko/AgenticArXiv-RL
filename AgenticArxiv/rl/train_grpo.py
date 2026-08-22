@@ -42,6 +42,7 @@ import tools.arxiv_tool  # noqa: F401  触发工具注册
 import tools.cache_status_tool  # noqa: F401
 import tools.pdf_download_tool  # noqa: F401
 import tools.pdf_translate_tool  # noqa: F401
+import tools.code_repository_tool  # noqa: F401
 
 from benchmark.tasks import get_all_tasks
 from rl.canary import CanaryEvaluator, CanaryCallback

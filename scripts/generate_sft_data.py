@@ -24,6 +24,7 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 os.environ.setdefault("STORE_BACKEND", "memory")
 
 from benchmark.tasks import get_all_tasks
+from benchmark.metrics import extract_metrics
 from agents.agent_engine import ReActAgent
 from agents.side_effects import LocalSideEffectManager
 from utils.llm_client import get_env_llm_client
@@ -46,8 +47,17 @@ def generate_sft_dataset():
         try:
             result = agent.run(task_def["task"], session_id=f"sft_gen_{task_def['id']}")
 
-            # 只保留成功的 trajectories
-            if result.get("iteration_count", 0) > 0 and result.get("history"):
+            # 只保留经过静态 oracle 验证的 expert trajectories，避免老师模型
+            # 选错平台/工具/参数或工具执行失败后仍污染 SFT 数据。
+            metrics = extract_metrics(task_def, result, "react", trial=1)
+            is_verified = (
+                metrics.task_completed
+                and metrics.tool_call_accurate
+                and metrics.arg_score >= 0.999
+                and metrics.tool_exec_failures == 0
+                and metrics.parse_failures == 0
+            )
+            if is_verified and result.get("history"):
                 print(f"   ✅ 成功，共 {len(result['history'])} 步")
 
                 # 转为 SFT 格式（每一步作为一条训练样本）
@@ -60,7 +70,7 @@ def generate_sft_dataset():
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "你是一个 arXiv 论文检索 Agent，可以调用工具完成任务。"
+                                "content": "你是一个科研与开源代码资源 Agent，可以调用工具完成论文检索、仓库检索和安全下载任务。"
                             },
                             {
                                 "role": "user",
@@ -73,7 +83,12 @@ def generate_sft_dataset():
                         ]
                     })
             else:
-                print(f"   ⚠️  执行失败或无有效步骤")
+                print(
+                    "   ⚠️  未通过轨迹校验，已丢弃 "
+                    f"(completed={metrics.task_completed}, "
+                    f"tools={metrics.tool_call_accurate}, args={metrics.arg_score:.2f}, "
+                    f"exec_failures={metrics.tool_exec_failures})"
+                )
 
         except Exception as e:
             print(f"   ❌ 执行出错: {e}")

@@ -9,6 +9,21 @@
 
 ---
 
+## 开源代码仓库工具
+
+Agent 现在可以完成 GitHub/Gitee 的“检索 → 选择 → 下载源码”流程：
+
+- `search_github_repositories` / `search_gitee_repositories`：统一仓库元数据，并在会话中保存搜索结果；
+- `download_github_repository` / `download_gitee_repository`：支持搜索结果序号、`owner/name` 和仓库 URL；
+- 下载结果为带大小上限的 ZIP，不执行代码，也不自动解压。
+
+公开仓库通常无需令牌；也可配置 `GITHUB_TOKEN`、`GITEE_TOKEN`。下载目录和上限可通过
+`REPOSITORY_DOWNLOAD_PATH`、`REPOSITORY_MAX_DOWNLOAD_MB`（默认 100）设置。
+新增或修改仓库任务后，运行 `cd AgenticArxiv && python -m rl.build_snapshot`
+生成供离线训练使用的快照。
+
+---
+
 ## 🎯 项目定位
 
 将 arXiv 论文检索/下载/翻译任务改造为**可训练的强化学习环境**，专注于：
@@ -238,7 +253,7 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # 缓存查询
 │  ├─ benchmark/                     # ⭐ Verifiable Reward 来源
 │  │  ├─ metrics.py               # TaskMetrics、工具序列严格匹配、参数匹配
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS（7 个任务种子）
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS（论文与代码仓库任务种子）
 │  │  ├─ runner.py                 # 基准执行器
 │  │  ├─ run_benchmark.py          # 命令行基准入口
 │  │  └─ report.py                 # 指标统计报告
@@ -339,7 +354,7 @@ print(f'Reward: {reward:.2f}')  # 期望: ~1.5
 
 ## 🧪 测试任务集
 
-来自 `benchmark/tasks.py`，包含 7 个任务：
+来自 `benchmark/tasks.py`，包含 18 个任务：8 个论文任务和 10 个代码仓库任务。
 
 | ID | 任务 | 类型 | 预期工具 |
 |----|------|------|---------|
@@ -350,6 +365,11 @@ print(f'Reward: {reward:.2f}')  # 期望: ~1.5
 | `translate_01` | 翻译第1篇论文 | 翻译 | `translate_arxiv_pdf` |
 | `cache_01` | 查看第1篇论文缓存状态 | 缓存 | `get_paper_cache_status` |
 | `composite_01` | 搜索+下载 | 复合 | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
+| `github_search_*` | GitHub 仓库检索 | 代码检索 | `search_github_repositories` |
+| `gitee_search_*` | Gitee 仓库检索 | 代码检索 | `search_gitee_repositories` |
+| `*_download_*` | 指定仓库/Tag 下载 | 代码下载 | 对应平台下载工具 |
+| `*_search_download_*` | 搜索后按序号下载 | 代码复合 | 对应平台搜索、下载工具 |
+| `cross_platform_search_01` | 双平台检索 | 代码复合 | 两个平台搜索工具 |
 
 ---
 
@@ -484,7 +504,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 
 ### P1 — 中期（数据与评测）
 
-- [ ] **任务集扩充**：`benchmark/tasks.py` 仅 7 个任务，扩充到 50+，并支持自动派生 `expected_tools` / `expected_tool_args`，奖励才有区分度。
+- [ ] **任务集继续扩充**：`benchmark/tasks.py` 当前 18 个任务，继续扩充到 50+，并支持自动派生 `expected_tools` / `expected_tool_args`。
 - [ ] **eval/ badcase replay**：目录树中的 `eval/`（`eval_cases.jsonl`、`badcase_replay.py`）实际尚不存在，需实现坏例回放闭环。
 - [ ] **Reward hacking 排查**：在现有 `RewardVarianceGuard` / `CanaryCallback` 基础上补 reward-hacking 案例库与多粒度权重课程调优。
 

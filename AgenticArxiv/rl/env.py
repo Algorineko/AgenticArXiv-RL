@@ -24,6 +24,8 @@
 
 import json
 import os
+import hashlib
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
@@ -34,7 +36,11 @@ from utils.logger import log
 _VOLATILE_ARG_KEYS = {"session_id", "output_path", "save_to_file"}
 
 # 需要走快照回放的"网络型"工具
-DEFAULT_SNAPSHOT_TOOLS: Set[str] = {"get_recently_submitted_cs_papers"}
+DEFAULT_SNAPSHOT_TOOLS: Set[str] = {
+    "get_recently_submitted_cs_papers",
+    "search_github_repositories",
+    "search_gitee_repositories",
+}
 
 
 class MockArxivEnv:
@@ -95,6 +101,10 @@ class MockArxivEnv:
         if tool_name == "download_arxiv_pdf" and self.offline_download:
             self.stats["offline_stubs"] += 1
             return self._offline_download(args)
+        if tool_name in ("download_github_repository", "download_gitee_repository") and self.offline_download:
+            self.stats["offline_stubs"] += 1
+            platform = "github" if "github" in tool_name else "gitee"
+            return self._offline_repository_download(platform, args)
 
         # 2) 非快照工具（纯本地，如缓存查询）→ 直接真实执行
         if tool_name not in self.snapshot_tools:
@@ -122,6 +132,11 @@ class MockArxivEnv:
         #     否则策略稍微改个参数就变成 KeyError，奖励信号会被污染成"全是工具失败"。
         if tool_name == "get_recently_submitted_cs_papers":
             derived = self._derive_search_result(args, tool_data)
+            if derived is not None:
+                self.stats["hit"] += 1
+                return derived
+        if tool_name in ("search_github_repositories", "search_gitee_repositories"):
+            derived = self._derive_repository_search_result(args, tool_data)
             if derived is not None:
                 self.stats["hit"] += 1
                 return derived
@@ -179,6 +194,39 @@ class MockArxivEnv:
             max_results = 50
         max_results = max(1, min(max_results, len(pool)))
         return pool[:max_results]
+
+    @staticmethod
+    def _derive_repository_search_result(args: Dict[str, Any], tool_data: Dict[str, Any]):
+        """Reuse a recorded query pool while preserving limit and sort semantics."""
+        query = str(args.get("query", "")).strip().casefold()
+        language = str(args.get("language", "")).strip().casefold()
+        pool = None
+        for entry in tool_data.values():
+            recorded = entry.get("args", {})
+            if str(recorded.get("query", "")).strip().casefold() != query:
+                continue
+            recorded_language = str(recorded.get("language", "")).strip().casefold()
+            if language and recorded_language and recorded_language != language:
+                continue
+            candidate = entry.get("result")
+            if isinstance(candidate, list):
+                pool = list(candidate)
+                break
+        if pool is None:
+            return None
+        sort_key = {"stars": "stars", "forks": "forks", "updated": "updated_at"}.get(
+            str(args.get("sort", "stars"))
+        )
+        if sort_key:
+            pool.sort(
+                key=lambda item: item.get(sort_key) or ("" if sort_key == "updated_at" else 0),
+                reverse=str(args.get("order", "desc")) != "asc",
+            )
+        try:
+            limit = max(1, min(int(args.get("max_results", 5)), 20))
+        except (TypeError, ValueError):
+            limit = 5
+        return pool[:limit]
 
     # ---------- 离线下载桩 ----------
 
@@ -250,6 +298,31 @@ class MockArxivEnv:
         }
 
     # ---------- 快照读写 ----------
+
+    @staticmethod
+    def _offline_repository_download(platform: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a harmless deterministic ZIP in place of a network archive."""
+        from config import settings
+        from tools.code_repository_tool import _resolve_repository, _split_full_name
+
+        session_id = args.get("session_id", "default")
+        item = _resolve_repository(platform, session_id, args.get("repository"))
+        owner, name = _split_full_name(item["full_name"], platform)
+        ref = str(args.get("ref") or item.get("default_branch") or "main")
+        safe_ref = "".join(ch if ch.isalnum() or ch in "_.-" else "_" for ch in ref)
+        output_dir = Path(settings.repository_download_path).resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / f"{platform}__{owner}__{name}__{safe_ref}.zip"
+        existed = path.exists() and path.stat().st_size > 0
+        if not existed or args.get("force"):
+            with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr(f"{name}-{safe_ref}/README.md", "offline repository fixture\n")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        return {
+            "platform": platform, "repository": f"{owner}/{name}", "ref": ref,
+            "local_path": str(path), "status": "READY", "existed": existed,
+            "size_bytes": path.stat().st_size, "sha256": digest, "extracted": False,
+        }
 
     @staticmethod
     def _make_key(args: Dict[str, Any]) -> str:

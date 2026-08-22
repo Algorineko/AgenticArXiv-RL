@@ -25,6 +25,7 @@ class ReActAgent(BaseAgent):
             import tools.pdf_download_tool  # noqa: F401
             import tools.pdf_translate_tool  # noqa: F401
             import tools.cache_status_tool  # noqa: F401
+            import tools.code_repository_tool  # noqa: F401
             log.info(f"已导入工具模块，注册了 {len(registry.list_tools())} 个工具")
         except ImportError as e:
             log.warning(f"导入工具模块失败: {e}")
