@@ -205,7 +205,12 @@ python -m AgenticArxiv.rl.train_grpo
 - 无需 value model（PPO 的缺点：显存开销大）
 - 适合小模型（如 Qwen2.5-1.5B）
 
-**奖励打分**（`rl/grpo_reward.py`）：把模型生成的单步 completion 解析为 ReAct 动作，用 `MockArxivEnv` 执行工具后补成「最小完整轨迹」，再交给五分量 `RewardCalculator` 打分——与 rollout / benchmark 共用同一套标准，不引入第二套奖励。
+**多轮 rollout 与奖励打分**（`rl/grpo_reward.py`）：每轮由当前 policy 生成 ReAct 动作，独立 `MockArxivEnv` 执行工具并把 observation 插回上下文，直到 `FINISH`、解析失败或达到 `--max_turns`。所有 assistant token 进入 GRPO loss，环境 observation token 通过 `env_mask=0` 仅作上下文；完整轨迹再交给五分量 `RewardCalculator` 打分，与 rollout / benchmark 共用同一套标准。
+
+```bash
+python -m AgenticArxiv.rl.build_snapshot
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
+```
 
 ### 训练质量保障（自动校验）
 
@@ -479,7 +484,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 
 ### P0 — 近期（填补核心缺口）
 
-- [ ] **多轮 Agentic Rollout**：当前 GRPO 只对模型生成的**单步** completion 做「合成最小轨迹」打分，未实现真正的多轮「行动 → 环境反馈 → 再行动」交互采样。用 TRL 的 tool-calling / multi-turn 机制 + `MockArxivEnv` 作工具后端，配合 assistant-only loss mask（只让模型 token 参与训练），补齐与「Agentic RL」之名最不相称的缺口。
+- [x] **多轮 Agentic Rollout**：已实现真正的「行动 → 环境反馈 → 再行动」交互采样；每条 generation 使用独立 `MockArxivEnv`，环境 token 以 `env_mask=0` 排除策略 loss，完整 assistant 轨迹参与 GRPO 更新与五分量奖励。
 - [ ] **训练可观测性**：接入 wandb / TensorBoard（当前 `report_to=[]`，无任何监控），记录 reward / advantage / kl / 各奖励分量曲线，再谈超参调优。
 
 ### P1 — 中期（数据与评测）

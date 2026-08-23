@@ -6,8 +6,8 @@ GRPO（Group Relative Policy Optimization）：
 - 数据：**不需要预先生成**。GRPO 是在线算法，只要 prompt + 可验证奖励，
         数据集直接由 benchmark/tasks.py 派生
 
-奖励定义见 rl/grpo_reward.py：把模型生成的一步补成最小完整轨迹，
-再交给 rl/reward.py 已有的 RewardCalculator 打分，不引入第二套标准。
+奖励定义见 rl/grpo_reward.py：TRL 原生执行多轮 tool-calling，把每轮环境
+observation 插回上下文，并将完整轨迹交给 RewardCalculator 打分。
 
 训练中每 N 步自动运行 canary 评估（在固定小任务集上验证模型未退化），
 训练结束后可选运行阶段验证（检查模型是否达到最低质量阈值）。
@@ -49,8 +49,10 @@ from rl.grpo_reward import (
     build_prompt_dataset,
     load_mock_env,
     make_grpo_reward_fn,
+    make_multiturn_rollout_func,
     parse_react_action,
 )
+from rl.multiturn_env import make_environment_factory
 from rl.reward import RewardCalculator
 from rl.stage_verifier import StageVerifier
 
@@ -141,6 +143,7 @@ def main(
     beta: float = 0.04,
     num_generations: int = 4,
     max_completion_length: int = 256,
+    max_turns: int = 4,
     temperature: float = 1.0,
     snapshot: str = None,
     allow_zero_variance: bool = False,
@@ -183,13 +186,17 @@ def main(
 
     # --- 奖励函数 ---
     snapshot_path = Path(snapshot) if snapshot else DEFAULT_SNAPSHOT
-    env = load_mock_env(snapshot_path)
-    if env is None:
-        print(f"⚠️  未找到快照 {snapshot_path}，奖励将不执行工具"
-              f"（仅由格式/工具名/参数决定）。生成快照: python -m AgenticArxiv.rl.build_snapshot")
-    else:
-        print(f"🗂  使用离线快照执行工具: {snapshot_path}")
-    reward_fn = make_grpo_reward_fn({t["id"]: t for t in tasks}, env=env)
+    if not snapshot_path.exists():
+        raise SystemExit(
+            f"❌ 多轮 GRPO 需要离线快照 {snapshot_path}\n"
+            "   请先运行: python -m AgenticArxiv.rl.build_snapshot"
+        )
+    env = load_mock_env(snapshot_path)  # canary / verifier 使用
+    environment_factory = make_environment_factory(snapshot_path)
+    print(f"🗂  使用独立离线环境执行多轮工具调用: {snapshot_path}")
+    # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
+    reward_fn = make_grpo_reward_fn({t["id"]: t for t in tasks}, env=None)
+    rollout_func = make_multiturn_rollout_func(environment_factory, max_turns=max_turns)
 
     # GRPO 要求生成批量能被 num_generations 整除
     if batch_size % num_generations != 0:
@@ -226,6 +233,7 @@ def main(
         args=config,
         train_dataset=train_dataset,
         processing_class=tokenizer,
+        rollout_func=rollout_func,
     )
 
     # --- Canary 回调：每 N 步在固定任务上评估，检测性能退化 ---
@@ -300,6 +308,10 @@ if __name__ == "__main__":
              "GRPO 不产生任何梯度，训练会静默空转",
     )
     p.add_argument("--max_completion_length", type=int, default=256)
+    p.add_argument(
+        "--max_turns", type=int, default=4,
+        help="每条 rollout 最多执行多少轮工具调用；环境 observation 不计入策略 loss",
+    )
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--snapshot", default=None)
     p.add_argument(
@@ -319,8 +331,4 @@ if __name__ == "__main__":
         "--verify", action=argparse.BooleanOptionalAction, default=True,
         help="训练结束后运行阶段验证（默认开启）",
     )
-    a = p.parse_args()
-    main(a.model, a.output_dir, a.epochs, a.batch_size, a.grad_accum, a.lr, a.beta,
-         a.num_generations, a.max_completion_length, a.temperature, a.snapshot,
-         a.allow_zero_variance, a.canary_steps, a.min_canary_reward,
-         a.canary_patience, a.verify)
+    main(**vars(p.parse_args()))

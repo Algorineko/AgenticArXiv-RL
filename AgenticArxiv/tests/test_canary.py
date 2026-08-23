@@ -58,7 +58,14 @@ class _FakeTokenizer:
     def __call__(self, text, return_tensors="pt", **kwargs):
         # 返回假的 input_ids（长度为 10 的 prompt）
         ids = torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
-        return SimpleNamespace(input_ids=ids, shape=ids.shape)
+        class FakeBatch(dict):
+            def __getattr__(self, name):
+                return self[name]
+
+            def to(self, device):
+                return FakeBatch({k: v.to(device) for k, v in self.items()})
+
+        return FakeBatch(input_ids=ids)
 
     def batch_decode(self, ids, skip_special_tokens=True):
         # 返回预设的 completion 文本
