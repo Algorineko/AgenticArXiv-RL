@@ -84,6 +84,7 @@ def main(
     grad_accum: int = 4,
     lr: float = 2e-5,
     max_length: int = 3072,
+    max_steps: int = -1,
     verify: bool = False,
     min_parse_rate: float = 0.3,
 ):
@@ -116,6 +117,7 @@ def main(
         gradient_accumulation_steps=grad_accum,
         learning_rate=lr,
         max_length=max_length,    # TRL>=0.20 用 max_length（旧名 max_seq_length 已移除）
+        max_steps=max_steps,
         logging_steps=10,
         save_steps=100,
         save_total_limit=3,
@@ -163,6 +165,10 @@ if __name__ == "__main__":
         "--max_length", type=int, default=3072,
         help="超过此长度的样本会被从右截断，而右边正是 assistant 目标；"
              "训练前会做长度体检，不匹配直接报错",
+    )
+    parser.add_argument(
+        "--max_steps", type=int, default=-1,
+        help="限制优化步数；-1 表示按 epochs 完整训练，可用于 CPU 烟雾测试",
     )
     parser.add_argument(
         "--verify", action="store_true", default=False,

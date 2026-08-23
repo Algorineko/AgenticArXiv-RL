@@ -16,7 +16,9 @@ def precision_flags() -> dict:
     import torch
 
     if not torch.cuda.is_available():
-        return {}
+        # Transformers 5.x requires CPU training to be selected explicitly;
+        # an empty dict can otherwise leave the default bf16 path enabled.
+        return {"use_cpu": True}
     if torch.cuda.is_bf16_supported():
         return {"bf16": True}
     return {"fp16": True}
