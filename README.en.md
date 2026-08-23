@@ -198,7 +198,7 @@ python -m AgenticArxiv.rl.train_grpo
 - No value model required (PPO's drawback: high VRAM overhead)
 - Suitable for small models (e.g., Qwen2.5-1.5B)
 
-**Reward scoring** (`rl/grpo_reward.py`): the model's single-step completion is parsed into a ReAct action, executed with `MockArxivEnv`, and completed into a "minimal full trajectory" before being scored by the five-component `RewardCalculator` — the same standard used by rollout and benchmark, with no second reward definition.
+**Multi-turn rollout and reward scoring** (`rl/grpo_reward.py`): the current policy generates a ReAct action at every turn, an independent `MockArxivEnv` executes it, and the observation is appended back to context until completion or `--max_turns`. Assistant tokens participate in GRPO loss while environment tokens are excluded with `env_mask=0`; the complete trajectory is scored by the shared five-component `RewardCalculator`.
 
 ### Training Quality Guards (auto-verification)
 
@@ -474,7 +474,7 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 
 ### P0 — Near term (close core gaps)
 
-- [ ] **Multi-turn Agentic Rollout**: GRPO currently scores only the model's **single-step** completion as a "synthesized minimal trajectory" — there is no real multi-turn "act → observe → act" interaction. Use TRL's tool-calling / multi-turn support with `MockArxivEnv` as the tool backend and assistant-only loss masking to close the most conspicuous gap against the "Agentic RL" name.
+- [x] **Multi-turn Agentic Rollout**: implemented real "act → observe → act" sampling with an independent `MockArxivEnv` per generation; environment tokens use `env_mask=0`, while the complete assistant trajectory participates in GRPO optimization and reward scoring.
 - [ ] **Training observability**: wire up wandb / TensorBoard (currently `report_to=[]`, no monitoring) and log reward / advantage / KL / per-component curves before tuning hyperparameters.
 
 ### P1 — Mid term (data & evaluation)

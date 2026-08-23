@@ -118,7 +118,7 @@ class PrecisionFlagsTest(unittest.TestCase):
             return precision_flags()
 
     def test_no_mixed_precision_off_cuda(self):
-        self.assertEqual(self._flags(cuda=False, bf16=False), {})
+        self.assertEqual(self._flags(cuda=False, bf16=False), {"use_cpu": True})
 
     def test_prefers_bf16_when_supported(self):
         self.assertEqual(self._flags(cuda=True, bf16=True), {"bf16": True})
