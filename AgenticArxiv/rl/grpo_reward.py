@@ -3,7 +3,8 @@
 TRL 的 GRPOTrainer 是「对同一 prompt 采样 N 条输出 → 逐条打分 → 组内相对优势」
 的结构，它只负责生成**一步**，不会替你跑完整的 ReAct 循环。
 
-这里把模型生成的一步补成一条**最小完整轨迹**，再交给项目已有的
+兼容两条路径：旧的单步 completion 会补成最小轨迹；TRL 原生工具循环
+产生的多轮 structured messages 会直接还原为完整 history，再交给项目已有的
 `RewardCalculator.compute_reward_breakdown()` 打分，从而复用现成的奖励定义：
 
     模型输出  →  解析 Thought/Action
@@ -140,6 +141,62 @@ def _completion_text(completion: Any) -> str:
     return str(completion or "")
 
 
+def messages_to_trajectory(completion: Any) -> Dict[str, Any]:
+    """Convert TRL native multi-turn messages into the project's history schema.
+
+    Assistant tool-call messages become action steps and consume the following
+    tool message as their observation.  The final assistant answer becomes a
+    FINISH step.  This preserves the real Action -> Observation -> Action chain
+    produced by GRPOTrainer's tool loop.
+    """
+    if not isinstance(completion, list):
+        return synthesize_trajectory(_completion_text(completion))
+
+    history: List[Dict[str, Any]] = []
+    pending: List[int] = []
+    for message in completion:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        if role == "assistant":
+            calls = message.get("tool_calls") or []
+            if calls:
+                for call in calls:
+                    function = call.get("function", call) if isinstance(call, dict) else {}
+                    name = function.get("name")
+                    args = function.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except json.JSONDecodeError:
+                            args = {}
+                    action = {"name": name, "args": args or {}}
+                    history.append({
+                        "thought": str(message.get("content") or ""),
+                        "action": json.dumps(action, ensure_ascii=False),
+                        "observation": "",
+                    })
+                    pending.append(len(history) - 1)
+            elif str(message.get("content") or "").strip():
+                history.append({
+                    "thought": str(message.get("content") or ""),
+                    "action": "FINISH",
+                    "observation": "任务完成",
+                })
+        elif role == "tool" and pending:
+            index = pending.pop(0)
+            history[index]["observation"] = str(message.get("content") or "")
+
+    if not history:
+        return synthesize_trajectory(_completion_text(completion))
+    return {
+        "history": history,
+        "timing": {},
+        "token_usage": {},
+        "iteration_count": len(history),
+    }
+
+
 def make_grpo_reward_fn(
     tasks_by_id: Dict[str, Dict[str, Any]],
     env: Any = None,
@@ -153,6 +210,7 @@ def make_grpo_reward_fn(
     calc = reward_calc or RewardCalculator()
 
     def grpo_reward_fn(completions=None, task_id=None, trainer_state=None,
+                       trajectory_results=None,
                        **kwargs) -> List[float]:
         completions = completions or []
         ids = task_id or [None] * len(completions)
@@ -163,12 +221,17 @@ def make_grpo_reward_fn(
         step = int(getattr(trainer_state, "global_step", 0) or 0)
 
         rewards: List[float] = []
-        for completion, tid in zip(completions, ids):
+        trajectories = trajectory_results or [None] * len(completions)
+        for completion, tid, rollout_result in zip(completions, ids, trajectories):
             task_def = tasks_by_id.get(tid)
             if task_def is None:
                 rewards.append(0.0)
                 continue
-            result = synthesize_trajectory(_completion_text(completion), env=env)
+            result = rollout_result or (
+                messages_to_trajectory(completion)
+                if isinstance(completion, list)
+                else synthesize_trajectory(_completion_text(completion), env=env)
+            )
             breakdown, _ = calc.compute_reward_breakdown(
                 task_def, result, training_step=step
             )
@@ -177,6 +240,124 @@ def make_grpo_reward_fn(
 
     grpo_reward_fn.__name__ = "grpo_reward_fn"
     return grpo_reward_fn
+
+
+def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
+    """Create a TRL custom rollout function for textual ReAct models.
+
+    Every assistant turn is sampled from the current policy. Tool observations
+    are appended to the completion token stream with ``env_mask=0``; generated
+    policy tokens use ``env_mask=1`` and therefore participate in GRPO loss.
+    The full history is forwarded to the reward function as an extra field.
+    """
+    max_turns = max(1, int(max_turns))
+
+    def rollout_func(prompts, trainer):
+        import copy
+
+        tokenizer = trainer.processing_class
+        generations = trainer.num_generations if trainer.model.training else trainer.num_generations_eval
+        expanded_prompts = [copy.deepcopy(p) for p in prompts for _ in range(generations)]
+        prompt_ids = []
+        for prompt in expanded_prompts:
+            ids = tokenizer.apply_chat_template(
+                prompt, tokenize=True, add_generation_prompt=True,
+            ) if isinstance(prompt, list) else tokenizer(prompt)["input_ids"]
+            prompt_ids.append(list(ids))
+
+        environments = [environment_factory() for _ in expanded_prompts]
+        trajectory_results = []
+        completion_ids = [[] for _ in expanded_prompts]
+        env_masks = [[] for _ in expanded_prompts]
+        histories = [[] for _ in expanded_prompts]
+        active = list(range(len(expanded_prompts)))
+        full_ids = [list(ids) for ids in prompt_ids]
+
+        # Dataset rows are expanded prompt-major, matching TRL's reward columns.
+        for i, environment in enumerate(environments):
+            environment.reset()
+
+        for _turn in range(max_turns):
+            if not active:
+                break
+            remaining = [trainer.max_completion_length - len(completion_ids[i]) for i in active]
+            keep = [(i, r) for i, r in zip(active, remaining) if r > 0]
+            if not keep:
+                break
+            active = [i for i, _ in keep]
+
+            turn_ids, _, _ = trainer._generate_single_turn(
+                [full_ids[i] for i in active], None, {}
+            )
+            next_active = []
+            for batch_index, index in enumerate(active):
+                budget = trainer.max_completion_length - len(completion_ids[index])
+                generated = list(turn_ids[batch_index])[:budget]
+                text = tokenizer.decode(generated, skip_special_tokens=True)
+                completion_ids[index].extend(generated)
+                env_masks[index].extend([1] * len(generated))
+
+                kind, action = parse_react_action(text)
+                thought = _thought_of(text)
+                if kind == "finish":
+                    histories[index].append({
+                        "thought": thought, "action": "FINISH", "observation": "任务完成"
+                    })
+                    continue
+                if kind == "parse_error":
+                    histories[index].append({
+                        "thought": thought, "action": "PARSE_ERROR",
+                        "observation": "无法解析 Action", "parse_failed": True,
+                    })
+                    continue
+
+                args = dict(action.get("args") or {})
+                try:
+                    if action["name"] == "get_recently_submitted_cs_papers":
+                        result = environments[index].get_recently_submitted_cs_papers(**args)
+                    elif action["name"] == "download_arxiv_pdf":
+                        result = environments[index].download_arxiv_pdf(**args)
+                    elif action["name"] == "translate_arxiv_pdf":
+                        result = environments[index].translate_arxiv_pdf(**args)
+                    elif action["name"] == "get_paper_cache_status":
+                        result = environments[index].get_paper_cache_status(**args)
+                    else:
+                        raise ValueError(f"未知工具: {action['name']}")
+                    observation = str(result)[:1000]
+                except Exception as exc:  # noqa: BLE001
+                    observation = f"工具执行失败: {exc}"
+
+                histories[index].append({
+                    "thought": thought,
+                    "action": json.dumps(action, ensure_ascii=False),
+                    "observation": observation,
+                })
+                suffix = f"\nObservation: {observation}\nThought:"
+                suffix_ids = tokenizer(suffix, add_special_tokens=False)["input_ids"]
+                suffix_ids = list(suffix_ids)[: max(0, trainer.max_completion_length - len(completion_ids[index]))]
+                completion_ids[index].extend(suffix_ids)
+                env_masks[index].extend([0] * len(suffix_ids))
+                full_ids[index] = prompt_ids[index] + completion_ids[index]
+                if len(completion_ids[index]) < trainer.max_completion_length:
+                    next_active.append(index)
+            active = next_active
+
+        for history in histories:
+            trajectory_results.append({
+                "history": history,
+                "timing": {},
+                "token_usage": {},
+                "iteration_count": len(history),
+            })
+        return {
+            "prompt_ids": prompt_ids,
+            "completion_ids": completion_ids,
+            "logprobs": None,
+            "env_mask": env_masks,
+            "trajectory_results": trajectory_results,
+        }
+
+    return rollout_func
 
 
 def build_prompt_dataset(tasks: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -199,6 +380,26 @@ def build_prompt_dataset(tasks: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
         )
         rows.append({
             "prompt": [{"role": "user", "content": prompt}],
+            "task_id": task["id"],
+        })
+    return rows
+
+
+def build_multiturn_prompt_dataset(tasks: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Build conversational prompts for TRL native multi-turn tool calling."""
+    rows = []
+    for task in tasks:
+        rows.append({
+            "prompt": [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是 arXiv 论文 Agent。根据任务选择工具；读取每次工具返回后再决定下一步。"
+                        "需要多个工具时必须逐步执行，任务真正完成后给出简短最终回答。"
+                    ),
+                },
+                {"role": "user", "content": task["task"]},
+            ],
             "task_id": task["id"],
         })
     return rows

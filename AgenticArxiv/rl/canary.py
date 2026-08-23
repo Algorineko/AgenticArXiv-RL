@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizer
-from trl import TrainerCallback
+from transformers import TrainerCallback
 
 from benchmark.tasks import get_task_by_id
 from rl.grpo_reward import synthesize_trajectory
@@ -97,7 +97,7 @@ class CanaryEvaluator:
         Returns:
             CanaryResult 包含聚合指标。
         """
-        device = next(self.model.parameters()).device
+        device = next(iter(self.model.parameters())).device
         self.model.eval()
 
         all_rewards: List[float] = []
