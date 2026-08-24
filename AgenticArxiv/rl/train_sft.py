@@ -123,6 +123,7 @@ def main(
         gradient_accumulation_steps=grad_accum,
         learning_rate=lr,
         max_length=max_length,    # TRL>=0.20 用 max_length（旧名 max_seq_length 已移除）
+        assistant_only_loss=True, # 新增修改
         max_steps=max_steps,
         logging_steps=10,
         save_steps=100,
