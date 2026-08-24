@@ -289,5 +289,114 @@ class TestPromptDataset(unittest.TestCase):
         self.assertIn("读取每次工具返回", rows[0]["prompt"][0]["content"])
 
 
+class FakeGenerationTrainer:
+    """够 make_multiturn_rollout_func 跑一轮的最小 trainer 替身。"""
+
+    class _Model:
+        training = True
+
+    def __init__(self, tokenizer, num_generations=2, max_completion_length=16):
+        self.processing_class = tokenizer
+        self.model = self._Model()
+        self.num_generations = num_generations
+        self.num_generations_eval = num_generations
+        self.max_completion_length = max_completion_length
+        self.seen_batch_sizes = []
+
+    def _generate_single_turn(self, prompt_ids, images, multimodal_fields):
+        self.seen_batch_sizes.append(len(prompt_ids))
+        # 每条都直接 FINISH，让 rollout 一轮结束
+        ids = self.processing_class("Thought: 完成\nAction: FINISH",
+                                    add_special_tokens=False)["input_ids"]
+        return [list(ids) for _ in prompt_ids], None, None
+
+
+class MultiTurnRolloutCardinalityTest(unittest.TestCase):
+    """rollout_func 返回的条数必须与 TRL 传进来的 prompts 条数一致。
+
+    TRL 交进来的 prompts 已经按 num_generations 重复过（num_generations=2
+    时收到 2 条一模一样的 prompt）。rollout 里若再展开一次，返回条数会变成
+    N*G*G，TRL 在 shuffle_sequence_dict 处直接抛
+    `IndexError: index 3 is out of bounds for dimension 0 with size 2`，
+    多轮 GRPO 一步都跑不完。
+    """
+
+    def _tokenizer(self):
+        class Tok:
+            def __call__(self, text, add_special_tokens=True):
+                return {"input_ids": [1, 2, 3]}
+
+            def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
+                return [4, 5]
+
+            def decode(self, ids, skip_special_tokens=True):
+                return "Thought: 完成\nAction: FINISH"
+        return Tok()
+
+    def _rollout(self, num_prompts, num_generations):
+        from rl.grpo_reward import make_multiturn_rollout_func
+
+        class _Env:
+            def reset(self, *a, **k):
+                return ""
+
+        trainer = FakeGenerationTrainer(self._tokenizer(), num_generations=num_generations)
+        fn = make_multiturn_rollout_func(lambda: _Env(), max_turns=2)
+        prompts = [[{"role": "user", "content": "任务"}]] * num_prompts
+        return fn(prompts, trainer), trainer
+
+    def test_output_length_matches_input_length(self):
+        for num_prompts, num_generations in ((2, 2), (4, 2), (6, 3), (1, 1)):
+            with self.subTest(prompts=num_prompts, generations=num_generations):
+                out, _ = self._rollout(num_prompts, num_generations)
+                for key in ("prompt_ids", "completion_ids", "env_mask", "trajectory_results"):
+                    self.assertEqual(
+                        len(out[key]), num_prompts,
+                        f"{key} 条数应等于传入的 prompts 条数，不能再乘一次 num_generations",
+                    )
+
+    def test_generation_batch_is_not_inflated(self):
+        """展开一次会让每步生成量翻 num_generations 倍，显存和耗时都跟着翻。"""
+        _, trainer = self._rollout(num_prompts=4, num_generations=2)
+        self.assertEqual(trainer.seen_batch_sizes[0], 4)
+
+
+class TrlVersionGuardTest(unittest.TestCase):
+    """TRL 太老时必须启动即失败，而不是让多轮 rollout 静默失效。
+
+    trl < 0.28 只在 use_vllm 且 vllm_mode == "server" 时调用 rollout_func。
+    默认配置下多轮采样根本不执行，也不报错 —— 奖励退回
+    messages_to_trajectory，任何非空 assistant 文本都被当成一步 FINISH，
+    随机初始化的模型输出词沙拉也能拿到正分。
+    """
+
+    def test_version_boundary(self):
+        from rl.grpo_reward import rollout_func_supported
+        for version, supported in (
+            ("0.20.0", False), ("0.25.1", False), ("0.27.9", False),
+            ("0.28.0", True), ("0.29.1", True), ("1.0.0", True),
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(rollout_func_supported(version), supported)
+
+    def test_old_trl_raises_with_upgrade_hint(self):
+        from unittest import mock
+        import rl.grpo_reward as gr
+        # 伪造一个装了旧版 trl 的环境，别依赖本机实际装的版本
+        with mock.patch("importlib.metadata.version", return_value="0.25.1"):
+            with self.assertRaises(SystemExit) as ctx:
+                gr.require_rollout_func_support()
+        message = str(ctx.exception)
+        self.assertIn("trl>=0.28.0", message)   # 给出可执行的升级命令
+        self.assertIn("不会报错", message)       # 点明这是静默失效
+        self.assertIn("0.25.1", message)        # 报出当前实际装的版本
+
+    def test_supported_trl_passes_silently(self):
+        from unittest import mock
+        import rl.grpo_reward as gr
+        with mock.patch("importlib.metadata.version", return_value="0.28.0"):
+            gr.require_rollout_func_support()   # 不抛异常即可
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

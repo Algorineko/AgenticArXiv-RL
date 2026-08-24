@@ -1,9 +1,11 @@
 # ===== RL 训练核心依赖 =====
 torch>=2.0.0
 transformers>=4.45.0
-# 训练脚本使用 TRL 现行 API（SFTConfig.max_length、Trainer(processing_class=...)），
-# 这些在 trl<0.20 上不存在。下限按实际验证过的版本给出（已在 trl 0.29.1 上验证）。
-trl>=0.20.0
+# 训练脚本使用 TRL 现行 API（SFTConfig.max_length、Trainer(processing_class=...)）。
+# 下限由多轮 GRPO 决定：TRL 从 0.28.0 起才在非 vLLM 路径上调用 rollout_func，
+# 更早的版本会让多轮 rollout 静默失效（不报错，但每条轨迹退化成一步 FINISH）。
+# 已在 trl 0.29.1 上验证。
+trl>=0.28.0
 datasets>=2.14.0
 accelerate>=0.25.0
 
