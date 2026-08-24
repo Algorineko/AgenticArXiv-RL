@@ -289,5 +289,77 @@ class TestPromptDataset(unittest.TestCase):
         self.assertIn("读取每次工具返回", rows[0]["prompt"][0]["content"])
 
 
+class FakeGenerationTrainer:
+    """够 make_multiturn_rollout_func 跑一轮的最小 trainer 替身。"""
+
+    class _Model:
+        training = True
+
+    def __init__(self, tokenizer, num_generations=2, max_completion_length=16):
+        self.processing_class = tokenizer
+        self.model = self._Model()
+        self.num_generations = num_generations
+        self.num_generations_eval = num_generations
+        self.max_completion_length = max_completion_length
+        self.seen_batch_sizes = []
+
+    def _generate_single_turn(self, prompt_ids, images, multimodal_fields):
+        self.seen_batch_sizes.append(len(prompt_ids))
+        # 每条都直接 FINISH，让 rollout 一轮结束
+        ids = self.processing_class("Thought: 完成\nAction: FINISH",
+                                    add_special_tokens=False)["input_ids"]
+        return [list(ids) for _ in prompt_ids], None, None
+
+
+class MultiTurnRolloutCardinalityTest(unittest.TestCase):
+    """rollout_func 返回的条数必须与 TRL 传进来的 prompts 条数一致。
+
+    TRL 交进来的 prompts 已经按 num_generations 重复过（num_generations=2
+    时收到 2 条一模一样的 prompt）。rollout 里若再展开一次，返回条数会变成
+    N*G*G，TRL 在 shuffle_sequence_dict 处直接抛
+    `IndexError: index 3 is out of bounds for dimension 0 with size 2`，
+    多轮 GRPO 一步都跑不完。
+    """
+
+    def _tokenizer(self):
+        class Tok:
+            def __call__(self, text, add_special_tokens=True):
+                return {"input_ids": [1, 2, 3]}
+
+            def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
+                return [4, 5]
+
+            def decode(self, ids, skip_special_tokens=True):
+                return "Thought: 完成\nAction: FINISH"
+        return Tok()
+
+    def _rollout(self, num_prompts, num_generations):
+        from rl.grpo_reward import make_multiturn_rollout_func
+
+        class _Env:
+            def reset(self, *a, **k):
+                return ""
+
+        trainer = FakeGenerationTrainer(self._tokenizer(), num_generations=num_generations)
+        fn = make_multiturn_rollout_func(lambda: _Env(), max_turns=2)
+        prompts = [[{"role": "user", "content": "任务"}]] * num_prompts
+        return fn(prompts, trainer), trainer
+
+    def test_output_length_matches_input_length(self):
+        for num_prompts, num_generations in ((2, 2), (4, 2), (6, 3), (1, 1)):
+            with self.subTest(prompts=num_prompts, generations=num_generations):
+                out, _ = self._rollout(num_prompts, num_generations)
+                for key in ("prompt_ids", "completion_ids", "env_mask", "trajectory_results"):
+                    self.assertEqual(
+                        len(out[key]), num_prompts,
+                        f"{key} 条数应等于传入的 prompts 条数，不能再乘一次 num_generations",
+                    )
+
+    def test_generation_batch_is_not_inflated(self):
+        """展开一次会让每步生成量翻 num_generations 倍，显存和耗时都跟着翻。"""
+        _, trainer = self._rollout(num_prompts=4, num_generations=2)
+        self.assertEqual(trainer.seen_batch_sizes[0], 4)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

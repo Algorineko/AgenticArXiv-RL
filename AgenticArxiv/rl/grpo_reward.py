@@ -262,8 +262,11 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
         import copy
 
         tokenizer = trainer.processing_class
-        generations = trainer.num_generations if trainer.model.training else trainer.num_generations_eval
-        expanded_prompts = [copy.deepcopy(p) for p in prompts for _ in range(generations)]
+        # 不要再按 num_generations 展开：TRL 交进来的 prompts 已经是重复过的
+        # （num_generations=2 时收到的是 2 条一模一样的 prompt）。再展开一次会让
+        # 返回条数变成 N*G*G，与 TRL 期望的 N*G 对不上，在 shuffle_sequence_dict
+        # 处炸成 IndexError。
+        expanded_prompts = [copy.deepcopy(p) for p in prompts]
         prompt_ids = []
         for prompt in expanded_prompts:
             ids = tokenizer.apply_chat_template(
