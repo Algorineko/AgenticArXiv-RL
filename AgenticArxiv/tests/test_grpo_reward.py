@@ -361,5 +361,42 @@ class MultiTurnRolloutCardinalityTest(unittest.TestCase):
         self.assertEqual(trainer.seen_batch_sizes[0], 4)
 
 
+class TrlVersionGuardTest(unittest.TestCase):
+    """TRL 太老时必须启动即失败，而不是让多轮 rollout 静默失效。
+
+    trl < 0.28 只在 use_vllm 且 vllm_mode == "server" 时调用 rollout_func。
+    默认配置下多轮采样根本不执行，也不报错 —— 奖励退回
+    messages_to_trajectory，任何非空 assistant 文本都被当成一步 FINISH，
+    随机初始化的模型输出词沙拉也能拿到正分。
+    """
+
+    def test_version_boundary(self):
+        from rl.grpo_reward import rollout_func_supported
+        for version, supported in (
+            ("0.20.0", False), ("0.25.1", False), ("0.27.9", False),
+            ("0.28.0", True), ("0.29.1", True), ("1.0.0", True),
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(rollout_func_supported(version), supported)
+
+    def test_old_trl_raises_with_upgrade_hint(self):
+        from unittest import mock
+        import rl.grpo_reward as gr
+        # 伪造一个装了旧版 trl 的环境，别依赖本机实际装的版本
+        with mock.patch("importlib.metadata.version", return_value="0.25.1"):
+            with self.assertRaises(SystemExit) as ctx:
+                gr.require_rollout_func_support()
+        message = str(ctx.exception)
+        self.assertIn("trl>=0.28.0", message)   # 给出可执行的升级命令
+        self.assertIn("不会报错", message)       # 点明这是静默失效
+        self.assertIn("0.25.1", message)        # 报出当前实际装的版本
+
+    def test_supported_trl_passes_silently(self):
+        from unittest import mock
+        import rl.grpo_reward as gr
+        with mock.patch("importlib.metadata.version", return_value="0.28.0"):
+            gr.require_rollout_func_support()   # 不抛异常即可
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
