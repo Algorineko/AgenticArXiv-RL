@@ -40,6 +40,10 @@ _ACTION_RE = re.compile(r"Action:\s*(.*?)(?=\nObservation:|$)", re.DOTALL)
 # 静默失效，奖励退回 messages_to_trajectory（任何非空文本都算一步 FINISH）。
 MIN_TRL_FOR_ROLLOUT_FUNC = "0.28.0"
 
+# 工具执行失败时写进 observation 的前缀。抽成常量是为了让
+# rl/observability.py 统计 tool_error_rate 时不必字面量匹配一段会漂的文案。
+TOOL_ERROR_PREFIX = "工具执行失败: "
+
 
 def parse_react_action(completion: str):
     """从模型输出中解析动作。
@@ -131,7 +135,7 @@ def synthesize_trajectory(
             else:
                 observation = str(result)[:500]
         except Exception as exc:                      # noqa: BLE001
-            observation = f"工具执行失败: {exc}"
+            observation = f"{TOOL_ERROR_PREFIX}{exc}"
 
     return {
         "history": [
@@ -213,11 +217,18 @@ def make_grpo_reward_fn(
     tasks_by_id: Dict[str, Dict[str, Any]],
     env: Any = None,
     reward_calc: Optional[RewardCalculator] = None,
+    tracker: Any = None,
 ) -> Callable[..., List[float]]:
     """构造 TRL GRPOTrainer 用的 reward function。
 
     TRL 会把数据集中除 prompt/completion 之外的列按列名作为关键字参数传入，
     因此数据集需要带一个 `task_id` 列。
+
+    Args:
+        tracker: 可选的 `rl.observability.RewardComponentTracker`。只返回
+            `breakdown.total` 会把五个分量丢掉，而课程会在前 30 步改变各分量
+            的权重 —— 没有分量曲线就无法判断 reward 上升是策略变强还是权重
+            表在动。传入 tracker 即把分量、权重与轨迹健康度一并记进训练日志。
     """
     calc = reward_calc or RewardCalculator()
 
@@ -247,6 +258,8 @@ def make_grpo_reward_fn(
             breakdown, _ = calc.compute_reward_breakdown(
                 task_def, result, training_step=step
             )
+            if tracker is not None:
+                tracker.record(breakdown, result)
             rewards.append(float(breakdown.total))
         return rewards
 
@@ -366,7 +379,7 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
                         raise ValueError(f"未知工具: {action['name']}")
                     observation = str(result)[:1000]
                 except Exception as exc:  # noqa: BLE001
-                    observation = f"工具执行失败: {exc}"
+                    observation = f"{TOOL_ERROR_PREFIX}{exc}"
 
                 histories[index].append({
                     "thought": thought,

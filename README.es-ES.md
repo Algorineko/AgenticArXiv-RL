@@ -204,6 +204,7 @@ El pipeline de entrenamiento incorpora varias capas de validación automática q
 - **Evaluación canary**: muestrea sobre tareas fijas cada N pasos y detiene antes de tiempo si el desempeño degrada bajo el umbral repetidamente (`CanaryCallback`)
 - **Verificación por etapa**: el modelo saliente de cada fase debe superar un umbral mínimo de calidad — tasa de parseo SFT ≥ 0.3, reward promedio DPO ≥ −0.3, reward promedio GRPO ≥ −0.2 (`StageVerifier`, se omite con `--no-verify`)
 - **Precisión mixta adaptativa**: bf16 primero en CUDA, con respaldo a fp16, desactivada en CPU / MPS (`rl/precision.py`)
+- **Validación del backend de registro**: un backend indicado en `--report_to` que no esté instalado falla antes de cargar el modelo, para no terminar un entrenamiento y descubrir que no hay ninguna curva (`rl/observability.py`)
 
 ---
 
@@ -242,7 +243,8 @@ AgenticArXiv-RL/
 │  │  ├─ build_snapshot.py         # Genera snapshot offline de arXiv (único paso con red)
 │  │  ├─ canary.py                 # Evaluación periódica en entrenamiento (detención temprana)
 │  │  ├─ stage_verifier.py         # Verificación de umbral de calidad por fase
-│  │  └─ precision.py              # Estrategia de precisión mixta (bf16/fp16/CPU)
+│  │  ├─ precision.py              # Estrategia de precisión mixta (bf16/fp16/CPU)
+│  │  └─ observability.py          # Backends de registro + curvas por componente
 │  ├─ models/                        # Capa de almacenamiento (store_memory para RL, store_mysql para Web)
 │  ├─ services/                      # Servicios de efectos secundarios (event_bus / log / runtime)
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # Capas de compatibilidad Web / MCP / Skill archivadas
@@ -468,8 +470,8 @@ Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribui
 
 ### P0 — Corto plazo (cerrar brechas clave)
 
-- [ ] **Rollout Agentic Multiturno**: el GRPO actual solo puntúa el `completion` de **un solo paso** del modelo como una "trayectoria mínima sintetizada" — no existe una interacción real de múltiples turnos "actuar → observar → actuar". Usa el soporte de tool-calling / multi-turn de TRL con `MockArxivEnv` como backend de herramientas y enmascarado de loss solo de asistente, para cerrar la brecha más visible frente al nombre de "Agentic RL".
-- [ ] **Observabilidad del entrenamiento**: conectar wandb / TensorBoard (actualmente `report_to=[]`, sin monitorización) y registrar curvas de reward / advantage / KL / componentes antes de ajustar hiperparámetros.
+- [x] **Rollout Agentic Multiturno**: implementado el muestreo real «actuar → observar → actuar», con un `MockArxivEnv` independiente por generación; los tokens del entorno usan `env_mask=0`, mientras que la trayectoria completa del asistente participa en la optimización GRPO y en la recompensa de cinco componentes.
+- [x] **Observabilidad del entrenamiento**: SFT / DPO / GRPO comparten un mismo `--report_to` (none / auto / tensorboard / wandb); si el backend no está instalado falla de inmediato en vez de no registrar nada en silencio. Además de reward / kl / grad_norm / `frac_reward_zero_std` que ya trae TRL, se registran por separado los cinco componentes de la recompensa (format/tool/argument/process/outcome) y los pesos actuales del currículo —el currículo cambia los pesos durante los primeros 30 pasos, así que la recompensa total por sí sola no distingue «la política mejoró» de «los pesos se movieron»—, más `rollout/` turns / finished / parse_error_rate / tool_error_rate para diagnosticar el propio muestreo multiturno.
 
 ### P1 — Medio plazo (datos y evaluación)
 

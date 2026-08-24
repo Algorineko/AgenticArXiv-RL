@@ -24,6 +24,7 @@ from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 
+from rl.observability import describe_logging, resolve_report_to
 from rl.stage_verifier import StageVerifier
 
 
@@ -39,9 +40,13 @@ def main(
     output_dir: str = None,
     verify: bool = False,
     min_reward: float = -0.3,
+    report_to: str = "none",
+    run_name: str = None,
 ):
     """DPO 训练主函数"""
 
+    # 先校验日志后端再加载模型：参数写错时应立刻失败
+    backends = resolve_report_to(report_to)
     # 1. 配置
     model_path = Path(model) if model else REPO_ROOT / "outputs" / "sft" / "final"
     model_name = str(model_path)
@@ -71,6 +76,9 @@ def main(
     print(f"   样本数: {len(train_dataset)}")
 
     # 3. 配置 DPO
+    logging_dir = str(Path(out_dir) / "logs")
+    print(describe_logging(backends, logging_dir if backends else None))
+
     config = DPOConfig(
         output_dir=str(out_dir),
         num_train_epochs=3,
@@ -81,6 +89,9 @@ def main(
         logging_steps=10,
         save_steps=100,
         save_total_limit=3,
+        report_to=backends,
+        logging_dir=logging_dir,
+        run_name=run_name or Path(out_dir).name,
         **_precision_flags(),     # 只有 CUDA 才开 fp16
     )
 
@@ -127,5 +138,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min_reward", type=float, default=-0.3,
         help="DPO 验证的最低平均奖励阈值（默认 -0.3）",
+    )
+    parser.add_argument(
+        "--report_to", default="none",
+        help="训练曲线记到哪：none / auto / tensorboard / wandb（可逗号分隔）",
+    )
+    parser.add_argument(
+        "--run_name", default=None,
+        help="本次运行在 TensorBoard / wandb 里的名字，默认取 output_dir 末段",
     )
     main(**vars(parser.parse_args()))

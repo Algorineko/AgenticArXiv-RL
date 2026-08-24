@@ -25,6 +25,7 @@ from trl import SFTConfig, SFTTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 
+from rl.observability import describe_logging, resolve_report_to
 from rl.stage_verifier import StageVerifier
 
 
@@ -87,9 +88,14 @@ def main(
     max_steps: int = -1,
     verify: bool = False,
     min_parse_rate: float = 0.3,
+    report_to: str = "none",
+    run_name: str = None,
 ):
     train_data_path = Path(data) if data else REPO_ROOT / "data" / "sft" / "sft_train.jsonl"
     out_path = REPO_ROOT / output_dir if not Path(output_dir).is_absolute() else Path(output_dir)
+    # 先校验日志后端再加载模型：参数写错时应立刻失败
+    backends = resolve_report_to(report_to)
+    logging_dir = str(out_path / "logs")
 
     print(f"📦 加载模型: {model}")
     tokenizer = AutoTokenizer.from_pretrained(model)
@@ -121,9 +127,13 @@ def main(
         logging_steps=10,
         save_steps=100,
         save_total_limit=3,
+        report_to=backends,
+        logging_dir=logging_dir,
+        run_name=run_name or out_path.name,
         **_precision_flags(),     # 只有 CUDA 才开 fp16
     )
 
+    print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 SFT 训练...")
     trainer = SFTTrainer(
         model=policy,
@@ -177,5 +187,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min_parse_rate", type=float, default=0.3,
         help="SFT 验证的最低可解析率阈值（默认 0.3）",
+    )
+    parser.add_argument(
+        "--report_to", default="none",
+        help="训练曲线记到哪：none / auto / tensorboard / wandb（可逗号分隔）",
+    )
+    parser.add_argument(
+        "--run_name", default=None,
+        help="本次运行在 TensorBoard / wandb 里的名字，默认取 output_dir 末段",
     )
     main(**vars(parser.parse_args()))

@@ -53,6 +53,11 @@ from rl.grpo_reward import (
     parse_react_action,
 )
 from rl.multiturn_env import make_environment_factory
+from rl.observability import (
+    RewardComponentTracker,
+    describe_logging,
+    resolve_report_to,
+)
 from rl.reward import RewardCalculator
 from rl.stage_verifier import StageVerifier
 
@@ -151,7 +156,13 @@ def main(
     min_canary_reward: float = -1.0,
     canary_patience: int = 3,
     verify: bool = True,
+    report_to: str = "none",
+    run_name: str = None,
 ):
+    # 先校验日志后端再加载模型：参数写错时应立刻失败，而不是等模型加载完
+    backends = resolve_report_to(report_to)
+    logging_dir = str(REPO_ROOT / output_dir / "logs")
+
     model_path = REPO_ROOT / model
     if model_path.exists():
         resolved = str(model_path)
@@ -195,7 +206,8 @@ def main(
     environment_factory = make_environment_factory(snapshot_path)
     print(f"🗂  使用独立离线环境执行多轮工具调用: {snapshot_path}")
     # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
-    reward_fn = make_grpo_reward_fn({t["id"]: t for t in tasks}, env=None)
+    tracker = RewardComponentTracker()
+    reward_fn = make_grpo_reward_fn({t["id"]: t for t in tasks}, env=None, tracker=tracker)
     rollout_func = make_multiturn_rollout_func(environment_factory, max_turns=max_turns)
 
     # GRPO 要求生成批量能被 num_generations 整除
@@ -215,7 +227,9 @@ def main(
         "temperature": temperature,
         "logging_steps": 1,
         "save_strategy": "no",
-        "report_to": [],
+        "report_to": backends,
+        "logging_dir": logging_dir,
+        "run_name": run_name or Path(output_dir).name,
         **_precision_flags(),
     }
     # GRPOConfig 的字段在 TRL 各版本间有增删，按实际安装版本过滤，
@@ -226,6 +240,7 @@ def main(
         print(f"  提示：当前 TRL 不支持这些 GRPOConfig 参数，已忽略 -> {dropped}")
     config = GRPOConfig(**{k: v for k, v in cfg_kwargs.items() if k in valid})
 
+    print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 GRPO 训练（每个 prompt 采样 {num_generations} 条，规则奖励）")
     trainer = GRPOTrainer(
         model=policy,
@@ -235,6 +250,10 @@ def main(
         processing_class=tokenizer,
         rollout_func=rollout_func,
     )
+    # 必须在 trainer 建好之后接线：分量指标要塞进 TRL 的 _metrics 缓冲区，
+    # 由 TRL 在 log() 里取均值后再分发给 report_to 的各个后端。
+    if backends:
+        tracker.bind(trainer)
 
     # --- Canary 回调：每 N 步在固定任务上评估，检测性能退化 ---
     canary_cb = None
@@ -330,5 +349,15 @@ if __name__ == "__main__":
     p.add_argument(
         "--verify", action=argparse.BooleanOptionalAction, default=True,
         help="训练结束后运行阶段验证（默认开启）",
+    )
+    p.add_argument(
+        "--report_to", default="none",
+        help="训练曲线记到哪：none / auto / tensorboard / wandb（可逗号分隔）。"
+             "记录 reward、kl、grad_norm、frac_reward_zero_std，"
+             "以及 format/tool/argument/process/outcome 五个奖励分量与当前课程权重",
+    )
+    p.add_argument(
+        "--run_name", default=None,
+        help="本次运行在 TensorBoard / wandb 里的名字，默认取 output_dir 末段",
     )
     main(**vars(p.parse_args()))

@@ -210,7 +210,19 @@ python -m AgenticArxiv.rl.train_grpo
 ```bash
 python -m AgenticArxiv.rl.build_snapshot
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
+
+# 记录训练曲线（三个阶段同一套参数）
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
+tensorboard --logdir outputs/grpo/logs
 ```
+
+**训练曲线**（`rl/observability.py`）：`--report_to` 取 `none` / `auto` / `tensorboard` / `wandb`（可逗号分隔），三个训练阶段共用。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，额外记录：
+
+| 指标组 | 内容 | 为什么单独记 |
+|---|---|---|
+| `reward_components/*` | format / tool / argument / process / outcome | 各自恒在 `[-1,1]` 且与权重无关 |
+| `reward_weights/*` | 当前课程权重 | 课程前 30 步压低 tool/argument/outcome 权重，只看 total 会把「权重放开」误读成「策略退化」 |
+| `rollout/*` | turns / finished / parse_error_rate / tool_error_rate | reward 掉下去时区分「策略退化」与「没学会收尾、每次跑满 max_turns」 |
 
 ### 训练质量保障（自动校验）
 
@@ -221,6 +233,7 @@ python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 - **Canary 评估**：训练中每 N 步在固定任务上采样评估，性能退化达到阈值连续多次则提前停止（`CanaryCallback`）
 - **阶段验证**：每个阶段产出模型须过最低质量阈值——SFT 可解析率 ≥ 0.3、DPO 平均奖励 ≥ −0.3、GRPO 平均奖励 ≥ −0.2（`StageVerifier`，`--no-verify` 可跳过）
 - **混合精度自适应**：CUDA 优先 bf16、回退 fp16，CPU / MPS 关闭（`rl/precision.py`）
+- **日志后端校验**：`--report_to` 指定的后端没装时在加载模型前就失败，避免训练跑完才发现没有任何曲线（`rl/observability.py`）
 
 ---
 
@@ -259,7 +272,8 @@ AgenticArXiv-RL/
 │  │  ├─ build_snapshot.py         # 生成 arXiv 离线快照（唯一联网步骤）
 │  │  ├─ canary.py                 # 训练中周期性评估（防退化早停）
 │  │  ├─ stage_verifier.py         # 阶段产出模型质量阈值验证
-│  │  └─ precision.py              # 混合精度策略（bf16/fp16/CPU）
+│  │  ├─ precision.py              # 混合精度策略（bf16/fp16/CPU）
+│  │  └─ observability.py          # 日志后端 + 奖励分量曲线
 │  ├─ models/                        # 存储层（RL 用 store_memory，Web 版用 store_mysql）
 │  ├─ services/                      # 副作用服务（event_bus / log / runtime）
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # 归档的 Web / MCP / Skill 兼容层
@@ -485,7 +499,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 ### P0 — 近期（填补核心缺口）
 
 - [x] **多轮 Agentic Rollout**：已实现真正的「行动 → 环境反馈 → 再行动」交互采样；每条 generation 使用独立 `MockArxivEnv`，环境 token 以 `env_mask=0` 排除策略 loss，完整 assistant 轨迹参与 GRPO 更新与五分量奖励。
-- [ ] **训练可观测性**：接入 wandb / TensorBoard（当前 `report_to=[]`，无任何监控），记录 reward / advantage / kl / 各奖励分量曲线，再谈超参调优。
+- [x] **训练可观测性**：SFT / DPO / GRPO 统一 `--report_to`（none / auto / tensorboard / wandb），后端未安装时直接报错而非静默不记。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，另单独记录 format/tool/argument/process/outcome 五个奖励分量与当前课程权重——课程会在前 30 步改变权重，只看 total reward 分不出「策略在变强」还是「权重表在动」；再加 `rollout/` 下的 turns / finished / parse_error_rate / tool_error_rate 用于定位多轮采样本身的问题。
 
 ### P1 — 中期（数据与评测）
 
