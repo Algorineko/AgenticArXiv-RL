@@ -27,6 +27,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from benchmark.metrics import NON_TOOL_ACTIONS
 from rl.reward import RewardCalculator
 
 # 与 agents/agent_engine.py 的解析规则保持一致
@@ -52,7 +53,7 @@ def parse_react_action(completion: str):
     action_text = match.group(1).strip()
     if not action_text:
         return "parse_error", None
-    if action_text.upper().startswith("FINISH"):
+    if action_text.upper().startswith(NON_TOOL_ACTIONS):
         return "finish", None
 
     json_match = re.search(r"(\{.*\})", action_text, re.DOTALL)
@@ -66,6 +67,11 @@ def parse_react_action(completion: str):
 
     if not isinstance(parsed, dict) or not parsed.get("name"):
         return "parse_error", None
+    # 模型常把结束写成 Action: {"name": "FINISH", "args": {}}。当成工具调用会让
+    # rollout 拿到「未知工具」的 observation 继续跑满 max_turns，并给一条本已
+    # 正确收尾的轨迹记上一次失败调用 —— 奖励因此与 benchmark 的判定不一致。
+    if str(parsed["name"]).strip().upper() in NON_TOOL_ACTIONS:
+        return "finish", None
     return "call", {"name": parsed["name"], "args": parsed.get("args") or {}}
 
 
