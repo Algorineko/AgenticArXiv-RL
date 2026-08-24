@@ -6,6 +6,7 @@
   - **可选参数**（optional）：force / service / threads / keep_dual
   - **跨步状态**（state）：「刚下载的那篇」这类必须靠会话状态才能解析的指代
   - **多跳链路**（composite / long_chain）：2~5 步的工具链
+  - **负向约束**（constraint）：完成指定操作，同时抑制下载、翻译等多余调用
   - **不可行请求**（infeasible）：正确行为是**不调用任何工具**
 
 `expected_tools` 与 `expected_tool_args` 都从 `steps` 派生（见
@@ -468,6 +469,88 @@ _OTHERS: List[TaskSpec] = [
 
 
 # ============================================================================
+# 负向约束：完成可行任务，但不要执行用户明确排除的操作
+# ============================================================================
+# infeasible 覆盖的是「一次工具都不该调」；这一组覆盖更常见、也更难判定的情况：
+# 任务本身需要调用工具，但模型必须在完成目标后及时停止，不能因为“看起来有帮助”
+# 就继续下载、翻译或查缓存。严格工具序列评分会把任何多余调用判错。
+#
+# constraint_search_no_file 还覆盖搜索工具中此前未测试的副作用开关：
+# save_to_file 默认是 True，用户明确要求不落盘时必须传 False。
+_CONSTRAINTS: List[TaskSpec] = [
+    TaskSpec(
+        id='constraint_search_no_file',
+        task='检索最近7天所有计算机科学方向的新论文，最多5篇；只返回结果，不要保存到文件，也不要下载论文',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {
+                'aspect': '*', 'days': 7, 'max_results': 5, 'save_to_file': False,
+            }),
+        ),
+        category='constraint',
+        difficulty='hard',
+        note='覆盖 aspect=* 与 save_to_file=False；额外下载也会被严格序列评分判错',
+    ),
+    TaskSpec(
+        id='constraint_search_only',
+        task='搜索最近3天机器人学(cs.RO)论文，最多3篇；只列出检索结果，不要下载或翻译',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {
+                'aspect': 'RO', 'days': 3, 'max_results': 3,
+            }),
+        ),
+        category='constraint',
+        difficulty='medium',
+    ),
+    TaskSpec(
+        id='constraint_cache_only',
+        task='只查看第2篇论文的缓存状态，不要下载，也不要翻译',
+        steps=(
+            Step('get_paper_cache_status', {'ref': 2}),
+        ),
+        category='constraint',
+        difficulty='hard',
+        setup=_SEED_AI5,
+    ),
+    TaskSpec(
+        id='constraint_download_only',
+        task='只下载第1篇论文，不要翻译，也不要额外检查缓存状态',
+        steps=(
+            Step('download_arxiv_pdf', {'ref': 1}),
+        ),
+        category='constraint',
+        difficulty='hard',
+        setup=_SEED_AI5,
+    ),
+    TaskSpec(
+        id='constraint_translate_only',
+        task='只把刚下载的那篇论文翻译成双语版本，不要重新搜索，也不要检查缓存状态',
+        steps=(
+            Step('translate_arxiv_pdf', {'ref': None, 'keep_dual': True}),
+        ),
+        category='constraint',
+        difficulty='hard',
+        setup=(
+            Step('get_recently_submitted_cs_papers', {
+                'aspect': 'AI', 'days': 7, 'max_results': 5,
+            }),
+            Step('download_arxiv_pdf', {'ref': 1}),
+        ),
+    ),
+    TaskSpec(
+        id='constraint_two_downloads_only',
+        task='下载第1篇和第3篇论文；除此之外不要检查缓存或翻译',
+        steps=(
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('download_arxiv_pdf', {'ref': 3}),
+        ),
+        category='constraint',
+        difficulty='hard',
+        setup=_SEED_AI5,
+    ),
+]
+
+
+# ============================================================================
 # 不可行请求：正确行为是**不调用任何工具**
 # ============================================================================
 # 现有任务全都在奖励「做对了什么」，没有一条惩罚「做了不该做的事」。
@@ -591,7 +674,9 @@ _LONG_CHAIN: List[TaskSpec] = [
 ]
 
 
-EXPANDED_TASKS: List[Dict[str, Any]] = build(_SEARCH + _OTHERS + _INFEASIBLE + _LONG_CHAIN)
+EXPANDED_TASKS: List[Dict[str, Any]] = build(
+    _SEARCH + _OTHERS + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
+)
 
 
 def get_expanded_tasks() -> List[Dict[str, Any]]:
