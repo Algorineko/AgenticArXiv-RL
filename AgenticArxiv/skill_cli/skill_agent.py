@@ -15,6 +15,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from tools.bootstrap import missing_tools, register_all_tools, registered_tool_count
 from agents.base_agent import BaseAgent
 from utils.llm_client import LLMClient
 from utils.logger import log
@@ -44,13 +45,17 @@ class SkillAgent(BaseAgent):
         self._skill_doc = self._load_skill_doc()
 
         # 确保底层工具已注册（供 _execute_with_side_effects 使用）
-        try:
-            import tools.arxiv_tool  # noqa: F401
-            import tools.pdf_download_tool  # noqa: F401
-            import tools.pdf_translate_tool  # noqa: F401
-            import tools.cache_status_tool  # noqa: F401
-        except ImportError as e:
-            log.warning(f"导入工具模块失败: {e}")
+        # 逐个模块独立导入：四个 import 曾共用一个 try，缺任何一个第三方依赖
+        # 就会让四个工具**全部**注册不上，而 registry 为空时模型不会报错，
+        # 它会编工具名。详见 tools/bootstrap.py。
+        failures = register_all_tools()
+        for module, error in failures.items():
+            log.warning(f"工具模块 {module} 导入失败: {error}")
+        missing = missing_tools()
+        if missing:
+            log.warning(f"以下工具不可用，模型可能改为编造工具名: {missing}")
+        else:
+            log.info(f"工具已全部注册（{registered_tool_count()} 个）")
 
     @staticmethod
     def _load_skill_doc() -> str:
