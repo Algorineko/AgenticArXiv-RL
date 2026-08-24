@@ -42,6 +42,22 @@ def _messages_of(row):
     return list(row.get("prompt") or []) + list(row.get("completion") or [])
 
 
+def _to_prompt_completion(row):
+    """把单轮 messages 样本转换成 TRL 的 prompt-completion 格式。
+
+    项目的 assistant message 只包含 Action。显式拆分 prompt/completion 后，
+    ``completion_only_loss=True`` 可以在不依赖模型 chat template 是否提供
+    assistant mask 的情况下，仅监督 Action。
+    """
+    messages = list(row["messages"])
+    if not messages or messages[-1].get("role") != "assistant":
+        raise ValueError("SFT 样本必须以 assistant message 结尾")
+    return {
+        "prompt": messages[:-1],
+        "completion": messages[-1:],
+    }
+
+
 def _token_length(tokenizer, messages) -> int:
     # 先渲染成字符串再计数：apply_chat_template(tokenize=True) 在 transformers 5.x
     # 返回 BatchEncoding，len() 数到的是字段数而不是 token 数。
@@ -111,6 +127,12 @@ def main(
         )
 
     train_dataset = load_dataset("json", data_files=str(train_data_path), split="train")
+    if "messages" in train_dataset.column_names:
+        train_dataset = train_dataset.map(
+            _to_prompt_completion,
+            remove_columns=["messages"],
+            desc="Converting SFT data to prompt-completion format",
+        )
     print(f"   样本数: {len(train_dataset)}")
 
     # --- 长度守卫 ---
@@ -123,6 +145,7 @@ def main(
         gradient_accumulation_steps=grad_accum,
         learning_rate=lr,
         max_length=max_length,    # TRL>=0.20 用 max_length（旧名 max_seq_length 已移除）
+        completion_only_loss=True,  # prompt 不计 loss，只监督 assistant Action
         max_steps=max_steps,
         logging_steps=10,
         save_steps=100,
