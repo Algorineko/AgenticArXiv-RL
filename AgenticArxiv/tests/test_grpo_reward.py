@@ -43,6 +43,8 @@ WRONG_ARGS = ('Thought: 需要检索\n'
               '"args":{"aspect":"CR","days":30,"max_results":99}}')
 WRONG_TOOL = 'Thought: 下载\nAction: {"name":"download_arxiv_pdf","args":{"ref":1}}'
 BARE_FINISH = 'Thought: 完成了\nAction: FINISH'
+JSON_FINISH = 'Thought: 完成了\nAction: {"name": "FINISH", "args": {}}'
+JSON_FORCE_STOP = 'Thought: 放弃\nAction: {"name": "FORCE_STOP", "args": {}}'
 BAD_JSON = "Thought: t\nAction: {'name': 'get_recently_submitted_cs_papers',}"
 NO_ACTION = "Thought: 我先想想该怎么做"
 
@@ -60,6 +62,25 @@ class TestParseReactAction(unittest.TestCase):
 
     def test_finish(self):
         self.assertEqual(parse_react_action(BARE_FINISH)[0], "finish")
+
+    def test_json_wrapped_finish_is_not_a_tool_call(self):
+        """模型常把结束写成和工具调用一样的 JSON 外壳。
+
+        当成工具调用会连锁出三件事：rollout 拿到「未知工具: FINISH」的
+        observation 并继续跑满 max_turns；一条本已正确收尾的轨迹被记上一次
+        失败调用；奖励因此低于 benchmark 对同一条轨迹的判定。
+        """
+        self.assertEqual(parse_react_action(JSON_FINISH), ("finish", None))
+        self.assertEqual(parse_react_action(JSON_FORCE_STOP), ("finish", None))
+
+    def test_finish_case_insensitive(self):
+        self.assertEqual(parse_react_action('Thought: t\nAction: {"name": "finish"}')[0],
+                         "finish")
+
+    def test_real_tool_still_parsed_after_finish_guard(self):
+        kind, action = parse_react_action(WRONG_TOOL)
+        self.assertEqual(kind, "call")
+        self.assertEqual(action["name"], "download_arxiv_pdf")
 
     def test_bad_json_is_parse_error(self):
         """prompt 要求严格 JSON，坏 JSON 不应被降级修复，否则格式惩罚失效。"""
