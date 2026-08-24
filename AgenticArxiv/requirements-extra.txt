@@ -4,3 +4,7 @@ fastapi
 uvicorn[standard]
 sqlalchemy>=2.0
 pymysql
+
+# ===== 训练曲线后端（--report_to，按需装一个） =====
+tensorboard   # 零配置、离线可用，推荐；查看: tensorboard --logdir outputs/<stage>/logs
+# wandb       # 需要联网与 API key

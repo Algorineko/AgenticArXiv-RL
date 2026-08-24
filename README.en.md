@@ -200,6 +200,23 @@ python -m AgenticArxiv.rl.train_grpo
 
 **Multi-turn rollout and reward scoring** (`rl/grpo_reward.py`): the current policy generates a ReAct action at every turn, an independent `MockArxivEnv` executes it, and the observation is appended back to context until completion or `--max_turns`. Assistant tokens participate in GRPO loss while environment tokens are excluded with `env_mask=0`; the complete trajectory is scored by the shared five-component `RewardCalculator`.
 
+```bash
+python -m AgenticArxiv.rl.build_snapshot
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
+
+# Record training curves (same flag across all three stages)
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
+tensorboard --logdir outputs/grpo/logs
+```
+
+**Training curves** (`rl/observability.py`): `--report_to` accepts `none` / `auto` / `tensorboard` / `wandb` (comma-separated), shared by all three stages. On top of TRL's built-in metrics it logs:
+
+| Metric group | Contents | Why log it separately |
+|---|---|---|
+| `reward_components/*` | format / tool / argument / process / outcome | each bounded to `[-1,1]` and independent of the weights |
+| `reward_weights/*` | current curriculum weights | the curriculum suppresses tool/argument/outcome weights for the first 30 steps, so total reward alone reads "weights opened up" as "policy regressed" |
+| `rollout/*` | turns / finished / parse_error_rate / tool_error_rate | when reward drops, separates "policy regressed" from "never learned to stop, burns every turn up to max_turns" |
+
 ### Training Quality Guards (auto-verification)
 
 The training pipeline bakes in several layers of automatic validation that turn "silent training failures" into loud errors:
@@ -209,6 +226,7 @@ The training pipeline bakes in several layers of automatic validation that turn 
 - **Canary evaluation**: samples on fixed tasks every N steps and early-stops if performance degrades below the threshold repeatedly (`CanaryCallback`)
 - **Stage verification**: each stage's output model must pass a minimum quality threshold — SFT parse rate ≥ 0.3, DPO mean reward ≥ −0.3, GRPO mean reward ≥ −0.2 (`StageVerifier`, skip with `--no-verify`)
 - **Adaptive mixed precision**: bf16 first on CUDA, falling back to fp16, disabled on CPU / MPS (`rl/precision.py`)
+- **Logging-backend validation**: a backend named in `--report_to` that is not installed fails before the model is loaded, so you never finish a run only to find no curves (`rl/observability.py`)
 
 ---
 
@@ -247,7 +265,8 @@ AgenticArXiv-RL/
 │  │  ├─ build_snapshot.py         # Build arXiv offline snapshot (only network step)
 │  │  ├─ canary.py                 # Periodic in-training evaluation (early stop)
 │  │  ├─ stage_verifier.py         # Per-stage model quality threshold verification
-│  │  └─ precision.py              # Mixed-precision strategy (bf16/fp16/CPU)
+│  │  ├─ precision.py              # Mixed-precision strategy (bf16/fp16/CPU)
+│  │  └─ observability.py          # Logging backends + reward-component curves
 │  ├─ models/                        # Storage layer (store_memory for RL, store_mysql for Web)
 │  ├─ services/                      # Side-effect services (event_bus / log / runtime)
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # Archived Web / MCP / Skill compatibility layers
@@ -475,7 +494,7 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 ### P0 — Near term (close core gaps)
 
 - [x] **Multi-turn Agentic Rollout**: implemented real "act → observe → act" sampling with an independent `MockArxivEnv` per generation; environment tokens use `env_mask=0`, while the complete assistant trajectory participates in GRPO optimization and reward scoring.
-- [ ] **Training observability**: wire up wandb / TensorBoard (currently `report_to=[]`, no monitoring) and log reward / advantage / KL / per-component curves before tuning hyperparameters.
+- [x] **Training observability**: SFT / DPO / GRPO share one `--report_to` flag (none / auto / tensorboard / wandb); a missing backend fails loudly instead of silently recording nothing. Beyond TRL's built-in reward / kl / grad_norm / `frac_reward_zero_std`, the five reward components (format/tool/argument/process/outcome) and the current curriculum weights are logged separately — the curriculum reweights components over the first 30 steps, so total reward alone cannot tell "the policy improved" from "the weights moved" — plus `rollout/` turns / finished / parse_error_rate / tool_error_rate for diagnosing multi-turn sampling itself.
 
 ### P1 — Mid term (data & evaluation)
 
