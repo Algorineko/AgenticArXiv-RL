@@ -21,6 +21,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from tools.bootstrap import require_all_tools
 from benchmark.tasks import get_all_tasks, get_tasks_by_category, get_task_by_id
 from benchmark.runner import BenchmarkRunner
 from benchmark.report import BenchmarkReport
@@ -75,6 +76,10 @@ def main():
     )
     parser.add_argument("--snapshot", default=None, help="指定快照路径（默认 data/mock_arxiv_snapshot.json）")
     args = parser.parse_args()
+
+    # 工具没注册齐就别开跑：registry 不全时模型不会报错，它会编造工具名，
+    # benchmark 照样跑完并给出成功率 —— 那种数字比没有数字更危险。
+    require_all_tools("Benchmark")
 
     llm_extra = {}
     if args.no_thinking:
