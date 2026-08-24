@@ -10,7 +10,7 @@ from unittest.mock import Mock
 
 from rl.precision import precision_flags
 from rl.train_grpo import RewardVarianceGuard
-from rl.train_sft import _check_lengths, _messages_of
+from rl.train_sft import _check_lengths, _messages_of, _to_prompt_completion
 
 
 class _FakeTokenizer:
@@ -37,6 +37,27 @@ class MessagesOfTest(unittest.TestCase):
     def test_messages_format(self):
         row = {"messages": [{"role": "user", "content": "x"}]}
         self.assertEqual(_messages_of(row), row["messages"])
+
+
+class PromptCompletionConversionTest(unittest.TestCase):
+    def test_splits_last_assistant_message_from_prompt(self):
+        row = {
+            "messages": [
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+                {"role": "assistant", "content": '{"tool": "search"}'},
+            ]
+        }
+
+        converted = _to_prompt_completion(row)
+
+        self.assertEqual([m["role"] for m in converted["prompt"]], ["system", "user"])
+        self.assertEqual(converted["completion"], [row["messages"][-1]])
+
+    def test_rejects_sample_without_final_assistant_message(self):
+        row = {"messages": [{"role": "user", "content": "task"}]}
+        with self.assertRaisesRegex(ValueError, "assistant"):
+            _to_prompt_completion(row)
 
 
 class CheckLengthsTest(unittest.TestCase):
