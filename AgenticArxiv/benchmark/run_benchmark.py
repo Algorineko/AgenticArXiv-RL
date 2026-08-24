@@ -43,8 +43,9 @@ def main():
     parser.add_argument(
         "--tasks", type=str, default=None,
         choices=["search", "download", "translate", "cache", "composite",
-                 "ref_form", "optional", "state", "long_chain", "infeasible"],
-        help="按类别筛选测试任务。后五个类别只存在于 --task-set expanded",
+                 "ref_form", "optional", "state", "long_chain", "constraint",
+                 "infeasible"],
+        help="按类别筛选测试任务。扩展类别只存在于 --task-set expanded",
     )
     parser.add_argument(
         "--task-ids", nargs="+", default=None,
@@ -78,8 +79,8 @@ def main():
     parser.add_argument("--snapshot", default=None, help="指定快照路径（默认 data/mock_arxiv_snapshot.json）")
     parser.add_argument(
         "--task-set", choices=["default", "expanded"], default="default",
-        help="default=benchmark/tasks.py 的 8 条；expanded=扩充后的 52 条"
-             "（指代形态、可选参数、跨步状态、多跳链路、不可行请求）",
+        help="default=benchmark/tasks.py 的 8 条；expanded=扩充后的 58 条"
+             "（指代形态、可选参数、跨步状态、多跳链路、负向约束、不可行请求）",
     )
     args = parser.parse_args()
 
