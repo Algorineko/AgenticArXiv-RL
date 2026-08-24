@@ -177,9 +177,16 @@ def _extract_tool_sequence(history: List[Dict]) -> List[str]:
 
 
 def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
-    """检查实际工具调用是否与预期序列完全一致（严格顺序、无多余/重复调用）"""
+    """检查实际工具调用是否与预期序列完全一致（严格顺序、无多余/重复调用）。
+
+    expected 为空表示**正确行为是一次工具都不调**（category="infeasible"：
+    请求超出能力边界或指向不存在的对象）。此前这里无条件返回 True，于是
+    幻觉调用也算「准确」——`_outcome_score` 会因为 task_completed and
+    tool_call_accurate 给出满分，硬调不存在的第 20 篇反而拿到 outcome=+1.0。
+    rl/reward.py 的 `_tool_score` 在同样输入下给 0.0，两边本就不一致。
+    """
     if not expected:
-        return True
+        return not actual
     return actual == expected
 
 

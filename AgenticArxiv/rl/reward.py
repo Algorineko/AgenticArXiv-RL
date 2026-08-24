@@ -165,8 +165,11 @@ class RewardCalculator:
 
     @staticmethod
     def _tool_score(actual: Sequence[str], expected: Sequence[str]) -> float:
+        # expected 为空表示正确行为是一次工具都不调（category="infeasible"）。
+        # 调了就给 -1.0 而不是 0.0：普通任务调错工具时 f1=0 → 2*0-1 = -1，
+        # 「本该什么都不做却动了手」不该比「做错了」罚得更轻。
         if not expected:
-            return 1.0 if not actual else 0.0
+            return 1.0 if not actual else -1.0
         lcs = _lcs_length(actual, expected)
         precision = lcs / len(actual) if actual else 0.0
         recall = lcs / len(expected)
