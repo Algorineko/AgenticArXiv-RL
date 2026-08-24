@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.llm_client import LLMClient
 from tools.tool_registry import registry
+from tools.bootstrap import missing_tools, register_all_tools, registered_tool_count
 from agents.base_agent import BaseAgent, is_terminal_action
 from agents.prompt_templates import get_react_prompt, format_tool_description
 from utils.logger import log
@@ -20,14 +21,17 @@ class ReActAgent(BaseAgent):
     def __init__(self, llm_client: LLMClient, side_effect_mgr=None, env=None, max_iterations: int = 5, llm_extra=None):
         super().__init__(llm_client, side_effect_mgr=side_effect_mgr, env=env,
                          max_iterations=max_iterations, llm_extra=llm_extra)
-        try:
-            import tools.arxiv_tool  # noqa: F401
-            import tools.pdf_download_tool  # noqa: F401
-            import tools.pdf_translate_tool  # noqa: F401
-            import tools.cache_status_tool  # noqa: F401
-            log.info(f"已导入工具模块，注册了 {len(registry.list_tools())} 个工具")
-        except ImportError as e:
-            log.warning(f"导入工具模块失败: {e}")
+        # 逐个模块独立导入：四个 import 曾共用一个 try，缺任何一个第三方依赖
+        # 就会让四个工具**全部**注册不上，而 registry 为空时模型不会报错，
+        # 它会编工具名。详见 tools/bootstrap.py。
+        failures = register_all_tools()
+        for module, error in failures.items():
+            log.warning(f"工具模块 {module} 导入失败: {error}")
+        missing = missing_tools()
+        if missing:
+            log.warning(f"以下工具不可用，模型可能改为编造工具名: {missing}")
+        else:
+            log.info(f"工具已全部注册（{registered_tool_count()} 个）")
 
     def discover_tools(self) -> List[Dict[str, Any]]:
         return registry.list_tools()
