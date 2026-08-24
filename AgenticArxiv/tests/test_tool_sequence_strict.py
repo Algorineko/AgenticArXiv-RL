@@ -39,8 +39,21 @@ class StrictToolSequenceTest(unittest.TestCase):
         actual = ["get_recently_submitted_cs_papers"]
         self.assertFalse(_check_tool_sequence(actual, self.EXPECTED))
 
-    def test_empty_expected_always_ok(self):
-        self.assertTrue(_check_tool_sequence(["anything"], []))
+    def test_empty_expected_means_no_tool_call(self):
+        """expected 为空 = 正确行为是一次工具都不调，不是「没声明标准答案」。
+
+        这条原本断言的是 `_check_tool_sequence(["anything"], []) is True`，
+        当时没有任何任务的 expected_tools 为空，那个返回值只是个安全默认。
+        引入 category="infeasible"（请求超出能力边界或指向不存在的对象）后，
+        空 expected 有了确切含义：无条件返回 True 会让幻觉调用也算「准确」，
+        `_outcome_score` 因 task_completed and tool_call_accurate 给出满分——
+        硬调不存在的第 20 篇反而拿到 outcome=+1.0。
+
+        rl/reward.py 的 `_tool_score` 在同样输入下返回 0.0（既不算对也不算错），
+        与这里的 True 本就不一致；现在两边统一成「调了就是错」。
+        """
+        self.assertTrue(_check_tool_sequence([], []))
+        self.assertFalse(_check_tool_sequence(["anything"], []))
 
 
 if __name__ == "__main__":
