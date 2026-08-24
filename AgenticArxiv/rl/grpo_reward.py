@@ -34,6 +34,12 @@ from rl.reward import RewardCalculator
 _THOUGHT_RE = re.compile(r"Thought:\s*(.*?)(?=\nAction:|$)", re.DOTALL)
 _ACTION_RE = re.compile(r"Action:\s*(.*?)(?=\nObservation:|$)", re.DOTALL)
 
+# TRL 从 0.28.0 起才会在**非 vLLM** 路径上调用 rollout_func，签名也才是
+# rollout_func(prompts, trainer)。更早的版本里它只在 use_vllm 且
+# vllm_mode == "server" 时被调用 —— 默认配置下压根不会执行，多轮 rollout
+# 静默失效，奖励退回 messages_to_trajectory（任何非空文本都算一步 FINISH）。
+MIN_TRL_FOR_ROLLOUT_FUNC = "0.28.0"
+
 
 def parse_react_action(completion: str):
     """从模型输出中解析动作。
@@ -248,6 +254,31 @@ def make_grpo_reward_fn(
     return grpo_reward_fn
 
 
+def rollout_func_supported(trl_version: str) -> bool:
+    """当前 TRL 是否会在非 vLLM 路径上调用 rollout_func。"""
+    from packaging.version import Version
+
+    return Version(trl_version) >= Version(MIN_TRL_FOR_ROLLOUT_FUNC)
+
+
+def require_rollout_func_support() -> None:
+    """TRL 太老就直接拦下，而不是让多轮 rollout 静默失效。
+
+    这类失败特别难查：训练照常跑完、loss 也在动，只是每条 rollout 都退化成
+    「一步 FINISH」，词沙拉也能拿到正分。宁可在启动时报错。
+    """
+    from importlib.metadata import version
+
+    installed = version("trl")
+    if not rollout_func_supported(installed):
+        raise SystemExit(
+            f"❌ 多轮 GRPO rollout 需要 trl >= {MIN_TRL_FOR_ROLLOUT_FUNC}，当前是 {installed}\n"
+            f"   更早的版本只在 vLLM server 模式下调用 rollout_func，默认配置下多轮采样\n"
+            f"   不会执行且不会报错 —— 奖励会退化成「任何非空输出都算完成」。\n"
+            f"   升级: pip install -U 'trl>={MIN_TRL_FOR_ROLLOUT_FUNC}'"
+        )
+
+
 def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
     """Create a TRL custom rollout function for textual ReAct models.
 
@@ -256,6 +287,7 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
     policy tokens use ``env_mask=1`` and therefore participate in GRPO loss.
     The full history is forwarded to the reward function as an extra field.
     """
+    require_rollout_func_support()
     max_turns = max(1, int(max_turns))
 
     def rollout_func(prompts, trainer):
