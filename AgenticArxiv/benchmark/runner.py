@@ -93,7 +93,8 @@ class BenchmarkRunner:
                         if task_def.get("category") in ("download", "translate"):
                             self._cleanup_paper_artifacts(session_id)
 
-                        agent = self._create_agent(agent_type)
+                        agent = self._create_agent(
+                            agent_type, task_def.get("max_iterations"))
                         raw = agent.run(
                             task=task_def["task"],
                             agent_model=self.model,
@@ -157,18 +158,27 @@ class BenchmarkRunner:
             log.info(f"[Benchmark] 离线模式，回放快照 {path}")
         return self._env
 
-    def _create_agent(self, agent_type: str):
+    def _create_agent(self, agent_type: str, max_iterations: Optional[int] = None):
+        """按任务声明的轮数预算创建 Agent。
+
+        Agent 默认 5 轮 = 最多 4 次工具调用 + 一次 FINISH。链更长的任务必须
+        显式抬高，否则会被判成 FORCE_STOP —— 那是「预算不够」而不是「不会
+        规划」，混在一起会让长链任务的失败率没法解读。
+        """
         side_fx = self._side_effects()
         env = self._tool_env()
+        kwargs = {"side_effect_mgr": side_fx, "env": env, "llm_extra": self.llm_extra}
+        if max_iterations is not None:
+            kwargs["max_iterations"] = max_iterations
         if agent_type == "mcp":
             from mcp_protocol.mcp_agent import MCPAgent
-            return MCPAgent(self.llm_client, side_effect_mgr=side_fx, env=env, llm_extra=self.llm_extra)
+            return MCPAgent(self.llm_client, **kwargs)
         elif agent_type == "skill_cli":
             from skill_cli.skill_agent import SkillAgent
-            return SkillAgent(self.llm_client, side_effect_mgr=side_fx, env=env, llm_extra=self.llm_extra)
+            return SkillAgent(self.llm_client, **kwargs)
         else:
             from agents.agent_engine import ReActAgent
-            return ReActAgent(self.llm_client, side_effect_mgr=side_fx, env=env, llm_extra=self.llm_extra)
+            return ReActAgent(self.llm_client, **kwargs)
 
     @staticmethod
     def _cleanup_paper_artifacts(session_id: str):
