@@ -32,7 +32,32 @@ python -m benchmark.run_benchmark --output /path/to/output
 python -m benchmark.run_benchmark --prefix bench_r1
 ```
 
-默认 7 个任务 x 3 种 Agent x 3 次重复 = 63 次运行。
+默认 8 个任务 x 3 种 Agent x 3 次重复 = 72 次运行。
+
+## 退化策略基线
+
+```bash
+cd AgenticArXiv
+
+# 不调用 LLM、网络或真实工具；用扩展任务集检查评分器能否区分弱策略
+python -m benchmark.run_baselines --task-set expanded
+
+# 保存逐任务 JSON 和 Markdown 报告；random_tool 默认从 seed 起采样 20 次
+python -m benchmark.run_baselines --task-set expanded --seed 42 --random-samples 20 --output /tmp/agentic-arxiv-baselines
+```
+
+该命令会并排评分四种确定性策略：
+
+| 策略 | 用途 |
+|---|---|
+| `reference` | 回放任务声明的标准工具路径，作为评分上限 |
+| `always_finish` | 立即终止，检查“正常 FINISH”会不会被误读为完成 |
+| `always_search` | 无视任务、固定调用一次搜索 |
+| `random_tool` | 对每条任务以固定 seed 选择一次合法工具调用 |
+
+报告单独显示 `finish_rate` 与 `exact_tool_path_rate`：前者只表示轨迹以 `FINISH` 结束，不是业务任务已完成。`random_tool` 汇总多个 seed 并报告标准差；没有参数标准答案的任务不参与平均参数分。报告还会列出每种退化策略中未完整匹配参考工具和参数、但仍获得高分的任务，便于直接定位奖励漏洞。
+
+默认健康门槛要求每种退化策略的平均奖励比 `reference` 至少低 `0.3`；不满足时命令返回非零状态，可直接接入 CI。可用 `--min-reference-gap` 调整门槛，或用 `--top` 调整每种策略展示的高分任务数。
 
 ## 绘图
 
@@ -80,6 +105,7 @@ draw/images/
 | search_01 | search | 检索 cs.AI 论文 | get_recently_submitted_cs_papers |
 | search_02 | search | 检索 cs.LG 论文 | get_recently_submitted_cs_papers |
 | search_03 | search | 检索 cs.CL 论文 | get_recently_submitted_cs_papers |
+| search_04 | search | 检索全部计算机科学论文 | get_recently_submitted_cs_papers |
 | download_01 | download | 下载第 1 篇论文 PDF | download_arxiv_pdf |
 | translate_01 | translate | 翻译第 1 篇论文 | translate_arxiv_pdf |
 | cache_01 | cache | 查看缓存状态 | get_paper_cache_status |
@@ -104,9 +130,9 @@ draw/images/
 
 | 指标 | 说明 |
 |---|---|
-| task_completed | 任务是否正常完成 (FINISH) |
+| task_completed | 轨迹是否以 `FINISH` 正常结束；不验证业务终态 |
 | termination_type | 终止类型: FINISH / FORCE_STOP / ERROR / INCOMPLETE |
-| tool_call_accurate | 实际工具调用是否包含全部预期工具（顺序子序列匹配） |
+| tool_call_accurate | 实际工具调用是否与预期工具序列完全相等（顺序严格、无多余/重复调用） |
 | parse_failures | LLM 响应解析失败次数 |
 | tool_exec_failures | 工具执行失败次数 |
 
@@ -118,6 +144,8 @@ benchmark/
   tasks.py           # 测试任务定义 (BENCHMARK_TASKS)
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
+  baselines.py        # 确定性退化策略与评分敏感性汇总
   report.py           # BenchmarkReport：生成 Markdown/CSV/JSON 报告
   run_benchmark.py    # CLI 入口
+  run_baselines.py    # 离线退化策略诊断 CLI
 ```
