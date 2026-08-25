@@ -87,7 +87,9 @@ def extract_metrics(
     parse_failures = _count_parse_failures(history)
     tool_exec_failures = _count_tool_failures(history)
 
-    arg_score = argument_match_score(history, task_def.get("expected_tool_args"))
+    arg_score = argument_match_score(
+        history, task_def.get("expected_tool_args"), expected_tools
+    )
     if arg_score is None:
         arg_score = 1.0
 
@@ -190,16 +192,43 @@ def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
     return actual == expected
 
 
-def argument_match_score(history, expected_args):
+def argument_match_score(history, expected_args, expected_tools=None):
     """参数级匹配度，返回 [0,1] 或 None（任务未声明 expected_tool_args）。
 
-    从 rl/reward.py 的 _argument_score 提取，语义保持一致：
-    每一步取 (键覆盖率 + 取值正确率) / 2，再对各步取平均。
-    expected_args 中为 None 的项表示该步不校验参数。
+    每一步按「期望键里被答对的比例」打分，再对各步取平均。约定：
+
+    - `expected_args is None`：任务没有参数标准答案，返回 None，
+      `RewardCalculator` 会把 argument 这一档整个踢出加权分母。
+    - `expected_args == []`：正确行为是**一次工具都不调**（category="infeasible"）。
+      这与上一条不是一回事，必须能区分，否则乱调工具反而白拿满分。
+    - 某一项为 `None`：该步存在但不校验参数。
+    - 某个键的期望值为 `None`：该键应当缺省——省略不传、或显式传 None 都算对，
+      工具会退回当前活跃论文。
 
     提取到此处是为了让 benchmark 报告也能反映参数准确率 ——
     此前它只存在于 RL 奖励里，TaskMetrics 中没有对应字段，
     于是「工具选对了但参数选错了」在 benchmark 里完全不可见。
+
+    ## 为什么不再算 key_recall
+
+    原实现是 `(键覆盖率 + 取值正确率) / 2`。键覆盖率几乎不携带独立信息：
+    键缺失时 `predicted.get(k)` 就是 None，取值正确率同样判错。它唯一的
+    效果是把一半的参数分白送给「照着工具签名把键填齐」的行为——而这正是
+    任何能对该工具吐出合法 JSON 的模型免费拿到的。实测代价：一个无视任务、
+    永远搜 cs.AI 的退化策略，在「检索 cs.CL」任务上参数分 0.833、总分 0.933。
+
+    更糟的是期望值为 None 时它把方向搞反了：`{"ref": None}` 意为「用当前
+    活跃论文」，正确写法是省略 ref，却被判键覆盖率 0；而错误地传 ref=1
+    反倒拿满键覆盖率。两者最终都是 0.5——那 6 条 null 对照任务存在的唯一
+    目的就是区分这两种行为，打分器却给不出任何区分。
+
+    ## expected_tools
+
+    传入后，第 i 步只有在**工具名也对**时才算参数分，否则该步 0 分；
+    不传则退化为原来的纯按位比对（保持既有调用点兼容）。
+    没有这道闸时参数分与工具名脱钩：`download_01` 期望
+    `download_arxiv_pdf(ref=1)`，而 `get_paper_cache_status(ref=1)`
+    照样拿满参数分——等于替调错的工具背书，权重 2 白送出去。
     """
     if expected_args is None:
         return None
@@ -208,20 +237,31 @@ def argument_match_score(history, expected_args):
     for step in history or []:
         parsed = _parse_tool_action(step.get("action", ""))
         if parsed is not None:
-            actual.append(parsed.get("parameters", parsed.get("args", {})) or {})
+            actual.append((
+                parsed.get("name"),
+                parsed.get("parameters", parsed.get("args", {})) or {},
+            ))
+
+    if not expected_args:
+        return 1.0 if not actual else 0.0
 
     scores = []
     for index, expected in enumerate(expected_args):
         if expected is None:
             continue
-        predicted = actual[index] if index < len(actual) else {}
+        name, predicted = actual[index] if index < len(actual) else (None, {})
+        if (
+            expected_tools is not None
+            and index < len(expected_tools)
+            and name != expected_tools[index]
+        ):
+            scores.append(0.0)
+            continue
         keys = set(expected)
         if not keys:
             scores.append(1.0 if not predicted else 0.0)
             continue
-        key_recall = len(keys & set(predicted)) / len(keys)
-        value_accuracy = sum(predicted.get(k) == v for k, v in expected.items()) / len(keys)
-        scores.append((key_recall + value_accuracy) / 2)
+        scores.append(sum(predicted.get(k) == v for k, v in expected.items()) / len(keys))
     return sum(scores) / len(scores) if scores else 1.0
 
 
