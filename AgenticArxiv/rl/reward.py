@@ -112,7 +112,11 @@ class RewardCalculator:
         components = {
             "format": self._format_score(history),
             "tool": self._tool_score(metrics.tool_call_sequence, metrics.expected_tools),
-            "argument": self._argument_score(history, task_def.get("expected_tool_args")),
+            "argument": self._argument_score(
+                history,
+                task_def.get("expected_tool_args"),
+                task_def.get("expected_tools"),
+            ),
             "process": self._process_score(history, metrics),
             "outcome": self._outcome_score(metrics),
         }
@@ -180,10 +184,11 @@ class RewardCalculator:
     def _argument_score(
         history: Sequence[Dict[str, Any]],
         expected_args: Optional[Sequence[Optional[Mapping[str, Any]]]],
+        expected_tools: Optional[Sequence[str]] = None,
     ) -> Optional[float]:
-        # 比对逻辑已提取到 benchmark/metrics.py，供 benchmark 报告共用；
-        # 这里只做 [0,1] → [-1,1] 的缩放，语义与原实现一致。
-        score = argument_match_score(history, expected_args)
+        # 比对逻辑在 benchmark/metrics.py，供 benchmark 报告共用；
+        # 这里只做 [0,1] → [-1,1] 的缩放。
+        score = argument_match_score(history, expected_args, expected_tools)
         return None if score is None else 2 * score - 1
 
     @staticmethod
@@ -209,7 +214,14 @@ class RewardCalculator:
         if metrics.termination_type == "FORCE_STOP":
             return -0.5
         if metrics.task_completed and metrics.tool_call_accurate:
-            return 1.0
+            # 工具名对了不等于任务完成。`tool_call_accurate` 只比较工具序列，
+            # 问 cs.CL 却搜了 cs.AI 在这里完全相等——要的东西根本没拿到，
+            # outcome 却给满分。这样 outcome 就成了 tool 档的复制品，权重 3
+            # 白送给「照着签名瞎填参数」的策略（issue #17 第 2 条）。
+            # 下限保持 0.25，与「FINISH 了但工具序列错」持平：参数全错不该
+            # 罚得比工具全错还狠。任务未声明参数标准答案时 arg_score 恒为 1.0，
+            # 该分支行为与原实现一致。
+            return max(0.25, 2 * metrics.arg_score - 1)
         if metrics.task_completed:
             return 0.25
         return -0.25

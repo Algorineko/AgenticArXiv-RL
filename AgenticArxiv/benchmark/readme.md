@@ -59,6 +59,8 @@ python -m benchmark.run_baselines --task-set expanded --seed 42 --random-samples
 
 默认健康门槛要求每种退化策略的平均奖励比 `reference` 至少低 `0.3`；不满足时命令返回非零状态，可直接接入 CI。可用 `--min-reference-gap` 调整门槛，或用 `--top` 调整每种策略展示的高分任务数。
 
+此外还有一道**逐类目**门槛 `--min-category-gap`（默认同为 `0.3`）。总体均值会把单个类目的漏洞摊平：`always_search` 曾经在 search 类目上距参考仅 `0.167`（无视任务、永远发同一个 cs.AI 查询，在「检索 cs.CL」任务上拿 `0.933`），而总体均值差有 `0.832`，总体闸照样 PASS。逐类目闸会剔除「策略恰好复现了参考解法」的那些行——infeasible 任务上 `always_finish` **就是**参考解法（正确行为是一次工具都不调），那不是漏洞。
+
 ## 绘图
 
 ```bash
@@ -132,7 +134,8 @@ draw/images/
 |---|---|
 | task_completed | 轨迹是否以 `FINISH` 正常结束；不验证业务终态 |
 | termination_type | 终止类型: FINISH / FORCE_STOP / ERROR / INCOMPLETE |
-| tool_call_accurate | 实际工具调用是否与预期工具序列完全相等（顺序严格、无多余/重复调用） |
+| tool_call_accurate | 实际工具调用是否与预期工具序列完全相等（顺序严格、无多余/重复调用），只比工具名 |
+| arg_score | 参数级匹配度 `[0,1]`：逐步比对期望键的**取值**；未声明 `expected_tool_args` 时为 1.0 |
 | parse_failures | LLM 响应解析失败次数 |
 | tool_exec_failures | 工具执行失败次数 |
 
@@ -141,7 +144,9 @@ draw/images/
 ```
 benchmark/
   __init__.py
-  tasks.py           # 测试任务定义 (BENCHMARK_TASKS)
+  task_spec.py        # TaskSpec/Step：expected_tools 与 expected_tool_args 同源派生
+  tasks.py           # 8 条冒烟任务 (BENCHMARK_TASKS)
+  tasks_expanded.py   # 58 条完整基准集 (--task-set expanded)
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总

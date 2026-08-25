@@ -40,7 +40,7 @@ class _FakeSideEffects:
 
 
 class ArgumentMatchScoreTest(unittest.TestCase):
-    """语义须与提取前的 rl/reward.py::_argument_score 一致。"""
+    """参数级打分：只认取值，认工具身份，区分「不该调」与「不校验」。"""
 
     def test_returns_none_when_task_declares_no_expected_args(self):
         self.assertIsNone(argument_match_score([_step("t", {"a": 1})], None))
@@ -49,9 +49,10 @@ class ArgumentMatchScoreTest(unittest.TestCase):
         history = [_step("download_arxiv_pdf", {"ref": 2})]
         self.assertEqual(argument_match_score(history, [{"ref": 2}]), 1.0)
 
-    def test_right_key_wrong_value_scores_half(self):
+    def test_right_key_wrong_value_scores_zero(self):
+        # 曾经是 0.5：键覆盖率占一半分，而把键填齐是免费的。
         history = [_step("download_arxiv_pdf", {"ref": 9})]
-        self.assertEqual(argument_match_score(history, [{"ref": 2}]), 0.5)
+        self.assertEqual(argument_match_score(history, [{"ref": 2}]), 0.0)
 
     def test_missing_step_scores_zero(self):
         self.assertEqual(argument_match_score([], [{"ref": 2}]), 0.0)
@@ -64,6 +65,43 @@ class ArgumentMatchScoreTest(unittest.TestCase):
         # session_id 由框架注入，不该算模型的错
         history = [_step("download_arxiv_pdf", {"ref": 2, "session_id": "s"})]
         self.assertEqual(argument_match_score(history, [{"ref": 2}]), 1.0)
+
+    def test_empty_expected_args_means_call_nothing(self):
+        """[] 是「正确行为是一次都不调」，不是「没写标准答案」。
+
+        后者是 None。两者曾经都走到末尾的 `else 1.0`，于是 infeasible
+        任务上乱调一个工具反而白拿满参数分（+1.0 × 权重 2），把
+        `_tool_score` 给的 -1.0 抵掉大半。
+        """
+        self.assertEqual(argument_match_score([], []), 1.0)
+        self.assertEqual(argument_match_score([_step("search", {"aspect": "AI"})], []), 0.0)
+
+    def test_expected_none_value_means_the_key_should_be_omitted(self):
+        """`{"ref": None}` = 用当前活跃论文；省略 ref 才是正确写法。
+
+        旧口径下「省略」被判键覆盖率 0、「错传 ref=1」反倒键覆盖率满分，
+        两者都落在 0.5——而 ref_form / state 里那些 null 对照任务存在的
+        唯一目的就是区分这两种行为。
+        """
+        expected = [{"ref": None}]
+        self.assertEqual(argument_match_score([_step("translate_arxiv_pdf", {})], expected), 1.0)
+        self.assertEqual(
+            argument_match_score([_step("translate_arxiv_pdf", {"ref": None})], expected), 1.0
+        )
+        self.assertEqual(
+            argument_match_score([_step("translate_arxiv_pdf", {"ref": 1})], expected), 0.0
+        )
+
+    def test_arguments_only_count_when_the_tool_itself_is_right(self):
+        """参数分不能与工具名脱钩，否则等于替调错的工具背书。"""
+        history = [_step("get_paper_cache_status", {"ref": 1})]
+        self.assertEqual(argument_match_score(history, [{"ref": 1}]), 1.0)  # 不传 expected_tools
+        self.assertEqual(
+            argument_match_score(history, [{"ref": 1}], ["download_arxiv_pdf"]), 0.0
+        )
+        self.assertEqual(
+            argument_match_score(history, [{"ref": 1}], ["get_paper_cache_status"]), 1.0
+        )
 
 
 class ApplySetupTest(unittest.TestCase):

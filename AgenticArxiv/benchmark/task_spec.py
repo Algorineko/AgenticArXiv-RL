@@ -51,6 +51,8 @@ class TaskSpec:
         max_iterations: 该任务允许的 ReAct 轮数上限。Agent 默认 5 轮，也就是
             最多 4 次工具调用 + 一次 FINISH；更长的链必须显式抬高，否则会被
             判成 FORCE_STOP 而非能力不足。
+        depends_on: 前置任务 id。同一会话里按依赖顺序跑，供
+            `tasks.get_dependency_chain` 使用。
     """
 
     id: str
@@ -64,6 +66,7 @@ class TaskSpec:
     note: str = ""
     termination: str = "FINISH"
     max_iterations: Optional[int] = None
+    depends_on: Optional[str] = None
 
     def to_task(self) -> Dict[str, Any]:
         """展开成 benchmark / RL 两侧共用的任务字典。"""
@@ -87,6 +90,8 @@ class TaskSpec:
             task["note"] = self.note
         if self.max_iterations is not None:
             task["max_iterations"] = self.max_iterations
+        if self.depends_on:
+            task["depends_on"] = self.depends_on
         return task
 
 
