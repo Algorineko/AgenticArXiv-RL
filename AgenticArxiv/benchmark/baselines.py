@@ -345,6 +345,48 @@ def reference_gap_failures(
     return failures
 
 
+def category_gap_failures(
+    results: Sequence[BaselineResult], min_gap: float = 0.3
+) -> List[str]:
+    """Per-category health check: an aggregate mean hides single-category holes.
+
+    ``reference_gap_failures`` compares whole-task-set means, so one leaky
+    category is diluted by the rest. Search tasks once left ``always_search``
+    only 0.167 below the reference while the aggregate check still passed.
+
+    Rows where a policy reproduced the reference trajectory are excluded: a
+    degenerate policy that happens to emit the reference solution has earned
+    the reference score, and on ``infeasible`` tasks ``always_finish`` *is*
+    the reference. A policy with no other rows in that category is skipped.
+    """
+
+    if min_gap < 0:
+        raise ValueError("min_gap must be non-negative")
+
+    reference: Dict[str, List[float]] = {}
+    others: Dict[tuple, List[float]] = {}
+    for result in results:
+        if result.policy == "reference":
+            reference.setdefault(result.category, []).append(result.reward)
+        elif not result.exact_reference:
+            others.setdefault((result.category, result.policy), []).append(result.reward)
+
+    if not reference:
+        return ["reference policy is required for the reward-gap health check"]
+
+    failures = []
+    for (category, policy), rewards in sorted(others.items()):
+        if category not in reference:
+            continue
+        gap = mean(reference[category]) - mean(rewards)
+        if gap < min_gap:
+            failures.append(
+                f"{category}/{policy}: reference gap {gap:.3f} is below "
+                f"required {min_gap:.3f}"
+            )
+    return failures
+
+
 def render_markdown(
     summaries: Sequence[PolicySummary],
     *,
@@ -354,6 +396,8 @@ def render_markdown(
     top_tasks: Sequence[TaskScoreSummary] = (),
     min_reference_gap: Optional[float] = None,
     health_failures: Sequence[str] = (),
+    min_category_gap: Optional[float] = None,
+    category_failures: Sequence[str] = (),
 ) -> str:
     """Render a small report suitable for terminal output and saved artifacts."""
 
@@ -398,6 +442,16 @@ def render_markdown(
             f"Health check: **{status}** (minimum reference gap: `{min_reference_gap:.3f}`)",
         ])
         lines.extend(f"- {failure}" for failure in health_failures)
+
+    if min_category_gap is not None:
+        status = "FAIL" if category_failures else "PASS"
+        lines.extend([
+            "",
+            f"Per-category check: **{status}** (minimum gap: `{min_category_gap:.3f}`). "
+            "The aggregate check above averages over the whole task set, so a "
+            "single leaky category is diluted by the rest.",
+        ])
+        lines.extend(f"- {failure}" for failure in category_failures)
 
     if top_tasks:
         lines.extend([

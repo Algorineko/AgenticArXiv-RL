@@ -1,5 +1,6 @@
 """Unit tests for hierarchical reward shaping."""
 
+import json
 import unittest
 from types import ModuleType
 from unittest.mock import Mock, patch
@@ -45,7 +46,15 @@ class MultiGranularRewardTest(unittest.TestCase):
         self.assertLess(reward.tool, 1.0)
         self.assertLess(reward.outcome, 1.0)
 
-    def test_argument_layer_scores_keys_and_values(self):
+    def test_argument_layer_scores_values_not_key_presence(self):
+        """键填齐不算分，只有值对了才算。
+
+        原实现是 (键覆盖率 + 取值正确率) / 2，这里 days 填错、键齐全，
+        旧口径给 0.75 → 分量 0.5。键覆盖率几乎不携带独立信息（键缺失时
+        取值同样判错），它唯一的作用是把一半参数分白送给「照着工具签名
+        把键填齐」，而那是任何能吐出合法 JSON 的模型免费拿到的。
+        现在 2 个键对 1 个 → 0.5 → 分量 0.0。
+        """
         task = {
             "id": "search",
             "expected_tools": ["search"],
@@ -56,7 +65,7 @@ class MultiGranularRewardTest(unittest.TestCase):
             {"action": "FINISH", "observation": "done"},
         ]
         reward, _ = self.calculator.compute_reward_breakdown(task, _result(history))
-        self.assertEqual(reward.argument, 0.5)
+        self.assertEqual(reward.argument, 0.0)
 
     def test_complete_args_receive_maximum_argument_score(self):
         task = {
@@ -94,7 +103,9 @@ class MultiGranularRewardTest(unittest.TestCase):
             {"action": "FINISH", "observation": "done"},
         ]
         reward, _ = self.calculator.compute_reward_breakdown(task, _result(history))
-        self.assertEqual(reward.argument, 0.0)
+        # 三个值全错 → 取值正确率 0 → 分量 -1.0。
+        # 旧口径因为键齐全还能拿 0.0（不罚），等于「搜错了方向」零成本。
+        self.assertEqual(reward.argument, -1.0)
 
     def test_missing_arguments_receive_lower_score(self):
         task = {
@@ -127,27 +138,40 @@ class MultiGranularRewardTest(unittest.TestCase):
         self.assertEqual(reward.argument, 0.0)
         self.assertEqual(reward.total, 1.0)
 
-    def test_composite_task_skips_dynamic_download_arguments(self):
+    def test_composite_download_step_has_a_static_argument_oracle(self):
+        """composite_01 第二步曾经写成 None（免检），前提是错的。
+
+        任务原文是「然后下载第1篇」，而 download_arxiv_pdf 的 ref 就是
+        1-based 序号（tools/pdf_download_tool.py: ref: Union[str,int,None] = 1），
+        「第1篇」= ref 1 是静态可判的，不存在动态性。免检的代价是这一步
+        随便填什么都拿满参数分。
+        """
         task = get_task_by_id("composite_01")
         self.assertEqual(
             task["expected_tool_args"],
-            [{"aspect": "CV", "days": 7, "max_results": 3}, None],
+            [{"aspect": "CV", "days": 7, "max_results": 3}, {"ref": 1}],
         )
-        history = [
-            {
-                "action": '{"name":"get_recently_submitted_cs_papers",'
-                '"args":{"aspect":"CV","days":7,"max_results":3}}',
+        head = {
+            "action": '{"name":"get_recently_submitted_cs_papers",'
+            '"args":{"aspect":"CV","days":7,"max_results":3}}',
+            "observation": "ok",
+        }
+        finish = {"action": "FINISH", "observation": "done"}
+
+        def download(ref):
+            return {
+                "action": '{"name":"download_arxiv_pdf","args":{"ref":%s}}' % json.dumps(ref),
                 "observation": "ok",
-            },
-            {
-                "action": '{"name":"download_arxiv_pdf",'
-                '"args":{"ref":"dynamic-search-result"}}',
-                "observation": "ok",
-            },
-            {"action": "FINISH", "observation": "done"},
-        ]
-        reward, _ = self.calculator.compute_reward_breakdown(task, _result(history))
-        self.assertEqual(reward.argument, 1.0)
+            }
+
+        right, _ = self.calculator.compute_reward_breakdown(
+            task, _result([head, download(1), finish])
+        )
+        wrong, _ = self.calculator.compute_reward_breakdown(
+            task, _result([head, download("dynamic-search-result"), finish])
+        )
+        self.assertEqual(right.argument, 1.0)
+        self.assertEqual(wrong.argument, 0.0)
 
     def test_benchmark_search_tasks_define_static_argument_oracles(self):
         expected = {
