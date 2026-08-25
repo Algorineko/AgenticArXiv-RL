@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmark.baselines import (  # noqa: E402
     ALL_POLICIES,
+    category_gap_failures,
     evaluate_baselines,
     highest_scoring_tasks,
     reference_gap_failures,
@@ -87,6 +88,42 @@ class BaselineDiagnosticTest(unittest.TestCase):
             get_all_tasks(), resolve_policies(["always_finish"]), training_step=100
         )
         self.assertEqual(summarize_baselines(results)[0].mean_arg_score, 0.0)
+
+    def test_per_category_check_catches_what_the_aggregate_mean_dilutes(self):
+        """总体均值把单类目的洞摊平了。
+
+        实测过的例子：`always_search` 在 search 类目上距参考仅 0.167，
+        而总体均值差 0.832 —— 总体闸 PASS，逐类目闸 FAIL。
+        """
+        results = self._results(list(ALL_POLICIES))
+        self.assertEqual(category_gap_failures(results, min_gap=0.3), [])
+
+        leaky = [
+            replace(row, reward=0.95)
+            if (row.category == "search" and row.policy == "always_search")
+            else row
+            for row in results
+        ]
+        summaries = summarize_baselines(leaky)
+        self.assertEqual(reference_gap_failures(summaries, min_gap=0.3), [])
+        failures = category_gap_failures(leaky, min_gap=0.3)
+        self.assertTrue(any("search/always_search" in f for f in failures), failures)
+
+    def test_per_category_check_ignores_rows_that_are_the_reference(self):
+        """infeasible 上 always_finish 就是参考解法：正确行为是一次都不调。
+
+        这不是漏洞，逐类目闸不能因此报警。
+        """
+        results = self._results(["reference", "always_finish"])
+        infeasible = [r for r in results if r.category == "infeasible"]
+        self.assertTrue(infeasible)
+        self.assertTrue(all(
+            r.exact_reference for r in infeasible if r.policy == "always_finish"
+        ))
+        self.assertFalse(any(
+            "infeasible/always_finish" in f
+            for f in category_gap_failures(results, min_gap=0.3)
+        ))
 
     def test_markdown_labels_finish_as_a_separate_signal(self):
         results = self._results(["reference", "always_finish"])

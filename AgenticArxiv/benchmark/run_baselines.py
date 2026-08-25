@@ -19,6 +19,7 @@ if PROJECT_ROOT not in sys.path:
 
 from benchmark.baselines import (  # noqa: E402
     ALL_POLICIES,
+    category_gap_failures,
     evaluate_baselines,
     highest_scoring_tasks,
     reference_gap_failures,
@@ -71,6 +72,11 @@ def main() -> None:
         help="Minimum mean-reward gap required for every weak policy (default: 0.3)",
     )
     parser.add_argument(
+        "--min-category-gap", type=float, default=0.3,
+        help="Minimum mean-reward gap required per task category (default: 0.3). "
+             "The aggregate check dilutes a single leaky category.",
+    )
+    parser.add_argument(
         "--top", type=int, default=5,
         help="Highest-scoring tasks shown per weak policy (default: 5)",
     )
@@ -87,6 +93,8 @@ def main() -> None:
         parser.error("--random-samples must be at least 1")
     if args.min_reference_gap < 0:
         parser.error("--min-reference-gap must be non-negative")
+    if args.min_category_gap < 0:
+        parser.error("--min-category-gap must be non-negative")
     if args.top < 1:
         parser.error("--top must be at least 1")
 
@@ -103,6 +111,9 @@ def main() -> None:
     health_failures = reference_gap_failures(
         summaries, min_gap=args.min_reference_gap
     )
+    category_failures = category_gap_failures(
+        results, min_gap=args.min_category_gap
+    )
     markdown = render_markdown(
         summaries,
         task_set=args.task_set,
@@ -111,6 +122,8 @@ def main() -> None:
         top_tasks=top_tasks,
         min_reference_gap=args.min_reference_gap,
         health_failures=health_failures,
+        min_category_gap=args.min_category_gap,
+        category_failures=category_failures,
     )
     print(markdown, end="")
 
@@ -125,6 +138,11 @@ def main() -> None:
                 "min_reference_gap": args.min_reference_gap,
                 "failures": health_failures,
             },
+            "category_check": {
+                "passed": not category_failures,
+                "min_category_gap": args.min_category_gap,
+                "failures": category_failures,
+            },
             "note": (
                 "Synthetic trajectories are a scorer-sensitivity diagnostic; "
                 "they do not execute tools or measure LLM quality."
@@ -136,9 +154,11 @@ def main() -> None:
         _save_report(args.output, report, markdown)
         print(f"Saved JSON and Markdown reports to: {args.output}")
 
-    if health_failures:
-        for failure in health_failures:
-            print(f"Health check failed: {failure}", file=sys.stderr)
+    for failure in health_failures:
+        print(f"Health check failed: {failure}", file=sys.stderr)
+    for failure in category_failures:
+        print(f"Per-category check failed: {failure}", file=sys.stderr)
+    if health_failures or category_failures:
         raise SystemExit(1)
 
 
