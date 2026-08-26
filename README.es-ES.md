@@ -227,7 +227,7 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # Consulta de caché
 │  ├─ benchmark/                     # ⭐ Fuente de Verifiable Reward
 │  │  ├─ metrics.py               # TaskMetrics, coincidencia estricta de herramientas y parámetros
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS (7 semillas de tareas)
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 semillas de tareas)
 │  │  ├─ runner.py                 # Ejecutor de benchmarks
 │  │  ├─ run_benchmark.py          # Entrada de benchmark por CLI
 │  │  └─ report.py                 # Informe de métricas
@@ -329,13 +329,14 @@ print(f'Reward: {reward:.2f}')  # Esperado: ~1.5
 
 ## 🧪 Conjunto de Tareas de Prueba
 
-Provenientes de `benchmark/tasks.py`, contienen 7 tareas:
+Provenientes de `benchmark/tasks.py`, contienen 8 tareas:
 
 | ID | Tarea | Tipo | Herramienta Esperada |
 |----|------|------|---------|
 | `search_01` | Buscar papers de IA de los últimos 7 días | Búsqueda | `get_recently_submitted_cs_papers` |
 | `search_02` | Obtener papers de ML de los últimos 3 días | Búsqueda | `get_recently_submitted_cs_papers` |
 | `search_03` | Buscar papers de NLP de los últimos 7 días | Búsqueda | `get_recently_submitted_cs_papers` |
+| `search_04` | Buscar papers de todas las categorías de ciencias de la computación de los últimos 7 días | Búsqueda | `get_recently_submitted_cs_papers` |
 | `download_01` | Descargar PDF del 1er paper | Descarga | `download_arxiv_pdf` |
 | `translate_01` | Traducir el 1er paper | Traducción | `translate_arxiv_pdf` |
 | `cache_01` | Ver estado de caché del 1er paper | Caché | `get_paper_cache_status` |
@@ -475,7 +476,7 @@ Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribui
 
 ### P1 — Medio plazo (datos y evaluación)
 
-- [ ] **Ampliar el conjunto de tareas**: `benchmark/tasks.py` tiene solo 7 tareas; ampliarlo a 50+ y derivar automáticamente `expected_tools` / `expected_tool_args`.
+- [ ] **Ampliar el conjunto de tareas**: `benchmark/tasks.py` tiene solo 8 tareas; ampliarlo a 50+ y derivar automáticamente `expected_tools` / `expected_tool_args`.
 - [ ] **eval/ badcase replay (reproducción de casos malos)**: el directorio `eval/` del árbol no existe aún; implementar `eval_cases.jsonl` + `badcase_replay.py` para cerrar el bucle.
 - [ ] **Investigación de reward hacking**: ampliar `RewardVarianceGuard` / `CanaryCallback` con una biblioteca de casos de reward hacking y ajuste de pesos del currículum.
 
