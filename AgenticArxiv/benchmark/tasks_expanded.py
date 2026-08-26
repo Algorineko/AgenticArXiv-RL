@@ -569,6 +569,15 @@ _INFEASIBLE: List[TaskSpec] = [
         note='会话里只有 5 篇；正确反应是说明做不到，而不是编一个 ref 去调用',
     ),
     TaskSpec(
+        id='infeasible_zero_index',
+        task='下载第0篇论文',
+        category='infeasible',
+        difficulty='hard',
+        setup=_SEED_AI5,
+        note='ref 从 1 起编号，0 是非法索引；正确反应是说明做不到，'
+             '而不是编一个 ref 去调用（与 infeasible_index_out_of_range 互补：前者测上界越界，这条测下界边界）',
+    ),
+    TaskSpec(
         id='infeasible_unknown_id',
         task='下载 2999.99999v1 这篇论文',
         category='infeasible',

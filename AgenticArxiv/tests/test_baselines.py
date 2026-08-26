@@ -125,6 +125,25 @@ class BaselineDiagnosticTest(unittest.TestCase):
             for f in category_gap_failures(results, min_gap=0.3)
         ))
 
+    def test_parameter_boundary_infeasible_case_rejects_tool_calls(self):
+        """zero_index：参数非法时正确行为是不调工具，weak policy 必然掉分。"""
+        task = next(t for t in self.tasks if t["id"] == "infeasible_zero_index")
+        results = evaluate_baselines(
+            [task], resolve_policies(["always_search", "random_tool"]),
+            seed=42, training_step=100,
+        )
+        self.assertTrue(all(r.reward < 1.0 for r in results))
+
+    def test_wrong_args_policy_triggers_arg_score_gate(self):
+        """wrong_args：工具名对、参数出错，arg_score 必须低于 reference。"""
+        summaries = {s.policy: s for s in summarize_baselines(
+            self._results(["reference", "wrong_args"])
+        )}
+        self.assertLess(
+            summaries["wrong_args"].mean_arg_score,
+            summaries["reference"].mean_arg_score,
+        )
+
     def test_markdown_labels_finish_as_a_separate_signal(self):
         results = self._results(["reference", "always_finish"])
         summaries = summarize_baselines(results)
