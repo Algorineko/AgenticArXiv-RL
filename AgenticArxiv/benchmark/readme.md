@@ -64,7 +64,7 @@ python -m benchmark.run_baselines --task-set expanded --seed 42 --random-samples
 ## 绘图
 
 ```bash
-cd AgenticArXiv  # 项目根目录
+cd ..  # 回到仓库根目录（draw/ 与 data/ 位于根目录，不在 AgenticArxiv/ 内；已在根目录时可跳过）
 
 # 使用默认路径（读 data/raw_data.csv，输出到 draw/images/）
 python draw/plot.py
