@@ -231,10 +231,11 @@ AgenticArXiv-RL/
 │  │  ├─ runner.py                 # Ejecutor de benchmarks
 │  │  ├─ run_benchmark.py          # Entrada de benchmark por CLI
 │  │  └─ report.py                 # Informe de métricas
-│  ├─ rl/                            # ⭐ Núcleo de RL
+│  ├─ rl/                            # ⭐ Núcleo RL
 │  │  ├─ train_sft.py              # ⭐ Entrenamiento SFT
 │  │  ├─ train_dpo.py              # ⭐ Entrenamiento DPO
 │  │  ├─ train_grpo.py             # ⭐ Entrenamiento GRPO (con guardias de entrenamiento)
+│  │  ├─ train_ppo.py              # ⭐ Entrenamiento PPO (Actor-Critic)
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (entorno de snapshot offline)
 │  │  ├─ reward.py                 # RewardCalculator (recompensa de 5 componentes + currículum)
 │  │  ├─ grpo_reward.py            # Adaptador de recompensa GRPO (completion de un paso → trayectoria)
