@@ -257,6 +257,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_sft.py              # ⭐ SFT training
 │  │  ├─ train_dpo.py              # ⭐ DPO training
 │  │  ├─ train_grpo.py             # ⭐ GRPO training (with training guards)
+│  │  ├─ train_ppo.py              # ⭐ PPO training (Actor-Critic)
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (offline snapshot env)
 │  │  ├─ reward.py                 # RewardCalculator (5-component reward + curriculum)
 │  │  ├─ grpo_reward.py            # GRPO reward adapter (single-step completion → trajectory)
