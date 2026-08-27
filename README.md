@@ -235,6 +235,17 @@ tensorboard --logdir outputs/grpo/logs
 - **混合精度自适应**：CUDA 优先 bf16、回退 fp16，CPU / MPS 关闭（`rl/precision.py`）
 - **日志后端校验**：`--report_to` 指定的后端没装时在加载模型前就失败，避免训练跑完才发现没有任何曲线（`rl/observability.py`）
 
+### 阶段4：PPO（Proximal Policy Optimization）
+
+**目标**：标准 Actor-Critic 架构在线微调策略与价值网络。
+
+**步骤**：
+```bash
+python -m AgenticArxiv.rl.train_ppo --model outputs/grpo/final
+```
+
+**产出**：`./outputs/ppo/final` 模型
+
 ---
 
 ## 📂 目录结构
@@ -264,6 +275,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_sft.py              # ⭐ SFT 训练
 │  │  ├─ train_dpo.py              # ⭐ DPO 训练
 │  │  ├─ train_grpo.py             # ⭐ GRPO 训练（含训练守卫）
+│  │  ├─ train_ppo.py              # ⭐ PPO 训练（Actor-Critic）
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv（离线快照环境）
 │  │  ├─ reward.py                 # RewardCalculator（五分量可验证奖励 + 课程）
 │  │  ├─ grpo_reward.py            # GRPO 奖励适配（单步 completion → 合成轨迹）

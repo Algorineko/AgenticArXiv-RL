@@ -86,8 +86,17 @@ def parse_react_action(completion: str):
 
 
 def _thought_of(completion: str) -> str:
-    match = _THOUGHT_RE.search(completion or "")
-    return match.group(1).strip() if match else ""
+    text = completion or ""
+    match = _THOUGHT_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    # 当 prompt 以 `\nThought:` 结尾时，模型生成可能不带 "Thought:" 前缀，而是直接输出思考内容
+    if "Action:" in text:
+        parts = text.split("Action:", 1)
+        prefix = parts[0].strip()
+        if prefix and not prefix.startswith("Observation:"):
+            return prefix
+    return ""
 
 
 def synthesize_trajectory(

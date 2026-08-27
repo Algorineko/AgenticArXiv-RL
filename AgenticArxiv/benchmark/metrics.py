@@ -192,6 +192,64 @@ def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
     return actual == expected
 
 
+def _match_arg_value(predicted_val: Any, expected_val: Any, key: str = "") -> bool:
+    """Robust equivalence check between predicted and expected tool arguments."""
+    if expected_val is None:
+        # None 表示缺省参数，省略不传或显式传 None 均算对
+        return predicted_val is None
+
+    if predicted_val is None:
+        return False
+
+    if predicted_val == expected_val:
+        return True
+
+    # 1. aspect 字段归一化：如 "cs.AI" 与 "AI" 等价，大小写不敏感
+    if key == "aspect":
+        pred_norm = str(predicted_val).strip().upper()
+        exp_norm = str(expected_val).strip().upper()
+        if pred_norm.startswith("CS."):
+            pred_norm = pred_norm[3:]
+        if exp_norm.startswith("CS."):
+            exp_norm = exp_norm[3:]
+        return pred_norm == exp_norm
+
+    # 2. ref 字段归一化：支持整数与字符串数字等价，支持形如 "第1篇" 的正则匹配
+    if key == "ref":
+        try:
+            if int(predicted_val) == int(expected_val):
+                return True
+        except (ValueError, TypeError):
+            pass
+        import re
+        m = re.search(r"\d+", str(predicted_val))
+        if m:
+            try:
+                if int(m.group(0)) == int(expected_val):
+                    return True
+            except (ValueError, TypeError):
+                pass
+        return str(predicted_val).strip().lower() == str(expected_val).strip().lower()
+
+    # 3. 通用数值类型比对：如 7 vs "7", 5.0 vs 5
+    if isinstance(expected_val, (int, float)):
+        try:
+            return float(predicted_val) == float(expected_val)
+        except (ValueError, TypeError):
+            pass
+
+    # 4. 布尔类型：字符串 "true"/"false" 与 bool 兼容
+    if isinstance(expected_val, bool):
+        if isinstance(predicted_val, str):
+            return predicted_val.lower() == str(expected_val).lower()
+
+    # 5. 字符串大小写宽松比对
+    if isinstance(expected_val, str) and isinstance(predicted_val, str):
+        return expected_val.strip().lower() == predicted_val.strip().lower()
+
+    return False
+
+
 def argument_match_score(history, expected_args, expected_tools=None):
     """参数级匹配度，返回 [0,1] 或 None（任务未声明 expected_tool_args）。
 
@@ -208,19 +266,6 @@ def argument_match_score(history, expected_args, expected_tools=None):
     提取到此处是为了让 benchmark 报告也能反映参数准确率 ——
     此前它只存在于 RL 奖励里，TaskMetrics 中没有对应字段，
     于是「工具选对了但参数选错了」在 benchmark 里完全不可见。
-
-    ## 为什么不再算 key_recall
-
-    原实现是 `(键覆盖率 + 取值正确率) / 2`。键覆盖率几乎不携带独立信息：
-    键缺失时 `predicted.get(k)` 就是 None，取值正确率同样判错。它唯一的
-    效果是把一半的参数分白送给「照着工具签名把键填齐」的行为——而这正是
-    任何能对该工具吐出合法 JSON 的模型免费拿到的。实测代价：一个无视任务、
-    永远搜 cs.AI 的退化策略，在「检索 cs.CL」任务上参数分 0.833、总分 0.933。
-
-    更糟的是期望值为 None 时它把方向搞反了：`{"ref": None}` 意为「用当前
-    活跃论文」，正确写法是省略 ref，却被判键覆盖率 0；而错误地传 ref=1
-    反倒拿满键覆盖率。两者最终都是 0.5——那 6 条 null 对照任务存在的唯一
-    目的就是区分这两种行为，打分器却给不出任何区分。
 
     ## expected_tools
 
@@ -261,7 +306,10 @@ def argument_match_score(history, expected_args, expected_tools=None):
         if not keys:
             scores.append(1.0 if not predicted else 0.0)
             continue
-        scores.append(sum(predicted.get(k) == v for k, v in expected.items()) / len(keys))
+        scores.append(
+            sum(_match_arg_value(predicted.get(k), v, k) for k, v in expected.items())
+            / len(keys)
+        )
     return sum(scores) / len(scores) if scores else 1.0
 
 
