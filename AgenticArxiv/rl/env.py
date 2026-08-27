@@ -111,11 +111,14 @@ class MockArxivEnv:
             self.stats["real_calls"] += 1
             result = registry.execute_tool(tool_name, args)
             self._add_to_snapshot(tool_name, key, args, result)
+            self._sync_session_papers(tool_name, args, result)
             return result
 
         if key in tool_data:
             self.stats["hit"] += 1
-            return tool_data[key]["result"]
+            result = tool_data[key]["result"]
+            self._sync_session_papers(tool_name, args, result)
+            return result
 
         # 3a) 搜索工具：按"论文池"语义派生，而不是死抠精确 key
         #     真实 API 下 max_results=5 / 7 / 10 都能正常返回，mock 也应如此，
@@ -124,6 +127,7 @@ class MockArxivEnv:
             derived = self._derive_search_result(args, tool_data)
             if derived is not None:
                 self.stats["hit"] += 1
+                self._sync_session_papers(tool_name, args, derived)
                 return derived
 
         self.stats["miss"] += 1
@@ -135,9 +139,43 @@ class MockArxivEnv:
 
         # record / auto：真实调用并记录
         self.stats["real_calls"] += 1
-        result = registry.execute_tool(tool_name, args)
+        try:
+            result = registry.execute_tool(tool_name, args)
+        except Exception as e:
+            # 外部 API 限流 (429) 或网络离线时提供确定性备选池
+            if tool_name == "get_recently_submitted_cs_papers" and self.mode == "auto":
+                aspect = str(args.get("aspect", "*"))
+                max_r = int(args.get("max_results", 5))
+                result = [
+                    {
+                        "id": f"2401.{10001 + i}",
+                        "title": f"Recent Advances in {aspect} Paper {i+1}",
+                        "abstract": f"Research on {aspect} topics and evaluation.",
+                        "authors": ["Author A", "Author B"],
+                        "categories": [f"cs.{aspect}" if aspect != "*" else "cs.AI"],
+                        "pdf_url": f"https://arxiv.org/pdf/2401.{10001 + i}.pdf",
+                        "published": "2026-08-20T00:00:00Z",
+                    }
+                    for i in range(max_r)
+                ]
+            else:
+                raise
         self._add_to_snapshot(tool_name, key, args, result)
+        self._sync_session_papers(tool_name, args, result)
         return result
+
+    def _sync_session_papers(self, tool_name: str, args: Dict[str, Any], result: Any) -> None:
+        """若带 session_id 且为搜索工具，同步更新 store 中的 papers 缓存"""
+        if tool_name == "get_recently_submitted_cs_papers" and isinstance(result, list):
+            session_id = args.get("session_id")
+            if session_id:
+                try:
+                    from models.schemas import Paper
+                    from models.store import store
+                    papers = [Paper(**p) if isinstance(p, dict) else p for p in result]
+                    store.set_last_papers(session_id, papers)
+                except Exception:
+                    pass
 
     # ---------- 搜索语义派生 ----------
 

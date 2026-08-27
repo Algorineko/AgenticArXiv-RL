@@ -36,6 +36,18 @@ _BACKEND_REQUIREMENTS = {
 }
 
 
+def safe_print(msg: str) -> None:
+    """Print with fallback encoding protection on platforms with limited charsets (e.g. Windows GBK)."""
+    import sys
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        safe_msg = msg.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
+            sys.stdout.encoding or "utf-8"
+        )
+        print(safe_msg)
+
+
 def resolve_report_to(value: Optional[str]) -> List[str]:
     """把 ``--report_to`` 的取值规范成 HF 认识的列表，并校验后端可用。
 
@@ -56,8 +68,10 @@ def resolve_report_to(value: Optional[str]) -> List[str]:
     if raw == "auto":
         if _backend_available("tensorboard"):
             return ["tensorboard"]
-        print("ℹ️  --report_to auto：未安装 tensorboard，本次不记录训练曲线。"
-              "   需要曲线请先 pip install tensorboard")
+        safe_print(
+            "ℹ️  --report_to auto：未安装 tensorboard，本次不记录训练曲线。"
+            "   需要曲线请先 pip install tensorboard"
+        )
         return []
 
     names = [name.strip() for name in raw.split(",") if name.strip()]
@@ -108,8 +122,10 @@ class RewardComponentTracker:
         """接到 trainer 的指标缓冲区。返回是否接上。"""
         metrics = getattr(trainer, "_metrics", None)
         if not isinstance(metrics, Mapping) or "train" not in metrics:
-            print("⚠️  当前 TRL 版本没有可用的 _metrics 缓冲区，"
-                  "奖励分量曲线本次不会被记录（训练本身不受影响）")
+            safe_print(
+                "⚠️  当前 TRL 版本没有可用的 _metrics 缓冲区，"
+                "奖励分量曲线本次不会被记录（训练本身不受影响）"
+            )
             return False
         self._sink = metrics["train"]
         self.bound = True
