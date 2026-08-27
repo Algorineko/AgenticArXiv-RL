@@ -103,6 +103,30 @@ class RandomToolPolicy(BaselinePolicy):
         return _result([_tool_step(name, args), _finish_step()])
 
 
+class WrongArgsPolicy(BaselinePolicy):
+    """Replay the reference tool names but with deliberately wrong arguments so that triggers the arg_score check."""
+
+    name = "wrong_args"
+
+    _WRONG_ARGS_BY_TOOL = {
+        "get_recently_submitted_cs_papers": {
+            "aspect": "nonexistent_topic", "days": 7, "max_results": 5,
+        },
+        "download_arxiv_pdf": {"ref": -1},
+        "translate_arxiv_pdf": {"ref": -1},
+        "get_paper_cache_status": {"ref": -1},
+    }
+
+    def build_result(self, task: Mapping[str, Any], seed: int) -> Dict[str, Any]:
+        expected_tools = task.get("expected_tools", [])
+        history = [
+            _tool_step(name, self._WRONG_ARGS_BY_TOOL.get(name, {"ref": -1}))
+            for name in expected_tools
+        ]
+        history.append(_finish_step())
+        return _result(history)
+
+
 ALL_POLICIES: Dict[str, BaselinePolicy] = {
     policy.name: policy
     for policy in (
@@ -110,6 +134,7 @@ ALL_POLICIES: Dict[str, BaselinePolicy] = {
         AlwaysFinishPolicy(),
         AlwaysSearchPolicy(),
         RandomToolPolicy(),
+        WrongArgsPolicy(),
     )
 }
 
