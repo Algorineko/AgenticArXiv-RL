@@ -15,7 +15,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import fire
 
@@ -33,6 +33,18 @@ from rl.env import MockArxivEnv
 from rl.reward import RewardCalculator
 from rl.trajectory import create_trajectory, save_trajectory
 from utils.llm_client import TransformersLLMClient, get_env_llm_client
+
+
+def _get_model_name(llm_client: Optional[Any]) -> str:
+    """Return a JSON-serializable model identifier for trajectory metadata."""
+    if llm_client is None:
+        return ""
+
+    for attribute in ("model_name", "model"):
+        value = getattr(llm_client, attribute, None)
+        if isinstance(value, (str, Path)):
+            return str(value)
+    return ""
 
 
 def _create_agent(
@@ -115,7 +127,7 @@ def rollout_single_task(
     )
 
     # 构造 trajectory
-    model_name = getattr(llm_client, "model", "") if llm_client else ""
+    model_name = _get_model_name(llm_client)
     traj = create_trajectory(
         task_id=task_def["id"],
         task=task_def["task"],
@@ -219,4 +231,3 @@ def main(
 
 if __name__ == "__main__":
     fire.Fire(main)
-
