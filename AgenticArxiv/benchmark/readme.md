@@ -146,7 +146,7 @@ benchmark/
   __init__.py
   task_spec.py        # TaskSpec/Step：expected_tools 与 expected_tool_args 同源派生
   tasks.py           # 8 条冒烟任务 (BENCHMARK_TASKS)
-  tasks_expanded.py   # 58 条完整基准集 (--task-set expanded)
+  tasks_expanded.py   # 59 条完整基准集 (--task-set expanded)
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总

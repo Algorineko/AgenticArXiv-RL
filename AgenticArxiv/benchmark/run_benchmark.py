@@ -23,6 +23,7 @@ if PROJECT_ROOT not in sys.path:
 
 from tools.bootstrap import require_all_tools
 from benchmark.tasks import get_all_tasks
+from benchmark.tasks_expanded import get_expanded_tasks
 from benchmark.runner import BenchmarkRunner
 from benchmark.report import BenchmarkReport
 from config import settings
@@ -79,8 +80,11 @@ def main():
     parser.add_argument("--snapshot", default=None, help="指定快照路径（默认 data/mock_arxiv_snapshot.json）")
     parser.add_argument(
         "--task-set", choices=["default", "expanded"], default="default",
-        help="default=benchmark/tasks.py 的 8 条；expanded=扩充后的 58 条"
-             "（指代形态、可选参数、跨步状态、多跳链路、负向约束、不可行请求）",
+        help=(
+            f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
+            f"expanded=扩充后的 {len(get_expanded_tasks())} 条"
+            "（指代形态、可选参数、跨步状态、多跳链路、负向约束、不可行请求）"
+        ),
     )
     args = parser.parse_args()
 
@@ -94,7 +98,7 @@ def main():
 
     # 任务池
     if args.task_set == "expanded":
-        from benchmark.tasks_expanded import get_expanded_tasks, offline_only_ids
+        from benchmark.tasks_expanded import offline_only_ids
         pool = get_expanded_tasks()
         if not args.offline:
             # 这些任务的标准答案绑定 data/mock_arxiv_snapshot.json（例如标题子串
