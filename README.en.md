@@ -5,7 +5,7 @@
 # AgenticArXiv-RL — Agentic RL Training Environment
 
 > **An Agentic RL training environment built on ReAct Agent + arXiv tools**  
-> Supports a progressive SFT/DPO/GRPO/PPO training pipeline for research on LLM Agent reinforcement learning
+> Supports a progressive SFT/DPO/GRPO/PPO training pipeline, plus an optional OPD (on-policy distillation) route, for research on LLM Agent reinforcement learning
 
 ---
 
@@ -119,7 +119,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 ---
 
-## 🛠️ Training Pipeline (SFT → DPO → GRPO)
+## 🛠️ Training Pipeline (SFT → DPO → GRPO / OPD)
 
 ### Stage 1: SFT (Supervised Fine-Tuning)
 
@@ -228,6 +228,30 @@ The training pipeline bakes in several layers of automatic validation that turn 
 - **Adaptive mixed precision**: bf16 first on CUDA, falling back to fp16, disabled on CPU / MPS (`rl/precision.py`)
 - **Logging-backend validation**: a backend named in `--report_to` that is not installed fails before the model is loaded, so you never finish a run only to find no curves (`rl/observability.py`)
 
+### Stage 3': OPD (On-Policy Distillation, optional, swappable with GRPO)
+
+**Goal**: distill the student's ReAct action ability from a strong teacher's per-token signal, with no reward involved during training.
+
+**Steps**:
+```bash
+python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwen2.5-7B-Instruct
+```
+
+**Output**: `./outputs/opd/final` model
+
+**Positioning**: OPD is a **full training paradigm**, not a single trick — the student samples on-policy from task prompts, the teacher scores every token with its logprobs, and the loss is the reverse KL `D_KL(π_student ‖ π_teacher)` (mode-seeking). Relative to GRPO it is the "teacher route" vs the "reward route":
+
+| Dimension | GRPO | OPD |
+|---|---|---|
+| Learning signal | five-component verifiable reward (sparse, trajectory-level) | teacher per-token logprobs (dense) |
+| Extra model | none | teacher model (needs local weights for logprobs; external APIs don't expose per-token distributions) |
+| Performance ceiling | can explore beyond the teacher | converges to teacher behavior |
+| Best when | verifiable reward exists, no teacher | strong teacher available, want to save RL exploration cost |
+
+OPD can also be used as a trick: warm start before RL, teacher-KL regularization inside RL, or verl's PG-OPD (reverse KL treated as a reward for policy gradient).
+
+**Current boundary (KISS single-turn)**: TRL's GKDTrainer only has a single prompt/completion split, so this implementation distills **one ReAct action per sample** without multi-turn environment feedback (multi-turn OPD would require a custom loss, not supported yet). Student and teacher share GPU memory (1.5B student + 7B teacher ≈ 24GB in bf16; switch to a 3B / 1.5B teacher if tight). Verified on trl 1.5.1 (`trl.experimental.gkd`); `beta=1.0` selects the reverse-KL direction (locked by a numeric unit test in `tests/test_opd.py`). Canary and stage verification are shared with GRPO — OPD training itself uses no reward, but the resulting model still has to pass the environment checks.
+
 ---
 
 ## 📂 Directory Structure
@@ -258,6 +282,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_dpo.py              # ⭐ DPO training
 │  │  ├─ train_grpo.py             # ⭐ GRPO training (with training guards)
 │  │  ├─ train_ppo.py              # ⭐ PPO training (Actor-Critic)
+│  │  ├─ train_opd.py              # ⭐ OPD training (on-policy distillation, swappable with GRPO)
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (offline snapshot env)
 │  │  ├─ reward.py                 # RewardCalculator (5-component reward + curriculum)
 │  │  ├─ grpo_reward.py            # GRPO reward adapter (single-step completion → trajectory)
@@ -425,6 +450,9 @@ fire
 - **InstructGPT** (OpenAI, 2022): RLHF three-stage pipeline (SFT → RM → PPO)
 - **DPO** (Stanford, 2023): Direct Preference Optimization
 - **RLVR**: Reinforcement Learning with Verifiable Reward
+- **On-Policy Distillation** ([Thinking Machines Lab, 2025](https://thinkingmachines.ai/blog/on-policy-distillation/)): source of the OPD recipe (student on-policy sampling + teacher per-token reverse KL)
+- **GKD / On-Policy Distillation of Language Models** (Agarwal et al., ICLR 2024, [arXiv:2306.13649](https://arxiv.org/abs/2306.13649)): generalized JSD distillation, the basis of TRL's GKDTrainer
+- **Rethinking On-Policy Distillation of Large Language Models** ([arXiv:2604.13016](https://arxiv.org/abs/2604.13016)): independent replication and analysis of the OPD recipe
 
 ### Original AgenticArXiv (Web Application)
 This project is derived from [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv). The original version includes:
@@ -485,6 +513,17 @@ GRPO is more suitable for lightweight learning projects:
 - ✅ Simple implementation, easier to debug
 
 PPO is better suited for production-grade large model training (7B+), which is beyond the scope of this learning demo.
+
+### Q: How to choose between OPD, SFT, DPO and GRPO?
+
+| Scenario | Recommendation |
+|------|------|
+| Expert demonstrations available, learn the action format first | SFT |
+| Preference pairs (good/bad trajectories), no online reward | DPO |
+| Verifiable reward, want to improve beyond the baseline online | GRPO |
+| Strong teacher model, want to save RL exploration cost | OPD |
+
+They complement each other: SFT is the starting point of every route; OPD and GRPO both sit on top of SFT — the former distills from a teacher (ceiling = teacher), the latter optimizes against verifiable reward (can explore beyond), and either output can initialize or benchmark the other.
 
 ---
 

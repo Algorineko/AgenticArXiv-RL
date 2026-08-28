@@ -40,5 +40,8 @@ output/
 # cc
 .claude/
 
+# zcode
+.zcode/
+
 # local
 local_docs/
