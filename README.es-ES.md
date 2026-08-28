@@ -75,10 +75,10 @@ EOF
 python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ```
 
-**Salida esperada**:
+**Ejemplo de salida (la recompensa varía según la trayectoria y está en `[-1, 1]`)**:
 ```
 ✅ Rollout de Task search_01 completado
-   Reward: 1.50
+   Reward: 1.00
    Metrics: task_completed=True, tool_call_accurate=True
    Trajectory guardada en: traces/train/rollout_20260621_150000.jsonl
 ```
@@ -376,7 +376,7 @@ result = {
 
 reward_calc = RewardCalculator()
 reward, metrics = reward_calc.compute_reward(task_def, result)
-print(f'Reward: {reward:.2f}')  # Esperado: ~1.5
+print(f'Reward: {reward:.2f}')  # Rango de recompensa: [-1, 1]; el valor depende de la trayectoria
 ```
 
 ---
