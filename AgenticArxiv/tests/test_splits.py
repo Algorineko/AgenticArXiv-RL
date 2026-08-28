@@ -4,7 +4,9 @@
 测出来的「泛化」其实是记忆。所以切分必须在模板层面进行。
 """
 
+import json
 import unittest
+from pathlib import Path
 
 from benchmark.splits import (
     difficulty_band,
@@ -13,6 +15,9 @@ from benchmark.splits import (
     summarize,
     template_key,
 )
+from benchmark.tasks_expanded import EXPANDED_TASKS
+
+PINNED_PATH = Path(__file__).resolve().parents[2] / "data" / "splits" / "v1.json"
 
 
 def _task(tid, category="search", tools=1, template=None):
@@ -159,6 +164,46 @@ class SummarizeTest(unittest.TestCase):
         tasks = _family("s", 2)
         out = summarize(make_split(tasks, iid_ratio=0.0), tasks)
         self.assertEqual(out["train"]["bands"], {"unknown": 2})
+
+
+class PinnedV1SplitTest(unittest.TestCase):
+    """data/splits/v1.json 必须跟得上任务集。
+
+    这个 pin 存在的意义是让训练前后两次运行引用同一份切分。可它是手工
+    落盘的静态文件，任务集一扩它就悄悄漏掉新任务——切分依然「有效」，
+    只是少了几条，没有任何东西会报错。同类漂移在本仓库已经发生过两次
+    （README 任务条数 7→8、58→59），所以这里直接钉死。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pinned = json.loads(PINNED_PATH.read_text(encoding="utf-8"))
+        cls.split = cls.pinned["split"]
+        cls.ids = {t["id"] for t in EXPANDED_TASKS}
+
+    def test_covers_every_task_exactly_once(self):
+        assigned = [tid for ids in self.split.values() for tid in ids]
+        self.assertEqual(len(assigned), len(set(assigned)), "有任务被切到多份里")
+        self.assertEqual(set(assigned), self.ids)
+
+    def test_is_reproducible_from_the_recorded_seed_and_keys(self):
+        """记下 seed / ood_keys / rates 就是为了能重算出同一份切分。"""
+        rebuilt = make_split(
+            EXPANDED_TASKS,
+            ood_keys=[tuple(k) for k in self.pinned["ood_keys"]],
+            seed=self.pinned["seed"],
+            rates=self.pinned["rates"],
+        )
+        self.assertEqual(rebuilt, self.split)
+
+    def test_no_template_straddles_train_and_the_held_out_sets(self):
+        by_id = {t["id"]: t for t in EXPANDED_TASKS}
+        keys = {name: {template_key(by_id[tid]) for tid in ids}
+                for name, ids in self.split.items()}
+        self.assertEqual(keys["train"] & keys["ood_test"], set())
+
+    def test_recorded_rates_refer_to_real_tasks(self):
+        self.assertEqual(set(self.pinned["rates"]) - self.ids, set())
 
 
 if __name__ == "__main__":
