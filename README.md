@@ -72,10 +72,10 @@ EOF
 python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ```
 
-**期望输出**：
+**输出示例（奖励随实际轨迹变化，范围为 `[-1, 1]`）**：
 ```
 ✅ Task search_01 rollout 完成
-   Reward: 1.50
+   Reward: 1.00
    Metrics: task_completed=True, tool_call_accurate=True
    Trajectory 保存至: traces/train/rollout_20260621_150000.jsonl
 ```
@@ -399,7 +399,7 @@ result = {
 
 reward_calc = RewardCalculator()
 reward, metrics = reward_calc.compute_reward(task_def, result)
-print(f'Reward: {reward:.2f}')  # 期望: ~1.5
+print(f'Reward: {reward:.2f}')  # 奖励范围：[-1, 1]，具体值取决于轨迹
 ```
 
 ---
