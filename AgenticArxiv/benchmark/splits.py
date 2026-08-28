@@ -13,14 +13,23 @@
 只有 ood 提升更可能是基础能力变强。
 """
 
+import json
 import random
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # 成功率分档边界。GRPO 的梯度来自组内奖励方差，两端不产生梯度，
 # 所以训练集应以中间带为主，两端更适合留作评测的上下限。
 FLOOR_MAX = 0.2
 CEILING_MIN = 0.8
+
+# 固化的切分。阶段间对比必须引用同一份文件，否则数字不可比。
+DEFAULT_SPLIT_PATH = Path(__file__).resolve().parents[2] / "data" / "splits" / "v1.json"
+
+# 文件里没有、按 rates 算出来的一份：train 中处于中间带的任务。
+# 不落盘是有意的 —— 它完全由 train 与 rates 决定，多存一份就多一处会漂的地方。
+COMPUTED_SPLITS = ("rl_train",)
 
 
 def template_key(task: Dict[str, Any]) -> Tuple[str, int]:
@@ -130,3 +139,40 @@ def rl_train_ids(
         tid for tid in split["train"]
         if tid in rates and difficulty_band(rates[tid]) == "middle"
     )
+
+
+def load_split(spec: str) -> List[str]:
+    """按名字取一份切分的任务 id。
+
+    spec 形如 `iid_test`（用 DEFAULT_SPLIT_PATH）或
+    `data/splits/v2.json:iid_test`（显式指定文件）。
+
+    除文件里存的 train / iid_test / ood_test 外，还接受 `rl_train`：
+    train 中成功率处于中间带的部分，见 rl_train_ids。它是算出来的，
+    不存在于文件里。
+    """
+    path_part, _, name = spec.rpartition(":")
+    path = Path(path_part) if path_part else DEFAULT_SPLIT_PATH
+    if not name:
+        raise ValueError(f"切分名为空: {spec!r}")
+    if not path.exists():
+        raise FileNotFoundError(f"切分文件不存在: {path}")
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    groups = payload.get("split", payload)
+    available = sorted(set(groups) | set(COMPUTED_SPLITS))
+
+    if name in groups:
+        return list(groups[name])
+    if name not in COMPUTED_SPLITS:
+        raise ValueError(f"切分 {name!r} 不存在于 {path}，可选: {available}")
+
+    rates = payload.get("rates")
+    if not rates:
+        # 中间带是按实测成功率划的。没有 rates 就没有中间带，
+        # 这时返回空列表会让训练集静默变空，不如直接报错。
+        raise ValueError(f"{path} 没有记录 rates，无法算出 {name!r}")
+    ids = rl_train_ids(groups, rates)
+    if not ids:
+        raise ValueError(f"{path} 的 train 里没有中间带任务，{name!r} 为空")
+    return ids
