@@ -268,6 +268,8 @@ AgenticArXiv-RL/
 │  ├─ benchmark/                     # ⭐ Verifiable Reward 来源
 │  │  ├─ metrics.py               # TaskMetrics、工具序列严格匹配、参数匹配
 │  │  ├─ tasks.py                 # BENCHMARK_TASKS（7 个任务种子）
+│  │  ├─ badcases.py               # 坏例用例的判定与回放
+│  │  ├─ splits.py                 # 模板层 train/iid/ood 切分
 │  │  ├─ runner.py                 # 基准执行器
 │  │  ├─ run_benchmark.py          # 命令行基准入口
 │  │  └─ report.py                 # 指标统计报告
@@ -303,6 +305,10 @@ AgenticArXiv-RL/
 │  ├─ sft/                           # SFT 数据集（JSONL）
 │  ├─ dpo/                           # DPO 偏好对（JSONL）
 │  └─ mock_arxiv_snapshot.json       # MockEnv 离线快照
+├─ eval/                             # 坏例回放闭环
+│  ├─ badcase_replay.py             # 回放 / 捕获 CLI（无需 LLM）
+│  ├─ eval_cases.jsonl              # 用例库，兼作 reward hacking 案例库
+│  └─ readme.md
 ├─ traces/                           # Trajectory 存储（JSONL，gitignored）
 ├─ archive/                          # 归档（原 Web 应用：PDFMathTranslate / arxiv-api / weather-agent）
 ├─ AgenticArxivWeb/                  # 原 Vue3 前端（已归档）
@@ -517,8 +523,8 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 
 - [x] **任务集扩充**：基准集扩到 59 条（`benchmark/tasks_expanded.py`，`--task-set expanded`），涵盖 search / ref_form / composite / state / optional / constraint / long_chain / infeasible 八类；`benchmark/tasks.py` 保留为 8 条冒烟子集。两边统一走 `benchmark/task_spec.py` 的 `TaskSpec`：`expected_tools` 与 `expected_tool_args` 由同一份 `steps` 派生，不再手写两份平行列表漂移。区分度用 `benchmark/run_baselines.py` 的确定性退化策略量化并逐类目卡门槛（`tests/test_reward_discrimination.py`）——修掉参数档的四处漏分后，「无视任务永远搜 cs.AI」在检索类任务上从 0.833 降到 0.446，「本该什么都不做却调了工具」从 +0.165 变成 −0.235。
 - [x] **评测口径与切分**：报告从「成功率 + token 均值 + 迭代均值」扩到 `pass^k` 可靠性（tau-bench 口径，逐任务估计再平均；样本不足的任务记为跳过而非 0）、`false_finish`（以 FINISH 结束但期望工具没做全——退化策略实测 `always_finish` 91.5%、`reference` 0%）、`ref_score`（比解析出的 `paper_id` 而非 `ref` 的写法，同时消掉字符串比对的假阳性与假阴性）、代价按成功次数归一（`skill_cli` 从贵 43% 变成贵 99%）与失败形态拆分。任务集按**模板**切成 train/iid_test/ood_test（`benchmark/splits.py`，固化于 `data/splits/v1.json`），`--split` 在 `run_benchmark.py` 与 `train_grpo.py` 两侧接通；`rl_train` 只取成功率中间带，两端的任务组内方差为零、不产生梯度。
-- [ ] **eval/ badcase replay**：目录树中的 `eval/`（`eval_cases.jsonl`、`badcase_replay.py`）实际尚不存在，需实现坏例回放闭环。
-- [ ] **Reward hacking 排查**：在现有 `RewardVarianceGuard` / `CanaryCallback` 基础上补 reward-hacking 案例库与多粒度权重课程调优。
+- [x] **eval/ badcase replay**：`eval/badcase_replay.py` + `eval/eval_cases.jsonl`。把单条失败轨迹连同当时的判定冻成永久回归用例；回放只重跑打分器，不需要 LLM / 网络 / 工具，因而 `pytest` 本身就是闸门（`tests/test_badcases.py::ShippedCasesTest`）。用例分 `open`（毛病还在）与 `fixed`（已修，再复现即回归、退出码 1）。`--save-traces` + `capture` 从真实跑的轨迹里挑坏例（按 `false_finish` / `ref_score` / 工具序列，而非只挑崩掉的）。
+- [ ] **Reward hacking 排查**：案例库这半已落在 `eval/eval_cases.jsonl` 的 `hack/*` 用例上——退化策略的骗分轨迹配阈值断言（「这种行为不许拿到 X 分」），#40 与 #47 修掉的两个洞都有用例守着，与 `run_baselines.py` 的逐类目闸门互补：闸门看均值、用例钉单条。**还欠多粒度权重课程调优**，那需要真实训练跑的数据支撑。
 
 ### P2 — 性能与规模
 
