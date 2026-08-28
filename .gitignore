@@ -15,6 +15,10 @@ outputs/
 data/sft/*.jsonl
 data/dpo/*.jsonl
 data/mock_arxiv_snapshot.json
+data/traces.jsonl
+
+# 坏例回放：用例库要进版本控制（它是资产），跑出来的结果不要
+eval/results/
 
 # 环境配置
 .env

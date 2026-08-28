@@ -177,6 +177,7 @@ benchmark/
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总
   splits.py           # 模板层 train/iid/ood 切分与 load_split
+  badcases.py         # 坏例用例的判定与回放（CLI 在 eval/badcase_replay.py）
   report.py           # BenchmarkReport：生成 Markdown/CSV/JSON 报告
   run_benchmark.py    # CLI 入口
   run_baselines.py    # 离线退化策略诊断 CLI

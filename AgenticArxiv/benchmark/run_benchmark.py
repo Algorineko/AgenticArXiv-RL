@@ -14,8 +14,10 @@ Benchmark CLI 入口。
 """
 
 import argparse
+import json
 import sys
 import os
+from pathlib import Path
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
@@ -79,6 +81,11 @@ def main():
              "代价是不再覆盖真实 API 集成。",
     )
     parser.add_argument("--snapshot", default=None, help="指定快照路径（默认 data/mock_arxiv_snapshot.json）")
+    parser.add_argument(
+        "--save-traces", nargs="?", const="", default=None, metavar="PATH",
+        help="把每条轨迹写成 JSONL（默认 <output>/traces.jsonl）。报告只留聚合数字，"
+             "失败的轨迹跑完就没了；存下来才能用 eval/badcase_replay.py capture 固化成回归用例",
+    )
     parser.add_argument(
         "--split", default=None, metavar="[FILE:]NAME",
         help=(
@@ -180,6 +187,25 @@ def main():
     print("=" * 60)
 
     results = runner.run_all(task_list)
+
+    if args.save_traces is not None:
+        traces_path = Path(args.save_traces) if args.save_traces else Path(args.output) / "traces.jsonl"
+        traces_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(traces_path, "w", encoding="utf-8") as handle:
+            written = 0
+            for r in results:
+                history = (r.raw_result or {}).get("history")
+                if not history:
+                    continue
+                handle.write(json.dumps({
+                    "task_id": r.task_id,
+                    "agent_type": r.agent_type,
+                    "trial": r.trial,
+                    "session_id": r.session_id,
+                    "history": history,
+                }, ensure_ascii=False) + "\n")
+                written += 1
+        print(f"轨迹已写出: {traces_path}（{written} 条）")
 
     # 提取有效 metrics
     all_metrics = [r.metrics for r in results if r.metrics is not None]
