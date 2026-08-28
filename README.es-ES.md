@@ -103,6 +103,8 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 3. `translate_arxiv_pdf(ref, session_id)` — Traducir PDF
 4. `get_paper_cache_status(ref, session_id)` — Consultar estado de la caché
 
+> El siguiente paso del conjunto de herramientas (búsqueda por palabras clave / lectura de papers / resumen / análisis de figuras) ya tiene un diseño cerrado, aún sin implementar — ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
+
 ### Componentes de Verifiable Reward
 
 **Recompensa verificable multigranular de cinco componentes** (`rl/reward.py`, inspirada en la recompensa jerárquica de LLM-TIR). Cada componente se normaliza a `[-1, 1]` y se combina como suma ponderada dividida por la suma de pesos:
@@ -193,7 +195,24 @@ python -m AgenticArxiv.rl.train_grpo
 - Sin necesidad de value model (desventaja de PPO: alto consumo de VRAM)
 - Adecuado para modelos pequeños (como Qwen2.5-1.5B)
 
-**Puntuación de recompensa** (`rl/grpo_reward.py`): el `completion` de un solo paso se parsea como acción ReAct, se ejecuta con `MockArxivEnv` y se completa hasta formar una "trayectoria mínima completa" antes de que la puntúe el `RewardCalculator` de cinco componentes — el mismo estándar que usan rollout y benchmark, sin una segunda definición de recompensa.
+**Rollout multiturno y puntuación de recompensa** (`rl/grpo_reward.py`): en cada turno la política actual genera una acción ReAct, un `MockArxivEnv` independiente la ejecuta y la observación se reinserta en el contexto, hasta FINISH, un fallo de parseo o `--max_turns`. Los tokens del asistente entran en la pérdida GRPO y los tokens del entorno solo hacen de contexto vía `env_mask=0`; la trayectoria completa la puntúa el `RewardCalculator` de cinco componentes, el mismo estándar que usan rollout y benchmark.
+
+```bash
+python -m AgenticArxiv.rl.build_snapshot
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
+
+# Registrar curvas de entrenamiento (el mismo parámetro en todas las fases)
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
+tensorboard --logdir outputs/grpo/logs
+```
+
+**Curvas de entrenamiento** (`rl/observability.py`): `--report_to` acepta `none` / `auto` / `tensorboard` / `wandb` (separados por comas), compartido por las cinco fases (SFT / DPO / GRPO / OPD / PPO). Además de las métricas que ya trae TRL, se registran:
+
+| Grupo de métricas | Contenido | Por qué se registra aparte |
+|---|---|---|
+| `reward_components/*` | format / tool / argument / process / outcome | cada uno acotado a `[-1,1]` e independiente de los pesos |
+| `reward_weights/*` | pesos actuales del currículo | el currículo reduce tool/argument/outcome los primeros 30 pasos, así que mirar solo la recompensa total confunde «se abrieron los pesos» con «la política retrocedió» |
+| `rollout/*` | turns / finished / parse_error_rate / tool_error_rate | cuando la recompensa cae, separa «la política retrocedió» de «nunca aprendió a terminar y agota max_turns» |
 
 ### Garantías de calidad del entrenamiento (verificación automática)
 
@@ -251,10 +270,14 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # Consulta de caché
 │  ├─ benchmark/                     # ⭐ Fuente de Verifiable Reward
 │  │  ├─ metrics.py               # TaskMetrics, coincidencia estricta de herramientas y parámetros
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 semillas de tareas)
-│  │  ├─ runner.py                 # Ejecutor de benchmarks
-│  │  ├─ run_benchmark.py          # Entrada de benchmark por CLI
-│  │  └─ report.py                 # Informe de métricas
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 tareas de humo)
+│  │  ├─ tasks_expanded.py        # Conjunto de tareas ampliado (59 tareas, 8 familias de plantillas)
+│  │  ├─ task_spec.py             # TaskSpec: expected_tools / expected_tool_args derivados de steps
+│  │  ├─ badcases.py              # Veredictos y replay de casos malos
+│  │  ├─ splits.py                # Partición train/iid/ood a nivel de plantilla
+│  │  ├─ baselines.py · run_baselines.py  # Baselines deterministas de política degradada (puertas por categoría)
+│  │  ├─ runner.py · run_benchmark.py     # Ejecutor de benchmarks y entrada CLI
+│  │  └─ report.py                # Informe de métricas
 │  ├─ rl/                            # ⭐ Núcleo RL
 │  │  ├─ train_sft.py              # ⭐ Entrenamiento SFT
 │  │  ├─ train_dpo.py              # ⭐ Entrenamiento DPO
@@ -262,6 +285,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_ppo.py              # ⭐ Entrenamiento PPO (Actor-Critic)
 │  │  ├─ train_opd.py              # ⭐ Entrenamiento OPD (destilación on-policy, intercambiable con GRPO)
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (entorno de snapshot offline)
+│  │  ├─ multiturn_env.py          # Adaptador multiturno para TRL (environment_factory, una instancia por generación)
 │  │  ├─ reward.py                 # RewardCalculator (recompensa de 5 componentes + currículum)
 │  │  ├─ grpo_reward.py            # Adaptador de recompensa GRPO (completion de un paso → trayectoria)
 │  │  ├─ rollout.py                # Recopilación de datos de rollout offline
@@ -275,7 +299,7 @@ AgenticArXiv-RL/
 │  ├─ services/                      # Servicios de efectos secundarios (event_bus / log / runtime)
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # Capas de compatibilidad Web / MCP / Skill archivadas
 │  ├─ utils/                         # llm_client, logger, utilidades PDF
-│  ├─ tests/                         # 16 tests unitarios (unittest)
+│  ├─ tests/                         # 30 tests unitarios (unittest)
 │  └─ requirements.txt
 ├─ scripts/                          # Generación de datos
 │  ├─ generate_sft_data.py          # Trayectorias expertas con LLM API
@@ -288,6 +312,10 @@ AgenticArXiv-RL/
 │  ├─ sft/                           # Dataset SFT (JSONL)
 │  ├─ dpo/                           # Pares DPO (JSONL)
 │  └─ mock_arxiv_snapshot.json       # Snapshot del MockEnv
+├─ eval/                             # Bucle de replay de casos malos
+│  ├─ badcase_replay.py             # CLI de replay / captura (sin LLM)
+│  ├─ eval_cases.jsonl              # Biblioteca de casos, doble uso como biblioteca de reward hacking
+│  └─ readme.md
 ├─ traces/                           # Almacenamiento de Trajectory (JSONL, gitignored)
 ├─ archive/                          # Archivado (app web original: PDFMathTranslate / arxiv-api / weather-agent)
 ├─ AgenticArxivWeb/                  # Frontend Vue3 original (archivado)
@@ -353,9 +381,9 @@ print(f'Reward: {reward:.2f}')  # Esperado: ~1.5
 
 ---
 
-## 🧪 Conjunto de Tareas de Prueba
+## 🧪 Conjunto de Tareas y Evaluación
 
-Provenientes de `benchmark/tasks.py`, contienen 8 tareas:
+### Conjunto de humo (`benchmark/tasks.py`, 8 tareas)
 
 | ID | Tarea | Tipo | Herramienta Esperada |
 |----|------|------|---------|
@@ -367,6 +395,26 @@ Provenientes de `benchmark/tasks.py`, contienen 8 tareas:
 | `translate_01` | Traducir el 1er paper | Traducción | `translate_arxiv_pdf` |
 | `cache_01` | Ver estado de caché del 1er paper | Caché | `get_paper_cache_status` |
 | `composite_01` | Búsqueda + Descarga | Compuesta | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
+
+### Conjunto ampliado (`benchmark/tasks_expanded.py`, 59 tareas)
+
+Se activa con `run_benchmark.py --task-set expanded` y cubre ocho familias de plantillas: search / ref_form / composite / state / optional / constraint / long_chain / infeasible. Ambos conjuntos pasan por el `TaskSpec` de `benchmark/task_spec.py`: `expected_tools` y `expected_tool_args` se derivan de la misma fuente `steps`, así que dos listas mantenidas a mano nunca pueden divergir.
+
+### Métricas de evaluación y particiones
+
+Más allá de «tasa de éxito + tokens/iteraciones medias», el informe incluye:
+
+- **Fiabilidad `pass^k`** (convención tau-bench, estimada por tarea y luego promediada; las tareas con pocas muestras se marcan como omitidas, no como 0)
+- **`false_finish`**: termina con FINISH pero no se llamaron todas las herramientas esperadas — políticas degradadas miden `always_finish` 91.5% vs `reference` 0%
+- **`ref_score`**: compara el `paper_id` resuelto en vez del literal `ref`, eliminando a la vez falsos positivos y falsos negativos
+- **Costo normalizado por aciertos** (`skill_cli` corregido de 43% a 99% más caro) y desglose de modos de fallo
+
+Las tareas se particionan por **plantilla** en train/iid_test/ood_test (`benchmark/splits.py`, fijado en `data/splits/v1.json`); `--split` está conectado tanto en `run_benchmark.py` como en `train_grpo.py`; `rl_train` toma solo la banda intermedia de tasa de éxito — las tareas de los extremos tienen varianza cero dentro del grupo y no producen gradiente.
+
+### Puertas de discriminación y replay de casos malos
+
+- **Puerta de discriminación por categoría** (`benchmark/run_baselines.py`): cuantifica la discriminación de la recompensa con políticas degradadas deterministas y fija umbrales por categoría (`tests/test_reward_discrimination.py`) — tras corregir las cuatro fugas de puntuación en la partida de argumentos, «buscar siempre cs.AI sin mirar la tarea» bajó de 0.833 a 0.446 en las tareas de búsqueda, y «llamar a una herramienta cuando lo correcto es no hacer nada» pasó de +0.165 a −0.235.
+- **Replay de casos malos** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`): congela una trayectoria fallida junto con el veredicto original en un caso de regresión permanente; el replay solo re-ejecuta el evaluador, sin LLM / red / herramientas, así que `pytest` es en sí mismo la puerta (`tests/test_badcases.py::ShippedCasesTest`). Los casos son `open` (el fallo sigue ahí) o `fixed` (ya corregido — reproducirlo de nuevo es una regresión, código de salida 1); `hack/*` registra trayectorias tramposas de políticas degradadas con aserciones de umbral («este comportamiento no debe sacar X», custodiando los dos agujeros corregidos en #40 y #47), con doble uso como biblioteca de reward hacking — complementaria a las puertas de `run_baselines.py`: **las puertas miran medias, los casos clavan fallos individuales**. `--save-traces` + `capture` eligen casos malos de trayectorias reales por `false_finish` / `ref_score` / secuencia de herramientas, no solo los que cascan.
 
 ---
 
@@ -394,11 +442,13 @@ tensorboard --logdir ./outputs/grpo/logs
 
 ## 🛡️ Notas sobre Dependencias
 
-**Dependencias principales** (`requirements.txt`):
+**Dependencias principales** (`requirements.txt`, cubre rollout / benchmark / las cinco fases de entrenamiento):
 ```txt
 torch>=2.0.0
 transformers>=4.45.0
-trl>=0.20.0               # TRL (SFT/DPO/GRPO), verificado en 0.29.1
+trl>=0.28.0               # el mínimo lo fija el GRPO multiturno: solo desde 0.28.0 se llama
+                          # a rollout_func en la ruta sin vLLM — versiones anteriores degradan
+                          # en silencio los rollouts multiturno; verificado en 0.29.1 (OPD en 1.5.1)
 datasets>=2.14.0
 accelerate>=0.25.0
 arxiv
@@ -409,17 +459,17 @@ pydantic>=2.0
 fire
 ```
 
-**Ya no necesario** (eliminado):
-- `fastapi`, `uvicorn` (sin servicio web)
-- `sqlalchemy`, `pymysql` (cambiado a JSONL)
-- `pdf2zh` (usa mock durante el entrenamiento)
+**Dependencias opcionales** (`requirements-extra.txt`, instalar según necesidad; el pipeline de entrenamiento principal no las requiere):
+- `pdf2zh` — traducción real de PDF (el entrenamiento/benchmark usan el mock; solo para eval/demos de traducción)
+- `fastapi` / `uvicorn` / `sqlalchemy` / `pymysql` — solo para ejecutar la versión Web archivada
+- `tensorboard` (recomendado, cero configuración y offline) / `wandb` — backends de curvas de entrenamiento para `--report_to`
 
 ---
 
 ## 🔗 Recursos Relacionados
 
 ### Documentación Oficial
-- [TRL 文档](https://huggingface.co/docs/trl/)
+- [Documentación de TRL](https://huggingface.co/docs/trl/)
 - [SFTTrainer](https://huggingface.co/docs/trl/en/sft_trainer)
 - [DPOTrainer](https://huggingface.co/docs/trl/en/dpo_trainer)
 - [GRPOTrainer](https://huggingface.co/docs/trl/en/grpo_trainer)
@@ -471,7 +521,7 @@ Licencia MIT
 | **Arquitectura** | FastAPI + Vue3 + MySQL | Puro Python + JSONL |
 | **Modo Agente** | 3 tipos (ReAct/MCP/Skill) | Solo ReAct (simplificado) |
 | **Funcionalidades clave** | Traducción en tiempo real, SSE, UI web | Entrenamiento SFT/DPO/GRPO |
-| **Dependencias** | Pesadas (14+ paquetes) | Livianas (8 paquetes principales) |
+| **Dependencias** | Pesadas (14+ paquetes) | Livianas (11 paquetes principales + extras opcionales) |
 
 ### Q: ¿Por qué se mantiene solo ReAct y se archiva MCP/Skill?
 
@@ -505,25 +555,84 @@ Se complementan entre sí: SFT es el punto de partida de todas las rutas; OPD y 
 
 ---
 
+## 🧰 Diseño de Evolución del Conjunto de Herramientas (borrador de diseño, sin implementar)
+
+> El objetivo final de este proyecto es un **LLM ligero desplegado localmente que resuelva de forma autónoma la búsqueda, descarga e interpretación de papers de arXiv**. Esta sección es solo diseño; nada está implementado aún.
+
+### Estado actual y brechas
+
+| Herramienta | Capacidad | Límite |
+|------|------|------|
+| `get_recently_submitted_cs_papers` | Búsqueda por categoría + ventana temporal | Solo entiende `cat:cs.*` + fecha de envío — **sin búsqueda por palabras clave / título / autor**, sin paginación; resúmenes truncados a 200 caracteres |
+| `download_arxiv_pdf` | Descargar PDF | — |
+| `translate_arxiv_pdf` | Traducción del paper completo con pdf2zh | Produce un archivo PDF traducido — **el contenido del paper nunca entra en el contexto del modelo**; depende del extra opcional |
+| `get_paper_cache_status` | Consulta de caché | — |
+
+Dos conclusiones:
+
+1. **La mitad de «búsqueda» del bucle está incompleta**: las tareas de navegación («qué hay de nuevo en cs.AI») funcionan, pero las tareas de búsqueda puntual («busca el paper xxx», «quién propuso xxx») son imposibles en el espacio de acciones actual.
+2. **La mitad de «interpretación» del bucle falta por completo**: lo único que el modelo llega a «ver» de un paper es un recorte de 200 caracteres del resumen en los resultados de búsqueda. Sin una herramienta de lectura, resumir / preguntar / analizar figuras no tienen recorrido — traducir produce un archivo, y eso no es interpretar.
+
+Además, **un espacio de acciones más grande no es automáticamente mejor**: la política es un modelo de ~1.5B, y cada herramienta nueva amplía la carga de aprendizaje de selección de herramientas y formato JSON. El criterio de admisión de una herramienta nueva es «habilita una nueva categoría de tareas», no «puede que sea útil» — de los 5 candidatos de la tabla, T1/T2 son el camino crítico, T3 es el incremento principal, T4/T5 son opcionales.
+
+### Herramientas nuevas propuestas (en orden de dependencia)
+
+| Prioridad | Herramienta | Diseño | Por qué sigue siendo amiga de RLVR |
+|--------|------|----------|----------------------|
+| **T1** | `search_arxiv_papers(query, max_results, days=None)` | Búsqueda por palabras clave mapeada a los campos `all:` / `ti:` / `au:` de la API de arXiv; coexiste con la herramienta actual (navegar por ventana temporal y búsqueda puntual son tipos de tarea distintos) | Las herramientas/parámetros esperados siguen derivándose de `task_spec.steps`; `MockArxivEnv` repite offline indexado por un hash del query, y los query no recogidos degradan de forma **determinista** (devuelve un subconjunto fijo, marcado explícitamente en la observation) — reproducible, y evita que el modelo confunda un resultado vacío con una búsqueda exitosa |
+| **T2** | `get_paper_content(ref, section=None)` | PDF → texto plano (PyMuPDF); por defecto devuelve title/abstract, y por secciones (method / result / conclusion) a petición | Extracción de texto determinista, sin LLM; los resultados de extracción van pre-guardados en el snapshot. **Es el prerrequisito de todas las tareas de interpretación** |
+| **T3** | `summarize_paper(ref, style, max_words)` | Resumir un paper: un modelo resumidor local **en el lado del entorno** (con el texto de T2 como entrada) devuelve el resumen | Lo entrenable es «cuándo llamarlo, sobre qué ref, si style/longitud son correctos» — todo verificable por reglas; la calidad del resumen en sí **no entra en la recompensa** (ver abajo) |
+| **T4** (opcional) | `extract_paper_figures(ref)` | Preparación de figuras/tablas: extrae imágenes de figuras + captions, devuelve rutas de archivos | Determinista; se verifica «ref correcto + archivos existen + cantidad ≥ 1» |
+| **T5** (opcional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Análisis de figuras: un VLM local del lado del entorno (p. ej. Qwen2.5-VL) lee la figura y responde | Las reglas solo juzgan «si se llamó bien y si los parámetros son correctos»; la calidad de la respuesta del VLM no entra en la recompensa, manteniendo el ruido de un modelo tercero fuera del gradiente de política |
+
+Plantillas de tareas asociadas (siguiendo las ocho familias de `tasks_expanded.py`, todas derivadas declarativamente de `task_spec.steps`):
+
+- `search_kw_*`: tareas de búsqueda por palabras clave (T1)
+- `read_*` / `qa_*`: buscar → descargar → leer contenido (T1/T2)
+- `summary_*`: buscar → descargar → leer → resumir (T3), nuevo material `long_chain`
+- `figure_*` (opcional): buscar → descargar → extraer figuras → análisis de figuras (T4/T5), activo solo en entornos multimodales
+
+### Diseño derivado para entrenamiento y evaluación
+
+1. **Extensión del snapshot**: `build_snapshot.py` lo hace todo de una pasada — además de los resultados de búsqueda, **pre-extrae el texto completo y los archivos de figuras** de los papers del snapshot; todas las herramientas nuevas se repiten offline, conservando el contrato de «build_snapshot es el único paso con red».
+2. **Cero cambios en la recompensa**: el esquema de cinco componentes se reutiliza tal cual; `expected_tools` / `expected_tool_args` se derivan de `steps`, así que `reward.py` y el currículo no se tocan.
+3. **Prevención de reward hacking**: las herramientas de interpretación abren una superficie nueva para «llamar herramientas al azar para farmear puntos de process» — reutilizar las puertas por categoría de `run_baselines.py` + clavar casos individuales en `eval/eval_cases.jsonl` (p. ej. llamar a `summarize_paper` con un ref que apunta a un paper inexistente debe restar puntos).
+4. **El problema de la recompensa por calidad del resumen (deliberadamente no hecho)**: convertir «si el resumen es bueno» en recompensa requiere LLM-as-judge o rúbricas, lo que introduce recompensas no deterministas y una nueva superficie de hacking. El diseño reduce primero el resumen a un **problema de decisión de llamada a herramientas** (cuándo llamar, a quién); evaluar calidad queda como un proyecto aparte a largo plazo.
+5. **La frontera multimodal (aislada deliberadamente)**: el VLM de T5 vive solo en el lado del entorno; la política sigue siendo un modelo pequeño de solo texto — en el espacio de acciones solo está «llamar o no, cómo preguntar», y la comprensión de figuras se externaliza al entorno. Solo si la política en sí se vuelve multimodal se consideraría meter imágenes en la observation.
+6. **Requisito de hardware**: T3/T5 añaden cada uno un modelo del lado del entorno (~2GB el resumidor, ~6GB el VLM, menos cuantizados); no afectan a la VRAM de entrenamiento (sin gradientes). Si el hardware no llega, hacer solo T1/T2/T4 — el camino crítico real del bucle de interpretación es T2.
+
+### Orden de implantación
+
+```
+T1 búsqueda por palabras clave ──→ T2 leer contenido ──→ T3 resumir   (bucle de interpretación)
+                                        └────→ T4 extraer → T5 analizar figuras (opcional, entorno multimodal)
+```
+
+Cada vez que aterriza una herramienta: ampliar las plantillas de tareas → re-ejecutar `run_baselines.py` para recalcular los umbrales de discriminación por categoría → regenerar los datos SFT/DPO → añadir los casos correspondientes a `eval/eval_cases.jsonl`.
+
+---
+
 ## 📝 TODO (Hoja de Ruta de Desarrollo)
 
 Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribuir)!
 
-### P0 — Corto plazo (cerrar brechas clave)
+### P0 — Expansión del conjunto de herramientas (bucle de interpretación)
 
-- [x] **Rollout Agentic Multiturno**: implementado el muestreo real «actuar → observar → actuar», con un `MockArxivEnv` independiente por generación; los tokens del entorno usan `env_mask=0`, mientras que la trayectoria completa del asistente participa en la optimización GRPO y en la recompensa de cinco componentes.
-- [x] **Observabilidad del entrenamiento**: SFT / DPO / GRPO comparten un mismo `--report_to` (none / auto / tensorboard / wandb); si el backend no está instalado falla de inmediato en vez de no registrar nada en silencio. Además de reward / kl / grad_norm / `frac_reward_zero_std` que ya trae TRL, se registran por separado los cinco componentes de la recompensa (format/tool/argument/process/outcome) y los pesos actuales del currículo —el currículo cambia los pesos durante los primeros 30 pasos, así que la recompensa total por sí sola no distingue «la política mejoró» de «los pesos se movieron»—, más `rollout/` turns / finished / parse_error_rate / tool_error_rate para diagnosticar el propio muestreo multiturno.
+Diseño cerrado (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»), ninguno implementado aún:
 
-### P1 — Medio plazo (datos y evaluación)
+- [ ] **T1 Búsqueda por palabras clave** `search_arxiv_papers`: añade la búsqueda puntual de «encontrar un paper concreto»
+- [ ] **T2 Lectura de papers** `get_paper_content`: PDF → texto, el prerrequisito de todas las tareas de interpretación (camino crítico)
+- [ ] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable
+- [ ] **T4/T5 Extracción y análisis de figuras** (opcional, entorno multimodal): después de T1–T3; el VLM vive solo en el lado del entorno
 
-- [ ] **Ampliar el conjunto de tareas**: `benchmark/tasks.py` tiene solo 8 tareas; ampliarlo a 50+ y derivar automáticamente `expected_tools` / `expected_tool_args`.
-- [ ] **eval/ badcase replay (reproducción de casos malos)**: el directorio `eval/` del árbol no existe aún; implementar `eval_cases.jsonl` + `badcase_replay.py` para cerrar el bucle.
-- [ ] **Investigación de reward hacking**: ampliar `RewardVarianceGuard` / `CanaryCallback` con una biblioteca de casos de reward hacking y ajuste de pesos del currículum.
+### P1 — Ajuste del currículo de recompensa
+
+- [ ] **Calibración del currículo multigranular**: la rebaja de pesos de los primeros 30 pasos es un valor a priori; calibrarlo necesita datos de entrenamientos reales. La puerta de casos de reward hacking ya está en su sitio (ver la parte de replay de casos malos en «Conjunto de Tareas y Evaluación»).
 
 ### P2 — Rendimiento y escala
 
-- [ ] **Muestreo acelerado con vLLM**: sustituir HF generate para aumentar el throughput del rollout (la prioridad sube cuando aterrice el rollout multiturno).
-- [ ] **Soporte multi-GPU**: configuración accelerate / FSDP (accelerate ya es dependencia, pero sin configurar).
+- [ ] **Muestreo acelerado con vLLM**: sustituir HF generate para aumentar el throughput de muestreo del rollout multiturno.
+- [ ] **Soporte multi-GPU**: configuración accelerate / FSDP (accelerate ya es dependencia, pero hoy sin configurar, un proceso en una sola GPU).
 
 ### P3 — Largo plazo (evolución algorítmica)
 
@@ -542,7 +651,7 @@ Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribui
 >
 > Resultados: entrenamiento estable durante ~1000 pasos; **97.3%** en AIME2025 (vs 84.2% en GRPO), 29.8% en SWE-Bench Verified; ya usado para entrenar GLM-5.2 (750B).
 >
-> Ruta de adopción: cerrar la brecha del rollout multiturno de P0 → introducir la omisión de observaciones y el recorte bilateral DIS → migrar a verl `fully_async_policy` (`gen_batch_size=1` / `staleness_threshold` / TIS a nivel de token, alineado con SAO) o AReaL v1.0 para entrenamiento totalmente asíncrono + value model.
+> Ruta de adopción: el rollout multiturno ya está disponible → introducir la omisión de observaciones y el recorte bilateral DIS → migrar a verl `fully_async_policy` (`gen_batch_size=1` / `staleness_threshold` / TIS a nivel de token, alineado con SAO) o AReaL v1.0 para entrenamiento totalmente asíncrono + value model.
 >
 > 📄 **Paper**: [Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning (arXiv:2607.07508)](https://arxiv.org/abs/2607.07508) (Tsinghua KEG; código oficial aún no liberado)
 

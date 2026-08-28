@@ -101,6 +101,8 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 3. `translate_arxiv_pdf(ref, session_id)` — Translate PDF
 4. `get_paper_cache_status(ref, session_id)` — Query cache status
 
+> The next step of the toolset (keyword search / paper reading / summarization / figure analysis) has a finalized design but is not implemented yet — see "🧰 Toolset Evolution Design" below.
+
 ### Verifiable Reward Components
 
 **Multi-granular five-component verifiable reward** (`rl/reward.py`, inspired by LLM-TIR's hierarchical reward). Each component is normalized to `[-1, 1]` and combined as a weighted sum divided by the total weight:
@@ -204,12 +206,12 @@ python -m AgenticArxiv.rl.train_grpo
 python -m AgenticArxiv.rl.build_snapshot
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 
-# Record training curves (same flag across all three stages)
+# Record training curves (same flag across all stages)
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
 ```
 
-**Training curves** (`rl/observability.py`): `--report_to` accepts `none` / `auto` / `tensorboard` / `wandb` (comma-separated), shared by all three stages. On top of TRL's built-in metrics it logs:
+**Training curves** (`rl/observability.py`): `--report_to` accepts `none` / `auto` / `tensorboard` / `wandb` (comma-separated), shared by all five stages (SFT / DPO / GRPO / OPD / PPO). On top of TRL's built-in metrics it logs:
 
 | Metric group | Contents | Why log it separately |
 |---|---|---|
@@ -273,10 +275,14 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # Cache query
 │  ├─ benchmark/                     # ⭐ Verifiable Reward source
 │  │  ├─ metrics.py               # TaskMetrics, strict tool-sequence & argument matching
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 task seeds)
-│  │  ├─ runner.py                 # Benchmark executor
-│  │  ├─ run_benchmark.py          # CLI benchmark entry
-│  │  └─ report.py                 # Metrics report
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 smoke tasks)
+│  │  ├─ tasks_expanded.py        # Expanded task set (59 tasks, 8 template families)
+│  │  ├─ task_spec.py             # TaskSpec: expected_tools / expected_tool_args derived from steps
+│  │  ├─ badcases.py              # Bad-case verdicts & replay
+│  │  ├─ splits.py                # Template-level train/iid/ood split
+│  │  ├─ baselines.py · run_baselines.py  # Deterministic degenerate-policy baselines (per-category gates)
+│  │  ├─ runner.py · run_benchmark.py     # Benchmark executor & CLI entry
+│  │  └─ report.py                # Metrics report
 │  ├─ rl/                            # ⭐ RL core
 │  │  ├─ train_sft.py              # ⭐ SFT training
 │  │  ├─ train_dpo.py              # ⭐ DPO training
@@ -284,6 +290,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_ppo.py              # ⭐ PPO training (Actor-Critic)
 │  │  ├─ train_opd.py              # ⭐ OPD training (on-policy distillation, swappable with GRPO)
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (offline snapshot env)
+│  │  ├─ multiturn_env.py          # TRL multi-turn env adapter (environment_factory, one instance per generation)
 │  │  ├─ reward.py                 # RewardCalculator (5-component reward + curriculum)
 │  │  ├─ grpo_reward.py            # GRPO reward adapter (single-step completion → trajectory)
 │  │  ├─ rollout.py                # Offline rollout data collection
@@ -297,7 +304,7 @@ AgenticArXiv-RL/
 │  ├─ services/                      # Side-effect services (event_bus / log / runtime)
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # Archived Web / MCP / Skill compatibility layers
 │  ├─ utils/                         # llm_client, logger, PDF utilities
-│  ├─ tests/                         # 16 unit tests (unittest)
+│  ├─ tests/                         # 30 unit tests (unittest)
 │  └─ requirements.txt
 ├─ scripts/                          # Data generation
 │  ├─ generate_sft_data.py          # Expert trajectories via LLM API
@@ -310,6 +317,10 @@ AgenticArXiv-RL/
 │  ├─ sft/                           # SFT dataset (JSONL)
 │  ├─ dpo/                           # DPO pairs (JSONL)
 │  └─ mock_arxiv_snapshot.json       # MockEnv snapshot
+├─ eval/                             # Bad-case replay loop
+│  ├─ badcase_replay.py             # Replay / capture CLI (no LLM needed)
+│  ├─ eval_cases.jsonl              # Case library, doubles as the reward-hacking case library
+│  └─ readme.md
 ├─ traces/                           # Trajectory storage (JSONL, gitignored)
 ├─ archive/                          # Archived (original Web app: PDFMathTranslate / arxiv-api / weather-agent)
 ├─ AgenticArxivWeb/                  # Original Vue3 frontend (archived)
@@ -375,9 +386,9 @@ print(f'Reward: {reward:.2f}')  # Expected: ~1.5
 
 ---
 
-## 🧪 Test Task Set
+## 🧪 Task Set & Evaluation
 
-From `benchmark/tasks.py`, containing 8 tasks:
+### Smoke set (`benchmark/tasks.py`, 8 tasks)
 
 | ID | Task | Type | Expected Tool |
 |----|------|------|---------------|
@@ -389,6 +400,26 @@ From `benchmark/tasks.py`, containing 8 tasks:
 | `translate_01` | Translate the 1st paper | Translation | `translate_arxiv_pdf` |
 | `cache_01` | Check cache status of the 1st paper | Cache | `get_paper_cache_status` |
 | `composite_01` | Search + Download | Composite | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
+
+### Expanded set (`benchmark/tasks_expanded.py`, 59 tasks)
+
+Enabled via `run_benchmark.py --task-set expanded`, covering eight template families: search / ref_form / composite / state / optional / constraint / long_chain / infeasible. Both sets go through the `TaskSpec` in `benchmark/task_spec.py`: `expected_tools` and `expected_tool_args` are derived from the same `steps`, so two hand-maintained lists can never drift apart.
+
+### Evaluation metrics & splits
+
+Beyond "success rate + mean tokens + mean iterations", the report includes:
+
+- **`pass^k` reliability** (tau-bench convention, estimated per task then averaged; tasks with too few samples are skipped, not counted as 0)
+- **`false_finish`**: ends with FINISH but the expected tools were not all called — degenerate policies measure `always_finish` 91.5% vs `reference` 0%
+- **`ref_score`**: compares the resolved `paper_id` rather than the literal `ref` string, removing both false positives and false negatives
+- **Cost normalized by successes** (`skill_cli` corrected from 43% to 99% more expensive) and failure-mode breakdown
+
+Tasks are split by **template** into train/iid_test/ood_test (`benchmark/splits.py`, pinned in `data/splits/v1.json`); `--split` is wired into both `run_benchmark.py` and `train_grpo.py`; `rl_train` keeps only the middle success-rate band — tasks at both ends have zero in-group variance and produce no gradient.
+
+### Discrimination gates & badcase replay
+
+- **Per-category discrimination gate** (`benchmark/run_baselines.py`): quantifies reward discrimination with deterministic degenerate policies and enforces per-category thresholds (`tests/test_reward_discrimination.py`) — after fixing four argument-matching score leaks, "always search cs.AI regardless of the task" dropped from 0.833 to 0.446 on search tasks, and "call a tool when doing nothing is correct" went from +0.165 to −0.235.
+- **Badcase replay** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`): freezes a failing trajectory together with its original verdict into a permanent regression case; replay only re-runs the scorer, no LLM / network / tools needed, so `pytest` itself is the gate (`tests/test_badcases.py::ShippedCasesTest`). Cases are `open` (bug still present) or `fixed` (already fixed — reproducing it again is a regression, exit code 1); `hack/*` records degenerate reward-hacking trajectories with threshold assertions ("this behavior must not score X", guarding the two holes fixed in #40 and #47), doubling as the reward-hacking case library — complementary to the `run_baselines.py` gates: **gates watch means, cases pin single failures**. `--save-traces` + `capture` pick bad cases from real trajectories by `false_finish` / `ref_score` / tool sequence, not just crashes.
 
 ---
 
@@ -416,11 +447,13 @@ tensorboard --logdir ./outputs/grpo/logs
 
 ## 🛡️ Dependencies
 
-**Core dependencies** (`requirements.txt`):
+**Core dependencies** (`requirements.txt`, covers rollout / benchmark / all five training stages):
 ```txt
 torch>=2.0.0
 transformers>=4.45.0
-trl>=0.20.0               # TRL (SFT/DPO/GRPO), verified on 0.29.1
+trl>=0.28.0               # floor set by multi-turn GRPO: only 0.28.0+ calls rollout_func on the
+                          # non-vLLM path — older versions silently degrade multi-turn rollouts;
+                          # verified on 0.29.1 (OPD verified on 1.5.1)
 datasets>=2.14.0
 accelerate>=0.25.0
 arxiv
@@ -431,10 +464,10 @@ pydantic>=2.0
 fire
 ```
 
-**No longer needed** (removed):
-- `fastapi`, `uvicorn` (no web service)
-- `sqlalchemy`, `pymysql` (switched to JSONL)
-- `pdf2zh` (using mock during training)
+**Optional dependencies** (`requirements-extra.txt`, install as needed; the core training pipeline does not require them):
+- `pdf2zh` — real PDF translation (training/benchmarks use the mock; only needed for translation eval/demos)
+- `fastapi` / `uvicorn` / `sqlalchemy` / `pymysql` — only for running the archived Web version
+- `tensorboard` (recommended, zero-config and offline) / `wandb` — training-curve backends for `--report_to`
 
 ---
 
@@ -493,7 +526,7 @@ MIT License
 | **Architecture** | FastAPI + Vue3 + MySQL | Pure Python + JSONL |
 | **Agent Modes** | 3 types (ReAct/MCP/Skill) | ReAct only (streamlined) |
 | **Core Features** | Real-time translation, SSE, Web UI | SFT/DPO/GRPO training |
-| **Dependencies** | Heavy (14+ packages) | Lightweight (8 core packages) |
+| **Dependencies** | Heavy (14+ packages) | Lightweight (11 core packages + optional extras) |
 
 ### Q: Why keep only ReAct and archive MCP/Skill?
 
@@ -527,25 +560,84 @@ They complement each other: SFT is the starting point of every route; OPD and GR
 
 ---
 
+## 🧰 Toolset Evolution Design (design doc, not implemented)
+
+> The end goal of this project is a **locally deployed lightweight LLM that independently handles arXiv paper retrieval, download, and interpretation**. This section is design only; nothing is implemented yet.
+
+### Current state and gaps
+
+| Tool | Capability | Boundary |
+|------|------------|----------|
+| `get_recently_submitted_cs_papers` | Category + time-window search | Only understands `cat:cs.*` + submission date — **no keyword / title / author search**, no pagination; abstracts truncated to 200 chars |
+| `download_arxiv_pdf` | Download PDF | — |
+| `translate_arxiv_pdf` | Full-paper translation via pdf2zh | Produces a translated PDF file — **paper content never enters the model's context**; depends on the optional extra |
+| `get_paper_cache_status` | Cache query | — |
+
+Two conclusions:
+
+1. **The "retrieval" half-loop is incomplete**: browse-type tasks ("what's new in cs.AI lately") work, but lookup-type tasks ("find the paper xxx", "who proposed xxx") are impossible in the current action space.
+2. **The "interpretation" half-loop is entirely missing**: the only paper content the model ever sees is a 200-char abstract snippet from search results. Without a reading tool, summarization / QA / figure analysis are out of reach — translation produces a file, which is not interpretation.
+
+Also, **a bigger action space is not automatically better**: the policy is a ~1.5B model, and every added tool enlarges the tool-selection and JSON-format learning burden. The admission bar for a new tool is "it enables a new task category", not "it might be useful" — of the 5 candidates below, T1/T2 are the critical path, T3 is the main increment, T4/T5 are optional.
+
+### Proposed new tools (in dependency order)
+
+| Priority | Tool | Design | Why it stays RLVR-friendly |
+|--------|------|----------|----------------------|
+| **T1** | `search_arxiv_papers(query, max_results, days=None)` | Keyword search mapped to the arXiv API's `all:` / `ti:` / `au:` fields; coexists with the existing tool (time-window browsing vs precise lookup are different task types) | Expected tools/args still derive from `task_spec.steps`; `MockArxivEnv` replays offline keyed by a hash of the query string, and unseen queries degrade **deterministically** (return a fixed subset, explicitly flagged in the observation) — reproducible, and it prevents the model from mistaking an empty result for a successful search |
+| **T2** | `get_paper_content(ref, section=None)` | PDF → plain text (PyMuPDF); returns title/abstract by default, per section (method / result / conclusion) on demand | Deterministic text extraction, no LLM involved; extraction results pre-stored in the snapshot. **It is the prerequisite of every interpretation task** |
+| **T3** | `summarize_paper(ref, style, max_words)` | Summarize a paper: an **env-side** local summarizer model (input from T2's text) returns the summary | What is trainable is "when to call it, on which ref, whether style/length args are right" — all rule-checkable; summary quality itself is **not rewarded** (see below) |
+| **T4** (optional) | `extract_paper_figures(ref)` | Figure/table preparation: extract figure images + captions, return file paths | Deterministic; verify "correct ref + files exist + count ≥ 1" |
+| **T5** (optional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Figure analysis: an env-side local VLM (e.g. Qwen2.5-VL) reads the figure and answers | Rules only judge "was it called correctly, are the args right"; VLM answer quality does not enter the reward, keeping third-party model noise out of the policy gradient |
+
+Companion task templates (following the eight `tasks_expanded.py` families, all declaratively derived from `task_spec.steps`):
+
+- `search_kw_*`: keyword-search tasks (T1)
+- `read_*` / `qa_*`: search → download → read content (T1/T2)
+- `summary_*`: search → download → read → summarize (T3), new `long_chain` material
+- `figure_*` (optional): search → download → extract figures → figure analysis (T4/T5), enabled only in multimodal environments
+
+### Downstream design for training & evaluation
+
+1. **Snapshot extension**: `build_snapshot.py` does everything in one pass — besides search results, **pre-extract full text and figure files** for snapshot papers; every new tool replays offline, preserving the "build_snapshot is the only network step" contract.
+2. **Zero reward changes**: the five-component scheme is reused as is; `expected_tools` / `expected_tool_args` derive from `steps`, so `reward.py` and the curriculum stay untouched.
+3. **Reward-hacking prevention**: interpretation tools open a new surface for "call tools randomly to farm process points" — reuse the `run_baselines.py` per-category gates + pin single cases in `eval/eval_cases.jsonl` (e.g. calling `summarize_paper` with a ref that points to a non-existent paper must lose points).
+4. **The reward problem of summary quality (deliberately not done)**: turning "is the summary good" into a reward needs LLM-as-judge or rubric scoring, which introduces non-deterministic rewards and a new hacking surface. The design first reduces summarization to a **tool-invocation decision problem** (when to call, on whom); quality evaluation is a separate long-term project.
+5. **The multimodal boundary (deliberately isolated)**: T5's VLM lives only on the env side; the policy remains a text-only small model — the action space only contains "call it or not, how to ask", outsourcing figure comprehension to the environment. Only when the policy itself becomes multimodal would putting images into the observation be considered.
+6. **Hardware bar**: T3/T5 each add an env-side model (~2GB for the summarizer, ~6GB for the VLM, less when quantized); they do not affect training VRAM (no gradients). If the hardware falls short, do only T1/T2/T4 — the true critical path of the interpretation loop is T2.
+
+### Rollout order
+
+```
+T1 keyword search ──→ T2 read content ──→ T3 summarize   (interpretation loop)
+                          └────→ T4 extract → T5 analyze (optional, multimodal env)
+```
+
+Each time a tool lands: extend the task templates → re-run `run_baselines.py` to re-derive per-category discrimination thresholds → regenerate SFT/DPO data → add matching cases to `eval/eval_cases.jsonl`.
+
+---
+
 ## 📝 TODO (Development Roadmap)
 
 Ordered by priority. Contributions welcome (see 🤝 Contributing).
 
-### P0 — Near term (close core gaps)
+### P0 — Toolset expansion (interpretation loop)
 
-- [x] **Multi-turn Agentic Rollout**: implemented real "act → observe → act" sampling with an independent `MockArxivEnv` per generation; environment tokens use `env_mask=0`, while the complete assistant trajectory participates in GRPO optimization and reward scoring.
-- [x] **Training observability**: SFT / DPO / GRPO share one `--report_to` flag (none / auto / tensorboard / wandb); a missing backend fails loudly instead of silently recording nothing. Beyond TRL's built-in reward / kl / grad_norm / `frac_reward_zero_std`, the five reward components (format/tool/argument/process/outcome) and the current curriculum weights are logged separately — the curriculum reweights components over the first 30 steps, so total reward alone cannot tell "the policy improved" from "the weights moved" — plus `rollout/` turns / finished / parse_error_rate / tool_error_rate for diagnosing multi-turn sampling itself.
+Design finalized (see "🧰 Toolset Evolution Design"), none implemented yet:
 
-### P1 — Mid term (data & evaluation)
+- [ ] **T1 Keyword search** `search_arxiv_papers`: adds the "find a specific paper" lookup-type retrieval
+- [ ] **T2 Paper reading** `get_paper_content`: PDF → text, the prerequisite of all interpretation tasks (critical path)
+- [ ] **T3 Paper summarization** `summarize_paper`: env-side summarization, turning "interpretation" into a trainable tool-invocation decision
+- [ ] **T4/T5 Figure extraction & analysis** (optional, multimodal env): after T1–T3; the VLM lives only on the env side
 
-- [ ] **Expand the task set**: `benchmark/tasks.py` has only 8 tasks; grow it to 50+ and auto-derive `expected_tools` / `expected_tool_args`.
-- [ ] **eval/ badcase replay**: the `eval/` directory listed in the tree does not exist yet; implement `eval_cases.jsonl` + `badcase_replay.py` to close the bad-case replay loop.
-- [ ] **Reward-hacking triage**: build on `RewardVarianceGuard` / `CanaryCallback` with a reward-hacking case library and curriculum weight tuning.
+### P1 — Reward curriculum tuning
+
+- [ ] **Multi-granular curriculum calibration**: the first-30-steps weight schedule is a prior; calibrating it needs data from real training runs. The reward-hacking case gate is already in place (see the badcase replay part of "Task Set & Evaluation").
 
 ### P2 — Performance & scale
 
-- [ ] **vLLM-accelerated sampling**: replace HF generate to raise rollout throughput (priority rises once multi-turn rollout lands).
-- [ ] **Multi-GPU support**: accelerate / FSDP config (accelerate is already a dependency but currently unused).
+- [ ] **vLLM-accelerated sampling**: replace HF generate to raise multi-turn rollout sampling throughput.
+- [ ] **Multi-GPU support**: accelerate / FSDP config (accelerate is already a dependency, but currently zero-config, single-GPU single-process).
 
 ### P3 — Long term (algorithmic evolution)
 
@@ -564,7 +656,7 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 >
 > Results: stable training for ~1000 steps; **97.3%** on AIME2025 (vs 84.2% for GRPO), 29.8% on SWE-Bench Verified; already used to train GLM-5.2 (750B).
 >
-> Adoption path: close the P0 multi-turn rollout gap → introduce skip-observation masking and DIS bilateral clipping → migrate to verl `fully_async_policy` (`gen_batch_size=1` / `staleness_threshold` / token-level TIS clipping, aligned with SAO) or AReaL v1.0 for fully async training + value model.
+> Adoption path: multi-turn rollout has landed → introduce skip-observation masking and DIS bilateral clipping → migrate to verl `fully_async_policy` (`gen_batch_size=1` / `staleness_threshold` / token-level TIS clipping, aligned with SAO) or AReaL v1.0 for fully async training + value model.
 >
 > 📄 **Paper**: [Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning (arXiv:2607.07508)](https://arxiv.org/abs/2607.07508) (Tsinghua KEG; official code not yet open-sourced)
 
