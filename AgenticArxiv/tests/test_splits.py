@@ -5,11 +5,14 @@
 """
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
 from benchmark.splits import (
+    DEFAULT_SPLIT_PATH,
     difficulty_band,
+    load_split,
     make_split,
     rl_train_ids,
     summarize,
@@ -204,6 +207,66 @@ class PinnedV1SplitTest(unittest.TestCase):
 
     def test_recorded_rates_refer_to_real_tasks(self):
         self.assertEqual(set(self.pinned["rates"]) - self.ids, set())
+
+
+class LoadSplitTest(unittest.TestCase):
+    """按名字取切分：benchmark 与训练脚本共用一份读取逻辑。
+
+    两处各写一遍 json.load 就是两处会各自漂的地方，而「训练用了哪一份切分」
+    这件事一旦对不上，训练前后的数字就不可比 —— 那正是切分存在的理由。
+    """
+
+    def test_bare_name_uses_the_default_pinned_file(self):
+        self.assertEqual(load_split("iid_test"),
+                         json.loads(DEFAULT_SPLIT_PATH.read_text())["split"]["iid_test"])
+
+    def test_explicit_path_overrides_the_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "v9.json"
+            path.write_text(json.dumps({"split": {"train": ["only_one"]}}))
+            self.assertEqual(load_split(f"{path}:train"), ["only_one"])
+
+    def test_rl_train_is_computed_not_stored(self):
+        """rl_train 不在文件里，是 train 与 rates 算出来的。"""
+        payload = json.loads(DEFAULT_SPLIT_PATH.read_text())
+        self.assertNotIn("rl_train", payload["split"])
+        self.assertEqual(load_split("rl_train"),
+                         rl_train_ids(payload["split"], payload["rates"]))
+
+    def test_rl_train_is_a_subset_of_train_in_the_middle_band(self):
+        payload = json.loads(DEFAULT_SPLIT_PATH.read_text())
+        rates = payload["rates"]
+        ids = load_split("rl_train")
+        self.assertTrue(set(ids) <= set(payload["split"]["train"]))
+        for tid in ids:
+            self.assertEqual(difficulty_band(rates[tid]), "middle", tid)
+
+    def test_unknown_name_lists_what_is_available(self):
+        with self.assertRaises(ValueError) as ctx:
+            load_split("nope")
+        message = str(ctx.exception)
+        self.assertIn("rl_train", message)
+        self.assertIn("iid_test", message)
+
+    def test_missing_file_is_reported_as_such(self):
+        with self.assertRaises(FileNotFoundError):
+            load_split("/nonexistent/path.json:train")
+
+    def test_rl_train_without_rates_is_an_error_not_an_empty_set(self):
+        """没有 rates 就没有中间带。静默返回空集会让训练集悄悄变空。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "norates.json"
+            path.write_text(json.dumps({"split": {"train": ["a", "b"]}}))
+            with self.assertRaises(ValueError):
+                load_split(f"{path}:rl_train")
+
+    def test_rl_train_that_comes_out_empty_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "allceiling.json"
+            path.write_text(json.dumps(
+                {"split": {"train": ["a", "b"]}, "rates": {"a": 1.0, "b": 0.0}}))
+            with self.assertRaises(ValueError):
+                load_split(f"{path}:rl_train")
 
 
 if __name__ == "__main__":

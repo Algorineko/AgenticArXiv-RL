@@ -516,6 +516,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 ### P1 — 中期（数据与评测）
 
 - [x] **任务集扩充**：基准集扩到 59 条（`benchmark/tasks_expanded.py`，`--task-set expanded`），涵盖 search / ref_form / composite / state / optional / constraint / long_chain / infeasible 八类；`benchmark/tasks.py` 保留为 8 条冒烟子集。两边统一走 `benchmark/task_spec.py` 的 `TaskSpec`：`expected_tools` 与 `expected_tool_args` 由同一份 `steps` 派生，不再手写两份平行列表漂移。区分度用 `benchmark/run_baselines.py` 的确定性退化策略量化并逐类目卡门槛（`tests/test_reward_discrimination.py`）——修掉参数档的四处漏分后，「无视任务永远搜 cs.AI」在检索类任务上从 0.833 降到 0.446，「本该什么都不做却调了工具」从 +0.165 变成 −0.235。
+- [x] **评测口径与切分**：报告从「成功率 + token 均值 + 迭代均值」扩到 `pass^k` 可靠性（tau-bench 口径，逐任务估计再平均；样本不足的任务记为跳过而非 0）、`false_finish`（以 FINISH 结束但期望工具没做全——退化策略实测 `always_finish` 91.5%、`reference` 0%）、`ref_score`（比解析出的 `paper_id` 而非 `ref` 的写法，同时消掉字符串比对的假阳性与假阴性）、代价按成功次数归一（`skill_cli` 从贵 43% 变成贵 99%）与失败形态拆分。任务集按**模板**切成 train/iid_test/ood_test（`benchmark/splits.py`，固化于 `data/splits/v1.json`），`--split` 在 `run_benchmark.py` 与 `train_grpo.py` 两侧接通；`rl_train` 只取成功率中间带，两端的任务组内方差为零、不产生梯度。
 - [ ] **eval/ badcase replay**：目录树中的 `eval/`（`eval_cases.jsonl`、`badcase_replay.py`）实际尚不存在，需实现坏例回放闭环。
 - [ ] **Reward hacking 排查**：在现有 `RewardVarianceGuard` / `CanaryCallback` 基础上补 reward-hacking 案例库与多粒度权重课程调优。
 

@@ -30,9 +30,33 @@ python -m benchmark.run_benchmark --output /path/to/output
 
 # 指定 session 前缀（用于区分不同测试轮次，默认 bench_r<timestamp>）
 python -m benchmark.run_benchmark --prefix bench_r1
+
+# 只跑某一份切分（见下）
+python -m benchmark.run_benchmark --task-set expanded --offline --split iid_test
 ```
 
 默认 8 个任务 x 3 种 Agent x 3 次重复 = 72 次运行。
+
+### 训练/留出集切分
+
+`--split` 从 `data/splits/v1.json` 取一份任务：
+
+| 名字 | 条数 | 是什么 |
+|---|---:|---|
+| `train` | 42 | 训练集 |
+| `iid_test` | 13 | 同模板、未见过的参数实例——「换个参数还会不会」 |
+| `ood_test` | 4 | 完全未见过的模板/链长——「换个形态还会不会」 |
+| `rl_train` | 13 | `train` 中成功率处于中间带的部分，**算出来的、不在文件里** |
+
+切分在**模板**层面进行：`search_AI_1d_3` 与 `search_AI_30d_25` 是同一模板换参数，
+按任务随机切会让它们分居两侧，测出来的「泛化」其实是记忆。
+
+两个留出集都要看：只有 iid 提升可能是记住了模板，ood 也提升才更像基础能力变强。
+
+`rl_train` 供 `rl/train_grpo.py --split rl_train` 使用——GRPO 的优势是组内相对的，
+成功率贴近 0 或 1 的任务每条采样奖励一致，方差为零、不产生梯度，放进训练集是空转。
+
+也可显式指定文件：`--split data/splits/v2.json:ood_test`。阶段间对比必须引用同一份文件。
 
 ## 退化策略基线
 
@@ -136,6 +160,8 @@ draw/images/
 | termination_type | 终止类型: FINISH / FORCE_STOP / ERROR / INCOMPLETE |
 | tool_call_accurate | 实际工具调用是否与预期工具序列完全相等（顺序严格、无多余/重复调用），只比工具名 |
 | arg_score | 参数级匹配度 `[0,1]`：逐步比对期望键的**取值**；未声明 `expected_tool_args` 时为 1.0 |
+| ref_score | 指代解析准确率 `[0,1]`：比对**解析出的 `paper_id`** 而非 `ref` 的写法；未声明 `expected_paper` 时为 1.0 |
+| false_finish | 以 `FINISH` 结束、但期望工具没做全。只抓「做少了」，绕路多调不算 |
 | parse_failures | LLM 响应解析失败次数 |
 | tool_exec_failures | 工具执行失败次数 |
 
@@ -150,6 +176,7 @@ benchmark/
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总
+  splits.py           # 模板层 train/iid/ood 切分与 load_split
   report.py           # BenchmarkReport：生成 Markdown/CSV/JSON 报告
   run_benchmark.py    # CLI 入口
   run_baselines.py    # 离线退化策略诊断 CLI
