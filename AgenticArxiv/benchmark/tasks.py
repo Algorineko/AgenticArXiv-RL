@@ -1,7 +1,7 @@
 # AgenticArxiv/benchmark/tasks.py
 """标准化测试任务集，用于对比三种 Agent 模式的性能和准确性。
 
-这里是 8 条冒烟任务；完整的 58 条基准集在 `benchmark/tasks_expanded.py`
+这里是 8 条冒烟任务；完整的 59 条基准集在 `benchmark/tasks_expanded.py`
 （`--task-set expanded`）。两边共用 `task_spec.TaskSpec`：`expected_tools`
 与 `expected_tool_args` 由同一份 `steps` 派生，不再手写两份平行列表。
 
