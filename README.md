@@ -5,7 +5,7 @@
 # AgenticArXiv-RL — Agentic RL 训练环境
 
 > **基于 ReAct Agent + arXiv 工具的 Agentic RL 训练环境**  
-> 支持 SFT/DPO/GRPO/PPO 渐进式训练路径，用于研究 LLM Agent 强化学习
+> 支持 SFT/DPO/GRPO/PPO 渐进式训练路径，另提供可选的 OPD（on-policy 蒸馏）路线，用于研究 LLM Agent 强化学习
 
 ---
 
@@ -118,7 +118,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 ---
 
-## 🛠️ 训练路径（SFT → DPO → GRPO）
+## 🛠️ 训练路径（SFT → DPO → GRPO / OPD）
 
 ### 阶段1：SFT（Supervised Fine-Tuning）
 
@@ -235,6 +235,30 @@ tensorboard --logdir outputs/grpo/logs
 - **混合精度自适应**：CUDA 优先 bf16、回退 fp16，CPU / MPS 关闭（`rl/precision.py`）
 - **日志后端校验**：`--report_to` 指定的后端没装时在加载模型前就失败，避免训练跑完才发现没有任何曲线（`rl/observability.py`）
 
+### 阶段 3'：OPD（On-Policy Distillation，可选，与 GRPO 互替）
+
+**目标**：用强教师模型的逐 token 信号蒸馏学生的 ReAct 动作能力，训练全程不依赖奖励。
+
+**步骤**：
+```bash
+python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwen2.5-7B-Instruct
+```
+
+**产出**：`./outputs/opd/final` 模型
+
+**定位**：OPD 是一个**完整的训练范式**而非单一 trick——学生在任务 prompt 上 on-policy 采样，教师对每个 token 给出 logprob，损失取 reverse-KL `D_KL(π_student ‖ π_teacher)`（mode-seeking）。它与 GRPO 是「教师路线 vs 奖励路线」的关系：
+
+| 维度 | GRPO | OPD |
+|---|---|---|
+| 学习信号 | 五分量可验证奖励（稀疏、轨迹级） | 教师逐 token logprob（稠密） |
+| 额外模型 | 无 | 教师模型（需本地权重取 logprob，外部 API 拿不到逐 token 分布） |
+| 性能上限 | 可探索超越教师 | 收敛到教师行为 |
+| 适用场景 | 有可验证奖励、无教师 | 有强教师、想省 RL 探索成本 |
+
+OPD 也能当 trick 用：RL 前的 warm start、RL 中的 teacher-KL 正则、verl 的 PG-OPD（把 reverse-KL 当奖励做策略梯度）。
+
+**当前边界（KISS 单轮版）**：TRL GKDTrainer 只有 prompt/completion 的单段切分，本实现每条样本蒸馏**一个 ReAct 动作**，不含多轮环境反馈（多轮 OPD 需自写 loss，暂不支持）。学生与教师同驻显存（1.5B 学生 + 7B 教师 bf16 约 24GB，吃紧可换 3B / 1.5B 教师）。已在 trl 1.5.1（`trl.experimental.gkd`）上验证；`beta=1.0` 即 reverse-KL 方向（`tests/test_opd.py` 有数值单测锁死）。Canary 与阶段验证沿用 GRPO 同一套——OPD 训练本身无奖励，但产出模型仍要在环境里过关。
+
 ### 阶段4：PPO（Proximal Policy Optimization）
 
 **目标**：标准 Actor-Critic 架构在线微调策略与价值网络。
@@ -278,6 +302,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_dpo.py              # ⭐ DPO 训练
 │  │  ├─ train_grpo.py             # ⭐ GRPO 训练（含训练守卫）
 │  │  ├─ train_ppo.py              # ⭐ PPO 训练（Actor-Critic）
+│  │  ├─ train_opd.py              # ⭐ OPD 训练（on-policy 蒸馏，与 GRPO 互替）
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv（离线快照环境）
 │  │  ├─ reward.py                 # RewardCalculator（五分量可验证奖励 + 课程）
 │  │  ├─ grpo_reward.py            # GRPO 奖励适配（单步 completion → 合成轨迹）
@@ -448,6 +473,9 @@ fire
 - **InstructGPT** (OpenAI, 2022)：RLHF 三阶段（SFT → RM → PPO）
 - **DPO** (Stanford, 2023)：直接偏好优化
 - **RLVR**：Reinforcement Learning with Verifiable Reward
+- **On-Policy Distillation** ([Thinking Machines Lab, 2025](https://thinkingmachines.ai/blog/on-policy-distillation/))：OPD 的方法来源（学生 on-policy 采样 + 教师逐 token reverse-KL）
+- **GKD / On-Policy Distillation of Language Models** (Agarwal et al., ICLR 2024, [arXiv:2306.13649](https://arxiv.org/abs/2306.13649))：广义 JSD 蒸馏，TRL GKDTrainer 的论文依据
+- **Rethinking On-Policy Distillation of Large Language Models** ([arXiv:2604.13016](https://arxiv.org/abs/2604.13016))：对 OPD 配方的独立复现与分析
 
 ### 原 AgenticArXiv（Web 应用版）
 本项目基于 [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) 改造，原版包含：
@@ -508,6 +536,17 @@ GRPO 更适合轻量级学习项目：
 - ✅ 实现简单，调试容易
 
 PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不涉及。
+
+### Q: OPD、SFT、DPO、GRPO 怎么选？
+
+| 场景 | 推荐 |
+|------|------|
+| 有 expert 演示，先学动作格式 | SFT |
+| 有偏好对（正/负轨迹），无在线奖励 | DPO |
+| 有可验证奖励，想在线超越基线 | GRPO |
+| 有强教师模型，想省 RL 探索成本 | OPD |
+
+四者是互补关系：SFT 是所有路径的起点；OPD 与 GRPO 都在 SFT 之上，前者走教师蒸馏（上限=教师）、后者走奖励优化（可探索超越），两者产出可互为对方的初始化或对照基线。
 
 ---
 ## 📝 TODO（开发路线图）
