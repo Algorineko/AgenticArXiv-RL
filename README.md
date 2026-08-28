@@ -100,6 +100,8 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 3. `translate_arxiv_pdf(ref, session_id)` — 翻译 PDF
 4. `get_paper_cache_status(ref, session_id)` — 查询缓存状态
 
+> 工具集的下一步扩展（关键词检索 / 论文阅读 / 总结 / 图表分析）已有设计稿、暂不实现，见下文「🧰 工具集演进设计」。
+
 ### Verifiable Reward 组件
 
 **多粒度五分量可验证奖励**（`rl/reward.py`，借鉴 LLM-TIR 的分层奖励），每个分量归一化到 `[-1, 1]`，加权求和后除以权重和：
@@ -211,12 +213,12 @@ python -m AgenticArxiv.rl.train_grpo
 python -m AgenticArxiv.rl.build_snapshot
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 
-# 记录训练曲线（三个阶段同一套参数）
+# 记录训练曲线（各阶段同一套参数）
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
 ```
 
-**训练曲线**（`rl/observability.py`）：`--report_to` 取 `none` / `auto` / `tensorboard` / `wandb`（可逗号分隔），三个训练阶段共用。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，额外记录：
+**训练曲线**（`rl/observability.py`）：`--report_to` 取 `none` / `auto` / `tensorboard` / `wandb`（可逗号分隔），五个训练阶段（SFT / DPO / GRPO / OPD / PPO）共用。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，额外记录：
 
 | 指标组 | 内容 | 为什么单独记 |
 |---|---|---|
@@ -291,12 +293,14 @@ AgenticArXiv-RL/
 │  │  └─ cache_status_tool.py      # 缓存查询
 │  ├─ benchmark/                     # ⭐ Verifiable Reward 来源
 │  │  ├─ metrics.py               # TaskMetrics、工具序列严格匹配、参数匹配
-│  │  ├─ tasks.py                 # BENCHMARK_TASKS（7 个任务种子）
-│  │  ├─ badcases.py               # 坏例用例的判定与回放
-│  │  ├─ splits.py                 # 模板层 train/iid/ood 切分
-│  │  ├─ runner.py                 # 基准执行器
-│  │  ├─ run_benchmark.py          # 命令行基准入口
-│  │  └─ report.py                 # 指标统计报告
+│  │  ├─ tasks.py                 # BENCHMARK_TASKS（8 条冒烟任务）
+│  │  ├─ tasks_expanded.py        # 扩展任务集（59 条、八类模板）
+│  │  ├─ task_spec.py             # TaskSpec：expected_tools / expected_tool_args 由 steps 统一派生
+│  │  ├─ badcases.py              # 坏例用例的判定与回放
+│  │  ├─ splits.py                # 模板层 train/iid/ood 切分
+│  │  ├─ baselines.py · run_baselines.py  # 确定性退化策略基线（逐类目区分度闸门）
+│  │  ├─ runner.py · run_benchmark.py     # 基准执行器与命令行入口
+│  │  └─ report.py                # 指标统计报告
 │  ├─ rl/                            # ⭐ RL 核心
 │  │  ├─ train_sft.py              # ⭐ SFT 训练
 │  │  ├─ train_dpo.py              # ⭐ DPO 训练
@@ -304,6 +308,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_ppo.py              # ⭐ PPO 训练（Actor-Critic）
 │  │  ├─ train_opd.py              # ⭐ OPD 训练（on-policy 蒸馏，与 GRPO 互替）
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv（离线快照环境）
+│  │  ├─ multiturn_env.py          # TRL 多轮环境适配器（environment_factory，每代独立实例）
 │  │  ├─ reward.py                 # RewardCalculator（五分量可验证奖励 + 课程）
 │  │  ├─ grpo_reward.py            # GRPO 奖励适配（单步 completion → 合成轨迹）
 │  │  ├─ rollout.py                # 离线 rollout 数据收集
@@ -317,7 +322,7 @@ AgenticArXiv-RL/
 │  ├─ services/                      # 副作用服务（event_bus / log / runtime）
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # 归档的 Web / MCP / Skill 兼容层
 │  ├─ utils/                         # llm_client、logger、PDF 工具
-│  ├─ tests/                         # 16 个单元测试（unittest）
+│  ├─ tests/                         # 30 个单元测试（unittest）
 │  └─ requirements.txt
 ├─ scripts/                          # 数据生成
 │  ├─ generate_sft_data.py          # 用 LLM API 生成 expert 轨迹
@@ -399,19 +404,40 @@ print(f'Reward: {reward:.2f}')  # 期望: ~1.5
 
 ---
 
-## 🧪 测试任务集
+## 🧪 任务集与评测
 
-来自 `benchmark/tasks.py`，包含 7 个任务：
+### 冒烟集（`benchmark/tasks.py`，8 条）
 
 | ID | 任务 | 类型 | 预期工具 |
 |----|------|------|---------|
 | `search_01` | 检索最近7天AI论文 | 搜索 | `get_recently_submitted_cs_papers` |
 | `search_02` | 获取最近3天ML论文 | 搜索 | `get_recently_submitted_cs_papers` |
 | `search_03` | 搜索最近7天NLP论文 | 搜索 | `get_recently_submitted_cs_papers` |
+| `search_04` | 检索最近7天CS全部方向论文（最多10篇） | 搜索 | `get_recently_submitted_cs_papers` |
 | `download_01` | 下载第1篇论文PDF | 下载 | `download_arxiv_pdf` |
 | `translate_01` | 翻译第1篇论文 | 翻译 | `translate_arxiv_pdf` |
 | `cache_01` | 查看第1篇论文缓存状态 | 缓存 | `get_paper_cache_status` |
 | `composite_01` | 搜索+下载 | 复合 | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
+
+### 扩展集（`benchmark/tasks_expanded.py`，59 条）
+
+`run_benchmark.py --task-set expanded` 启用，涵盖 search / ref_form / composite / state / optional / constraint / long_chain / infeasible 八类模板。两套任务统一走 `benchmark/task_spec.py` 的 `TaskSpec`：`expected_tools` 与 `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表的漂移。
+
+### 评测口径与切分
+
+报告从「成功率 + token 均值 + 迭代均值」扩到：
+
+- **`pass^k` 可靠性**：tau-bench 口径，逐任务估计再平均；样本不足的任务记为跳过而非 0
+- **`false_finish`**：以 FINISH 结束但期望工具没做全——退化策略实测 `always_finish` 91.5%、`reference` 0%
+- **`ref_score`**：比解析出的 `paper_id` 而非 `ref` 的写法，同时消掉字符串比对的假阳性与假阴性
+- **代价按成功次数归一**（`skill_cli` 从贵 43% 修正为贵 99%）与失败形态拆分
+
+任务集按**模板**切成 train/iid_test/ood_test（`benchmark/splits.py`，固化于 `data/splits/v1.json`），`--split` 在 `run_benchmark.py` 与 `train_grpo.py` 两侧接通；`rl_train` 只取成功率中间带——两端的任务组内方差为零、不产生梯度。
+
+### 区分度闸门与坏例回放
+
+- **逐类目区分度闸门**（`benchmark/run_baselines.py`）：用确定性退化策略量化奖励区分度，逐类目卡门槛（`tests/test_reward_discrimination.py`）——修掉参数档的四处漏分后，「无视任务永远搜 cs.AI」在检索类任务上从 0.833 降到 0.446，「本该什么都不做却调了工具」从 +0.165 变成 −0.235。
+- **坏例回放**（`eval/badcase_replay.py` + `eval/eval_cases.jsonl`）：把单条失败轨迹连同当时的判定冻成永久回归用例；回放只重跑打分器，不需要 LLM / 网络 / 工具，`pytest` 本身就是闸门（`tests/test_badcases.py::ShippedCasesTest`）。用例分 `open`（毛病还在）与 `fixed`（已修，再复现即回归、退出码 1）；`hack/*` 记录退化策略的骗分轨迹并配阈值断言（「这种行为不许拿到 X 分」，#40 与 #47 修掉的两个洞都有用例守着），兼作 reward hacking 案例库——与 `run_baselines.py` 的闸门互补：**闸门看均值、用例钉单条**。`--save-traces` + `capture` 按 `false_finish` / `ref_score` / 工具序列从真实跑的轨迹里挑坏例，而非只挑崩掉的。
 
 ---
 
@@ -439,11 +465,12 @@ tensorboard --logdir ./outputs/grpo/logs
 
 ## 🛡️ 依赖说明
 
-**核心依赖**（`requirements.txt`）：
+**核心依赖**（`requirements.txt`，覆盖 rollout / benchmark / 五个训练阶段）：
 ```txt
 torch>=2.0.0
 transformers>=4.45.0
-trl>=0.20.0               # TRL (SFT/DPO/GRPO)，已在 0.29.1 上验证
+trl>=0.28.0               # 下限由多轮 GRPO 决定：0.28.0 起非 vLLM 路径才调用 rollout_func，
+                          # 更早版本多轮 rollout 会静默退化；已在 0.29.1 验证（OPD 在 1.5.1 验证）
 datasets>=2.14.0
 accelerate>=0.25.0
 arxiv
@@ -454,10 +481,10 @@ pydantic>=2.0
 fire
 ```
 
-**不再需要**（已去除）：
-- `fastapi`、`uvicorn`（无 Web 服务）
-- `sqlalchemy`、`pymysql`（改用 JSONL）
-- `pdf2zh`（训练时用 mock）
+**可选依赖**（`requirements-extra.txt`，按需安装，核心训练链路不依赖）：
+- `pdf2zh` — 真实 PDF 翻译（训练/基准走 mock，跑翻译 eval/demo 时才需要）
+- `fastapi` / `uvicorn` / `sqlalchemy` / `pymysql` — 仅运行归档的 Web 版时需要
+- `tensorboard`（推荐，零配置离线可用）/ `wandb` — `--report_to` 的训练曲线后端
 
 ---
 
@@ -516,7 +543,7 @@ MIT License
 | **架构** | FastAPI + Vue3 + MySQL | 纯 Python + JSONL |
 | **Agent 模式** | 3 种（ReAct/MCP/Skill） | 仅 ReAct（精简） |
 | **核心功能** | 实时翻译、SSE、Web UI | SFT/DPO/GRPO 训练 |
-| **依赖** | 重（14+ 包） | 轻（8 核心包） |
+| **依赖** | 重（14+ 包） | 轻（11 核心包 + 可选 extra） |
 
 ### Q: 为什么只保留 ReAct，归档 MCP/Skill？
 
@@ -549,25 +576,81 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 四者是互补关系：SFT 是所有路径的起点；OPD 与 GRPO 都在 SFT 之上，前者走教师蒸馏（上限=教师）、后者走奖励优化（可探索超越），两者产出可互为对方的初始化或对照基线。
 
 ---
+## 🧰 工具集演进设计（设计稿，未实现）
+
+> 本项目的最终目标是**本地部署的轻量 LLM 独立完成 arXiv 论文的检索、下载与分析解读**。本节只做设计，不改实现。
+
+### 现状盘点与缺口
+
+| 工具 | 能力 | 边界 |
+|------|------|------|
+| `get_recently_submitted_cs_papers` | 子领域 + 时间窗检索 | 只认 `cat:cs.*` + 提交日期，**无关键词/篇名/作者检索**，无翻页；摘要截断 200 字符 |
+| `download_arxiv_pdf` | 下载 PDF | — |
+| `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，**论文内容从未进入模型上下文**；依赖可选 extra |
+| `get_paper_cache_status` | 查缓存 | — |
+
+两个结论：
+
+1. **「检索」半环不完整**：浏览型任务（最近几天 cs.AI 有什么）没问题，但查找型任务（"找一下xxx这篇论文"、"谁提出了xxx"）在当前动作空间里做不到。
+2. **「分析解读」半环完全缺失**：模型唯一能"看到"的论文信息是搜索结果里 200 字符的摘要截断。没有阅读工具，总结、问答、图表分析都无从谈起——翻译只是产出一个文件，不等于解读。
+
+同时，**动作空间不是越大越好**：策略是 1.5B 量级小模型，每加一个工具都放大工具选择与 JSON 格式的学习负担。新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」——下表 5 个候选里，T1/T2 是关键路径，T3 是主要增量，T4/T5 可选。
+
+### 建议新增的工具（按依赖顺序）
+
+| 优先级 | 工具 | 设计要点 | 为什么仍是 RLVR 友好 |
+|--------|------|----------|----------------------|
+| **T1** | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数照常由 `task_spec.steps` 派生；`MockArxivEnv` 按查询串哈希离线回放，未收录的 query 走**确定性降级**（返回固定子集并在 observation 里显式标注），保证可复现、也防止模型把空结果当检索成功 |
+| **T2** | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
+| **T3** | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**调本地摘要模型（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
+| **T4**（可选） | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 文件存在 + 数量 ≥ 1」 |
+| **T5**（可选，多模态） | `analyze_figure(ref, figure_no, question=None)` | 图表分析：env 侧调本地 VLM（如 Qwen2.5-VL）读图回答 | 规则只判「调没调对、参数对不对」；VLM 回答质量不进奖励，避免把第三方模型的噪声写进策略梯度 |
+
+配套任务模板（沿用 `tasks_expanded.py` 的八类分类，全部由 `task_spec.steps` 声明式派生）：
+
+- `search_kw_*`：关键词检索类（T1）
+- `read_*` / `qa_*`：检索 → 下载 → 读内容（T1/T2）
+- `summary_*`：检索 → 下载 → 读内容 → 总结（T3），新的 `long_chain` 素材
+- `figure_*`（可选）：检索 → 下载 → 抽图 → 图表分析（T4/T5），仅多模态环境启用
+
+### 训练与评测侧的连带设计
+
+1. **快照扩展**：`build_snapshot.py` 一次跑齐——除搜索结果外，对快照论文**预抽取全文文本与图表文件**；新工具全部离线回放，维持「build_snapshot 是唯一联网步骤」的约定。
+2. **奖励零改动**：五分量方案原样复用；`expected_tools` / `expected_tool_args` 从 `steps` 派生，`reward.py` 与课程学习均不需动。
+3. **防 reward hacking**：解读类工具天然多出「乱调工具刷 process 分」的面——沿用 `run_baselines.py` 逐类目闸门 + `eval/eval_cases.jsonl` 单例钉死（例如：ref 指向不存在论文时调 `summarize_paper` 必须扣分）。
+4. **摘要质量的奖励问题（刻意不做）**：把「摘要写得好不好」变成奖励需要 LLM-as-judge 或 rubric 打分，会引入非确定性奖励与新的 hacking 面。设计上先把总结收敛为**工具调用决策问题**（何时调、对谁调），质量评估留到长期单独立项。
+5. **多模态的边界（刻意隔离）**：T5 的 VLM 只活在 env 侧，策略仍是纯文本小模型——动作空间里只有「调不调、怎么问」，看图能力外包给环境。只有策略本身换成多模态模型时，才考虑把图片放进 observation。
+6. **硬件门槛**：T3/T5 各引入一个 env 侧模型（摘要模型约 2GB、VLM 约 6GB 量级，量化后更低），与训练显存互不影响（它们不进梯度）。不满足时只做 T1/T2/T4——解读闭环的真正关键路径是 T2。
+
+### 落地顺序
+
+```
+T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读闭环）
+                      └────→ T4 抽图 → T5 图分析 （可选，多模态环境）
+```
+
+每落一个工具：扩任务模板 → 重跑 `run_baselines.py` 重新卡各类目区分度门槛 → 重新生成 SFT/DPO 数据 → `eval/eval_cases.jsonl` 补对应用例。
+
+---
+
 ## 📝 TODO（开发路线图）
 
-按优先级排列。
+### P0 — 工具集扩展（解读闭环）
 
-### P0 — 近期（填补核心缺口）
+设计已定稿（见「🧰 工具集演进设计」），均未实现：
 
-- [x] **多轮 Agentic Rollout**：已实现真正的「行动 → 环境反馈 → 再行动」交互采样；每条 generation 使用独立 `MockArxivEnv`，环境 token 以 `env_mask=0` 排除策略 loss，完整 assistant 轨迹参与 GRPO 更新与五分量奖励。
-- [x] **训练可观测性**：SFT / DPO / GRPO 统一 `--report_to`（none / auto / tensorboard / wandb），后端未安装时直接报错而非静默不记。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，另单独记录 format/tool/argument/process/outcome 五个奖励分量与当前课程权重——课程会在前 30 步改变权重，只看 total reward 分不出「策略在变强」还是「权重表在动」；再加 `rollout/` 下的 turns / finished / parse_error_rate / tool_error_rate 用于定位多轮采样本身的问题。
+- [ ] **T1 关键词检索** `search_arxiv_papers`：补全「找一篇具体论文」的查找型检索
+- [ ] **T2 论文阅读** `get_paper_content`：PDF → 文本，全部解读类任务的前置件（关键路径）
+- [ ] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策
+- [ ] **T4/T5 图表抽取与分析**（可选，多模态环境）：排在 T1–T3 之后；VLM 只在 env 侧
 
-### P1 — 中期（数据与评测）
+### P1 — 奖励课程调优
 
-- [x] **任务集扩充**：基准集扩到 59 条（`benchmark/tasks_expanded.py`，`--task-set expanded`），涵盖 search / ref_form / composite / state / optional / constraint / long_chain / infeasible 八类；`benchmark/tasks.py` 保留为 8 条冒烟子集。两边统一走 `benchmark/task_spec.py` 的 `TaskSpec`：`expected_tools` 与 `expected_tool_args` 由同一份 `steps` 派生，不再手写两份平行列表漂移。区分度用 `benchmark/run_baselines.py` 的确定性退化策略量化并逐类目卡门槛（`tests/test_reward_discrimination.py`）——修掉参数档的四处漏分后，「无视任务永远搜 cs.AI」在检索类任务上从 0.833 降到 0.446，「本该什么都不做却调了工具」从 +0.165 变成 −0.235。
-- [x] **评测口径与切分**：报告从「成功率 + token 均值 + 迭代均值」扩到 `pass^k` 可靠性（tau-bench 口径，逐任务估计再平均；样本不足的任务记为跳过而非 0）、`false_finish`（以 FINISH 结束但期望工具没做全——退化策略实测 `always_finish` 91.5%、`reference` 0%）、`ref_score`（比解析出的 `paper_id` 而非 `ref` 的写法，同时消掉字符串比对的假阳性与假阴性）、代价按成功次数归一（`skill_cli` 从贵 43% 变成贵 99%）与失败形态拆分。任务集按**模板**切成 train/iid_test/ood_test（`benchmark/splits.py`，固化于 `data/splits/v1.json`），`--split` 在 `run_benchmark.py` 与 `train_grpo.py` 两侧接通；`rl_train` 只取成功率中间带，两端的任务组内方差为零、不产生梯度。
-- [x] **eval/ badcase replay**：`eval/badcase_replay.py` + `eval/eval_cases.jsonl`。把单条失败轨迹连同当时的判定冻成永久回归用例；回放只重跑打分器，不需要 LLM / 网络 / 工具，因而 `pytest` 本身就是闸门（`tests/test_badcases.py::ShippedCasesTest`）。用例分 `open`（毛病还在）与 `fixed`（已修，再复现即回归、退出码 1）。`--save-traces` + `capture` 从真实跑的轨迹里挑坏例（按 `false_finish` / `ref_score` / 工具序列，而非只挑崩掉的）。
-- [ ] **Reward hacking 排查**：案例库这半已落在 `eval/eval_cases.jsonl` 的 `hack/*` 用例上——退化策略的骗分轨迹配阈值断言（「这种行为不许拿到 X 分」），#40 与 #47 修掉的两个洞都有用例守着，与 `run_baselines.py` 的逐类目闸门互补：闸门看均值、用例钉单条。**还欠多粒度权重课程调优**，那需要真实训练跑的数据支撑。
+- [ ] **多粒度权重课程定档**：前 30 步压 `tool` / `argument` / `outcome` 权重的档位是先验设定，需要真实训练跑的数据支撑来调整；reward hacking 的用例闸门已就位（见「任务集与评测」的坏例回放一节）。
 
 ### P2 — 性能与规模
 
-- [ ] **vLLM 加速采样**：替换 HF generate，提升 rollout 吞吐（多轮 rollout 落地后优先级上升）。
+- [ ] **vLLM 加速采样**：替换 HF generate，提升多轮 rollout 的采样吞吐。
 - [ ] **多卡支持**：accelerate / FSDP 配置（依赖已有 accelerate，但当前零配置、单卡单进程）。
 
 ### P3 — 长期（算法演进）
@@ -587,7 +670,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 >
 > 效果：稳定训练 ~1000 步，AIME2025 达 **97.3%**（vs GRPO 84.2%），SWE-Bench Verified 29.8%，已用于 GLM-5.2（750B）训练。
 >
-> 引入路径：先做 P0 多轮 rollout → 引入 skip-observation 掩码与 DIS 双边裁剪 → 迁移 verl `fully_async_policy`（`gen_batch_size=1` / `staleness_threshold` / token 级 TIS 裁剪，与 SAO 思路一致）或 AReaL v1.0 实现全异步 + value model。
+> 引入路径：多轮 rollout 已落地 → 引入 skip-observation 掩码与 DIS 双边裁剪 → 迁移 verl `fully_async_policy`（`gen_batch_size=1` / `staleness_threshold` / token 级 TIS 裁剪，与 SAO 思路一致）或 AReaL v1.0 实现全异步 + value model。
 >
 > 📄 **论文**：[Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning（arXiv:2607.07508）](https://arxiv.org/abs/2607.07508)（清华 KEG，官方代码尚未开源）
 
