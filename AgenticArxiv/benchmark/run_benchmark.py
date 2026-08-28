@@ -24,6 +24,7 @@ if PROJECT_ROOT not in sys.path:
 from tools.bootstrap import require_all_tools
 from benchmark.tasks import get_all_tasks
 from benchmark.tasks_expanded import get_expanded_tasks
+from benchmark.splits import DEFAULT_SPLIT_PATH, load_split
 from benchmark.runner import BenchmarkRunner
 from benchmark.report import BenchmarkReport
 from config import settings
@@ -79,6 +80,14 @@ def main():
     )
     parser.add_argument("--snapshot", default=None, help="指定快照路径（默认 data/mock_arxiv_snapshot.json）")
     parser.add_argument(
+        "--split", default=None, metavar="[FILE:]NAME",
+        help=(
+            f"只跑某一份切分，如 iid_test（用 {DEFAULT_SPLIT_PATH.name}）或 "
+            "data/splits/v2.json:ood_test。iid=同模板换参数，ood=未见过的模板；"
+            "训练前后对比必须引用同一份文件，否则数字不可比。需配合 --task-set expanded"
+        ),
+    )
+    parser.add_argument(
         "--task-set", choices=["default", "expanded"], default="default",
         help=(
             f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
@@ -119,6 +128,25 @@ def main():
         if not task_list:
             print(f"错误: 未找到任务 {args.task_ids}")
             sys.exit(1)
+    elif args.split:
+        try:
+            wanted = set(load_split(args.split))
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"错误: {exc}")
+            sys.exit(1)
+        by_id = {t["id"]: t for t in pool}
+        task_list = [by_id[tid] for tid in sorted(wanted) if tid in by_id]
+        missing = wanted - set(by_id)
+        if missing:
+            # 切分文件是按完整任务集划的。少了任务通常意味着任务池被别的
+            # 开关缩过（--task-set default 只有 8 条，或未加 --offline
+            # 跳掉了绑定快照的那些），此时跑出来的数字不能与别的阶段比。
+            print(f"错误: 切分 '{args.split}' 里有 {len(missing)} 条任务不在当前任务池中，"
+                  f"例如 {sorted(missing)[:3]}")
+            print("      切分按 --task-set expanded 的完整任务集划定；"
+                  "绑定快照的任务还需要 --offline")
+            sys.exit(1)
+        print(f"使用切分 {args.split}（{len(task_list)} 条）")
     elif args.tasks:
         task_list = [t for t in pool if t.get("category") == args.tasks]
         if not task_list:

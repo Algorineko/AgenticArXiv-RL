@@ -8,8 +8,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from benchmark.splits import load_split
+from benchmark.tasks import get_all_tasks
+from benchmark.tasks_expanded import get_expanded_tasks
 from rl.precision import precision_flags
-from rl.train_grpo import RewardVarianceGuard
+from rl.train_grpo import RewardVarianceGuard, _load_tasks
 from rl.train_sft import _check_lengths, _messages_of, _to_prompt_completion
 
 
@@ -85,10 +88,12 @@ class CheckLengthsTest(unittest.TestCase):
 
 
 class RewardVarianceGuardTest(unittest.TestCase):
-    def _fire(self, guard, n, **logs):
+    def _fire(self, guard, n, step=1, **logs):
+        """step 现在会影响行为：开局零方差是故障，练久了是收敛。"""
         control = SimpleNamespace(should_training_stop=False)
         for _ in range(n):
-            guard.on_log(Mock(), Mock(), control, logs=dict(logs))
+            guard.on_log(Mock(), SimpleNamespace(global_step=step), control,
+                         logs=dict(logs))
         return control
 
     def test_healthy_variance_never_stops(self):
@@ -124,6 +129,38 @@ class RewardVarianceGuardTest(unittest.TestCase):
         guard = RewardVarianceGuard(patience=1)
         control = self._fire(guard, 5, loss=0.1, epoch=1.0)
         self.assertFalse(control.should_training_stop)
+
+    def test_zero_variance_after_the_grace_period_is_convergence_not_failure(self):
+        """练到没梯度 ≠ 开局就没梯度。
+
+        --split rl_train 只有十来条中间带任务，学会之后每组都是满分，
+        方差自然归零。把它判成故障会白扔一个已经练好的 checkpoint。
+        """
+        guard = RewardVarianceGuard(patience=3, grace_steps=20)
+        control = self._fire(guard, 3, step=50, frac_reward_zero_std=1.0, reward=1.0)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(guard.converged)
+        self.assertFalse(guard.tripped)      # 不以失败退出，checkpoint 保留
+
+    def test_zero_variance_inside_the_grace_period_is_still_a_failure(self):
+        """开局就零方差多半是基座还吐不出可解析动作，那是真故障。"""
+        guard = RewardVarianceGuard(patience=3, grace_steps=20)
+        control = self._fire(guard, 3, step=5, frac_reward_zero_std=1.0, reward=-0.84)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(guard.tripped)
+        self.assertFalse(guard.converged)
+
+    def test_the_boundary_step_still_counts_as_grace(self):
+        guard = RewardVarianceGuard(patience=1, grace_steps=20)
+        self._fire(guard, 1, step=20, frac_reward_zero_std=1.0)
+        self.assertTrue(guard.tripped)
+
+    def test_an_unusable_global_step_falls_back_to_failure(self):
+        """拿不到步数时按开局处理：宁可多报一次故障，也不要因它崩掉。"""
+        guard = RewardVarianceGuard(patience=1, grace_steps=20)
+        control = SimpleNamespace(should_training_stop=False)
+        guard.on_log(Mock(), Mock(), control, logs={"frac_reward_zero_std": 1.0})
+        self.assertTrue(guard.tripped)
 
 
 class PrecisionFlagsTest(unittest.TestCase):
@@ -240,6 +277,38 @@ class StageVerifierTest(unittest.TestCase):
             self.assertEqual(data["stage"], "sft")
             self.assertTrue(data["passed"])
             self.assertEqual(data["metrics"]["parse_rate"], 0.8)
+
+
+class TrainingTaskSetTest(unittest.TestCase):
+    """GRPO 训到哪些任务上。
+
+    此前写死 get_all_tasks()，也就是 benchmark/tasks.py 那 8 条冒烟任务 ——
+    59 条的完整基准集和 data/splits/v1.json 的切分都在，训练脚本一条都没用上。
+    """
+
+    def test_default_still_uses_the_smoke_subset(self):
+        """默认值不动：换了会让此前所有训练曲线不可比。"""
+        self.assertEqual(len(_load_tasks("default", None)), len(get_all_tasks()))
+
+    def test_expanded_uses_the_full_benchmark_set(self):
+        self.assertEqual(len(_load_tasks("expanded", None)), len(get_expanded_tasks()))
+
+    def test_rl_train_split_keeps_only_the_middle_band(self):
+        """两端的任务同一 prompt 采样出的奖励一致，组内方差为零，没有梯度。"""
+        chosen = {t["id"] for t in _load_tasks("expanded", "rl_train")}
+        self.assertEqual(chosen, set(load_split("rl_train")))
+        self.assertLess(len(chosen), len(get_expanded_tasks()))
+
+    def test_split_against_the_wrong_task_set_fails_loudly(self):
+        """切分按完整任务集划定；配上冒烟集会静默少掉大半训练数据。"""
+        with self.assertRaises(SystemExit) as ctx:
+            _load_tasks("default", "rl_train")
+        self.assertIn("不在当前任务集中", str(ctx.exception))
+
+    def test_task_ids_come_back_in_a_deterministic_order(self):
+        first = [t["id"] for t in _load_tasks("expanded", "train")]
+        self.assertEqual(first, sorted(first))
+        self.assertEqual(first, [t["id"] for t in _load_tasks("expanded", "train")])
 
 
 if __name__ == "__main__":

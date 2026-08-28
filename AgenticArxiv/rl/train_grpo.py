@@ -23,6 +23,7 @@ import dataclasses
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
@@ -44,6 +45,8 @@ import tools.pdf_download_tool  # noqa: F401
 import tools.pdf_translate_tool  # noqa: F401
 
 from benchmark.tasks import get_all_tasks
+from benchmark.splits import DEFAULT_SPLIT_PATH, load_split
+from benchmark.tasks_expanded import get_expanded_tasks
 from rl.canary import CanaryEvaluator, CanaryCallback
 from rl.grpo_reward import (
     build_prompt_dataset,
@@ -70,6 +73,44 @@ def _precision_flags():
     return precision_flags()
 
 
+def _load_tasks(task_set: str, split: Optional[str]):
+    """选择训练任务集。
+
+    默认仍是 benchmark/tasks.py 的 8 条冒烟任务 —— 换默认值会让此前所有
+    训练曲线不可比，所以要用完整任务集必须显式 --task_set expanded。
+
+    `--split rl_train` 取的是 train 中成功率处于中间带的那部分：GRPO 的
+    优势是组内相对的，成功率贴近 0 或 1 的任务，同一 prompt 采样出的轨迹
+    奖励一致，组内方差为零、优势为零、不产生任何梯度。把它们放进训练集
+    是纯粹的空转，还会把 frac_reward_zero_std 顶到 1 触发方差守卫。
+    """
+    pool = get_expanded_tasks() if task_set == "expanded" else get_all_tasks()
+    if not split:
+        if task_set != "expanded":
+            print(
+                f"⚠️  正在用 benchmark/tasks.py 的 {len(pool)} 条冒烟任务训练。"
+                "完整任务集用 --task_set expanded；\n"
+                "    只训练有梯度的那部分用 --task_set expanded "
+                f"--split rl_train（{DEFAULT_SPLIT_PATH.name}）"
+            )
+        return pool
+
+    wanted = set(load_split(split))
+    by_id = {t["id"]: t for t in pool}
+    chosen = [by_id[tid] for tid in sorted(wanted) if tid in by_id]
+    missing = wanted - set(by_id)
+    if missing:
+        # 切分按完整任务集划定，缺任务说明任务池选错了，
+        # 此时训练集会静默变小，训出来的东西与切分不对应。
+        raise SystemExit(
+            f"❌ 切分 '{split}' 里有 {len(missing)} 条任务不在当前任务集中，"
+            f"例如 {sorted(missing)[:3]}\n"
+            "   切分按 --task_set expanded 的完整任务集划定"
+        )
+    print(f"📑 使用切分 {split}（{len(chosen)} 条）")
+    return chosen
+
+
 def _gold_completion_tokens(tokenizer, tasks) -> int:
     """标准动作渲染成 ReAct 文本后的最大 token 数。
 
@@ -86,6 +127,18 @@ def _gold_completion_tokens(tokenizer, tasks) -> int:
     return max(lengths)
 
 
+def _global_step(state) -> int:
+    """当前步数，取不到就按 0（视作还在开局宽限期内）。
+
+    宽限期只用来区分「开局就没梯度」和「练到没梯度」，判错的代价是
+    多报一次故障；为它让训练崩掉才是更坏的结果。
+    """
+    try:
+        return int(getattr(state, "global_step", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 class RewardVarianceGuard(TrainerCallback):
     """组内奖励方差为 0 时中止训练。
 
@@ -99,10 +152,16 @@ class RewardVarianceGuard(TrainerCallback):
     而这一栏很容易被忽略。这里把它变成一次响亮的失败。
     """
 
-    def __init__(self, patience: int = 5):
+    def __init__(self, patience: int = 5, grace_steps: int = 20):
         self.patience = patience
+        # 只有开局 grace_steps 步内的零方差才算故障。此后再出现，通常是策略
+        # 已经在当前任务集上做满了 —— 尤其 --split rl_train 只有十来条中间带
+        # 任务，模型学会之后每组都是满分，方差自然归零。那是「该换任务了」，
+        # 不是「训练坏了」，把它当故障会白扔一个已经练好的 checkpoint。
+        self.grace_steps = grace_steps
         self.streak = 0
         self.tripped = False
+        self.converged = False
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         if not logs:
@@ -122,9 +181,22 @@ class RewardVarianceGuard(TrainerCallback):
         if self.streak < self.patience:
             return
 
-        self.tripped = True
         control.should_training_stop = True
         mean = logs.get("reward")
+        step = _global_step(state)
+        if step > self.grace_steps:
+            # 收敛而非故障：正常停止，保留 checkpoint
+            self.converged = True
+            print(
+                f"\n⏹  第 {step} 步起连续 {self.streak} 步组内奖励方差为 0"
+                + (f"（奖励恒为 {float(mean):.4f}）" if mean is not None else "")
+                + "，策略已在当前任务集上收敛，提前停止并保存。\n"
+                "   要继续训练需要换一批任务：重新划中间带（成功率会随训练漂移，"
+                "旧的 rl_train 会逐渐变成 ceiling），或扩充任务集。"
+            )
+            return
+
+        self.tripped = True
         print(
             f"\n❌ 连续 {self.streak} 步组内奖励方差为 0"
             + (f"（奖励恒为 {float(mean):.4f}）" if mean is not None else "")
@@ -151,6 +223,8 @@ def main(
     max_turns: int = 4,
     temperature: float = 1.0,
     snapshot: str = None,
+    task_set: str = "default",
+    split: str = None,
     allow_zero_variance: bool = False,
     canary_steps: int = 50,
     min_canary_reward: float = -1.0,
@@ -181,7 +255,7 @@ def main(
     policy = AutoModelForCausalLM.from_pretrained(resolved)
 
     # --- 数据集：直接由任务集派生，无需预生成 ---
-    tasks = get_all_tasks()
+    tasks = _load_tasks(task_set, split)
     rows = build_prompt_dataset(tasks)
     train_dataset = Dataset.from_list(rows)
     print(f"📚 任务数: {len(tasks)}（GRPO 为在线算法，无需预生成轨迹数据）")
@@ -333,6 +407,17 @@ if __name__ == "__main__":
     )
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--snapshot", default=None)
+    p.add_argument(
+        "--task_set", choices=["default", "expanded"], default="default",
+        help="default=benchmark/tasks.py 的 8 条冒烟任务（保持现状）；"
+             "expanded=完整基准集。改默认值会让既有训练曲线不可比，故需显式指定",
+    )
+    p.add_argument(
+        "--split", default=None, metavar="[FILE:]NAME",
+        help=f"只用某一份切分训练，如 rl_train（用 {DEFAULT_SPLIT_PATH.name}）或 "
+             "data/splits/v2.json:train。rl_train 只含成功率中间带的任务——"
+             "GRPO 的梯度来自组内奖励方差，两端的任务不产生梯度。需配合 --task_set expanded",
+    )
     p.add_argument(
         "--canary_steps", type=int, default=50,
         help="每隔多少步运行 canary 评估（0 表示禁用）",
