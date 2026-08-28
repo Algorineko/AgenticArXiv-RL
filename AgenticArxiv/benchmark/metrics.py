@@ -2,6 +2,7 @@
 """从 Agent run() 结果中提取性能和准确性指标。"""
 
 import json
+import re
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional
 
@@ -217,12 +218,14 @@ def _match_arg_value(predicted_val: Any, expected_val: Any, key: str = "") -> bo
     # 2. ref 字段归一化：支持整数与字符串数字等价，支持形如 "第1篇" 的正则匹配
     if key == "ref":
         try:
-            if int(predicted_val) == int(expected_val):
-                return True
+            # 两边都能转成整数时，这一步就是定论，不该再往下抠数字。
+            return int(predicted_val) == int(expected_val)
         except (ValueError, TypeError):
             pass
-        import re
-        m = re.search(r"\d+", str(predicted_val))
+        # 只有取值不是纯数字（"第1篇"）时才退回正则。`-?` 不能省：str(-1) 里的
+        # 减号不属于 \d+，写成 \d+ 会从 "-1" 里抠出 "1" 判成对。ref 是 1-based
+        # 序号，-1 是越界值，正是 wrong_args 基线用来制造错误参数的取值。
+        m = re.search(r"-?\d+", str(predicted_val))
         if m:
             try:
                 if int(m.group(0)) == int(expected_val):
