@@ -7,7 +7,7 @@
 # AgenticArXiv-RL — Entorno de Entrenamiento para RL Agentic
 
 > **Entorno de entrenamiento de RL Agentic basado en Agente ReAct + herramientas de arXiv**  
-> Soporta ruta de entrenamiento progresivo SFT/DPO/GRPO/PPO, para investigar aprendizaje por refuerzo en Agentes de LLM
+> Soporta ruta de entrenamiento progresivo SFT/DPO/GRPO/PPO, además de una ruta opcional de OPD (destilación on-policy), para investigar aprendizaje por refuerzo en Agentes de LLM
 
 ---
 
@@ -121,7 +121,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 ---
 
-## 🛠️ Ruta de Entrenamiento (SFT → DPO → GRPO)
+## 🛠️ Ruta de Entrenamiento (SFT → DPO → GRPO / OPD)
 
 ### Fase 1: SFT (Ajuste Fino Supervisado)
 
@@ -206,6 +206,30 @@ El pipeline de entrenamiento incorpora varias capas de validación automática q
 - **Precisión mixta adaptativa**: bf16 primero en CUDA, con respaldo a fp16, desactivada en CPU / MPS (`rl/precision.py`)
 - **Validación del backend de registro**: un backend indicado en `--report_to` que no esté instalado falla antes de cargar el modelo, para no terminar un entrenamiento y descubrir que no hay ninguna curva (`rl/observability.py`)
 
+### Fase 3': OPD (On-Policy Distillation, opcional, intercambiable con GRPO)
+
+**Objetivo**: destilar la capacidad de acción ReAct del estudiante a partir de la señal por token de un profesor fuerte, sin depender de ninguna recompensa durante el entrenamiento.
+
+**Pasos**:
+```bash
+python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwen2.5-7B-Instruct
+```
+
+**Salida**: modelo `./outputs/opd/final`
+
+**Posicionamiento**: OPD es un **paradigma de entrenamiento completo**, no un simple truco — el estudiante muestrea on-policy sobre los prompts de las tareas, el profesor puntúa cada token con sus logprobs, y la pérdida es la KL reversa `D_KL(π_estudiante ‖ π_profesor)` (mode-seeking). Frente a GRPO es la "ruta del profesor" frente a la "ruta de la recompensa":
+
+| Dimensión | GRPO | OPD |
+|---|---|---|
+| Señal de aprendizaje | verifiable reward de cinco componentes (dispersa, a nivel de trayectoria) | logprobs por token del profesor (densa) |
+| Modelo extra | ninguno | modelo profesor (necesita pesos locales para los logprobs; las APIs externas no exponen distribuciones por token) |
+| Techo de rendimiento | puede explorar más allá del profesor | converge al comportamiento del profesor |
+| Mejor cuando | hay recompensa verificable y no hay profesor | hay un profesor fuerte y se quiere ahorrar el costo de exploración de RL |
+
+OPD también puede usarse como truco: warm start antes de RL, regularización teacher-KL dentro de RL, o el PG-OPD de verl (la KL reversa tratada como recompensa para el gradiente de política).
+
+**Límite actual (KISS de un solo paso)**: el GKDTrainer de TRL solo tiene un corte prompt/completion único, así que esta implementación destila **una acción ReAct por muestra**, sin retroalimentación multi-turno del entorno (la OPD multi-turno requeriría una pérdida propia, aún no soportada). Estudiante y profesor comparten la GPU (estudiante 1.5B + profesor 7B ≈ 24GB en bf16; usa un profesor de 3B / 1.5B si vas justo). Verificado en trl 1.5.1 (`trl.experimental.gkd`); `beta=1.0` selecciona la dirección reverse-KL (fijada por un test numérico en `tests/test_opd.py`). Canary y verificación por etapa se comparten con GRPO — el entrenamiento OPD en sí no usa recompensa, pero el modelo resultante sigue teniendo que pasar las comprobaciones del entorno.
+
 ---
 
 ## 📂 Estructura de Directorios
@@ -236,6 +260,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_dpo.py              # ⭐ Entrenamiento DPO
 │  │  ├─ train_grpo.py             # ⭐ Entrenamiento GRPO (con guardias de entrenamiento)
 │  │  ├─ train_ppo.py              # ⭐ Entrenamiento PPO (Actor-Critic)
+│  │  ├─ train_opd.py              # ⭐ Entrenamiento OPD (destilación on-policy, intercambiable con GRPO)
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (entorno de snapshot offline)
 │  │  ├─ reward.py                 # RewardCalculator (recompensa de 5 componentes + currículum)
 │  │  ├─ grpo_reward.py            # Adaptador de recompensa GRPO (completion de un paso → trayectoria)
@@ -403,6 +428,9 @@ fire
 - **InstructGPT** (OpenAI, 2022): Tres fases de RLHF (SFT → RM → PPO)
 - **DPO** (Stanford, 2023): Optimización directa de preferencias
 - **RLVR**: Reinforcement Learning with Verifiable Reward
+- **On-Policy Distillation** ([Thinking Machines Lab, 2025](https://thinkingmachines.ai/blog/on-policy-distillation/)): origen de la receta OPD (muestreo on-policy del estudiante + KL reversa por token del profesor)
+- **GKD / On-Policy Distillation of Language Models** (Agarwal et al., ICLR 2024, [arXiv:2306.13649](https://arxiv.org/abs/2306.13649)): destilación JSD generalizada, base del GKDTrainer de TRL
+- **Rethinking On-Policy Distillation of Large Language Models** ([arXiv:2604.13016](https://arxiv.org/abs/2604.13016)): replicación y análisis independientes de la receta OPD
 
 ### AgenticArXiv Original (versión Web App)
 Este proyecto se basa en [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv), la versión original incluye:
@@ -463,6 +491,17 @@ GRPO es más adecuado para proyectos de aprendizaje ligeros:
 - ✅ Implementación simple, fácil de depurar
 
 PPO es más adecuado para entrenamiento de modelos grandes de nivel producción (7B+), este proyecto como demo de aprendizaje no lo cubre.
+
+### Q: ¿Cómo elegir entre OPD, SFT, DPO y GRPO?
+
+| Escenario | Recomendación |
+|------|------|
+| Hay demostraciones de experto, aprender primero el formato de acción | SFT |
+| Hay pares de preferencia (trayectorias buenas/malas), sin recompensa en línea | DPO |
+| Hay recompensa verificable y se quiere superar la línea base en línea | GRPO |
+| Hay un modelo profesor fuerte y se quiere ahorrar el costo de exploración de RL | OPD |
+
+Se complementan entre sí: SFT es el punto de partida de todas las rutas; OPD y GRPO van encima de SFT — la primera destila desde un profesor (techo = profesor), el segundo optimiza contra recompensa verificable (puede explorar más allá), y la salida de cualquiera puede servir de inicialización o de línea base para el otro.
 
 ---
 
