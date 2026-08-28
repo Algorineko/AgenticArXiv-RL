@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from benchmark.metrics import argument_match_score
+from benchmark.metrics import _match_arg_value, argument_match_score
 from benchmark.runner import BenchmarkRunner
 
 
@@ -101,6 +101,56 @@ class ArgumentMatchScoreTest(unittest.TestCase):
         )
         self.assertEqual(
             argument_match_score(history, [{"ref": 1}], ["get_paper_cache_status"]), 1.0
+        )
+
+
+class ArgValueEquivalenceTest(unittest.TestCase):
+    """取值等价判定：允许写法差异，不允许语义差异。
+
+    `_match_arg_value` 让 "cs.AI"/"AI"、"1"/1、"第1篇"/1 这类同义写法不被
+    误判为错，这是对的——模型换个写法不该扣分。但它的宽松度必须止步于写法：
+    一旦放行了语义不同的取值，参数档就重新变成「照签名填齐就有分」，
+    也就是 issue #17 第 2 条描述的那个洞。
+    """
+
+    def test_aspect_accepts_the_cs_prefix_and_case_variants(self):
+        for predicted in ("cs.AI", "AI", "cs.ai", " CS.AI "):
+            self.assertTrue(_match_arg_value(predicted, "cs.AI", "aspect"), predicted)
+
+    def test_aspect_still_rejects_a_different_category(self):
+        self.assertFalse(_match_arg_value("cs.AI", "cs.CL", "aspect"))
+
+    def test_ref_accepts_string_and_ordinal_spellings(self):
+        for predicted in (1, "1", "1.0", "第1篇", "第 1 篇"):
+            self.assertTrue(_match_arg_value(predicted, 1, "ref"), predicted)
+
+    def test_ref_does_not_drop_the_minus_sign(self):
+        r"""回归：`\d+` 从 "-1" 里只抠得到 "1"，于是 ref=-1 被判成 ref=1。
+
+        ref 是 1-based 序号（tools/pdf_download_tool.py），-1 是越界值，
+        也正是 wrong_args 基线用来制造错误参数的取值——这个洞让它在
+        composite 类目上白拿 0.226 分，离参考轨迹只剩 0.335 的差距。
+        """
+        self.assertFalse(_match_arg_value(-1, 1, "ref"))
+        self.assertFalse(_match_arg_value("-1", 1, "ref"))
+        self.assertFalse(_match_arg_value(-3, 3, "ref"))
+        self.assertFalse(_match_arg_value("ref=-1", 1, "ref"))
+
+    def test_numeric_and_string_forms_agree_outside_the_named_keys(self):
+        self.assertTrue(_match_arg_value("7", 7, "days"))
+        self.assertTrue(_match_arg_value(5.0, 5, "max_results"))
+        self.assertFalse(_match_arg_value(7, 30, "days"))
+
+    def test_expected_none_means_the_key_should_be_omitted(self):
+        self.assertTrue(_match_arg_value(None, None, "ref"))
+        self.assertFalse(_match_arg_value(1, None, "ref"))
+        self.assertFalse(_match_arg_value(None, 1, "ref"))
+
+    def test_wrong_args_baseline_earns_nothing_on_a_ref_oracle(self):
+        """端到端确认：wrong_args 的 ref=-1 在参数档上应当颗粒无收。"""
+        history = [_step("download_arxiv_pdf", {"ref": -1})]
+        self.assertEqual(
+            argument_match_score(history, [{"ref": 1}], ["download_arxiv_pdf"]), 0.0
         )
 
 

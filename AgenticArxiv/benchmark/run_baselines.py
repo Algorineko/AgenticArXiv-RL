@@ -52,7 +52,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--task-set", choices=["default", "expanded"], default="expanded",
-        help="default=8 seed tasks; expanded=58 tasks including constraints and infeasible requests",
+        help=(
+            f"default={len(_task_pool('default'))} seed tasks; "
+            f"expanded={len(_task_pool('expanded'))} tasks including constraints "
+            "and infeasible requests"
+        ),
     )
     parser.add_argument(
         "--policies", nargs="+", choices=sorted(ALL_POLICIES),
