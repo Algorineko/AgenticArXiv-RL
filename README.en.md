@@ -237,6 +237,11 @@ The training pipeline bakes in several layers of automatic validation that turn 
 **Steps**:
 ```bash
 python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwen2.5-7B-Instruct
+
+# Multi-turn Agentic OPD: execute Action → Observation → Action
+python -m AgenticArxiv.rl.train_opd --model outputs/sft/final \
+  --teacher Qwen/Qwen2.5-7B-Instruct --max_turns 4 \
+  --snapshot data/mock_arxiv_snapshot.json
 ```
 
 **Output**: `./outputs/opd/final` model
@@ -252,7 +257,9 @@ python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwe
 
 OPD can also be used as a trick: warm start before RL, teacher-KL regularization inside RL, or verl's PG-OPD (reverse KL treated as a reward for policy gradient).
 
-**Current boundary (KISS single-turn)**: TRL's GKDTrainer only has a single prompt/completion split, so this implementation distills **one ReAct action per sample** without multi-turn environment feedback (multi-turn OPD would require a custom loss, not supported yet). Student and teacher share GPU memory (1.5B student + 7B teacher ≈ 24GB in bf16; switch to a 3B / 1.5B teacher if tight). Verified on trl 1.5.1 (`trl.experimental.gkd`); `beta=1.0` selects the reverse-KL direction (locked by a numeric unit test in `tests/test_opd.py`). Canary and stage verification are shared with GRPO — OPD training itself uses no reward, but the resulting model still has to pass the environment checks.
+**Single-turn and multi-turn modes**: `--max_turns 1` (the default) preserves TRL GKDTrainer's original single prompt/completion behavior. `--max_turns > 1` enables Agentic OPD: every trajectory receives an independent `MockArxivEnv`, tool calls are executed, and the real Observation is inserted into the next turn. Prompt and Observation labels are `-100`; reverse-KL is computed only on student-generated assistant tokens. The first version requires identical teacher/student token-to-id vocabularies and fails before training if they differ. Student and teacher share GPU memory (a 1.5B student plus 7B teacher use roughly 17GB for bf16 weights alone; gradients, optimizer states, and logits need additional memory, so a smaller teacher or student is recommended on a 32GB GPU). Verified on trl 1.5.1 (`trl.experimental.gkd`); `beta=1.0` selects reverse-KL (locked by a numeric unit test in `tests/test_opd.py`). Canary and stage verification remain shared with GRPO: OPD itself uses no reward, but its output model must still pass environment checks.
+
+**Offline comparison**: run SFT, `--max_turns 1`, `--max_turns > 1`, and GRPO with the same snapshot and task set, then compare the common `StageVerifier` results in each output directory's `final/verification_report.json`. Those rewards are evaluation-only and never enter the OPD loss.
 
 ---
 
@@ -289,6 +296,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_grpo.py             # ⭐ GRPO training (with training guards)
 │  │  ├─ train_ppo.py              # ⭐ PPO training (Actor-Critic)
 │  │  ├─ train_opd.py              # ⭐ OPD training (on-policy distillation, swappable with GRPO)
+│  │  ├─ opd_multiturn.py          # Multi-turn rollout, Observation masks, and custom GKD loss
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv (offline snapshot env)
 │  │  ├─ multiturn_env.py          # TRL multi-turn env adapter (environment_factory, one instance per generation)
 │  │  ├─ reward.py                 # RewardCalculator (5-component reward + curriculum)
