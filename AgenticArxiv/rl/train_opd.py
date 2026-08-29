@@ -7,11 +7,11 @@ D_KL(π_student ‖ π_teacher)（mode-seeking：学生分布收敛到教师在�
 的 on-policy 升级，也是 GRPO 的互替路径——有强教师时用蒸馏省掉 RL 的
 探索成本；没有教师时仍应走 GRPO（verifiable reward 路线）。
 
-本实现的定位与边界（KISS）：
-- **单轮**：每条样本只蒸馏「一个 ReAct 动作」，不做多轮环境反馈。
-  TRL GKDTrainer 基于 SFTTrainer，只有 prompt/completion 的单段切分，
-  没有 GRPO 那套 rollout_func / env_mask 多轮机制；多轮 OPD 需要自写
-  loss，不在本脚本范围（README 有记录）。
+本实现支持两种模式：
+- **单轮（默认）**：保留 TRL GKDTrainer 的原始行为，便于复现实验。
+- **多轮（--max_turns > 1）**：学生执行 Action → Observation → Action，
+  Observation 仅作为上下文且 loss mask 为 0，reverse-KL 只计算学生生成 token。
+  每条轨迹使用独立 MockArxivEnv，避免工具和会话状态串扰。
 - **教师需本地 logprob**：外部 API 教师拿不到逐 token logprob，因此
   --teacher 必须是本地 HF 模型或 HF 仓库名。上限是教师：蒸馏不会超过
   教师在本任务上的水平。
@@ -26,6 +26,7 @@ D_KL(π_student ‖ π_teacher)（mode-seeking：学生分布收敛到教师在�
 使用方式：
     python -m AgenticArxiv.rl.train_opd --model outputs/sft/final
     python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwen2.5-7B-Instruct
+    python -m AgenticArxiv.rl.train_opd --max_turns 4 --snapshot data/mock_arxiv_snapshot.json
     python -m AgenticArxiv.rl.train_opd --report_to tensorboard
 """
 
@@ -61,6 +62,11 @@ from benchmark.tasks_expanded import get_expanded_tasks
 from rl.canary import CanaryCallback, CanaryEvaluator
 from rl.grpo_reward import build_prompt_dataset
 from rl.observability import describe_logging, resolve_report_to
+from rl.opd_multiturn import (
+    MultiTurnOPDCollator,
+    make_multiturn_gkd_trainer,
+    validate_tokenizer_compatibility,
+)
 from rl.reward import RewardCalculator
 from rl.stage_verifier import StageVerifier
 
@@ -204,11 +210,23 @@ def _gold_action_tokens(tokenizer, tasks) -> int:
     return max(lengths)
 
 
+def _model_context_limit(model) -> Optional[int]:
+    """Return a usable decoder context limit, ignoring tokenizer sentinel values."""
+    config = getattr(model, "config", None)
+    candidates = []
+    for name in ("max_position_embeddings", "n_positions", "max_sequence_length"):
+        value = getattr(config, name, None)
+        if isinstance(value, int) and 0 < value < 10_000_000:
+            candidates.append(value)
+    return min(candidates) if candidates else None
+
+
 def main(
     model: str = "outputs/sft/final",
     teacher: str = DEFAULT_TEACHER,
     output_dir: str = "outputs/opd",
     epochs: int = 1,
+    max_steps: int = -1,
     batch_size: int = 2,
     grad_accum: int = 1,
     lr: float = 1e-5,
@@ -216,6 +234,8 @@ def main(
     lmbda: float = 1.0,
     beta: float = REVERSE_KL_BETA,
     max_new_tokens: int = 256,
+    max_turns: int = 1,
+    max_observation_tokens: int = 256,
     snapshot: str = None,
     task_set: str = "default",
     canary_steps: int = 50,
@@ -250,6 +270,14 @@ def main(
     student = AutoModelForCausalLM.from_pretrained(student_path)
 
     print(f"🎓 加载教师模型: {teacher_path}")
+    teacher_tokenizer = AutoTokenizer.from_pretrained(teacher_path)
+    if teacher_tokenizer.pad_token is None:
+        teacher_tokenizer.pad_token = teacher_tokenizer.eos_token
+    if max_turns > 1:
+        try:
+            validate_tokenizer_compatibility(tokenizer, teacher_tokenizer)
+        except ValueError as exc:
+            raise SystemExit(f"❌ {exc}") from exc
     teacher_model = AutoModelForCausalLM.from_pretrained(teacher_path, **_teacher_load_kwargs())
     teacher_model.requires_grad_(False)  # 教师全程 eval + no_grad，双保险防意外更新
     print(f"   显存提示：学生与教师同驻显存；吃紧时换更小的教师（如 Qwen2.5-3B/1.5B-Instruct）")
@@ -268,9 +296,43 @@ def main(
             f"请改用 --max_new_tokens {need + 64}"
         )
 
+    multiturn = max_turns > 1
+    if max_turns < 1:
+        raise SystemExit("❌ --max_turns 必须至少为 1")
+    if max_observation_tokens < 0:
+        raise SystemExit("❌ --max_observation_tokens 不能为负数")
+
+    # Multi-turn mode needs room for every assistant turn and every inserted
+    # observation.  A small fixed marker allowance covers ``Observation:`` and
+    # the following ``Thought:`` prompt without tying this guard to one tokenizer.
+    if multiturn:
+        max_sequence_length = (
+            max_prompt_tokens
+            + max_turns * max_new_tokens
+            + (max_turns - 1) * (max_observation_tokens + 32)
+        )
+        context_limits = [
+            value
+            for value in (
+                _model_context_limit(student),
+                _model_context_limit(teacher_model),
+            )
+            if value is not None
+        ]
+        context_limit = min(context_limits) if context_limits else None
+        if context_limit is not None and max_sequence_length > context_limit:
+            raise SystemExit(
+                f"❌ 多轮 OPD 最坏需要 {max_sequence_length} tokens，但模型上下文仅 "
+                f"{context_limit}。请降低 --max_turns / --max_new_tokens / "
+                "--max_observation_tokens。"
+            )
+    else:
+        max_sequence_length = max_prompt_tokens + max_new_tokens
+
     cfg_kwargs = {
         "output_dir": str(REPO_ROOT / output_dir),
         "num_train_epochs": epochs,
+        "max_steps": max_steps,
         "per_device_train_batch_size": batch_size,
         "gradient_accumulation_steps": grad_accum,
         "learning_rate": lr,
@@ -279,7 +341,7 @@ def main(
         "beta": beta,
         "max_new_tokens": max_new_tokens,
         # SFTConfig.max_length：ChatML collator 的截断预算，prompt + 生成余量
-        "max_length": max_prompt_tokens + max_new_tokens,
+        "max_length": max_sequence_length,
         "logging_steps": 1,
         "save_strategy": "no",
         "report_to": backends,
@@ -299,33 +361,54 @@ def main(
     config = GKDConfig(**cfg)
 
     print(describe_logging(backends, logging_dir if backends else None))
+    mode_description = f"多轮，max_turns={max_turns}" if multiturn else "单轮兼容模式"
     print(
-        f"🚀 开始 OPD 训练（lmbda={lmbda} 全 on-policy 采样，"
+        f"🚀 开始 OPD 训练（{mode_description}，lmbda={lmbda} 全 on-policy 采样，"
         f"beta={beta} → {'reverse-KL D_KL(学生‖教师)' if beta == 1.0 else 'JSD 插值'}）"
     )
-    trainer = GKDTrainer(
+
+    # Multi-turn rollout itself requires the deterministic environment even if
+    # Canary and final verification are disabled.
+    needs_env = multiturn or canary_steps > 0 or verify
+    env = None
+    environment_factory = None
+    if needs_env:
+        snapshot_path = Path(snapshot) if snapshot else DEFAULT_SNAPSHOT
+        if not snapshot_path.exists():
+            reason = "多轮 OPD / Canary / 阶段验证" if multiturn else "Canary / 阶段验证"
+            raise SystemExit(
+                f"❌ {reason}需要离线快照 {snapshot_path}\n"
+                "   请先运行: python -m AgenticArxiv.rl.build_snapshot"
+                "（单轮模式可用 --canary_steps 0 --no-verify 跳过）"
+            )
+        from rl.grpo_reward import load_mock_env
+        env = load_mock_env(snapshot_path)
+        if multiturn:
+            from rl.multiturn_env import make_environment_factory
+            environment_factory = make_environment_factory(snapshot_path)
+
+    trainer_class = make_multiturn_gkd_trainer(GKDTrainer) if multiturn else GKDTrainer
+    trainer_kwargs = {}
+    if multiturn:
+        trainer_kwargs.update({
+            "data_collator": MultiTurnOPDCollator(tokenizer.pad_token_id),
+            "environment_factory": environment_factory,
+            "tasks_by_id": {task["id"]: task for task in tasks},
+            "max_turns": max_turns,
+            "max_observation_tokens": max_observation_tokens,
+            "max_sequence_length": max_sequence_length,
+        })
+    trainer = trainer_class(
         model=student,
         teacher_model=teacher_model,
         args=config,
         train_dataset=train_dataset,
         processing_class=tokenizer,
+        **trainer_kwargs,
     )
 
     # --- Canary 回调：每 N 步在固定任务上评估，检测学生退化 ---
     # OPD 本身无奖励信号，但产出模型仍要在环境里过关；快照只在 canary / 验证时需要
-    needs_env = canary_steps > 0 or verify
-    env = None
-    if needs_env:
-        snapshot_path = Path(snapshot) if snapshot else DEFAULT_SNAPSHOT
-        if not snapshot_path.exists():
-            raise SystemExit(
-                f"❌ Canary / 阶段验证需要离线快照 {snapshot_path}\n"
-                "   请先运行: python -m AgenticArxiv.rl.build_snapshot"
-                "（或 --canary_steps 0 --no-verify 跳过两者）"
-            )
-        from rl.grpo_reward import load_mock_env
-        env = load_mock_env(snapshot_path)
-
     canary_cb = None
     if canary_steps > 0:
         canary_evaluator = CanaryEvaluator(
@@ -384,6 +467,10 @@ if __name__ == "__main__":
     )
     p.add_argument("--output_dir", default="outputs/opd")
     p.add_argument("--epochs", type=int, default=1)
+    p.add_argument(
+        "--max_steps", type=int, default=-1,
+        help="限制优化步数；-1 按 epochs 完整训练，可用 1 做 GPU 端到端烟雾验证",
+    )
     p.add_argument("--batch_size", type=int, default=2)
     p.add_argument("--grad_accum", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-5)
@@ -398,6 +485,14 @@ if __name__ == "__main__":
              "0.0=反方向；其余为 JSD 插值",
     )
     p.add_argument("--max_new_tokens", type=int, default=256, help="学生单步动作生成预算")
+    p.add_argument(
+        "--max_turns", type=int, default=1,
+        help="每条 on-policy 轨迹的最大 ReAct 轮数；1 保留原单轮 OPD，>1 启用多轮 OPD",
+    )
+    p.add_argument(
+        "--max_observation_tokens", type=int, default=256,
+        help="每轮写回上下文的 Observation token 上限；这些 token 的 loss mask 恒为 0",
+    )
     p.add_argument("--snapshot", default=None)
     p.add_argument(
         "--task_set", choices=["default", "expanded"], default="default",

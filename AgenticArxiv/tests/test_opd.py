@@ -170,7 +170,11 @@ class TeacherLoadKwargsTest(unittest.TestCase):
 
 class GoldActionTokensTest(unittest.TestCase):
     def test_longest_tool_name_wins(self):
-        tokenizer = SimpleNamespace(__call__=lambda self, text, **kw: {"input_ids": list(range(len(text)))})
+        class Tokenizer:
+            def __call__(self, text, **kwargs):
+                return {"input_ids": list(range(len(text)))}
+
+        tokenizer = Tokenizer()
         tasks = [{"expected_tools": ["short", "a_much_longer_tool_name"]}]
         need = opd._gold_action_tokens(tokenizer, tasks)
         longest = "a_much_longer_tool_name"
@@ -178,7 +182,11 @@ class GoldActionTokensTest(unittest.TestCase):
         self.assertEqual(need, expected)
 
     def test_tasks_without_tools_yield_zero(self):
-        tokenizer = SimpleNamespace(__call__=lambda self, text, **kw: {"input_ids": list(range(len(text)))})
+        class Tokenizer:
+            def __call__(self, text, **kwargs):
+                return {"input_ids": list(range(len(text)))}
+
+        tokenizer = Tokenizer()
         self.assertEqual(opd._gold_action_tokens(tokenizer, [{"expected_tools": []}]), 0)
 
 
@@ -204,13 +212,13 @@ class ReverseKLDirectionTest(unittest.TestCase):
     def test_beta_1_is_reverse_kl_student_first(self):
         student = torch.tensor([[[2.0, 0.0, -1.0, 0.5]]])
         teacher = torch.tensor([[[0.0, 1.0, 3.0, -0.5]]])
-        loss = float(self.loss(student, teacher, beta=1.0))
+        loss = float(type(self).loss(student, teacher, beta=1.0))
         self.assertAlmostEqual(loss, self._hand_kl(student, teacher), places=5)
 
     def test_beta_0_is_the_opposite_direction(self):
         student = torch.tensor([[[2.0, 0.0, -1.0, 0.5]]])
         teacher = torch.tensor([[[0.0, 1.0, 3.0, -0.5]]])
-        loss_beta0 = float(self.loss(student, teacher, beta=0.0))
+        loss_beta0 = float(type(self).loss(student, teacher, beta=0.0))
         self.assertAlmostEqual(loss_beta0, self._hand_kl(teacher, student), places=5)
         # 方向不同 ⇒ 两个损失不相等；相等说明语义被翻转，OPD 方向失效
         self.assertNotAlmostEqual(
