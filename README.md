@@ -244,6 +244,11 @@ tensorboard --logdir outputs/grpo/logs
 **步骤**：
 ```bash
 python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwen2.5-7B-Instruct
+
+# 多轮 Agentic OPD：真实执行 Action → Observation → Action
+python -m AgenticArxiv.rl.train_opd --model outputs/sft/final \
+  --teacher Qwen/Qwen2.5-7B-Instruct --max_turns 4 \
+  --snapshot data/mock_arxiv_snapshot.json
 ```
 
 **产出**：`./outputs/opd/final` 模型
@@ -259,7 +264,9 @@ python -m AgenticArxiv.rl.train_opd --model outputs/sft/final --teacher Qwen/Qwe
 
 OPD 也能当 trick 用：RL 前的 warm start、RL 中的 teacher-KL 正则、verl 的 PG-OPD（把 reverse-KL 当奖励做策略梯度）。
 
-**当前边界（KISS 单轮版）**：TRL GKDTrainer 只有 prompt/completion 的单段切分，本实现每条样本蒸馏**一个 ReAct 动作**，不含多轮环境反馈（多轮 OPD 需自写 loss，暂不支持）。学生与教师同驻显存（1.5B 学生 + 7B 教师 bf16 约 24GB，吃紧可换 3B / 1.5B 教师）。已在 trl 1.5.1（`trl.experimental.gkd`）上验证；`beta=1.0` 即 reverse-KL 方向（`tests/test_opd.py` 有数值单测锁死）。Canary 与阶段验证沿用 GRPO 同一套——OPD 训练本身无奖励，但产出模型仍要在环境里过关。
+**单轮与多轮**：`--max_turns 1`（默认）保留 TRL GKDTrainer 的单段 prompt/completion 行为；`--max_turns > 1` 启用 Agentic OPD。多轮模式为每条轨迹创建独立 `MockArxivEnv`，执行工具后把真实 Observation 写回下一轮上下文；prompt 和 Observation token 的 loss mask 为 `-100`，reverse-KL 只覆盖学生生成的 assistant token。第一版要求教师与学生的 token-to-id vocabulary 完全一致，不兼容时在加载模型后、训练前明确失败。学生与教师同驻显存（1.5B 学生 + 7B 教师仅权重 bf16 约 17GB，训练还需梯度、优化器和 logits 显存；32GB 卡建议使用更小教师或学生）。已在 trl 1.5.1（`trl.experimental.gkd`）上验证；`beta=1.0` 即 reverse-KL 方向（`tests/test_opd.py` 有数值单测锁死）。Canary 与阶段验证沿用 GRPO 同一套——OPD 训练本身无奖励，但产出模型仍要在环境里过关。
+
+**离线对比**：用相同的 snapshot 与 task set 分别运行 SFT、`--max_turns 1`、`--max_turns > 1` 和 GRPO，并比较各输出目录 `final/verification_report.json` 中由 `StageVerifier` 生成的同口径结果；这些 reward 只用于评测，不会进入 OPD loss。
 
 ### 阶段4：PPO（Proximal Policy Optimization）
 
@@ -307,6 +314,7 @@ AgenticArXiv-RL/
 │  │  ├─ train_grpo.py             # ⭐ GRPO 训练（含训练守卫）
 │  │  ├─ train_ppo.py              # ⭐ PPO 训练（Actor-Critic）
 │  │  ├─ train_opd.py              # ⭐ OPD 训练（on-policy 蒸馏，与 GRPO 互替）
+│  │  ├─ opd_multiturn.py          # 多轮 OPD rollout、Observation mask 与自定义 GKD loss
 │  │  ├─ env.py                    # RLEnv + MockArxivEnv（离线快照环境）
 │  │  ├─ multiturn_env.py          # TRL 多轮环境适配器（environment_factory，每代独立实例）
 │  │  ├─ reward.py                 # RewardCalculator（五分量可验证奖励 + 课程）
