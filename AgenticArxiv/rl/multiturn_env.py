@@ -57,6 +57,27 @@ class AgenticArxivMultiTurnEnv:
         self.store.set_last_papers(self.session_id, papers)
         return result
 
+    def search_arxiv_papers(
+        self, query: str, max_results: int = 10, days: Optional[int] = None
+    ) -> list[dict[str, Any]]:
+        """Search arXiv by keyword, title, or author within this rollout.
+
+        Args:
+            query: Bare text or an ``all:``, ``ti:``, or ``au:`` query.
+            max_results: Maximum number of papers to return.
+            days: Optional submission-time window in days.
+        """
+        result = self.backend.execute_tool(
+            "search_arxiv_papers",
+            {"query": query, "max_results": max_results, "days": days},
+        )
+        papers = [
+            Paper(**{key: value for key, value in item.items() if not key.startswith("_")})
+            for item in result
+        ]
+        self.store.set_last_papers(self.session_id, papers)
+        return result
+
     def download_arxiv_pdf(self, ref: str | int = 1) -> dict[str, Any]:
         """Download a paper selected from the latest search results.
 

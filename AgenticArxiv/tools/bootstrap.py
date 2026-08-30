@@ -30,16 +30,19 @@
 from __future__ import annotations
 
 import importlib
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from tools.tool_registry import registry
 
 #: 模块 -> 它提供的工具名。用于校验「导入成功」是否真的等于「工具可用」。
-TOOL_MODULES: Dict[str, str] = {
-    "tools.arxiv_tool": "get_recently_submitted_cs_papers",
-    "tools.pdf_download_tool": "download_arxiv_pdf",
-    "tools.pdf_translate_tool": "translate_arxiv_pdf",
-    "tools.cache_status_tool": "get_paper_cache_status",
+TOOL_MODULES: Dict[str, Tuple[str, ...]] = {
+    "tools.arxiv_tool": (
+        "get_recently_submitted_cs_papers",
+        "search_arxiv_papers",
+    ),
+    "tools.pdf_download_tool": ("download_arxiv_pdf",),
+    "tools.pdf_translate_tool": ("translate_arxiv_pdf",),
+    "tools.cache_status_tool": ("get_paper_cache_status",),
 }
 
 
@@ -60,7 +63,12 @@ def register_all_tools() -> Dict[str, str]:
 def missing_tools() -> List[str]:
     """当前 registry 里还缺哪些工具。"""
     registered = {t["name"] for t in registry.list_tools()}
-    return sorted(name for name in TOOL_MODULES.values() if name not in registered)
+    return sorted(
+        name
+        for names in TOOL_MODULES.values()
+        for name in names
+        if name not in registered
+    )
 
 
 def registered_tool_count() -> int:
@@ -80,7 +88,8 @@ def require_all_tools(context: str = "本次运行") -> None:
     if not missing:
         return
 
-    lines = [f"❌ {context}需要全部 {len(TOOL_MODULES)} 个工具，当前缺少: {missing}"]
+    expected_count = sum(len(names) for names in TOOL_MODULES.values())
+    lines = [f"❌ {context}需要全部 {expected_count} 个工具，当前缺少: {missing}"]
     for module, error in failures.items():
         lines.append(f"   {module}: {error}")
     lines.append("   工具列表不全时模型不会报错，而是会编造工具名 ——")

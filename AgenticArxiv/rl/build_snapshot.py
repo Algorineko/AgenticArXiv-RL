@@ -28,20 +28,28 @@ from rl.env import MockArxivEnv
 
 # 覆盖 benchmark/rl 任务集里出现过的所有方向
 DEFAULT_ASPECTS = ["*", "AI", "LG", "CL", "CV", "RO", "CR"]
+DEFAULT_KEYWORD_QUERIES = [
+    "all:agentic reinforcement learning",
+    "all:large language model",
+    "all:retrieval augmented generation",
+]
 
 
 def build(
     snapshot_path: str = "../data/mock_arxiv_snapshot.json",
     aspects=None,
+    keyword_queries=None,
     max_results: int = 50,
     days: int = 30,
 ) -> None:
     aspects = list(aspects or DEFAULT_ASPECTS)
+    keyword_queries = list(keyword_queries or DEFAULT_KEYWORD_QUERIES)
     path = Path(snapshot_path)
     env = MockArxivEnv(snapshot_path=path, mode="record")
 
     print(f"生成 MockEnv 快照 → {path}")
-    print(f"  aspects={aspects} max_results={max_results} days={days}")
+    print(f"  aspects={aspects} keyword_queries={keyword_queries}")
+    print(f"  max_results={max_results} days={days}")
 
     ok, fail = 0, 0
     for aspect in aspects:
@@ -61,6 +69,22 @@ def build(
             print(f"  [FAIL] aspect={aspect:<3} → {e}")
             fail += 1
 
+    for query in keyword_queries:
+        try:
+            papers = env.execute_tool(
+                "search_arxiv_papers",
+                {
+                    "query": query,
+                    "days": days,
+                    "max_results": max_results,
+                },
+            )
+            print(f"  [OK]   query={query!r} → {len(papers)} 篇")
+            ok += 1
+        except Exception as e:
+            print(f"  [FAIL] query={query!r} → {e}")
+            fail += 1
+
     env.save_snapshot()
     total = sum(len(v) for v in env.snapshot.values())
     print(f"\n完成：{ok} 个 aspect 成功、{fail} 个失败，共 {total} 条快照记录")
@@ -71,6 +95,7 @@ def main():
     parser = argparse.ArgumentParser(description="生成 MockArxivEnv 快照")
     parser.add_argument("--snapshot", default="../data/mock_arxiv_snapshot.json")
     parser.add_argument("--aspects", nargs="+", default=None)
+    parser.add_argument("--keyword-queries", nargs="+", default=None)
     parser.add_argument("--max_results", type=int, default=50)
     parser.add_argument("--days", type=int, default=30)
     args = parser.parse_args()
@@ -78,6 +103,7 @@ def main():
     build(
         snapshot_path=args.snapshot,
         aspects=args.aspects,
+        keyword_queries=args.keyword_queries,
         max_results=args.max_results,
         days=args.days,
     )

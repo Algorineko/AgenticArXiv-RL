@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Optional
 import sys
 import os
+import re
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -61,6 +62,46 @@ def _default_output_path() -> str:
     return os.path.join(project_root, "output", "recent_cs_papers.txt")
 
 
+def _paper_info(result) -> Dict:
+    return {
+        "id": result.get_short_id(),
+        "title": result.title,
+        "authors": [author.name for author in result.authors],
+        "summary": (result.summary[:200] + "...")
+        if len(result.summary) > 200
+        else result.summary,
+        "published": result.published.strftime("%Y-%m-%d %H:%M:%S"),
+        "updated": result.updated.strftime("%Y-%m-%d %H:%M:%S")
+        if result.updated
+        else None,
+        "pdf_url": result.pdf_url,
+        "primary_category": result.primary_category,
+        "categories": result.categories,
+        "comment": result.comment,
+        "links": [link.href for link in result.links],
+    }
+
+
+_KEYWORD_FIELD_RE = re.compile(r"^(all|ti|au):\s*(.+)$", re.IGNORECASE)
+
+
+def _keyword_query_expression(query: str) -> str:
+    """Map a user query to the small, documented arXiv keyword surface.
+
+    Bare text searches all metadata. Advanced callers can explicitly select a
+    title (``ti:``) or author (``au:``) field, while keeping tool arguments
+    simple enough for the policy to learn.
+    """
+    normalized = " ".join(str(query or "").split())
+    if not normalized:
+        raise ValueError("query 不能为空")
+
+    match = _KEYWORD_FIELD_RE.match(normalized)
+    field, terms = (match.group(1).lower(), match.group(2)) if match else ("all", normalized)
+    escaped_terms = terms.replace('"', r'\"')
+    return f'{field}:"{escaped_terms}"'
+
+
 def get_recently_submitted_cs_papers(
     max_results: int = 50,
     aspect: str = "*",
@@ -90,30 +131,44 @@ def get_recently_submitted_cs_papers(
 
     papers: List[Dict] = []
     for result in client.results(search):
-        paper_info = {
-            "id": result.get_short_id(),
-            "title": result.title,
-            "authors": [author.name for author in result.authors],
-            "summary": (result.summary[:200] + "...")
-            if len(result.summary) > 200
-            else result.summary,
-            "published": result.published.strftime("%Y-%m-%d %H:%M:%S"),
-            "updated": result.updated.strftime("%Y-%m-%d %H:%M:%S")
-            if result.updated
-            else None,
-            "pdf_url": result.pdf_url,
-            "primary_category": result.primary_category,
-            "categories": result.categories,
-            "comment": result.comment,
-            "links": [link.href for link in result.links],
-        }
-        papers.append(paper_info)
+        papers.append(_paper_info(result))
 
     if save_to_file:
         path = output_path or _default_output_path()
         save_papers_to_file(papers, path)
 
     return papers
+
+
+def search_arxiv_papers(
+    query: str,
+    max_results: int = 10,
+    days: Optional[int] = None,
+) -> List[Dict]:
+    """Search arXiv by keyword, title, or author.
+
+    ``query`` accepts bare text (searched as ``all:``) and explicit ``all:``,
+    ``ti:``, or ``au:`` prefixes.  An optional time window is applied using
+    arXiv's submitted-date filter.
+    """
+    if days is not None and days < 1:
+        raise ValueError("days 必须大于 0")
+
+    search_query = _keyword_query_expression(query)
+    if days is not None:
+        now_utc = datetime.now(timezone.utc)
+        start_date = (now_utc - timedelta(days=days)).strftime("%Y%m%d")
+        end_date = now_utc.strftime("%Y%m%d")
+        search_query = f"{search_query} AND submittedDate:[{start_date} TO {end_date}]"
+
+    client = arxiv.Client()
+    search = arxiv.Search(
+        query=search_query,
+        max_results=max_results,
+        sort_by=arxiv.SortCriterion.Relevance,
+        sort_order=arxiv.SortOrder.Descending,
+    )
+    return [_paper_info(result) for result in client.results(search)]
 
 
 ARXIV_TOOL_SCHEMA = {
@@ -152,11 +207,42 @@ ARXIV_TOOL_SCHEMA = {
     "required": [],
 }
 
+KEYWORD_SEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "检索词；默认全字段检索，也可用 all:、ti: 或 au: 限定字段",
+            "minLength": 1,
+        },
+        "max_results": {
+            "type": "integer",
+            "description": "最大返回结果数",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+        },
+        "days": {
+            "type": ["integer", "null"],
+            "description": "可选：只检索最近多少天内提交的论文",
+            "minimum": 1,
+        },
+    },
+    "required": ["query"],
+}
+
 registry.register_tool(
     name="get_recently_submitted_cs_papers",
     description="获取最近提交的计算机科学领域论文列表，支持按子领域筛选",
     parameter_schema=ARXIV_TOOL_SCHEMA,
     func=get_recently_submitted_cs_papers,
+)
+
+registry.register_tool(
+    name="search_arxiv_papers",
+    description="按关键词、标题或作者检索 arXiv 论文，可选按提交时间过滤",
+    parameter_schema=KEYWORD_SEARCH_SCHEMA,
+    func=search_arxiv_papers,
 )
 
 
