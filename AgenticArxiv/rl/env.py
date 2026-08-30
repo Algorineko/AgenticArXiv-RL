@@ -14,9 +14,10 @@
 3. **key 含 session_id**：每次 rollout 的 session_id 都不同，缓存永远 miss。
    → key 归一化时剔除易变字段。
 
-四个工具在离线模式下的处理策略不同：
+五个工具在离线模式下的处理策略不同：
 
     get_recently_submitted_cs_papers  网络请求 → 快照回放
+    search_arxiv_papers               网络请求 → 快照回放 / 确定性降级
     download_arxiv_pdf                网络请求 → 离线桩（写占位文件 + 更新 store）
     translate_arxiv_pdf               子进程   → 由 LocalSideEffectManager 拦截，不进 env
     get_paper_cache_status            纯本地   → 直接真实执行（读内存 store）
@@ -24,6 +25,7 @@
 
 import json
 import os
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
@@ -34,7 +36,10 @@ from utils.logger import log
 _VOLATILE_ARG_KEYS = {"session_id", "output_path", "save_to_file"}
 
 # 需要走快照回放的"网络型"工具
-DEFAULT_SNAPSHOT_TOOLS: Set[str] = {"get_recently_submitted_cs_papers"}
+_RECENT_SEARCH_TOOL = "get_recently_submitted_cs_papers"
+_KEYWORD_SEARCH_TOOL = "search_arxiv_papers"
+_SEARCH_TOOLS = {_RECENT_SEARCH_TOOL, _KEYWORD_SEARCH_TOOL}
+DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS)
 
 
 class MockArxivEnv:
@@ -77,7 +82,13 @@ class MockArxivEnv:
         self.snapshot: Dict[str, Dict[str, Any]] = {}
 
         # 统计信息，便于确认 rollout 真的没打外网
-        self.stats = {"hit": 0, "miss": 0, "real_calls": 0, "offline_stubs": 0}
+        self.stats = {
+            "hit": 0,
+            "miss": 0,
+            "real_calls": 0,
+            "offline_stubs": 0,
+            "fallback": 0,
+        }
 
         if self.snapshot_path and self.snapshot_path.exists():
             with open(self.snapshot_path, "r", encoding="utf-8") as f:
@@ -103,6 +114,8 @@ class MockArxivEnv:
 
         # 3) 快照工具
         key = self._make_key(args)
+        if tool_name == _KEYWORD_SEARCH_TOOL:
+            key = self._keyword_search_key(args)
         tool_data = self.snapshot.get(tool_name, {})
 
         # record 模式必须每次都真打，否则派生逻辑会"帮倒忙"：
@@ -117,18 +130,28 @@ class MockArxivEnv:
         if key in tool_data:
             self.stats["hit"] += 1
             result = tool_data[key]["result"]
+            if tool_name == _KEYWORD_SEARCH_TOOL:
+                result = self._limit_search_result(result, args)
             self._sync_session_papers(tool_name, args, result)
             return result
 
         # 3a) 搜索工具：按"论文池"语义派生，而不是死抠精确 key
         #     真实 API 下 max_results=5 / 7 / 10 都能正常返回，mock 也应如此，
         #     否则策略稍微改个参数就变成 KeyError，奖励信号会被污染成"全是工具失败"。
-        if tool_name == "get_recently_submitted_cs_papers":
+        if tool_name == _RECENT_SEARCH_TOOL:
             derived = self._derive_search_result(args, tool_data)
             if derived is not None:
                 self.stats["hit"] += 1
                 self._sync_session_papers(tool_name, args, derived)
                 return derived
+
+        if tool_name == _KEYWORD_SEARCH_TOOL:
+            fallback = self._keyword_search_fallback(args, tool_data)
+            if fallback is not None:
+                self.stats["hit"] += 1
+                self.stats["fallback"] += 1
+                self._sync_session_papers(tool_name, args, fallback)
+                return fallback
 
         self.stats["miss"] += 1
         if self.mode == "replay":
@@ -143,7 +166,7 @@ class MockArxivEnv:
             result = registry.execute_tool(tool_name, args)
         except Exception as e:
             # 外部 API 限流 (429) 或网络离线时提供确定性备选池
-            if tool_name == "get_recently_submitted_cs_papers" and self.mode == "auto":
+            if tool_name == _RECENT_SEARCH_TOOL and self.mode == "auto":
                 aspect = str(args.get("aspect", "*"))
                 max_r = int(args.get("max_results", 5))
                 result = [
@@ -166,13 +189,17 @@ class MockArxivEnv:
 
     def _sync_session_papers(self, tool_name: str, args: Dict[str, Any], result: Any) -> None:
         """若带 session_id 且为搜索工具，同步更新 store 中的 papers 缓存"""
-        if tool_name == "get_recently_submitted_cs_papers" and isinstance(result, list):
+        if tool_name in _SEARCH_TOOLS and isinstance(result, list):
             session_id = args.get("session_id")
             if session_id:
                 try:
                     from models.schemas import Paper
                     from models.store import store
-                    papers = [Paper(**p) if isinstance(p, dict) else p for p in result]
+                    papers = [
+                        Paper(**{key: value for key, value in paper.items() if not key.startswith("_")})
+                        if isinstance(paper, dict) else paper
+                        for paper in result
+                    ]
                     store.set_last_papers(session_id, papers)
                 except Exception:
                     pass
@@ -217,6 +244,63 @@ class MockArxivEnv:
             max_results = 50
         max_results = max(1, min(max_results, len(pool)))
         return pool[:max_results]
+
+    @staticmethod
+    def _limit_search_result(result: Any, args: Dict[str, Any]) -> Any:
+        """Apply the requested limit to a cached keyword-search result pool."""
+        if not isinstance(result, list):
+            return result
+        try:
+            max_results = int(args.get("max_results", 10))
+        except (TypeError, ValueError):
+            max_results = 10
+        return result[:max(1, min(max_results, len(result)))]
+
+    @classmethod
+    def _keyword_search_key(cls, args: Dict[str, Any]) -> str:
+        """Key keyword-search snapshots by a normalized query hash."""
+        query = " ".join(str((args or {}).get("query", "")).split()).casefold()
+        stable = {"query_sha256": sha256(query.encode("utf-8")).hexdigest()}
+        days = (args or {}).get("days")
+        if days is not None:
+            stable["days"] = days
+        return json.dumps(stable, sort_keys=True, ensure_ascii=False)
+
+    @classmethod
+    def _keyword_search_fallback(
+        cls, args: Dict[str, Any], tool_data: Dict[str, Any]
+    ) -> Optional[list]:
+        """Return an explicitly marked, deterministic subset for an unseen query."""
+        pool = []
+        seen_ids = set()
+        for key in sorted(tool_data):
+            result = tool_data[key].get("result")
+            if not isinstance(result, list):
+                continue
+            for paper in result:
+                if not isinstance(paper, dict):
+                    continue
+                paper_id = str(paper.get("id", ""))
+                if paper_id in seen_ids:
+                    continue
+                seen_ids.add(paper_id)
+                pool.append(paper)
+        if not pool:
+            return None
+
+        query = " ".join(str((args or {}).get("query", "")).split()).casefold()
+        start = int.from_bytes(sha256(query.encode("utf-8")).digest()[:8], "big") % len(pool)
+        ordered = pool[start:] + pool[:start]
+        selected = cls._limit_search_result(ordered, args)
+        if not selected:
+            return None
+
+        marked = [dict(paper) for paper in selected]
+        marked[0]["_mock_env"] = {
+            "offline_fallback": True,
+            "message": "关键词未命中离线快照；返回固定回退子集，不代表查询匹配结果。",
+        }
+        return marked
 
     # ---------- 离线下载桩 ----------
 
@@ -322,5 +406,6 @@ class MockArxivEnv:
         s = self.stats
         return (
             f"mode={self.mode} hit={s['hit']} miss={s['miss']} "
-            f"real_calls={s['real_calls']} offline_stubs={s['offline_stubs']}"
+            f"real_calls={s['real_calls']} offline_stubs={s['offline_stubs']} "
+            f"fallback={s['fallback']}"
         )

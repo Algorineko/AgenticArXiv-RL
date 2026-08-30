@@ -102,8 +102,9 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 2. `download_arxiv_pdf(ref, session_id)` — Descargar PDF
 3. `translate_arxiv_pdf(ref, session_id)` — Traducir PDF
 4. `get_paper_cache_status(ref, session_id)` — Consultar estado de la caché
+5. `search_arxiv_papers(query, max_results, days=None)` — Buscar por palabra clave, título o autor
 
-> El siguiente paso del conjunto de herramientas (búsqueda por palabras clave / lectura de papers / resumen / análisis de figuras) ya tiene un diseño cerrado, aún sin implementar — ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
+> La búsqueda por palabras clave ya está disponible. La lectura de papers, el resumen y el análisis de figuras tienen un diseño cerrado, pero aún no están implementados; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
 
 ### Componentes de Verifiable Reward
 
@@ -587,7 +588,7 @@ Además, **un espacio de acciones más grande no es automáticamente mejor**: la
 
 | Prioridad | Herramienta | Diseño | Por qué sigue siendo amiga de RLVR |
 |--------|------|----------|----------------------|
-| **T1** | `search_arxiv_papers(query, max_results, days=None)` | Búsqueda por palabras clave mapeada a los campos `all:` / `ti:` / `au:` de la API de arXiv; coexiste con la herramienta actual (navegar por ventana temporal y búsqueda puntual son tipos de tarea distintos) | Las herramientas/parámetros esperados siguen derivándose de `task_spec.steps`; `MockArxivEnv` repite offline indexado por un hash del query, y los query no recogidos degradan de forma **determinista** (devuelve un subconjunto fijo, marcado explícitamente en la observation) — reproducible, y evita que el modelo confunda un resultado vacío con una búsqueda exitosa |
+| **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | Búsqueda por palabras clave mapeada a los campos `all:` / `ti:` / `au:` de la API de arXiv; coexiste con la herramienta actual (navegar por ventana temporal y búsqueda puntual son tipos de tarea distintos) | Las herramientas/parámetros esperados siguen derivándose de `task_spec.steps`; `MockArxivEnv` repite offline indexado por un hash del query, y los query no recogidos degradan de forma **determinista** (devuelve un subconjunto fijo, marcado explícitamente en la observation) — reproducible, y evita que el modelo confunda un resultado vacío con una búsqueda exitosa |
 | **T2** | `get_paper_content(ref, section=None)` | PDF → texto plano (PyMuPDF); por defecto devuelve title/abstract, y por secciones (method / result / conclusion) a petición | Extracción de texto determinista, sin LLM; los resultados de extracción van pre-guardados en el snapshot. **Es el prerrequisito de todas las tareas de interpretación** |
 | **T3** | `summarize_paper(ref, style, max_words)` | Resumir un paper: un modelo resumidor local **en el lado del entorno** (con el texto de T2 como entrada) devuelve el resumen | Lo entrenable es «cuándo llamarlo, sobre qué ref, si style/longitud son correctos» — todo verificable por reglas; la calidad del resumen en sí **no entra en la recompensa** (ver abajo) |
 | **T4** (opcional) | `extract_paper_figures(ref)` | Preparación de figuras/tablas: extrae imágenes de figuras + captions, devuelve rutas de archivos | Determinista; se verifica «ref correcto + archivos existen + cantidad ≥ 1» |
@@ -626,9 +627,9 @@ Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribui
 
 ### P0 — Expansión del conjunto de herramientas (bucle de interpretación)
 
-Diseño cerrado (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»), ninguno implementado aún:
+T1 está implementado; el resto tiene diseño cerrado (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»):
 
-- [ ] **T1 Búsqueda por palabras clave** `search_arxiv_papers`: añade la búsqueda puntual de «encontrar un paper concreto»
+- [x] **T1 Búsqueda por palabras clave** `search_arxiv_papers`: añade la búsqueda puntual de «encontrar un paper concreto»
 - [ ] **T2 Lectura de papers** `get_paper_content`: PDF → texto, el prerrequisito de todas las tareas de interpretación (camino crítico)
 - [ ] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable
 - [ ] **T4/T5 Extracción y análisis de figuras** (opcional, entorno multimodal): después de T1–T3; el VLM vive solo en el lado del entorno

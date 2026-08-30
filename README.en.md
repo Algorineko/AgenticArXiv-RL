@@ -100,8 +100,9 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 2. `download_arxiv_pdf(ref, session_id)` — Download PDF
 3. `translate_arxiv_pdf(ref, session_id)` — Translate PDF
 4. `get_paper_cache_status(ref, session_id)` — Query cache status
+5. `search_arxiv_papers(query, max_results, days=None)` — Search by keyword, title, or author
 
-> The next step of the toolset (keyword search / paper reading / summarization / figure analysis) has a finalized design but is not implemented yet — see "🧰 Toolset Evolution Design" below.
+> Keyword search is available. Paper reading, summarization, and figure analysis remain designed but unimplemented; see "🧰 Toolset Evolution Design" below.
 
 ### Verifiable Reward Components
 
@@ -592,7 +593,7 @@ Also, **a bigger action space is not automatically better**: the policy is a ~1.
 
 | Priority | Tool | Design | Why it stays RLVR-friendly |
 |--------|------|----------|----------------------|
-| **T1** | `search_arxiv_papers(query, max_results, days=None)` | Keyword search mapped to the arXiv API's `all:` / `ti:` / `au:` fields; coexists with the existing tool (time-window browsing vs precise lookup are different task types) | Expected tools/args still derive from `task_spec.steps`; `MockArxivEnv` replays offline keyed by a hash of the query string, and unseen queries degrade **deterministically** (return a fixed subset, explicitly flagged in the observation) — reproducible, and it prevents the model from mistaking an empty result for a successful search |
+| **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | Keyword search mapped to the arXiv API's `all:` / `ti:` / `au:` fields; coexists with the existing tool (time-window browsing vs precise lookup are different task types) | Expected tools/args still derive from `task_spec.steps`; `MockArxivEnv` replays offline keyed by a hash of the query string, and unseen queries degrade **deterministically** (return a fixed subset, explicitly flagged in the observation) — reproducible, and it prevents the model from mistaking an empty result for a successful search |
 | **T2** | `get_paper_content(ref, section=None)` | PDF → plain text (PyMuPDF); returns title/abstract by default, per section (method / result / conclusion) on demand | Deterministic text extraction, no LLM involved; extraction results pre-stored in the snapshot. **It is the prerequisite of every interpretation task** |
 | **T3** | `summarize_paper(ref, style, max_words)` | Summarize a paper: an **env-side** local summarizer model (input from T2's text) returns the summary | What is trainable is "when to call it, on which ref, whether style/length args are right" — all rule-checkable; summary quality itself is **not rewarded** (see below) |
 | **T4** (optional) | `extract_paper_figures(ref)` | Figure/table preparation: extract figure images + captions, return file paths | Deterministic; verify "correct ref + files exist + count ≥ 1" |
@@ -631,9 +632,9 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 
 ### P0 — Toolset expansion (interpretation loop)
 
-Design finalized (see "🧰 Toolset Evolution Design"), none implemented yet:
+T1 is implemented; the remaining tools have finalized designs (see "🧰 Toolset Evolution Design"):
 
-- [ ] **T1 Keyword search** `search_arxiv_papers`: adds the "find a specific paper" lookup-type retrieval
+- [x] **T1 Keyword search** `search_arxiv_papers`: adds the "find a specific paper" lookup-type retrieval
 - [ ] **T2 Paper reading** `get_paper_content`: PDF → text, the prerequisite of all interpretation tasks (critical path)
 - [ ] **T3 Paper summarization** `summarize_paper`: env-side summarization, turning "interpretation" into a trainable tool-invocation decision
 - [ ] **T4/T5 Figure extraction & analysis** (optional, multimodal env): after T1–T3; the VLM lives only on the env side

@@ -378,6 +378,8 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
                 try:
                     if action["name"] == "get_recently_submitted_cs_papers":
                         result = environments[index].get_recently_submitted_cs_papers(**args)
+                    elif action["name"] == "search_arxiv_papers":
+                        result = environments[index].search_arxiv_papers(**args)
                     elif action["name"] == "download_arxiv_pdf":
                         result = environments[index].download_arxiv_pdf(**args)
                     elif action["name"] == "translate_arxiv_pdf":
