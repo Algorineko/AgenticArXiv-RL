@@ -26,13 +26,18 @@ from tools.bootstrap import (  # noqa: E402
     registered_tool_count,
     require_all_tools,
 )
+from tools.tool_registry import registry  # noqa: E402
 
 
 class RegisterAllToolsTest(unittest.TestCase):
-    def test_all_four_register_in_a_healthy_environment(self):
+    def test_all_tools_register_in_a_healthy_environment(self):
         self.assertEqual(register_all_tools(), {})
         self.assertEqual(missing_tools(), [])
-        self.assertEqual(registered_tool_count(), len(TOOL_MODULES))
+        expected_count = sum(len(names) for names in TOOL_MODULES.values())
+        self.assertEqual(registered_tool_count(), expected_count)
+        self.assertIn("search_arxiv_papers", {
+            tool["name"] for tool in registry.list_tools()
+        })
 
     def test_one_broken_module_does_not_take_down_the_rest(self):
         """这是整个模块存在的理由。

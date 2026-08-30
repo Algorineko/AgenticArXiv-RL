@@ -99,8 +99,9 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 2. `download_arxiv_pdf(ref, session_id)` — 下载 PDF
 3. `translate_arxiv_pdf(ref, session_id)` — 翻译 PDF
 4. `get_paper_cache_status(ref, session_id)` — 查询缓存状态
+5. `search_arxiv_papers(query, max_results, days=None)` — 按关键词、标题或作者检索
 
-> 工具集的下一步扩展（关键词检索 / 论文阅读 / 总结 / 图表分析）已有设计稿、暂不实现，见下文「🧰 工具集演进设计」。
+> 关键词检索已经可用；论文阅读、总结和图表分析已有设计稿、暂不实现，见下文「🧰 工具集演进设计」。
 
 ### Verifiable Reward 组件
 
@@ -608,7 +609,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 
 | 优先级 | 工具 | 设计要点 | 为什么仍是 RLVR 友好 |
 |--------|------|----------|----------------------|
-| **T1** | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数照常由 `task_spec.steps` 派生；`MockArxivEnv` 按查询串哈希离线回放，未收录的 query 走**确定性降级**（返回固定子集并在 observation 里显式标注），保证可复现、也防止模型把空结果当检索成功 |
+| **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数照常由 `task_spec.steps` 派生；`MockArxivEnv` 按查询串哈希离线回放，未收录的 query 走**确定性降级**（返回固定子集并在 observation 里显式标注），保证可复现、也防止模型把空结果当检索成功 |
 | **T2** | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
 | **T3** | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**调本地摘要模型（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
 | **T4**（可选） | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 文件存在 + 数量 ≥ 1」 |
@@ -645,9 +646,9 @@ T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读
 
 ### P0 — 工具集扩展（解读闭环）
 
-设计已定稿（见「🧰 工具集演进设计」），均未实现：
+T1 已实现；其余工具设计已定稿（见「🧰 工具集演进设计」）：
 
-- [ ] **T1 关键词检索** `search_arxiv_papers`：补全「找一篇具体论文」的查找型检索
+- [x] **T1 关键词检索** `search_arxiv_papers`：补全「找一篇具体论文」的查找型检索
 - [ ] **T2 论文阅读** `get_paper_content`：PDF → 文本，全部解读类任务的前置件（关键路径）
 - [ ] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策
 - [ ] **T4/T5 图表抽取与分析**（可选，多模态环境）：排在 T1–T3 之后；VLM 只在 env 侧
