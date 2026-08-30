@@ -64,6 +64,21 @@ _SEARCH = family(
     difficulty="easy",
 )
 
+_KEYWORD_SEARCH_PARAMS = [
+    {"id": "agentic_rl", "query": "all:agentic reinforcement learning"},
+    {"id": "llm", "query": "all:large language model"},
+    {"id": "rag", "query": "all:retrieval augmented generation"},
+]
+
+_KEYWORD_SEARCH = family(
+    task_id=lambda p: f"search_kw_{p['id']}",
+    text=lambda p: f"按关键词检索 arXiv：{p['query']}，最多返回 5 篇论文",
+    steps=lambda p: [Step("search_arxiv_papers", {"query": p["query"], "max_results": 5, "days": 30})],
+    params=_KEYWORD_SEARCH_PARAMS,
+    category="keyword_search",
+    difficulty="medium",
+)
+
 _SEED_AI5 = (Step("get_recently_submitted_cs_papers",
                   {"aspect": "AI", "days": 7, "max_results": 5}),)
 
@@ -684,7 +699,7 @@ _LONG_CHAIN: List[TaskSpec] = [
 
 
 EXPANDED_TASKS: List[Dict[str, Any]] = build(
-    _SEARCH + _OTHERS + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
+    _SEARCH + _KEYWORD_SEARCH + _OTHERS + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
 )
 
 

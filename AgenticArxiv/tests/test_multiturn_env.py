@@ -29,6 +29,8 @@ class FakeBackend:
     def execute_tool(self, name, args):
         if name == "get_recently_submitted_cs_papers":
             return [PAPER]
+        if name == "search_arxiv_papers":
+            return [{**PAPER, "_mock_env": {"offline_fallback": True}}]
         raise AssertionError(name)
 
 
@@ -50,6 +52,12 @@ class MultiTurnEnvTest(unittest.TestCase):
         self.env.reset(task_id="next")
         with self.assertRaises(ValueError):
             self.env.download_arxiv_pdf(1)
+
+    def test_keyword_search_then_download_uses_same_session_state(self):
+        papers = self.env.search_arxiv_papers("all:agentic reinforcement learning", 3, 30)
+        downloaded = self.env.download_arxiv_pdf(1)
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(downloaded["paper_id"], PAPER["id"])
 
 
 if __name__ == "__main__":
