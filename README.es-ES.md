@@ -9,6 +9,10 @@
 > **Entorno de entrenamiento de RL Agentic basado en Agente ReAct + herramientas de arXiv**  
 > Soporta ruta de entrenamiento progresivo SFT/DPO/GRPO/PPO, además de una ruta opcional de OPD (destilación on-policy), para investigar aprendizaje por refuerzo en Agentes de LLM
 
+<p align="center">
+  <img src="imgs/AgenticArXiv-RL.jpg" alt="Descripción general del proyecto AgenticArXiv-RL" width="800"/>
+</p>
+
 ---
 
 ## 🎯 Posicionamiento del Proyecto

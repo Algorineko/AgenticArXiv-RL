@@ -7,6 +7,10 @@
 > **An Agentic RL training environment built on ReAct Agent + arXiv tools**  
 > Supports a progressive SFT/DPO/GRPO/PPO training pipeline, plus an optional OPD (on-policy distillation) route, for research on LLM Agent reinforcement learning
 
+<p align="center">
+  <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL Project Overview" width="800"/>
+</p>
+
 ---
 
 ## 🎯 Project Overview

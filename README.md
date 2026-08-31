@@ -7,6 +7,10 @@
 > **基于 ReAct Agent + arXiv 工具的 Agentic RL 训练环境**  
 > 支持 SFT/DPO/GRPO/PPO 渐进式训练路径，另提供可选的 OPD（on-policy 蒸馏）路线，用于研究 LLM Agent 强化学习
 
+<p align="center">
+  <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL 项目介绍" width="800"/>
+</p>
+
 ---
 
 ## 🎯 项目定位
