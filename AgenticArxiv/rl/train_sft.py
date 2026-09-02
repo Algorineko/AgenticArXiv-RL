@@ -151,7 +151,6 @@ def main(
         save_steps=100,
         save_total_limit=3,
         report_to=backends,
-        logging_dir=logging_dir,
         run_name=run_name or out_path.name,
         **_precision_flags(),     # 只有 CUDA 才开 fp16
     )
