@@ -153,10 +153,14 @@ class BaseAgent(ABC):
 
             try:
                 t0 = time.time()
+                # temperature 优先由调用方（如 DPO 数据生成）通过 llm_extra 指定，
+                # 否则回退到默认 0.1。硬编码 0.1 会让 llm_extra 里的 temperature
+                # 被静默忽略，导致多次 rollout 近乎确定、DPO 无法产生偏好分歧。
+                eff_temperature = float(extra.pop("temperature", 0.1))
                 response = self.llm_client.chat_completions(
                     model=agent_model,
                     messages=messages,
-                    temperature=0.1,
+                    temperature=eff_temperature,
                     max_tokens=1000,
                     stream=False,
                     extra=extra or None,

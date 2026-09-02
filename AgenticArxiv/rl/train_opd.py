@@ -345,7 +345,6 @@ def main(
         "logging_steps": 1,
         "save_strategy": "no",
         "report_to": backends,
-        "logging_dir": logging_dir,
         "run_name": run_name or Path(output_dir).name,
         **_precision_flags(),
     }
