@@ -323,9 +323,18 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
         expanded_prompts = [copy.deepcopy(p) for p in prompts]
         prompt_ids = []
         for prompt in expanded_prompts:
-            ids = tokenizer.apply_chat_template(
-                prompt, tokenize=True, add_generation_prompt=True,
-            ) if isinstance(prompt, list) else tokenizer(prompt)["input_ids"]
+            if isinstance(prompt, list):
+                # transformers>=5 的 apply_chat_template(tokenize=True) 返回
+                # BatchEncoding（含 "input_ids" 键），旧版返回纯 int 列表；统一取 token 序列。
+                encoded = tokenizer.apply_chat_template(
+                    prompt, tokenize=True, add_generation_prompt=True,
+                )
+                if "input_ids" in encoded:
+                    ids = encoded["input_ids"]
+                else:
+                    ids = encoded
+            else:
+                ids = tokenizer(prompt)["input_ids"]
             prompt_ids.append(list(ids))
 
         environments = [environment_factory() for _ in expanded_prompts]
@@ -355,7 +364,9 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
             next_active = []
             for batch_index, index in enumerate(active):
                 budget = trainer.max_completion_length - len(completion_ids[index])
-                generated = list(turn_ids[batch_index])[:budget]
+                # turn_ids 是 TRL 返回的完成 token；可能是 tensor，统一转成 int 列表，
+                # 否则下一轮拼进 full_ids 后 torch.tensor() 无法处理
+                generated = [int(t) for t in turn_ids[batch_index]][:budget]
                 text = tokenizer.decode(generated, skip_special_tokens=True)
                 completion_ids[index].extend(generated)
                 env_masks[index].extend([1] * len(generated))
