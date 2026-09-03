@@ -34,6 +34,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import torch
 from datasets import Dataset
 from transformers import AutoTokenizer
+from rl import trl_compat  # noqa: F401  (torch<2.6 时兜底 FSDPModule，须在 trl 之前)
 from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
 
 import tools.arxiv_tool  # noqa: F401  触发工具注册
