@@ -20,6 +20,8 @@ REPO_ROOT = PACKAGE_ROOT.parent
 # 添加 AgenticArxiv 到 Python 路径
 sys.path.insert(0, str(PACKAGE_ROOT))
 
+# 先做旧 torch 的 trl 兼容（torch<2.6 时兜底 FSDPModule），再 import trl
+from rl import trl_compat  # noqa: F401
 from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
