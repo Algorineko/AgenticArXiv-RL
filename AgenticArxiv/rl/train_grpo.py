@@ -37,6 +37,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+from rl import trl_compat  # noqa: F401  (torch<2.6 时兜底 FSDPModule，须在 trl 之前)
 from trl import GRPOConfig, GRPOTrainer
 
 import tools.arxiv_tool  # noqa: F401  触发工具注册
