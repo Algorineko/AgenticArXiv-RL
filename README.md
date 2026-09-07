@@ -4,6 +4,8 @@
 
 # AgenticArXiv-RL — Agentic RL 训练环境
 
+[![CI](https://github.com/Algorineko/AgenticArXiv-RL/actions/workflows/ci.yml/badge.svg)](https://github.com/Algorineko/AgenticArXiv-RL/actions/workflows/ci.yml)
+
 > **基于 ReAct Agent + arXiv 工具的 Agentic RL 训练环境**  
 > 支持 SFT/DPO/GRPO/PPO 渐进式训练路径，另提供可选的 OPD（on-policy 蒸馏）路线，用于研究 LLM Agent 强化学习
 
@@ -530,6 +532,13 @@ fire
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+### CI（.github/workflows/ci.yml）
+每个 PR / push 自动跑两层校验（全部离线，无需 GPU 与 LLM API key）：
+- **fast-core**（py3.10 / py3.12）：不装 torch，跑纯离线单元测试（benchmark / tools / agents / trajectory 等 301 条）+ `eval/badcase_replay.py` 坏例回放；
+- **full**（py3.12）：CPU torch + 全量依赖，跑全部 411 条单元测试（含多轮 GRPO / OPD / canary 守卫）+ 坏例回放。
+
+本地快速自检：`python -m unittest discover -s AgenticArxiv/tests -p 'test_*.py'`，或仅离线层：`python eval/badcase_replay.py`。
 
 ### 开发建议
 1. Fork 本仓库

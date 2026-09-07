@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # 快速层：不装 torch/transformers/trl，跑纯离线单元测试 + 坏例回放。
+  # 覆盖全部非训练模块（benchmark / tools / agents / trajectory / badcase）。
+  fast-core:
+    name: fast-core (offline, no torch) · py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install lightweight dependencies
+        run: |
+          pip install arxiv requests python-dotenv loguru "pydantic>=2.0" fire
+
+      - name: Syntax check
+        run: python -m compileall -q AgenticArxiv eval
+
+      - name: Run offline unit tests (exclude torch-dependent files)
+        working-directory: AgenticArxiv
+        run: |
+          find tests -name 'test_*.py' \
+            ! -name 'test_canary.py' \
+            ! -name 'test_grpo_reward.py' \
+            ! -name 'test_llm_request_params.py' \
+            ! -name 'test_opd.py' \
+            ! -name 'test_opd_multiturn.py' \
+            ! -name 'test_training_guards.py' \
+            | sed 's|/|.|g; s|\.py$||' | sort | xargs python -m unittest -v
+
+      - name: Badcase replay (regression guard)
+        run: python eval/badcase_replay.py
+
+  # 完整层：CPU torch + 全量依赖，跑全部单元测试（含多轮 GRPO / OPD / canary）。
+  full:
+    name: full (torch+trl) · py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install CPU torch first (avoid multi-GB CUDA wheels)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install requirements
+        run: pip install -r AgenticArxiv/requirements.txt
+
+      - name: Syntax check
+        run: python -m compileall -q AgenticArxiv eval
+
+      - name: Run all unit tests
+        run: python -m unittest discover -s AgenticArxiv/tests -p 'test_*.py'
+
+      - name: Badcase replay (regression guard)
+        run: python eval/badcase_replay.py
