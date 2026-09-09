@@ -138,7 +138,12 @@ class CanaryEvaluator:
                 task_rewards = []
                 for completion in completions:
                     result = synthesize_trajectory(completion, env=self.env)
-                    breakdown, _ = self.reward_calc.compute_reward_breakdown(task, result)
+                    # 奖励带按 global step 变化的课程。Canary 必须使用当前训练
+                    # step，否则跨过课程边界后会继续按 step=0 的早期权重打分，
+                    # 与训练目标不可比。
+                    breakdown, _ = self.reward_calc.compute_reward_breakdown(
+                        task, result, training_step=step
+                    )
                     reward = float(breakdown.total)
                     task_rewards.append(reward)
                     if breakdown.outcome > 0:

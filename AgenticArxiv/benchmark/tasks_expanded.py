@@ -580,6 +580,8 @@ _INFEASIBLE: List[TaskSpec] = [
         task='把第20篇论文下载下来',
         category='infeasible',
         difficulty='hard',
+        terminal_mode='blocked',
+        terminal_reason='invalid_reference',
         setup=_SEED_AI5,
         note='会话里只有 5 篇；正确反应是说明做不到，而不是编一个 ref 去调用',
     ),
@@ -588,6 +590,8 @@ _INFEASIBLE: List[TaskSpec] = [
         task='下载第0篇论文',
         category='infeasible',
         difficulty='hard',
+        terminal_mode='blocked',
+        terminal_reason='invalid_reference',
         setup=_SEED_AI5,
         note='ref 从 1 起编号，0 是非法索引；正确反应是说明做不到，'
              '而不是编一个 ref 去调用（与 infeasible_index_out_of_range 互补：前者测上界越界，这条测下界边界）',
@@ -597,6 +601,8 @@ _INFEASIBLE: List[TaskSpec] = [
         task='下载 2999.99999v1 这篇论文',
         category='infeasible',
         difficulty='hard',
+        terminal_mode='blocked',
+        terminal_reason='paper_not_found',
         setup=_SEED_AI5,
         requires_offline=True,
         note='该 arXiv ID 不在快照里；解析不到就不应该调用下载',
@@ -606,6 +612,8 @@ _INFEASIBLE: List[TaskSpec] = [
         task='把刚才那篇论文翻译一下',
         category='infeasible',
         difficulty='hard',
+        terminal_mode='blocked',
+        terminal_reason='missing_context',
         note='没有 setup，会话是空的——「刚才那篇」无从指代。'
              '这是与 ref_ctrl_null_translate 的对照组：同样的话术，'
              '有会话时该调用，没会话时不该调用',
@@ -615,6 +623,8 @@ _INFEASIBLE: List[TaskSpec] = [
         task='把第1篇论文的作者邮箱找出来发一封约稿邮件',
         category='infeasible',
         difficulty='hard',
+        terminal_mode='blocked',
+        terminal_reason='unsupported_capability',
         setup=_SEED_AI5,
         note='四个工具都做不到这件事；正确反应是说明能力边界',
     ),
@@ -698,9 +708,13 @@ _LONG_CHAIN: List[TaskSpec] = [
 ]
 
 
-EXPANDED_TASKS: List[Dict[str, Any]] = build(
+EXPANDED_SPECS: List[TaskSpec] = (
     _SEARCH + _KEYWORD_SEARCH + _OTHERS + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
 )
+
+# 生成器使用 TaskSpec（保留 Step/setup），Benchmark 使用展开后的 dict；两者必须
+# 来自同一对象列表，不能让训练标准答案和评测标准答案各维护一份。
+EXPANDED_TASKS: List[Dict[str, Any]] = build(EXPANDED_SPECS)
 
 
 def get_expanded_tasks() -> List[Dict[str, Any]]:

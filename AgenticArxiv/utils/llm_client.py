@@ -1,5 +1,6 @@
 # AgenticArxiv/utils/llm_client.py
 import os
+from hashlib import sha256
 from typing import Any, Dict, List, Optional
 import requests
 
@@ -69,6 +70,7 @@ class TransformersLLMClient:
 
         self.model_name = model
         self.seed = seed
+        self._stream_seed = seed
         self._calls = 0
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         if self.tokenizer.pad_token_id is None:
@@ -82,7 +84,7 @@ class TransformersLLMClient:
         }
         if dtype not in dtype_map:
             raise ValueError(f"Unsupported dtype {dtype!r}; choose from {sorted(dtype_map)}")
-        load_kwargs: Dict[str, Any] = {"torch_dtype": dtype_map[dtype]}
+        load_kwargs: Dict[str, Any] = {"dtype": dtype_map[dtype]}
         self.device = device
         if device == "auto":
             load_kwargs["device_map"] = "auto"
@@ -90,6 +92,22 @@ class TransformersLLMClient:
         if device != "auto":
             self.model.to(device)
         self.model.eval()
+
+    def start_generation_stream(self, stream_key: str) -> None:
+        """Start an order-independent deterministic RNG stream for one rollout.
+
+        A global ``seed + call_count`` stream makes a later task's samples depend
+        on how many ReAct turns every earlier task happened to use. Deriving the
+        stream from task/trial identity keeps paired Base/SFT/RL evaluations
+        comparable even when an environment change alters earlier trajectories.
+        """
+        self._calls = 0
+        if self.seed is None:
+            self._stream_seed = None
+            return
+        digest = sha256(str(stream_key).encode("utf-8")).digest()
+        offset = int.from_bytes(digest[:8], "big") % (2**31)
+        self._stream_seed = self.seed + offset
 
     def chat_completions(
         self,
@@ -123,12 +141,18 @@ class TransformersLLMClient:
             "pad_token_id": self.tokenizer.pad_token_id,
             **extra,
         }
+        # Transformers supports string-level stopping when the tokenizer is
+        # supplied to generate().  Keep the decode-time split below as a final
+        # guard, but stop generation eagerly so a local model does not waste up
+        # to max_tokens hallucinating its own Observation and later turns.
+        if stop:
+            generation_kwargs["stop_strings"] = list(stop)
+            generation_kwargs["tokenizer"] = self.tokenizer
         if do_sample:
             generation_kwargs["temperature"] = temperature
         if self.seed is not None:
-            # A different, reproducible stream per call gives DPO rollouts
-            # diversity without making repeated dataset builds irreproducible.
-            torch.manual_seed(self.seed + self._calls)
+            stream_seed = getattr(self, "_stream_seed", self.seed)
+            torch.manual_seed(stream_seed + self._calls)
         self._calls += 1
         with torch.inference_mode():
             output = self.model.generate(**inputs, **generation_kwargs)

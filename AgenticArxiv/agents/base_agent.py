@@ -20,6 +20,13 @@ from agents.side_effects import SideEffectManager, LocalSideEffectManager
 # 把本来完全正确的轨迹判成 accurate=False。
 TERMINAL_ACTIONS = ("FINISH", "FORCE_STOP", "ERROR")
 
+# 两种搜索都会产生“当前会话的候选论文列表”。后续下载、翻译和缓存查询
+# 都通过这份列表解析 ref，因此必须共用相同的状态写入和结果展示逻辑。
+PAPER_SEARCH_ACTIONS = (
+    "get_recently_submitted_cs_papers",
+    "search_arxiv_papers",
+)
+
 
 def is_terminal_action(name: Any) -> bool:
     """判断解析出的动作名是否代表「结束」而非一次工具调用。"""
@@ -111,8 +118,19 @@ class BaseAgent(ABC):
     # ---------- 通用执行循环 ----------
 
     def run(
-        self, task: str, agent_model: str = None, session_id: str = "default"
+        self,
+        task: str,
+        agent_model: str = None,
+        session_id: str = "default",
+        initial_history: str = "",
     ) -> Dict[str, Any]:
+        """Run one task through the ReAct loop.
+
+        ``initial_history`` is model-visible state that existed before the
+        current user request.  Benchmark setup actions use it to expose the
+        same legitimate session context that GRPO sees, without counting the
+        setup as policy actions or placing it in the scored trajectory.
+        """
         log.info(f"[{self.__class__.__name__}] 开始执行任务: {task}")
         run_start = time.time()
         self.session_id = session_id
@@ -131,8 +149,14 @@ class BaseAgent(ABC):
         tools = self.discover_tools()
         tools_description = self.format_tools_for_prompt(tools)
 
-        # 注入会话上下文，避免 LLM 重复搜索已缓存的论文
-        enriched_task = self._enrich_task_with_context(task, session_id)
+        # Benchmark/GRPO 会显式传入同一份、由 TaskSpec.setup 派生的可见状态。
+        # 此时不要再从 side-effects 追加另一种格式的论文列表，否则评测 prompt
+        # 会比训练 prompt 多出标题，重新造成输入分布错位。普通 Web/API 调用没有
+        # initial_history，仍沿用运行时 store 中的真实会话上下文。
+        enriched_task = (
+            task if initial_history.strip()
+            else self._enrich_task_with_context(task, session_id)
+        )
 
         history: List[Dict[str, str]] = []
         step_timings: List[Dict[str, int]] = []
@@ -141,7 +165,13 @@ class BaseAgent(ABC):
         for iteration in range(self.max_iterations):
             log.info(f"第 {iteration + 1} 次迭代")
 
-            history_text = self.format_history(history)
+            generated_history = self.format_history(history)
+            history_text = initial_history.strip()
+            if generated_history:
+                history_text = (
+                    f"{history_text}\n\n{generated_history}"
+                    if history_text else generated_history
+                )
             messages, extra = self.build_messages(enriched_task, tools_description, history_text)
             extra = self._merge_llm_extra(extra)
 
@@ -345,8 +375,8 @@ class BaseAgent(ABC):
             except Exception:
                 pass
 
-            # arxiv 搜索结果存入 session
-            if tool_name == "get_recently_submitted_cs_papers":
+            # 两种 arXiv 搜索结果都存入同一个 session，供后续 ref 解析。
+            if tool_name in PAPER_SEARCH_ACTIONS:
                 # MCP 模式可能返回 dict（如 {"error": "..."}），兼容处理
                 if isinstance(result, dict):
                     if "error" in result:
@@ -356,7 +386,34 @@ class BaseAgent(ABC):
                         result = vals[0]
                 if isinstance(result, list):
                     if result:
-                        papers_obj = [Paper(**p) for p in result]
+                        # replay 对未知关键词会返回带显式标记的确定性回退池，
+                        # 它只用于保持环境可复现，不能伪装成真实命中，更不能
+                        # 覆盖当前会话的论文列表，否则后续 ref 会指向无关论文。
+                        fallback_meta = next(
+                            (
+                                paper.get("_mock_env")
+                                for paper in result
+                                if isinstance(paper, dict)
+                                and isinstance(paper.get("_mock_env"), dict)
+                                and paper["_mock_env"].get("offline_fallback")
+                            ),
+                            None,
+                        )
+                        if fallback_meta:
+                            message = fallback_meta.get(
+                                "message",
+                                "关键词未命中离线快照，回退结果不代表真实匹配。",
+                            )
+                            return (
+                                f"工具执行失败: {message}"
+                                "请检查 query 与 days 是否完整匹配任务要求。"
+                            )
+
+                        papers_obj = [
+                            Paper(**{key: value for key, value in paper.items() if not key.startswith("_")})
+                            if isinstance(paper, dict) else paper
+                            for paper in result
+                        ]
                         self.side_effects.set_last_papers(self.session_id, papers_obj)
                         papers_count = len(result)
                         paper_titles = [paper.get("title", "无标题") for paper in result[:3]]

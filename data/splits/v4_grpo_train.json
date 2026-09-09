@@ -1,0 +1,142 @@
+{
+  "version": 4,
+  "status": "invalidated_pending_setup_aware_reaudit",
+  "invalidation": {
+    "reason": "The GRPO rollout used for selection did not apply TaskSpec.setup before policy generation, invalidating reward statistics for setup-dependent reference tasks.",
+    "affected_tasks": [
+      "ref_ctrl_word_handover",
+      "ref_stress_image_restoration",
+      "ref_stress_state_across"
+    ],
+    "policy": "Use this split for smoke/debug only. Re-audit from the frozen SFT adapter and create a new version before formal GRPO training."
+  },
+  "task_set": "expanded",
+  "purpose": "formal GRPO train split selected by frozen-policy within-prompt reward variance",
+  "derived_from": [
+    "data/splits/v2_62.json:train",
+    "data/splits/v3_grpo_probe.json:rl_probe"
+  ],
+  "source": {
+    "model": "outputs/sft_qlora_v1_e1/final",
+    "artifact": "outputs/grpo_reward_audit_g4_r2/reward_probe_summary.json",
+    "policy_frozen": true,
+    "learning_rate": 0.0,
+    "num_generations": 4,
+    "groups_per_task": 8,
+    "rollouts_per_task": 32,
+    "temperature": 1.0,
+    "reward_curriculum_steps_during_audit": 30,
+    "snapshot": "data/mock_arxiv_snapshot.json"
+  },
+  "selection_policy": {
+    "include": "informative_group_fraction >= 0.375",
+    "exclude": "informative_group_fraction < 0.25 and mean_group_std < 0.02",
+    "rationale": "Keep tasks with repeated within-prompt ranking signal; exclude near-constant groups that waste online rollouts.",
+    "heldout_policy": "Only v2 train tasks are eligible. dev, iid_test and ood_test remain untouched."
+  },
+  "split": {
+    "rl_train": [
+      "chain_ro5_dl_three",
+      "infeasible_no_session",
+      "infeasible_unknown_id",
+      "infeasible_zero_index",
+      "ref_ctrl_word_handover",
+      "ref_stress_image_restoration",
+      "ref_stress_state_across"
+    ],
+    "excluded_low_variance": [
+      "chain_lg10_dl_tr_last"
+    ]
+  },
+  "audit": {
+    "chain_lg10_dl_tr_last": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.545237625,
+      "min_reward": 0.455952,
+      "max_reward": 0.55119,
+      "mean_group_std": 0.005952374999999996,
+      "zero_std_fraction": 0.875,
+      "informative_group_fraction": 0.125
+    },
+    "chain_ro5_dl_three": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.369866375,
+      "min_reward": -0.107143,
+      "max_reward": 0.446429,
+      "mean_group_std": 0.12722013940783866,
+      "zero_std_fraction": 0.25,
+      "informative_group_fraction": 0.75
+    },
+    "infeasible_no_session": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.49531249999999993,
+      "min_reward": 0.05,
+      "max_reward": 1.0,
+      "mean_group_std": 0.33238577504910316,
+      "zero_std_fraction": 0.25,
+      "informative_group_fraction": 0.75
+    },
+    "infeasible_unknown_id": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.6140625000000002,
+      "min_reward": 0.05,
+      "max_reward": 1.0,
+      "mean_group_std": 0.33238577504910316,
+      "zero_std_fraction": 0.25,
+      "informative_group_fraction": 0.75
+    },
+    "infeasible_zero_index": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.88058034375,
+      "min_reward": 0.028571,
+      "max_reward": 1.0,
+      "mean_group_std": 0.16337539534800813,
+      "zero_std_fraction": 0.625,
+      "informative_group_fraction": 0.375
+    },
+    "ref_ctrl_word_handover": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.440625,
+      "min_reward": -0.110714,
+      "max_reward": 0.5,
+      "mean_group_std": 0.08568307589700654,
+      "zero_std_fraction": 0.5,
+      "informative_group_fraction": 0.5
+    },
+    "ref_stress_image_restoration": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.4597098125,
+      "min_reward": 0.125,
+      "max_reward": 0.5,
+      "mean_group_std": 0.05262721099408092,
+      "zero_std_fraction": 0.625,
+      "informative_group_fraction": 0.375
+    },
+    "ref_stress_state_across": {
+      "sample_count": 32,
+      "group_count": 8,
+      "mean_reward": 0.4128348125,
+      "min_reward": 0.125,
+      "max_reward": 0.5,
+      "mean_group_std": 0.12117834052102336,
+      "zero_std_fraction": 0.25,
+      "informative_group_fraction": 0.75
+    }
+  },
+  "summary": {
+    "probe_task_count": 8,
+    "selected_task_count": 7,
+    "excluded_task_count": 1,
+    "prompt_group_count": 64,
+    "rollout_count": 256,
+    "informative_group_count": 35,
+    "informative_group_fraction": 0.546875
+  }
+}

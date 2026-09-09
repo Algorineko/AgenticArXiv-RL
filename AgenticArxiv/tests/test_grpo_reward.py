@@ -11,6 +11,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
@@ -282,6 +283,41 @@ class TestPromptDataset(unittest.TestCase):
         self.assertIn("Action:", content)
         self.assertIn("get_recently_submitted_cs_papers", content)
         self.assertIn("task_id", rows[0])
+        self.assertEqual(rows[0]["prompt"][0]["_task_id"], rows[0]["task_id"])
+
+    def test_same_user_text_gets_observable_setup_context_and_hidden_ids(self):
+        tasks = [
+            {"id": "empty_session", "task": "把刚才那篇论文翻译一下"},
+            {
+                "id": "seeded_session",
+                "task": "把刚才那篇论文翻译一下",
+                "setup": [
+                    {
+                        "name": "get_recently_submitted_cs_papers",
+                        "args": {"aspect": "AI", "days": 7, "max_results": 5},
+                    },
+                    {"name": "download_arxiv_pdf", "args": {"ref": 2}},
+                ],
+                "expected_tools": ["translate_arxiv_pdf"],
+                "expected_tool_args": [{"ref": None}],
+            },
+        ]
+        rows = build_prompt_dataset(tasks)
+        empty_prompt = rows[0]["prompt"][0]["content"]
+        seeded_prompt = rows[1]["prompt"][0]["content"]
+        self.assertNotEqual(empty_prompt, seeded_prompt)
+        self.assertIn("没有既有论文列表", empty_prompt)
+        self.assertIn("此前已下载 ref=2", seeded_prompt)
+        self.assertIn("ref=null 会指向它", seeded_prompt)
+        # 环境状态可以看见，但任务标签和当前任务标准步骤不能混入文本。
+        self.assertNotIn("empty_session", empty_prompt)
+        self.assertNotIn("seeded_session", seeded_prompt)
+        self.assertNotIn("expected_tools", seeded_prompt)
+        self.assertNotIn("expected_tool_args", seeded_prompt)
+        self.assertEqual(
+            [row["prompt"][0]["_task_id"] for row in rows],
+            ["empty_session", "seeded_session"],
+        )
 
     def test_multiturn_prompt_is_conversational(self):
         rows = build_multiturn_prompt_dataset(get_all_tasks())
@@ -359,6 +395,96 @@ class MultiTurnRolloutCardinalityTest(unittest.TestCase):
         """展开一次会让每步生成量翻 num_generations 倍，显存和耗时都跟着翻。"""
         _, trainer = self._rollout(num_prompts=4, num_generations=2)
         self.assertEqual(trainer.seen_batch_sizes[0], 4)
+
+    def test_visible_state_and_hidden_task_id_reach_the_right_consumers(self):
+        class RecordingTokenizer:
+            def __init__(self):
+                self.seen_prompts = []
+
+            def __call__(self, text, add_special_tokens=True):
+                return {"input_ids": [1, 2, 3]}
+
+            def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
+                self.seen_prompts.append(prompt)
+                return [4, 5]
+
+            def decode(self, ids, skip_special_tokens=True):
+                return "Thought: 完成\nAction: FINISH"
+
+        class Environment:
+            def reset(self, task_id=""):
+                self.task_id = task_id
+
+            def get_recently_submitted_cs_papers(self, **kwargs):
+                return [{"id": "paper-1"}]
+
+        task_rows = [
+            {
+                "id": "empty_session",
+                "task": "把刚才那篇论文翻译一下",
+                "setup": [],
+            },
+            {
+                "id": "seeded_session",
+                "task": "把刚才那篇论文翻译一下",
+                "setup": [{
+                    "name": "get_recently_submitted_cs_papers",
+                    "args": {"aspect": "AI", "days": 7, "max_results": 5},
+                }],
+            },
+        ]
+        tasks = {
+            "empty_session": {"id": "empty_session", "setup": []},
+            "seeded_session": {
+                "id": "seeded_session",
+                "setup": [{
+                    "name": "get_recently_submitted_cs_papers",
+                    "args": {"aspect": "AI", "days": 7, "max_results": 5},
+                }],
+            },
+        }
+        prompts = [row["prompt"] for row in build_prompt_dataset(task_rows)]
+        tokenizer = RecordingTokenizer()
+        trainer = FakeGenerationTrainer(
+            tokenizer, num_generations=1, max_completion_length=16
+        )
+        with patch("rl.grpo_reward.require_rollout_func_support"):
+            rollout = make_multiturn_rollout_func(
+                Environment,
+                max_turns=1,
+                tasks_by_id=tasks,
+                prompt_task_ids={},
+            )
+
+        output = rollout(prompts, trainer)
+
+        self.assertEqual(
+            [item["task_id"] for item in output["trajectory_results"]],
+            ["empty_session", "seeded_session"],
+        )
+        self.assertEqual(output["trajectory_results"][0]["setup_actions"], [])
+        self.assertEqual(
+            output["trajectory_results"][1]["setup_actions"],
+            tasks["seeded_session"]["setup"],
+        )
+        self.assertTrue(tokenizer.seen_prompts)
+        self.assertNotEqual(
+            tokenizer.seen_prompts[0][0]["content"],
+            tokenizer.seen_prompts[1][0]["content"],
+        )
+        self.assertIn(
+            "没有既有论文列表",
+            tokenizer.seen_prompts[0][0]["content"],
+        )
+        self.assertIn(
+            "此前已检索最近 7 天",
+            tokenizer.seen_prompts[1][0]["content"],
+        )
+        self.assertTrue(all(
+            "_task_id" not in message
+            for prompt in tokenizer.seen_prompts
+            for message in prompt
+        ))
 
 
 class TrlVersionGuardTest(unittest.TestCase):

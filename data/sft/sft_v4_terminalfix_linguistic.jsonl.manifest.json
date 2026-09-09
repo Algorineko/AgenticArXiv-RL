@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "augmentation_kind": "linguistic_semantics_preserving",
+  "input": "data/sft/sft_v4_terminalfix_seed.jsonl",
+  "input_sha256": "7c2b5cf87186a51800c66c4ecae1dd2f51b7d193c3ee03c2d3644b54f92ca156",
+  "output": "data/sft/sft_v4_terminalfix_linguistic.jsonl",
+  "output_sha256": "0b5bf08ed5d75e48fd318c8eba709bce6b0dadf9ad2313506b196f0acee79d1b",
+  "seed_rows": 85,
+  "output_rows": 1020,
+  "source_tasks": 36,
+  "source_split": [
+    "v2_62.json:train"
+  ],
+  "task_variants": 6,
+  "thought_variants": 2,
+  "unique_sample_fingerprints": 1020,
+  "heldout_overlap": 0,
+  "semantic_task_count": 36,
+  "note": "1020 rows are linguistic variants of 36 task semantics; they are not 1020 independent tasks."
+}

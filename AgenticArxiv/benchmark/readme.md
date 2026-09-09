@@ -25,28 +25,66 @@ python -m benchmark.run_benchmark --repeat 5
 # 指定 LLM 模型
 python -m benchmark.run_benchmark --model gpt-4-turbo
 
+# 使用本地 Hugging Face 模型（不读取 LLM_API_KEY）
+python -m benchmark.run_benchmark \
+  --backend transformers \
+  --model /path/to/Qwen2.5-1.5B-Instruct \
+  --local-device cuda \
+  --local-dtype bfloat16 \
+  --agents regex \
+  --offline
+
 # 指定输出目录（默认 ../data）
 python -m benchmark.run_benchmark --output /path/to/output
 
 # 指定 session 前缀（用于区分不同测试轮次，默认 bench_r<timestamp>）
 python -m benchmark.run_benchmark --prefix bench_r1
 
-# 只跑某一份切分（见下）
-python -m benchmark.run_benchmark --task-set expanded --offline --split iid_test
+# 当前 62 条任务的开发集（从 AgenticArxiv/ 目录运行）
+python -m benchmark.run_benchmark \
+  --task-set expanded \
+  --offline \
+  --split ../data/splits/v2_62.json:dev
 ```
 
 默认 8 个任务 x 3 种 Agent x 3 次重复 = 72 次运行。
 
-### 训练/留出集切分
+### 本地模型后端
 
-`--split` 从 `data/splits/v1.json` 取一份任务：
+`--backend api` 保持原来的 OpenAI-compatible API 行为，也是默认值。
+`--backend transformers` 直接通过 `AutoModelForCausalLM` 加载 `--model`
+指定的本地目录，不依赖 API key。模型在同一次 Benchmark 中只加载一次，供所有
+任务和 Agent 复用。
+
+本地后端专用参数：
+
+| 参数 | 含义 |
+|---|---|
+| `--local-device` | `auto` / `cuda` / `cpu`，默认 `auto` |
+| `--local-dtype` | `auto` / `float16` / `bfloat16` / `float32` |
+| `--seed` | 生成随机种子；每次调用使用 seed 加调用序号 |
+
+本地模型仍应配合 `--offline` 使用：前者控制 LLM 从哪里加载，后者控制工具是否
+访问真实 arXiv，两者解决的是不同问题。为了测模型能力而不是三种执行框架的差异，
+Base/SFT/GRPO 阶段默认只跑 `--agents regex`；三种 Agent 的对比实验再单独运行。
+
+### 训练/开发/留出集切分
+
+当前 62 条扩展任务使用 `../data/splits/v2_62.json`：
 
 | 名字 | 条数 | 是什么 |
 |---|---:|---|
-| `train` | 42 | 训练集 |
-| `iid_test` | 13 | 同模板、未见过的参数实例——「换个参数还会不会」 |
-| `ood_test` | 4 | 完全未见过的模板/链长——「换个形态还会不会」 |
-| `rl_train` | 13 | `train` 中成功率处于中间带的部分，**算出来的、不在文件里** |
+| `train` | 36 | 可用于构建 SFT/后续 RL 数据的任务 |
+| `dev` | 8 | 已在 pilot 中反复查看轨迹的任务，用于调试和 Bad Case 分析 |
+| `iid_test` | 14 | 与 train 同模板、但参数不同的盲测实例——「换个参数还会不会」 |
+| `ood_test` | 4 | train/dev/iid 均未出现的模板或链长——「换个形态还会不会」 |
+
+这 8 条 pilot 任务不能再放进最终测试集：我们已经根据其轨迹决定了后续数据方向，继续把
+它们称作“盲测”会产生人为调参泄漏。它们仍很有价值，但角色是 `dev`，不是整个 Benchmark。
+
+`v2_62.json` 的 `rates` 来自冻结环境中当前 Qwen Base 对 train 的三次重复，以严格成功率
+统计；`rl_train` 由此计算为 6 条 20%～80% 的中间难度任务。rates 只覆盖 train，不使用
+iid/ood 的任务级结果做训练选择。沿用旧模型或旧评测环境的 rates，会把过时难度带进 GRPO。
 
 切分在**模板**层面进行：`search_AI_1d_3` 与 `search_AI_30d_25` 是同一模板换参数，
 按任务随机切会让它们分居两侧，测出来的「泛化」其实是记忆。
@@ -56,7 +94,34 @@ python -m benchmark.run_benchmark --task-set expanded --offline --split iid_test
 `rl_train` 供 `rl/train_grpo.py --split rl_train` 使用——GRPO 的优势是组内相对的，
 成功率贴近 0 或 1 的任务每条采样奖励一致，方差为零、不产生梯度，放进训练集是空转。
 
-也可显式指定文件：`--split data/splits/v2.json:ood_test`。阶段间对比必须引用同一份文件。
+从 `AgenticArxiv/` 目录运行时，应显式指定：
+
+```bash
+--split ../data/splits/v2_62.json:train
+--split ../data/splits/v2_62.json:dev
+--split ../data/splits/v2_62.json:iid_test
+--split ../data/splits/v2_62.json:ood_test
+```
+
+只写 `--split iid_test` 会继续读取历史默认文件 `v1.json`，这是为了让旧实验可复现，不能用于
+当前 62 条任务的正式对比。阶段间对比必须引用同一份显式切分文件。
+
+历史 `v1.json` 固定保存原来的 59 条任务（train=42、iid=13、ood=4，以及由旧 rates 计算的
+rl_train=13）。新增关键词检索任务后不回写 v1，否则同一个版本名会在不同时间代表不同实验。
+
+正式 SFT 数据同样必须使用显式的 v2 train，不能把全部 expanded 任务交给生成器：
+
+```bash
+cd ..  # 从 AgenticArxiv/ 回到仓库根目录
+python scripts/generate_sft_data.py \
+  --task_set expanded \
+  --split data/splits/v2_62.json:train \
+  --snapshot data/mock_arxiv_snapshot.json \
+  --output data/sft/sft_v0_train.jsonl
+```
+
+生成器会拒绝未指定 split、裸 `train` 以及 dev/iid/ood，并在专家工具执行失败时终止，避免
+把测试题或失败轨迹写进监督数据。
 
 ## 退化策略基线
 
@@ -172,7 +237,7 @@ benchmark/
   __init__.py
   task_spec.py        # TaskSpec/Step：expected_tools 与 expected_tool_args 同源派生
   tasks.py           # 8 条冒烟任务 (BENCHMARK_TASKS)
-  tasks_expanded.py   # 59 条完整基准集 (--task-set expanded)
+  tasks_expanded.py   # 62 条完整基准集 (--task-set expanded)
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总

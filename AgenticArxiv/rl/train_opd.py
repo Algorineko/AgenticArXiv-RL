@@ -52,6 +52,11 @@ import torch
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# TRL 的 GKD 模块会间接导入 FSDPModule；torch 2.5 没有这个符号。
+# 必须在第一次探测/导入 GKD 之前安装单卡兼容占位，不能依赖其它训练脚本
+# 恰好先被 import，否则 test_opd 单独运行和整套测试的结果会依赖发现顺序。
+from rl import trl_compat  # noqa: F401
+
 import tools.arxiv_tool  # noqa: F401  触发工具注册（canary / 阶段验证打分要用）
 import tools.cache_status_tool  # noqa: F401
 import tools.pdf_download_tool  # noqa: F401
