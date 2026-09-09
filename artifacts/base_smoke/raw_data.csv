@@ -1,0 +1,3 @@
+session_id,task_id,agent_type,trial,total_ms,llm_ms,tool_ms,overhead_ms,iterations,tokens,completed,termination,tool_accurate,arg_score,false_finish,ref_score,tools,expected,parse_fail,tool_fail,error
+qwen25_15b_base_smoke_ref_stress_image_restoration_regex_0,ref_stress_image_restoration,regex,0,5560,5556,0,4,6,8871,False,FORCE_STOP,False,0.0,False,1.0,"get_recently_submitted_cs_papers,download_arxiv_pdf,get_recently_submitted_cs_papers,get_recently_submitted_cs_papers,get_recently_submitted_cs_papers",download_arxiv_pdf,0,1,
+qwen25_15b_base_smoke_infeasible_no_session_regex_0,infeasible_no_session,regex,0,1590,1589,0,1,2,2812,True,FINISH,False,0.0,False,1.0,translate_arxiv_pdf,,0,0,

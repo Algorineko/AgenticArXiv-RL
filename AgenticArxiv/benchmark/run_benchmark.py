@@ -47,8 +47,8 @@ def main():
     parser.add_argument(
         "--tasks", type=str, default=None,
         choices=["search", "download", "translate", "cache", "composite",
-                 "ref_form", "optional", "state", "long_chain", "constraint",
-                 "infeasible"],
+                 "keyword_search", "ref_form", "optional", "state",
+                 "long_chain", "constraint", "infeasible"],
         help="按类别筛选测试任务。扩展类别只存在于 --task-set expanded",
     )
     parser.add_argument(
@@ -62,7 +62,24 @@ def main():
     )
     parser.add_argument(
         "--model", type=str, default=None,
-        help="LLM 模型名 (默认使用 .env 中的 MODEL)",
+        help="API 模型名，或 transformers 后端的本地模型目录",
+    )
+    parser.add_argument(
+        "--backend", choices=["api", "transformers"], default="api",
+        help="模型后端：api=OpenAI-compatible API；transformers=本地 Hugging Face 模型",
+    )
+    parser.add_argument(
+        "--local-device", default="auto",
+        help="transformers 设备：auto / cuda / cpu（默认 auto）",
+    )
+    parser.add_argument(
+        "--local-dtype", choices=["auto", "float16", "bfloat16", "float32"],
+        default="auto",
+        help="transformers 权重精度；4090 建议 bfloat16",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42,
+        help="本地生成基础随机种子；每个 task/trial 使用独立稳定随机流（默认 42）",
     )
     parser.add_argument(
         "--prefix", type=str, default=None,
@@ -90,7 +107,8 @@ def main():
         "--split", default=None, metavar="[FILE:]NAME",
         help=(
             f"只跑某一份切分，如 iid_test（用 {DEFAULT_SPLIT_PATH.name}）或 "
-            "data/splits/v2.json:ood_test。iid=同模板换参数，ood=未见过的模板；"
+            "PATH:NAME（如 ../data/splits/v2_62.json:ood_test）。"
+            "iid=同模板换参数，ood=未见过的模板；"
             "训练前后对比必须引用同一份文件，否则数字不可比。需配合 --task-set expanded"
         ),
     )
@@ -103,6 +121,8 @@ def main():
         ),
     )
     args = parser.parse_args()
+    if args.backend == "transformers" and not args.model:
+        parser.error("--backend transformers 必须同时提供 --model 本地模型目录")
 
     # 工具没注册齐就别开跑：registry 不全时模型不会报错，它会编造工具名，
     # benchmark 照样跑完并给出成功率 —— 那种数字比没有数字更危险。
@@ -172,11 +192,18 @@ def main():
         llm_extra=llm_extra,
         offline=args.offline,
         snapshot=args.snapshot,
+        llm_backend=args.backend,
+        local_device=args.local_device,
+        local_dtype=args.local_dtype,
+        generation_seed=args.seed,
     )
 
     print("=" * 60)
     print("AgenticArxiv Benchmark")
     print(f"  模型:     {model}")
+    print(f"  后端:     {args.backend}")
+    if args.backend == "transformers":
+        print(f"  设备/精度: {args.local_device} / {args.local_dtype}")
     print(f"  前缀:     {runner.session_prefix}")
     print(f"  Agent:    {', '.join(args.agents)}")
     print(f"  任务数:   {len(task_list)}")

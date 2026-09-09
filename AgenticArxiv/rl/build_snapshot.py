@@ -34,6 +34,89 @@ DEFAULT_KEYWORD_QUERIES = [
     "all:retrieval augmented generation",
 ]
 
+# Some benchmark tasks resolve a paper by a fixed title fragment or arXiv ID.
+# A rolling "last N days" snapshot eventually drops those papers and silently
+# turns valid trajectories into environment failures.  Keep the small set of
+# benchmark anchors at the front of the relevant pools so that max_results=5
+# setup calls can always resolve them.  The order is intentional: it preserves
+# the ambiguous short-fragment counterexamples documented in tasks_expanded.py.
+REFERENCE_POOL_IDS = {
+    "AI": ["2608.14539v1", "2608.14530v1", "2608.14528v1"],
+    "CV": ["2608.14546v1", "2608.14543v1", "2608.14539v1"],
+}
+
+
+def _base_id(value: str) -> str:
+    """Return an arXiv identifier without its version suffix."""
+    import re
+
+    return re.sub(r"v\d+$", "", value)
+
+
+def _pin_reference_papers(env: MockArxivEnv) -> None:
+    """Fetch and prepend the fixed papers required by offline benchmark tasks."""
+    import arxiv
+    from tools.arxiv_tool import _paper_info
+
+    wanted = list(dict.fromkeys(
+        paper_id
+        for ids in REFERENCE_POOL_IDS.values()
+        for paper_id in ids
+    ))
+    client = arxiv.Client()
+    results = client.results(arxiv.Search(id_list=wanted, max_results=len(wanted)))
+    fetched = {_base_id(paper["id"]): paper for paper in map(_paper_info, results)}
+
+    missing = [paper_id for paper_id in wanted if _base_id(paper_id) not in fetched]
+    if missing:
+        raise RuntimeError(f"无法获取基准锚点论文: {missing}")
+
+    pools = env.snapshot.get("get_recently_submitted_cs_papers", {})
+    for aspect, ids in REFERENCE_POOL_IDS.items():
+        entry = next(
+            (item for item in pools.values()
+             if str(item.get("args", {}).get("aspect")) == aspect),
+            None,
+        )
+        if entry is None:
+            raise RuntimeError(f"快照缺少 aspect={aspect} 的论文池")
+
+        original = list(entry.get("result") or [])
+        pinned_bases = {_base_id(paper_id) for paper_id in ids}
+        pinned = [fetched[_base_id(paper_id)] for paper_id in ids]
+        remainder = [
+            paper for paper in original
+            if _base_id(str(paper.get("id", ""))) not in pinned_bases
+        ]
+        # Preserve the requested pool size after adding anchors.
+        entry["result"] = (pinned + remainder)[:len(original)]
+
+
+def _validate_reference_pools(env: MockArxivEnv) -> None:
+    """Fail fast when fixed benchmark references cannot resolve in top-5 pools."""
+    requirements = {
+        "AI": ["2608.14528", "Learning State", "State Across", "Marionette", "Handover"],
+        "CV": ["2608.14543", "Image Restoration", "An Uncertainty-Aware"],
+    }
+    pools = env.snapshot.get("get_recently_submitted_cs_papers", {})
+    failures = []
+    for aspect, needles in requirements.items():
+        entry = next(
+            (item for item in pools.values()
+             if str(item.get("args", {}).get("aspect")) == aspect),
+            None,
+        )
+        papers = list((entry or {}).get("result") or [])[:5]
+        haystacks = [
+            f"{paper.get('id', '')} {paper.get('title', '')}".lower()
+            for paper in papers
+        ]
+        for needle in needles:
+            if not any(needle.lower() in value for value in haystacks):
+                failures.append(f"aspect={aspect} missing={needle!r}")
+    if failures:
+        raise RuntimeError("快照与固定评测任务不一致: " + "; ".join(failures))
+
 
 def build(
     snapshot_path: str = "../data/mock_arxiv_snapshot.json",
@@ -41,6 +124,8 @@ def build(
     keyword_queries=None,
     max_results: int = 50,
     days: int = 30,
+    pin_references: bool = True,
+    allow_partial: bool = False,
 ) -> None:
     aspects = list(aspects or DEFAULT_ASPECTS)
     keyword_queries = list(keyword_queries or DEFAULT_KEYWORD_QUERIES)
@@ -85,6 +170,17 @@ def build(
             print(f"  [FAIL] query={query!r} → {e}")
             fail += 1
 
+    if fail and not allow_partial:
+        raise RuntimeError(
+            f"快照构建失败：{fail}/{ok + fail} 个查询未成功；"
+            "为避免写出不完整数据，未保存文件。"
+        )
+
+    if pin_references:
+        print("  固定并校验 benchmark 锚点论文")
+        _pin_reference_papers(env)
+        _validate_reference_pools(env)
+
     env.save_snapshot()
     total = sum(len(v) for v in env.snapshot.values())
     print(f"\n完成：{ok} 个 aspect 成功、{fail} 个失败，共 {total} 条快照记录")
@@ -98,6 +194,16 @@ def main():
     parser.add_argument("--keyword-queries", nargs="+", default=None)
     parser.add_argument("--max_results", type=int, default=50)
     parser.add_argument("--days", type=int, default=30)
+    parser.add_argument(
+        "--no-pin-references",
+        action="store_true",
+        help="不向 AI/CV 池固定 benchmark 所需论文（仅用于原始数据研究）",
+    )
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="允许部分查询失败后仍保存快照（训练/正式评测不建议）",
+    )
     args = parser.parse_args()
 
     build(
@@ -106,6 +212,8 @@ def main():
         keyword_queries=args.keyword_queries,
         max_results=args.max_results,
         days=args.days,
+        pin_references=not args.no_pin_references,
+        allow_partial=args.allow_partial,
     )
 
 

@@ -149,6 +149,21 @@ class CanaryEvaluatorTest(unittest.TestCase):
         self.evaluator.evaluate(step=0)
         self.assertTrue(self.model._training, "evaluate 后应恢复为 train 模式")
 
+    def test_evaluator_scores_with_current_training_step(self):
+        reward_calc = Mock(wraps=RewardCalculator())
+        evaluator = CanaryEvaluator(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            canary_task_ids=DEFAULT_CANARY_TASK_IDS,
+            reward_calc=reward_calc,
+            env=None,
+            num_generations=2,
+        )
+        evaluator.evaluate(step=37)
+        self.assertTrue(reward_calc.compute_reward_breakdown.called)
+        for call in reward_calc.compute_reward_breakdown.call_args_list:
+            self.assertEqual(call.kwargs["training_step"], 37)
+
 
 class CanaryCallbackTest(unittest.TestCase):
     def _make_cb(self, steps=10, min_reward=-0.5, patience=3):

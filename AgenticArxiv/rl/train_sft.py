@@ -1,4 +1,4 @@
-"""SFT 训练脚本（使用 TRL SFTTrainer）
+"""SFT/QLoRA 训练脚本（使用 TRL SFTTrainer）
 
 SFT（Supervised Fine-Tuning）：
 - 目标：让模型学会基本的工具调用格式
@@ -6,13 +6,18 @@ SFT（Supervised Fine-Tuning）：
 - 输出：SFT 模型（作为 DPO/GRPO 的起点）
 
 使用方式：
-    python -m AgenticArxiv.rl.train_sft
-    python -m AgenticArxiv.rl.train_sft --model HuggingFaceTB/SmolLM2-135M-Instruct --max_length 3072
+    python -m AgenticArxiv.rl.train_sft --inspect_only --max_length 4096
+    python -m AgenticArxiv.rl.train_sft --max_steps 30 --max_length 4096 --no-verify
     python -m AgenticArxiv.rl.train_sft --verify --min_parse_rate 0.5
 """
 
 import argparse
+import dataclasses
+import hashlib
+import json
+import math
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +34,136 @@ from datasets import load_dataset
 
 from rl.observability import describe_logging, resolve_report_to
 from rl.stage_verifier import StageVerifier
+
+
+QLORA_TARGET_MODULES = (
+    "q_proj", "k_proj", "v_proj", "o_proj",
+    "gate_proj", "up_proj", "down_proj",
+)
+
+
+def _filter_dataclass_kwargs(config_cls, kwargs: dict) -> tuple[dict, list[str]]:
+    """按当前安装版本的 dataclass 字段过滤跨版本配置项。
+
+    TRL 的配置类会随版本增删参数。训练脚本仍显式构造完整配置字典，
+    这里仅在实例化前移除当前版本不存在的键，并把它们返回给调用方告警。
+    """
+    supported = {field.name for field in dataclasses.fields(config_cls)}
+    dropped = sorted(set(kwargs) - supported)
+    return {key: value for key, value in kwargs.items() if key in supported}, dropped
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_data_manifest(data_path: Path, manifest_path: Path | None = None) -> dict:
+    """冻结训练输入：行数、类型与 SHA256 任一漂移都拒绝训练。"""
+    manifest_path = manifest_path or data_path.with_suffix(data_path.suffix + ".manifest.json")
+    if not manifest_path.exists():
+        raise SystemExit(
+            f"❌ 缺少训练数据 manifest: {manifest_path}\n"
+            "   正式 QLoRA 默认只接受 build_sft_train_mix.py 生成的可审计数据；"
+            "临时实验可显式传 --skip_data_manifest_check"
+        )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("kind") != "qlora_sft_train_mix":
+        raise SystemExit(f"❌ 训练数据 manifest kind 错误: {manifest.get('kind')!r}")
+    actual_hash = _sha256_file(data_path)
+    if manifest.get("output_sha256") != actual_hash:
+        raise SystemExit(
+            "❌ 训练数据 SHA256 与 manifest 不一致，文件可能在冻结后被修改\n"
+            f"   manifest={manifest.get('output_sha256')}\n   actual={actual_hash}"
+        )
+    actual_rows = sum(1 for line in data_path.open("r", encoding="utf-8") if line.strip())
+    if manifest.get("output_rows") != actual_rows:
+        raise SystemExit(
+            f"❌ 训练数据行数不一致: manifest={manifest.get('output_rows')}, "
+            f"actual={actual_rows}"
+        )
+    if manifest.get("unique_sample_fingerprints") != actual_rows:
+        raise SystemExit("❌ manifest 显示训练集中存在重复样本")
+    print(
+        f"🔒 数据审计通过: rows={actual_rows}, "
+        f"semantic_tasks={manifest.get('semantic_task_instances')}, sha256={actual_hash[:12]}…"
+    )
+    return manifest
+
+
+def _qlora_runtime_guard() -> None:
+    """在加载3GB模型前检查GPU和关键依赖，避免晚失败。"""
+    import torch
+
+    if not torch.cuda.is_available():
+        raise SystemExit("❌ QLoRA 需要 CUDA；当前 torch.cuda.is_available()=False")
+    if not torch.cuda.is_bf16_supported():
+        raise SystemExit("❌ 当前GPU不支持BF16；本项目冻结的4090配置要求BF16计算")
+    required = {"transformers": "4.57.6", "trl": "0.29.1", "peft": "0.17.1", "bitsandbytes": "0.45.5"}
+    installed = {}
+    for package in required:
+        try:
+            installed[package] = version(package)
+        except Exception as exc:
+            raise SystemExit(f"❌ QLoRA依赖缺失: {package}: {exc}") from exc
+    print("🧩 QLoRA依赖: " + ", ".join(f"{k}={v}" for k, v in installed.items()))
+    free, total = torch.cuda.mem_get_info()
+    print(
+        f"🎮 GPU: {torch.cuda.get_device_name(0)} | "
+        f"空闲 {free / 2**30:.2f} / {total / 2**30:.2f} GiB"
+    )
+    if total < 20 * 2**30:
+        raise SystemExit("❌ 本配置要求至少20GiB显存")
+
+
+def _build_qlora_configs(r: int, alpha: int, dropout: float):
+    """返回量化与LoRA配置；k-bit准备交给SFTTrainer，只做一次。"""
+    import torch
+    from peft import LoraConfig
+    from transformers import BitsAndBytesConfig
+
+    quantization = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+    peft = LoraConfig(
+        r=r,
+        lora_alpha=alpha,
+        lora_dropout=dropout,
+        bias="none",
+        task_type="CAUSAL_LM",
+        target_modules=list(QLORA_TARGET_MODULES),
+    )
+    return quantization, peft
+
+
+def _trainable_parameter_stats(model) -> tuple[int, int, float]:
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+    ratio = 100.0 * trainable / total if total else 0.0
+    return trainable, total, ratio
+
+
+def _assert_lora_only_trainable(model) -> tuple[int, int, float]:
+    unexpected = [
+        name for name, param in model.named_parameters()
+        if param.requires_grad and "lora_" not in name
+    ]
+    if unexpected:
+        raise SystemExit(
+            "❌ QLoRA中出现非LoRA可训练参数，例如: " + ", ".join(unexpected[:5])
+        )
+    stats = _trainable_parameter_stats(model)
+    if stats[0] == 0:
+        raise SystemExit("❌ 没有任何可训练LoRA参数")
+    if not getattr(model, "is_loaded_in_4bit", False):
+        raise SystemExit("❌ 模型没有以4-bit加载，拒绝把全参数训练误称为QLoRA")
+    return stats
 
 
 def _precision_flags():
@@ -97,36 +232,58 @@ def _check_lengths(tokenizer, dataset, max_length: int):
 def main(
     model: str = "Qwen/Qwen2.5-1.5B-Instruct",
     data: str = None,
-    output_dir: str = "outputs/sft",
+    data_manifest: str = None,
+    output_dir: str = "outputs/sft_qlora",
     epochs: int = 3,
-    batch_size: int = 4,
-    grad_accum: int = 4,
-    lr: float = 2e-5,
-    max_length: int = 3072,
+    batch_size: int = 1,
+    grad_accum: int = 8,
+    lr: float = 1e-4,
+    max_length: int = 4096,
     max_steps: int = -1,
+    qlora: bool = True,
+    lora_r: int = 16,
+    lora_alpha: int = 32,
+    lora_dropout: float = 0.05,
+    gradient_checkpointing: bool = True,
+    optim: str = "paged_adamw_8bit",
+    inspect_only: bool = False,
+    skip_data_manifest_check: bool = False,
+    seed: int = 42,
     verify: bool = False,
     min_parse_rate: float = 0.3,
     report_to: str = "none",
     run_name: str = None,
 ):
-    train_data_path = Path(data) if data else REPO_ROOT / "data" / "sft" / "sft_train.jsonl"
+    import torch
+
+    train_data_path = (
+        Path(data) if data
+        else REPO_ROOT / "data" / "sft" / "sft_v3_train_mix.jsonl"
+    )
     out_path = REPO_ROOT / output_dir if not Path(output_dir).is_absolute() else Path(output_dir)
     # 先校验日志后端再加载模型：参数写错时应立刻失败
     backends = resolve_report_to(report_to)
     logging_dir = str(out_path / "logs")
 
-    print(f"📦 加载模型: {model}")
-    tokenizer = AutoTokenizer.from_pretrained(model)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    policy = AutoModelForCausalLM.from_pretrained(model)
-
     print(f"📚 加载 SFT 数据集: {train_data_path}")
     if not train_data_path.exists():
         raise SystemExit(
             f"❌ 数据集不存在: {train_data_path}\n"
-            f"   请先运行: python scripts/generate_sft_data.py"
+            f"   请先运行: python scripts/build_sft_train_mix.py"
         )
+    manifest = None
+    if not skip_data_manifest_check:
+        manifest_path = Path(data_manifest) if data_manifest else None
+        manifest = _verify_data_manifest(train_data_path, manifest_path)
+    else:
+        print("⚠️  已跳过数据manifest校验；该运行不能作为正式可复现实验")
+
+    resolved_model = str(Path(model).resolve()) if Path(model).exists() else model
+    print(f"📦 加载 tokenizer: {resolved_model}")
+    tokenizer = AutoTokenizer.from_pretrained(resolved_model, local_files_only=Path(model).exists())
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
 
     train_dataset = load_dataset("json", data_files=str(train_data_path), split="train")
     if "messages" in train_dataset.column_names:
@@ -140,37 +297,186 @@ def main(
     # --- 长度守卫 ---
     _check_lengths(tokenizer, train_dataset, max_length)
 
-    config = SFTConfig(
-        output_dir=str(out_path),
-        num_train_epochs=epochs,
-        per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=grad_accum,
-        learning_rate=lr,
-        max_length=max_length,    # TRL>=0.20 用 max_length（旧名 max_seq_length 已移除）
-        completion_only_loss=True,  # prompt 不计 loss，只监督 assistant Action
-        max_steps=max_steps,
-        logging_steps=10,
-        save_steps=100,
-        save_total_limit=3,
-        report_to=backends,
-        run_name=run_name or out_path.name,
-        **_precision_flags(),     # 只有 CUDA 才开 fp16
+    effective_batch = batch_size * grad_accum
+    print(
+        f"🧮 训练计划: rows={len(train_dataset)}, micro_batch={batch_size}, "
+        f"grad_accum={grad_accum}, effective_batch={effective_batch}, "
+        f"max_length={max_length}, max_steps={max_steps}, epochs={epochs}"
     )
+    if inspect_only:
+        print("✅ inspect_only 完成：数据、manifest、token长度均通过；尚未加载模型或占用训练显存")
+        return
+
+    quantization_config = None
+    peft_config = None
+    policy = resolved_model
+    if qlora:
+        _qlora_runtime_guard()
+        quantization_config, peft_config = _build_qlora_configs(
+            lora_r, lora_alpha, lora_dropout
+        )
+        print(
+            "🪶 QLoRA: 4-bit NF4 + double quant + BF16 compute | "
+            f"r={lora_r}, alpha={lora_alpha}, dropout={lora_dropout}\n"
+            f"   target_modules={list(QLORA_TARGET_MODULES)}"
+        )
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        from peft import get_peft_model, prepare_model_for_kbit_training
+
+        policy = AutoModelForCausalLM.from_pretrained(
+            resolved_model,
+            quantization_config=quantization_config,
+            device_map={"": 0},
+            dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            local_files_only=Path(model).exists(),
+        )
+        # TRL 0.29.1 会按 SFTConfig 启用 gradient checkpointing 和 input grads；
+        # 此处只做一次 k-bit 冻结/LayerNorm准备，不重复打开 checkpointing。
+        policy = prepare_model_for_kbit_training(
+            policy, use_gradient_checkpointing=False
+        )
+        policy = get_peft_model(policy, peft_config)
+    else:
+        print("⚠️  --no-qlora：将加载完整模型；该运行不属于本项目冻结的4090方案")
+        policy = AutoModelForCausalLM.from_pretrained(resolved_model)
+        if optim == "paged_adamw_8bit":
+            optim = "adamw_torch_fused"
+
+    # KV cache 用于自回归生成，会保留每层历史 K/V；训练时既占显存，又与
+    # gradient checkpointing 的重计算策略冲突，因此在模型侧统一关闭。
+    policy.config.use_cache = False
+
+    # use_cache 属于模型 forward/generation 配置，不是 TRL 0.29.1 的 SFTConfig
+    # 字段。QLoRA 分支已在 policy.config.use_cache=False 关闭 KV cache，以兼容
+    # gradient checkpointing；不要再把它传给 TrainingArguments。
+    config_kwargs = {
+        "output_dir": str(out_path),
+        "num_train_epochs": epochs,
+        "per_device_train_batch_size": batch_size,
+        "gradient_accumulation_steps": grad_accum,
+        "learning_rate": lr,
+        "max_length": max_length,  # TRL>=0.20 用 max_length
+        "completion_only_loss": True,  # prompt 不计 loss，只监督 assistant Action
+        "max_steps": max_steps,
+        "logging_steps": 1,
+        "logging_first_step": True,
+        "save_steps": 50,
+        "save_total_limit": 3,
+        "warmup_ratio": 0.03,
+        "lr_scheduler_type": "cosine",
+        "optim": optim,
+        "gradient_checkpointing": gradient_checkpointing,
+        "gradient_checkpointing_kwargs": (
+            {"use_reentrant": False} if gradient_checkpointing else None
+        ),
+        "seed": seed,
+        "data_seed": seed,
+        "dataloader_num_workers": 0,
+        "dataset_num_proc": 1,
+        "packing": False,
+        "report_to": backends,
+        "run_name": run_name or out_path.name,
+        **_precision_flags(),  # 只有 CUDA 才开混合精度
+    }
+    config_kwargs, dropped_config_keys = _filter_dataclass_kwargs(
+        SFTConfig, config_kwargs
+    )
+    if dropped_config_keys:
+        print(
+            "⚠️  当前TRL版本不支持以下SFTConfig参数，已忽略: "
+            + ", ".join(dropped_config_keys)
+        )
+    config = SFTConfig(**config_kwargs)
 
     print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 SFT 训练...")
-    trainer = SFTTrainer(
-        model=policy,
-        args=config,
-        train_dataset=train_dataset,
-        processing_class=tokenizer,   # TRL>=0.13 用 processing_class（旧名 tokenizer 已移除）
+    trainer_kwargs = {
+        "model": policy,
+        "args": config,
+        "train_dataset": train_dataset,
+        "processing_class": tokenizer,
+    }
+    trainer = SFTTrainer(**trainer_kwargs)
+
+    trainable, total, ratio = _trainable_parameter_stats(trainer.model)
+    if qlora:
+        trainable, total, ratio = _assert_lora_only_trainable(trainer.model)
+    print(
+        f"🔧 参数统计: trainable={trainable:,}, model_parameters={total:,}, "
+        f"trainable_ratio={ratio:.4f}%"
     )
-    trainer.train()
+    if torch.cuda.is_available():
+        print(f"   Trainer初始化显存: {torch.cuda.memory_allocated() / 2**30:.2f} GiB")
+
+    train_result = trainer.train()
+    train_loss = float(train_result.training_loss)
+    if not math.isfinite(train_loss):
+        raise SystemExit(f"❌ training_loss不是有限数: {train_loss}")
 
     final_output_dir = out_path / "final"
     trainer.save_model(str(final_output_dir))
     tokenizer.save_pretrained(str(final_output_dir))
-    print(f"✅ SFT 训练完成，模型已保存: {final_output_dir}")
+    if qlora:
+        required_adapter_files = (
+            final_output_dir / "adapter_config.json",
+            final_output_dir / "adapter_model.safetensors",
+        )
+        missing = [str(path) for path in required_adapter_files if not path.exists()]
+        if missing:
+            raise SystemExit(f"❌ QLoRA训练结束但适配器文件缺失: {missing}")
+
+    peak_vram = (
+        torch.cuda.max_memory_allocated() / 2**30 if torch.cuda.is_available() else None
+    )
+    training_manifest = {
+        "stage": "sft_qlora" if qlora else "sft_full",
+        "base_model": resolved_model,
+        "data": str(train_data_path),
+        "data_sha256": _sha256_file(train_data_path),
+        "data_manifest_kind": manifest.get("kind") if manifest else None,
+        "output": str(final_output_dir),
+        "max_steps": max_steps,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "gradient_accumulation_steps": grad_accum,
+        "effective_batch_size": effective_batch,
+        "learning_rate": lr,
+        "max_length": max_length,
+        "optimizer": optim,
+        "seed": seed,
+        "train_loss": train_loss,
+        "trainable_parameters": trainable,
+        "model_parameters_seen_by_trainer": total,
+        "trainable_ratio_percent": ratio,
+        "peak_vram_gib": peak_vram,
+        "qlora": {
+            "load_in_4bit": qlora,
+            "quant_type": "nf4" if qlora else None,
+            "double_quant": qlora,
+            "compute_dtype": "bfloat16" if qlora else None,
+            "r": lora_r if qlora else None,
+            "alpha": lora_alpha if qlora else None,
+            "dropout": lora_dropout if qlora else None,
+            "target_modules": list(QLORA_TARGET_MODULES) if qlora else [],
+        },
+        "versions": {
+            package: version(package)
+            for package in ("torch", "transformers", "trl", "peft", "bitsandbytes")
+            if qlora or package not in ("peft", "bitsandbytes")
+        },
+    }
+    final_output_dir.mkdir(parents=True, exist_ok=True)
+    (final_output_dir / "training_manifest.json").write_text(
+        json.dumps(training_manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"✅ SFT训练完成: loss={train_loss:.6f}, "
+        + (f"peak_vram={peak_vram:.2f} GiB, " if peak_vram is not None else "")
+        + f"模型已保存: {final_output_dir}"
+    )
 
     # --- 阶段验证：检查模型是否能产出可解析的输出 ---
     if verify:
@@ -187,26 +493,47 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SFT 训练")
+    parser = argparse.ArgumentParser(description="SFT / 单卡4-bit QLoRA训练")
     parser.add_argument("--model", default="Qwen/Qwen2.5-1.5B-Instruct")
     parser.add_argument("--data", default=None)
-    parser.add_argument("--output_dir", default="outputs/sft")
+    parser.add_argument("--data_manifest", default=None)
+    parser.add_argument("--output_dir", default="outputs/sft_qlora")
     parser.add_argument("--epochs", type=int, default=3)
-    parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--grad_accum", type=int, default=4)
-    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--grad_accum", type=int, default=8)
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument(
-        "--max_length", type=int, default=3072,
+        "--max_length", type=int, default=4096,
         help="超过此长度的样本会被从右截断，而右边正是 assistant 目标；"
              "训练前会做长度体检，不匹配直接报错",
     )
     parser.add_argument(
         "--max_steps", type=int, default=-1,
-        help="限制优化步数；-1 表示按 epochs 完整训练，可用于 CPU 烟雾测试",
+        help="限制优化步数；先用30做显存冒烟，-1表示按epochs完整训练",
     )
     parser.add_argument(
-        "--verify", action="store_true", default=False,
-        help="训练结束后运行阶段验证（检查模型产出可解析率）",
+        "--qlora", action=argparse.BooleanOptionalAction, default=True,
+        help="默认启用4-bit QLoRA；--no-qlora是全参数路径，不属于冻结的4090方案",
+    )
+    parser.add_argument("--lora_r", type=int, default=16)
+    parser.add_argument("--lora_alpha", type=int, default=32)
+    parser.add_argument("--lora_dropout", type=float, default=0.05)
+    parser.add_argument(
+        "--gradient_checkpointing", action=argparse.BooleanOptionalAction, default=True,
+    )
+    parser.add_argument("--optim", default="paged_adamw_8bit")
+    parser.add_argument(
+        "--inspect_only", action="store_true",
+        help="只审计manifest和token长度，不加载模型、不开始训练",
+    )
+    parser.add_argument(
+        "--skip_data_manifest_check", action="store_true",
+        help="允许临时数据运行；结果不得作为正式可复现实验",
+    )
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--verify", action=argparse.BooleanOptionalAction, default=False,
+        help="训练结束后运行阶段验证（默认关闭；冒烟可显式写 --no-verify）",
     )
     parser.add_argument(
         "--min_parse_rate", type=float, default=0.3,

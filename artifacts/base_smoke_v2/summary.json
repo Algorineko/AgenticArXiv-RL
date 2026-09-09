@@ -1,0 +1,88 @@
+{
+  "model": "/mnt/disk4/gaojiayu/models/Qwen2.5-1.5B-Instruct",
+  "sample_count": 2,
+  "error_count": 0,
+  "summary_by_agent": {
+    "regex": {
+      "count": 2,
+      "avg_total_ms": 3145.0,
+      "avg_llm_ms": 3142.0,
+      "avg_tool_ms": 0.0,
+      "avg_overhead_ms": 3.0,
+      "avg_iterations": 4.0,
+      "avg_tokens": 5586.0,
+      "completion_rate": 0.5,
+      "strict_success_rate": 0.0,
+      "tool_accuracy": 0.0,
+      "arg_accuracy": 0.0,
+      "ref_accuracy": 1.0,
+      "false_finish_rate": 0.0,
+      "false_finish_of_completed": 0.0,
+      "avg_parse_failures": 0.0,
+      "avg_tool_failures": 2.5
+    }
+  },
+  "summary_by_task": {
+    "ref_stress_image_restoration": {
+      "count": 1,
+      "avg_total_ms": 4814.0,
+      "completion_rate": 0.0,
+      "tool_accuracy": 0.0
+    },
+    "infeasible_no_session": {
+      "count": 1,
+      "avg_total_ms": 1476.0,
+      "completion_rate": 1.0,
+      "tool_accuracy": 0.0
+    }
+  },
+  "details": [
+    {
+      "session_id": "qwen25_15b_base_smoke_v2_ref_stress_image_restoration_regex_0",
+      "task_id": "ref_stress_image_restoration",
+      "agent_type": "regex",
+      "trial": 0,
+      "total_ms": 4814,
+      "llm_ms": 4809,
+      "tool_ms": 0,
+      "overhead_ms": 5,
+      "iterations": 6,
+      "tokens": 8386,
+      "completed": false,
+      "termination": "FORCE_STOP",
+      "tool_accurate": false,
+      "arg_score": 0.0,
+      "false_finish": false,
+      "ref_score": 1.0,
+      "tools": "get_recently_submitted_cs_papers,search_arxiv_papers,download_arxiv_pdf,get_paper_cache_status,get_paper_cache_status",
+      "expected": "download_arxiv_pdf",
+      "parse_fail": 0,
+      "tool_fail": 4,
+      "error": ""
+    },
+    {
+      "session_id": "qwen25_15b_base_smoke_v2_infeasible_no_session_regex_0",
+      "task_id": "infeasible_no_session",
+      "agent_type": "regex",
+      "trial": 0,
+      "total_ms": 1476,
+      "llm_ms": 1475,
+      "tool_ms": 0,
+      "overhead_ms": 1,
+      "iterations": 2,
+      "tokens": 2786,
+      "completed": true,
+      "termination": "FINISH",
+      "tool_accurate": false,
+      "arg_score": 0.0,
+      "false_finish": false,
+      "ref_score": 1.0,
+      "tools": "translate_arxiv_pdf",
+      "expected": "",
+      "parse_fail": 0,
+      "tool_fail": 1,
+      "error": ""
+    }
+  ],
+  "errors": []
+}

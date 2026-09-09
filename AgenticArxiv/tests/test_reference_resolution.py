@@ -10,7 +10,9 @@ import unittest
 
 from benchmark.metrics import (
     extract_metrics,
+    is_strict_success,
     reference_resolution_score,
+    reference_resolution_score_by_step,
     resolved_paper_id,
 )
 
@@ -121,6 +123,52 @@ class ExtractMetricsIntegrationTest(unittest.TestCase):
         self.assertTrue(m.tool_call_accurate)
         self.assertFalse(m.false_finish)
         self.assertEqual(m.ref_score, 0.0)
+
+    def test_equivalent_ref_form_is_strict_success_when_paper_matches(self):
+        task = {
+            "id": "t",
+            "expected_tools": ["download_arxiv_pdf"],
+            "expected_tool_args": [{"ref": "Marionette"}],
+            "expected_paper_ids": [P1],
+        }
+        history = [
+            _step(_dict_obs(P1), args={"ref": 2}),
+            {"thought": "done", "action": "FINISH", "observation": "任务完成"},
+        ]
+        m = self._metrics(history, task)
+        self.assertEqual(m.arg_score, 1.0)
+        self.assertEqual(m.ref_score, 1.0)
+        self.assertTrue(is_strict_success(m))
+
+    def test_same_raw_ref_but_wrong_paper_is_not_strict_success(self):
+        task = {
+            "id": "t",
+            "expected_tools": ["download_arxiv_pdf"],
+            "expected_tool_args": [{"ref": "Marionette"}],
+            "expected_paper_ids": [P1],
+        }
+        history = [
+            _step(_dict_obs(P2), args={"ref": "Marionette"}),
+            {"thought": "done", "action": "FINISH", "observation": "任务完成"},
+        ]
+        m = self._metrics(history, task)
+        self.assertEqual(m.arg_score, 0.0)
+        self.assertEqual(m.ref_score, 0.0)
+        self.assertFalse(is_strict_success(m))
+
+    def test_multi_paper_chain_scores_each_step_against_its_own_target(self):
+        history = [
+            _step(_dict_obs(P1), args={"ref": 1}),
+            _step(_dict_obs(P2), args={"ref": 2}),
+        ]
+        self.assertEqual(
+            reference_resolution_score_by_step(
+                history,
+                ["download_arxiv_pdf", "download_arxiv_pdf"],
+                [P1, P2],
+            ),
+            1.0,
+        )
 
 
 if __name__ == "__main__":

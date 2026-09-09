@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "augmentation_kind": "linguistic_semantics_preserving",
+  "input": "data/sft/sft_v0_seed.jsonl",
+  "input_sha256": "df9d2aa71381aaccb12111573192228901443d69e6e3c9b7cd1d10779b2fea26",
+  "output": "data/sft/sft_v1_linguistic.jsonl",
+  "output_sha256": "e234b34cf0fdc41c1b54b306781a6f18c4f1b48e0847755f83b1e33e5ef41431",
+  "seed_rows": 85,
+  "output_rows": 1020,
+  "source_tasks": 36,
+  "source_split": [
+    "v2_62.json:train"
+  ],
+  "task_variants": 6,
+  "thought_variants": 2,
+  "unique_sample_fingerprints": 1020,
+  "heldout_overlap": 0,
+  "semantic_task_count": 36,
+  "note": "1020 rows are linguistic variants of 36 task semantics; they are not 1020 independent tasks."
+}

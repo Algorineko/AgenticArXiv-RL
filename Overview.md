@@ -60,6 +60,7 @@ def init_db():
 ```
 
 **特性**：
+
 - ✅ 幂等性（可安全重复调用）
 - ✅ 无需 Alembic/FlywayDB
 - ✅ 自动创建索引
@@ -136,13 +137,14 @@ cd AgenticArxivWeb && npm run dev -- --port 5173
 
 ### 三种 Agent 模式的差异
 
-| 模式 | 解析方式 | 执行方式 | 优点 | 缺点 | 最佳用途 |
-|---|---|---|---|---|---|
-| **regex** | 正则 | 进程内 | 快、简、稳 | JSON 格式敏感 | 推荐默认 |
-| **mcp** | 正则 | JSON-RPC | 标准、隔离 | 延迟、复杂 | 团队开发 |
-| **skill_cli** | 正则 | subprocess | 易理解 | 子进程开销 | 学习研究 |
+| 模式                | 解析方式 | 执行方式   | 优点       | 缺点          | 最佳用途 |
+| ------------------- | -------- | ---------- | ---------- | ------------- | -------- |
+| **regex**     | 正则     | 进程内     | 快、简、稳 | JSON 格式敏感 | 推荐默认 |
+| **mcp**       | 正则     | JSON-RPC   | 标准、隔离 | 延迟、复杂    | 团队开发 |
+| **skill_cli** | 正则     | subprocess | 易理解     | 子进程开销    | 学习研究 |
 
 **如何切换**？编辑 `.env`：
+
 ```env
 AGENT_TYPE=regex  # 改为 mcp 或 skill_cli
 ```
@@ -271,16 +273,15 @@ sudo systemctl start agentic-arxiv-api
 
 ## 关键代码位置
 
-| 功能 | 文件 | 行号 |
-|---|---|---|
-| Agent 执行循环 | `agents/base_agent.py` | 66-173 |
-| 副作用处理 | `agents/base_agent.py` | 192-277 |
-| 数据库初始化 | `api/app.py` | 19-25 |
-| 数据库初始化 | `models/db.py` | 27-30 |
-| ReAct 解析 | `agents/agent_engine.py` | 58-121 |
-| MCP 工作流 | `mcp_protocol/mcp_agent.py` | 96-148 |
-| Skill 解析 | `skill_cli/skill_agent.py` | 157-197 |
-| 工具注册 | `tools/tool_registry.py` | - |
-| 日志记录 | `services/log_service.py` | - |
-| SSE 推送 | `services/event_bus.py` | - |
-
+| 功能           | 文件                          | 行号    |
+| -------------- | ----------------------------- | ------- |
+| Agent 执行循环 | `agents/base_agent.py`      | 66-173  |
+| 副作用处理     | `agents/base_agent.py`      | 192-277 |
+| 数据库初始化   | `api/app.py`                | 19-25   |
+| 数据库初始化   | `models/db.py`              | 27-30   |
+| ReAct 解析     | `agents/agent_engine.py`    | 58-121  |
+| MCP 工作流     | `mcp_protocol/mcp_agent.py` | 96-148  |
+| Skill 解析     | `skill_cli/skill_agent.py`  | 157-197 |
+| 工具注册       | `tools/tool_registry.py`    | -       |
+| 日志记录       | `services/log_service.py`   | -       |
+| SSE 推送       | `services/event_bus.py`     | -       |
