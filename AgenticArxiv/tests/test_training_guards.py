@@ -5,6 +5,8 @@
 """
 
 import unittest
+import argparse
+from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -12,8 +14,78 @@ from benchmark.splits import load_split
 from benchmark.tasks import get_all_tasks
 from benchmark.tasks_expanded import get_expanded_tasks
 from rl.precision import precision_flags
-from rl.train_grpo import RewardVarianceGuard, _load_tasks
-from rl.train_sft import _check_lengths, _messages_of, _to_prompt_completion
+from rl.train_grpo import RewardVarianceGuard, _build_reward_calculator, _load_tasks
+from rl.train_sft import (
+    QLORA_TARGET_MODULES,
+    _assert_lora_only_trainable,
+    _check_lengths,
+    _filter_dataclass_kwargs,
+    _messages_of,
+    _sha256_file,
+    _to_prompt_completion,
+    _verify_data_manifest,
+)
+
+
+class ConfigCompatibilityTest(unittest.TestCase):
+    def test_filters_fields_missing_from_installed_dataclass_version(self):
+        @dataclass
+        class FakeConfig:
+            output_dir: str
+            max_length: int = 1024
+
+        filtered, dropped = _filter_dataclass_kwargs(
+            FakeConfig,
+            {"output_dir": "out", "max_length": 4096, "use_cache": False},
+        )
+
+        self.assertEqual(filtered, {"output_dir": "out", "max_length": 4096})
+        self.assertEqual(dropped, ["use_cache"])
+
+
+class RewardCurriculumConfigTest(unittest.TestCase):
+    def test_zero_steps_enables_full_semantic_weights_immediately(self):
+        weights = _build_reward_calculator(0).schedule(training_step=0)
+        self.assertEqual(
+            (weights.format, weights.tool, weights.argument, weights.process, weights.outcome),
+            (1.0, 3.0, 2.0, 1.0, 3.0),
+        )
+
+    def test_default_probe_schedule_keeps_early_scaled_weights(self):
+        weights = _build_reward_calculator(30).schedule(training_step=0)
+        self.assertEqual(
+            (weights.format, weights.tool, weights.argument, weights.process, weights.outcome),
+            (1.0, 1.0, 2.0 / 3.0, 1.0, 1.0),
+        )
+
+    def test_negative_curriculum_steps_fail_fast(self):
+        with self.assertRaisesRegex(SystemExit, "不能为负数"):
+            _build_reward_calculator(-1)
+
+
+class GrpoV4SplitTest(unittest.TestCase):
+    def test_formal_rl_split_is_train_only_and_matches_frozen_selection(self):
+        from pathlib import Path
+        import json
+
+        repo = Path(__file__).resolve().parents[2]
+        v2 = json.loads((repo / "data/splits/v2_62.json").read_text(encoding="utf-8"))
+        v4_path = repo / "data/splits/v4_grpo_train.json"
+        v4 = json.loads(v4_path.read_text(encoding="utf-8"))
+        selected = set(load_split(f"{v4_path}:rl_train"))
+
+        self.assertEqual(len(selected), 7)
+        self.assertTrue(selected <= set(v2["split"]["train"]))
+        heldout = set(v2["split"]["dev"] + v2["split"]["iid_test"] + v2["split"]["ood_test"])
+        self.assertFalse(selected & heldout)
+        self.assertEqual(
+            v4["split"]["excluded_low_variance"],
+            ["chain_lg10_dl_tr_last"],
+        )
+        for task_id in selected:
+            self.assertGreaterEqual(
+                v4["audit"][task_id]["informative_group_fraction"], 0.375
+            )
 
 
 class _FakeTokenizer:
@@ -87,6 +159,88 @@ class CheckLengthsTest(unittest.TestCase):
             _check_lengths(_FakeTokenizer(), [], max_length=100)
 
 
+class SftDataManifestTest(unittest.TestCase):
+    def test_accepts_matching_frozen_mix(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "train.jsonl"
+            data.write_text('{"messages": []}\n', encoding="utf-8")
+            manifest = data.with_suffix(data.suffix + ".manifest.json")
+            manifest.write_text(json.dumps({
+                "kind": "qlora_sft_train_mix",
+                "output_sha256": _sha256_file(data),
+                "output_rows": 1,
+                "unique_sample_fingerprints": 1,
+                "semantic_task_instances": 1,
+            }), encoding="utf-8")
+            self.assertEqual(_verify_data_manifest(data)["output_rows"], 1)
+
+    def test_rejects_data_changed_after_manifest(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "train.jsonl"
+            data.write_text('{"messages": []}\n', encoding="utf-8")
+            manifest = data.with_suffix(data.suffix + ".manifest.json")
+            manifest.write_text(json.dumps({
+                "kind": "qlora_sft_train_mix",
+                "output_sha256": _sha256_file(data),
+                "output_rows": 1,
+                "unique_sample_fingerprints": 1,
+            }), encoding="utf-8")
+            data.write_text('{"messages": [1]}\n', encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "SHA256"):
+                _verify_data_manifest(data)
+
+
+class QLoRAGuardTest(unittest.TestCase):
+    def test_qwen_attention_and_mlp_projections_are_targeted(self):
+        self.assertEqual(
+            set(QLORA_TARGET_MODULES),
+            {"q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"},
+        )
+
+    def test_rejects_model_that_is_not_actually_4bit(self):
+        import torch
+
+        class FakeModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.lora_weight = torch.nn.Parameter(torch.ones(1))
+                self.is_loaded_in_4bit = False
+
+        with self.assertRaisesRegex(SystemExit, "4-bit"):
+            _assert_lora_only_trainable(FakeModel())
+
+    def test_rejects_non_lora_trainable_parameter(self):
+        import torch
+
+        class FakeModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.base_weight = torch.nn.Parameter(torch.ones(1))
+                self.is_loaded_in_4bit = True
+
+        with self.assertRaisesRegex(SystemExit, "非LoRA"):
+            _assert_lora_only_trainable(FakeModel())
+
+
+class BooleanFlagContractTest(unittest.TestCase):
+    def test_verify_boolean_optional_action_accepts_both_forms(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--verify", action=argparse.BooleanOptionalAction, default=False
+        )
+        self.assertTrue(parser.parse_args(["--verify"]).verify)
+        self.assertFalse(parser.parse_args(["--no-verify"]).verify)
+        self.assertFalse(parser.parse_args([]).verify)
+
+
 class RewardVarianceGuardTest(unittest.TestCase):
     def _fire(self, guard, n, step=1, **logs):
         """step 现在会影响行为：开局零方差是故障，练久了是收敛。"""
@@ -141,6 +295,7 @@ class RewardVarianceGuardTest(unittest.TestCase):
         self.assertTrue(control.should_training_stop)
         self.assertTrue(guard.converged)
         self.assertFalse(guard.tripped)      # 不以失败退出，checkpoint 保留
+        self.assertEqual(guard.stop_step, 50)
 
     def test_zero_variance_inside_the_grace_period_is_still_a_failure(self):
         """开局就零方差多半是基座还吐不出可解析动作，那是真故障。"""

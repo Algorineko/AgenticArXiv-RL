@@ -1,0 +1,29 @@
+{
+  "version": 6,
+  "status": "targeted_reward_semantics_probe",
+  "task_set": "expanded",
+  "purpose": "Validate blocked-terminal semantic reward and its setup-aware positive control before selecting the next GRPO middle band.",
+  "derived_from": "data/splits/v2_62.json:train",
+  "policy": {
+    "model": "outputs/sft_qlora_v1_e1/final",
+    "frozen": true,
+    "learning_rate": 0.0,
+    "num_generations": 4,
+    "groups_per_task": 8,
+    "seed": 47,
+    "reward_curriculum_steps": 0,
+    "selection_use": "Diagnostic only. Do not train from the generated final adapter and do not use dev, iid_test, or ood_test for selection."
+  },
+  "split": {
+    "terminal_probe": [
+      "infeasible_no_session",
+      "infeasible_unknown_id",
+      "infeasible_zero_index",
+      "ref_ctrl_null_translate"
+    ]
+  },
+  "expected_ordering": {
+    "blocked_tasks": "specific explained refusal > generic false completion > hallucinated tool call",
+    "positive_control": "ref_ctrl_null_translate must call translate_arxiv_pdf with ref=null because visible setup makes the reference resolvable"
+  }
+}

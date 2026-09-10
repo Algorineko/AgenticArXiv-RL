@@ -19,7 +19,10 @@ outcome 的权重压到 1/3，之后恢复满权重。也就是说**只看 total
 
 from __future__ import annotations
 
+import json
+import math
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 # HF 的集成名 -> 需要装的包名。用于在启用前给出可操作的报错。
@@ -116,6 +119,11 @@ class RewardComponentTracker:
         self._sink: Optional[Dict[str, List[float]]] = None
         self._pending: Dict[str, List[float]] = {}
         self.bound = False
+        # ``_metrics`` 会在每次 TRL log 后清空，因此另存累计统计，供训练结束
+        # 后输出逐任务报告。否则只能看到某一步的均值，无法判断哪些任务长期
+        # 有组内方差、真正能给 GRPO 提供梯度。
+        self._task_rewards: Dict[str, List[float]] = {}
+        self._task_group_stds: Dict[str, List[float]] = {}
 
     # --- 接线 -------------------------------------------------------------
     def bind(self, trainer: Any) -> bool:
@@ -157,6 +165,81 @@ class RewardComponentTracker:
 
         if trajectory is not None:
             self._record_trajectory(trajectory)
+
+    def record_group(
+        self,
+        task_ids: Sequence[Optional[str]],
+        rewards: Sequence[float],
+    ) -> None:
+        """记录同一 prompt 各 generation 的组内奖励分布。
+
+        GRPO 的 advantage 是在同一 prompt 的 generations 内归一化得到的。
+        不同任务之间的 reward 即使差异很大，也不能替代组内方差；同一任务
+        的所有 generation 奖励相同时，这一组基本不产生策略梯度。
+        """
+        grouped: Dict[str, List[float]] = {}
+        for task_id, reward in zip(task_ids, rewards):
+            if task_id is None:
+                continue
+            tid = str(task_id)
+            grouped.setdefault(tid, []).append(float(reward))
+
+        for tid, values in grouped.items():
+            mean = sum(values) / len(values)
+            variance = sum((value - mean) ** 2 for value in values) / len(values)
+            std = math.sqrt(variance)
+            zero_std = 1.0 if std <= 1e-12 else 0.0
+
+            self._task_rewards.setdefault(tid, []).extend(values)
+            self._task_group_stds.setdefault(tid, []).append(std)
+
+            # 当前任务 ID 均由字母、数字和下划线组成；仍做一次清洗，避免未来
+            # 扩充数据时斜杠等字符破坏 TensorBoard 的指标层级。
+            metric_tid = "".join(
+                ch if ch.isalnum() or ch in "_-" else "_" for ch in tid
+            )
+            self._emit(f"reward_by_task/{metric_tid}/mean", mean)
+            self._emit(f"reward_by_task/{metric_tid}/std", std)
+            self._emit(f"reward_by_task/{metric_tid}/zero_std", zero_std)
+
+    def task_summary(self) -> Dict[str, Any]:
+        """返回整个训练期间累计的逐任务奖励与组内方差统计。"""
+        tasks: Dict[str, Dict[str, Any]] = {}
+        task_ids = sorted(set(self._task_rewards) | set(self._task_group_stds))
+        for tid in task_ids:
+            rewards = self._task_rewards.get(tid, [])
+            group_stds = self._task_group_stds.get(tid, [])
+            group_count = len(group_stds)
+            zero_groups = sum(std <= 1e-12 for std in group_stds)
+
+            tasks[tid] = {
+                "sample_count": len(rewards),
+                "group_count": group_count,
+                "mean_reward": sum(rewards) / len(rewards) if rewards else None,
+                "min_reward": min(rewards) if rewards else None,
+                "max_reward": max(rewards) if rewards else None,
+                "mean_group_std": (
+                    sum(group_stds) / group_count if group_count else None
+                ),
+                "zero_std_fraction": (
+                    zero_groups / group_count if group_count else None
+                ),
+                "informative_group_fraction": (
+                    1.0 - zero_groups / group_count if group_count else None
+                ),
+            }
+
+        return {"task_count": len(tasks), "tasks": tasks}
+
+    def save_task_summary(self, path: Any) -> Path:
+        """持久化逐任务统计，并返回输出路径。"""
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(self.task_summary(), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return output_path
 
     def _record_trajectory(self, trajectory: Mapping[str, Any]) -> None:
         history = trajectory.get("history") or []
@@ -208,8 +291,11 @@ def trajectory_health(history: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
 def describe_logging(report_to: Sequence[str], logging_dir: Optional[str]) -> str:
     """训练启动时打印一行人能看懂的说明（含查看命令）。"""
     if not report_to:
-        return ("📉 未启用训练曲线记录（--report_to none）。"
-                "要看 reward / kl / 各奖励分量，用 --report_to tensorboard")
+        return (
+            "📋 未启用外部曲线后端（--report_to none）；"
+            "reward / kl / 各奖励分量仍会输出到控制台。"
+            "需要持久化曲线时使用 --report_to tensorboard"
+        )
     if "tensorboard" in report_to and logging_dir:
         return (f"📈 训练曲线 -> {report_to}，日志目录 {logging_dir}\n"
                 f"   查看: tensorboard --logdir {logging_dir}")

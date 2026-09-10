@@ -1,14 +1,22 @@
 """离线回放、setup 铺状态、参数准确率的单元测试（不需要 LLM / 网络 / 数据库）。"""
 
 import json
+import tempfile
 import unittest
+from dataclasses import replace
+from pathlib import Path
+from unittest import mock
 
 from benchmark.metrics import _match_arg_value, argument_match_score
 from benchmark.runner import BenchmarkRunner
 
 
 def _step(name, args):
-    return {"thought": "t", "action": json.dumps({"name": name, "args": args}), "observation": ""}
+    return {
+        "thought": "t",
+        "action": json.dumps({"name": name, "args": args}),
+        "observation": "",
+    }
 
 
 class _FakeEnv:
@@ -74,7 +82,9 @@ class ArgumentMatchScoreTest(unittest.TestCase):
         `_tool_score` 给的 -1.0 抵掉大半。
         """
         self.assertEqual(argument_match_score([], []), 1.0)
-        self.assertEqual(argument_match_score([_step("search", {"aspect": "AI"})], []), 0.0)
+        self.assertEqual(
+            argument_match_score([_step("search", {"aspect": "AI"})], []), 0.0
+        )
 
     def test_expected_none_value_means_the_key_should_be_omitted(self):
         """`{"ref": None}` = 用当前活跃论文；省略 ref 才是正确写法。
@@ -84,18 +94,26 @@ class ArgumentMatchScoreTest(unittest.TestCase):
         唯一目的就是区分这两种行为。
         """
         expected = [{"ref": None}]
-        self.assertEqual(argument_match_score([_step("translate_arxiv_pdf", {})], expected), 1.0)
         self.assertEqual(
-            argument_match_score([_step("translate_arxiv_pdf", {"ref": None})], expected), 1.0
+            argument_match_score([_step("translate_arxiv_pdf", {})], expected), 1.0
         )
         self.assertEqual(
-            argument_match_score([_step("translate_arxiv_pdf", {"ref": 1})], expected), 0.0
+            argument_match_score(
+                [_step("translate_arxiv_pdf", {"ref": None})], expected
+            ),
+            1.0,
+        )
+        self.assertEqual(
+            argument_match_score([_step("translate_arxiv_pdf", {"ref": 1})], expected),
+            0.0,
         )
 
     def test_arguments_only_count_when_the_tool_itself_is_right(self):
         """参数分不能与工具名脱钩，否则等于替调错的工具背书。"""
         history = [_step("get_paper_cache_status", {"ref": 1})]
-        self.assertEqual(argument_match_score(history, [{"ref": 1}]), 1.0)  # 不传 expected_tools
+        self.assertEqual(
+            argument_match_score(history, [{"ref": 1}]), 1.0
+        )  # 不传 expected_tools
         self.assertEqual(
             argument_match_score(history, [{"ref": 1}], ["download_arxiv_pdf"]), 0.0
         )
@@ -171,30 +189,52 @@ class ApplySetupTest(unittest.TestCase):
         papers = [{"id": "2608.1v1", "title": "A"}, {"id": "2608.2v1", "title": "B"}]
         env = _FakeEnv({"get_recently_submitted_cs_papers": papers})
         fx = _FakeSideEffects()
-        task = {"id": "t", "setup": [
-            {"name": "get_recently_submitted_cs_papers", "args": {"aspect": "AI", "days": 7}}]}
+        task = {
+            "id": "t",
+            "setup": [
+                {
+                    "name": "get_recently_submitted_cs_papers",
+                    "args": {"aspect": "AI", "days": 7},
+                }
+            ],
+        }
         self._runner(env, fx)._apply_setup(task, "s1")
 
         self.assertEqual(env.calls[0][0], "get_recently_submitted_cs_papers")
-        self.assertEqual(env.calls[0][1]["session_id"], "s1")   # session_id 被注入
+        self.assertEqual(env.calls[0][1]["session_id"], "s1")  # session_id 被注入
         self.assertEqual([p.id for p in fx.papers["s1"]], ["2608.1v1", "2608.2v1"])
 
     def test_download_setup_marks_the_active_paper(self):
-        env = _FakeEnv({"download_arxiv_pdf": {"paper_id": "2608.1v1", "status": "READY"}})
+        env = _FakeEnv(
+            {"download_arxiv_pdf": {"paper_id": "2608.1v1", "status": "READY"}}
+        )
         fx = _FakeSideEffects()
-        task = {"id": "t", "setup": [{"name": "download_arxiv_pdf", "args": {"ref": 1}}]}
+        task = {
+            "id": "t",
+            "setup": [{"name": "download_arxiv_pdf", "args": {"ref": 1}}],
+        }
         self._runner(env, fx)._apply_setup(task, "s1")
         self.assertEqual(fx.active["s1"], "2608.1v1")
 
     def test_translate_setup_is_enqueued_not_executed(self):
         env, fx = _FakeEnv(), _FakeSideEffects()
-        task = {"id": "t", "setup": [{"name": "translate_arxiv_pdf", "args": {"ref": 1}}]}
+        task = {
+            "id": "t",
+            "setup": [{"name": "translate_arxiv_pdf", "args": {"ref": 1}}],
+        }
         self._runner(env, fx)._apply_setup(task, "s1")
-        self.assertEqual(env.calls, [])                          # 不同步执行
+        self.assertEqual(env.calls, [])  # 不同步执行
         self.assertEqual(fx.translated[0]["session_id"], "s1")
 
 
 class OfflineWiringTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # 每个测试类必须能独立运行，不能依赖其他测试先导入并注册工具。
+        from tools.bootstrap import register_all_tools
+
+        register_all_tools()
+
     def test_online_runner_injects_no_env(self):
         self.assertIsNone(BenchmarkRunner(offline=False)._tool_env())
 
@@ -205,8 +245,243 @@ class OfflineWiringTest(unittest.TestCase):
 
     def test_offline_forces_local_side_effects(self):
         from agents.side_effects import LocalSideEffectManager
-        self.assertIsInstance(BenchmarkRunner(offline=True)._side_effects(),
-                              LocalSideEffectManager)
+
+        self.assertIsInstance(
+            BenchmarkRunner(offline=True)._side_effects(), LocalSideEffectManager
+        )
+
+    def test_empty_session_translate_fails_instead_of_creating_none_paper_task(self):
+        from agents.side_effects import LocalSideEffectManager
+
+        fx = LocalSideEffectManager()
+        with self.assertRaisesRegex(ValueError, "未找到指代对象"):
+            fx.enqueue_translate(session_id="empty-translate-test", ref=None)
+
+    def test_offline_download_state_and_timestamps_ignore_existing_disk_files(self):
+        import config
+        from models.schemas import Paper
+        from models.store import store, use_memory_store
+        from rl.env import MockArxivEnv
+
+        paper = Paper(
+            id="2601.00001v1",
+            title="Deterministic Offline Paper",
+            pdf_url="https://arxiv.org/pdf/2601.00001v1.pdf",
+        )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            mock.patch(
+                "config.settings",
+                replace(config.settings, pdf_raw_path=tmpdir),
+            ),
+        ):
+            # 预先放入一个文件，模拟上一轮 benchmark 的磁盘残留。
+            existing = Path(tmpdir) / "2601.00001v1.pdf"
+            existing.write_bytes(b"an old file with a different size")
+
+            use_memory_store(reset=True)
+            store.set_last_papers("trial", [paper])
+            env = MockArxivEnv(mode="replay")
+            first = env.execute_tool(
+                "download_arxiv_pdf", {"session_id": "trial", "ref": 1}
+            )
+            second = env.execute_tool(
+                "download_arxiv_pdf", {"session_id": "trial", "ref": 1}
+            )
+            first_asset = store.get_pdf_asset(paper.id)
+
+            self.assertFalse(first["existed"])
+            self.assertTrue(second["existed"])
+            self.assertEqual(first["size_bytes"], 39)
+            self.assertEqual(str(first_asset.downloaded_at), "2000-01-01 00:00:00")
+            self.assertEqual(str(first_asset.updated_at), "2000-01-01 00:00:00")
+
+            use_memory_store(reset=True)
+            store.set_last_papers("trial", [paper])
+            another_env = MockArxivEnv(mode="replay")
+            repeated_run = another_env.execute_tool(
+                "download_arxiv_pdf", {"session_id": "trial", "ref": 1}
+            )
+            self.assertFalse(repeated_run["existed"])
+
+    def test_offline_trial_reset_clears_env_and_translate_runtime_state(self):
+        from agents.side_effects import LocalSideEffectManager
+        from models.store import store, use_memory_store
+
+        class FakeEnv:
+            def __init__(self):
+                self.reset_count = 0
+
+            def reset_runtime_state(self):
+                self.reset_count += 1
+
+        use_memory_store(reset=True)
+        store.set_last_active_paper_id("old", "2601.00001v1")
+        runner = BenchmarkRunner(offline=True)
+        runner._env = FakeEnv()
+        runner._side_fx = LocalSideEffectManager()
+        runner._side_fx._translate_seq = 7
+        runner._side_fx.published_events.append({"old": True})
+
+        runner._reset_offline_trial_state()
+
+        self.assertIsNone(store.get_last_active_paper_id("old"))
+        self.assertEqual(runner._env.reset_count, 1)
+        self.assertEqual(runner._side_fx._translate_seq, 0)
+        self.assertEqual(runner._side_fx.published_events, [])
+
+
+class ReplayArgumentValidationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from tools.bootstrap import register_all_tools
+
+        register_all_tools()
+
+    def test_replay_rejects_arguments_the_real_tool_does_not_accept(self):
+        from rl.env import MockArxivEnv
+
+        with self.assertRaisesRegex(ValueError, "unexpected keyword argument 'query'"):
+            MockArxivEnv._validate_tool_arguments(
+                "get_recently_submitted_cs_papers",
+                {"aspect": "AR", "query": "Image Restoration", "days": 7},
+            )
+
+    def test_framework_session_id_is_allowed_for_setup_search(self):
+        from rl.env import MockArxivEnv
+
+        MockArxivEnv._validate_tool_arguments(
+            "get_recently_submitted_cs_papers",
+            {"aspect": "CV", "days": 7, "max_results": 5, "session_id": "setup"},
+        )
+
+    def test_replay_rejects_empty_keyword_query_like_the_real_tool(self):
+        from rl.env import MockArxivEnv
+
+        with self.assertRaisesRegex(ValueError, "query 不能为空"):
+            MockArxivEnv._validate_tool_arguments(
+                "search_arxiv_papers",
+                {"query": "   ", "max_results": 3, "days": 30},
+            )
+
+
+class SearchSessionSyncTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from tools.bootstrap import register_all_tools
+
+        register_all_tools()
+
+    def test_both_search_tools_seed_the_same_session_memory_and_show_titles(self):
+        from agents.agent_engine import ReActAgent
+        from agents.side_effects import LocalSideEffectManager
+
+        paper = {"id": "2601.00001v1", "title": "Keyword Result"}
+        for tool_name in ("get_recently_submitted_cs_papers", "search_arxiv_papers"):
+            with self.subTest(tool=tool_name):
+                session_id = f"search-sync-{tool_name}"
+                fx = LocalSideEffectManager()
+                env = _FakeEnv({tool_name: [paper]})
+                agent = ReActAgent(llm_client=None, side_effect_mgr=fx, env=env)
+                agent.session_id = session_id
+
+                observation = agent._execute_with_side_effects(
+                    {"name": tool_name, "args": {}}
+                )
+
+                self.assertIn("Keyword Result", observation)
+                self.assertEqual(
+                    [p.id for p in fx.get_last_papers(session_id)],
+                    ["2601.00001v1"],
+                )
+
+    def test_keyword_fallback_is_reported_as_failure_and_does_not_seed_session(self):
+        from agents.agent_engine import ReActAgent
+        from agents.side_effects import LocalSideEffectManager
+
+        paper = {
+            "id": "2601.00001v1",
+            "title": "Unrelated Fallback",
+            "_mock_env": {
+                "offline_fallback": True,
+                "message": "关键词未命中离线快照；返回固定回退子集，不代表查询匹配结果。",
+            },
+        }
+        session_id = "keyword-fallback-not-success"
+        fx = LocalSideEffectManager()
+        env = _FakeEnv({"search_arxiv_papers": [paper]})
+        agent = ReActAgent(llm_client=None, side_effect_mgr=fx, env=env)
+        agent.session_id = session_id
+
+        observation = agent._execute_with_side_effects(
+            {
+                "name": "search_arxiv_papers",
+                "args": {"query": "all:unknown", "days": 30, "max_results": 3},
+            }
+        )
+
+        self.assertIn("工具执行失败", observation)
+        self.assertIn("不代表查询匹配结果", observation)
+        self.assertEqual(fx.get_last_papers(session_id), [])
+
+
+class LocalLlmBackendTest(unittest.TestCase):
+    def test_benchmark_resets_a_stable_stream_for_each_task_trial(self):
+        class FakeLocalClient:
+            def __init__(self):
+                self.streams = []
+
+            def start_generation_stream(self, key):
+                self.streams.append(key)
+
+        runner = BenchmarkRunner(model="/models/qwen", llm_backend="transformers")
+        fake = FakeLocalClient()
+        runner._llm_client = fake
+
+        runner._start_generation_stream("task-a", 2)
+
+        self.assertEqual(fake.streams, ["task-a:2"])
+
+    def test_api_remains_the_default_backend(self):
+        sentinel = object()
+        with (
+            mock.patch(
+                "benchmark.runner.get_env_llm_client", return_value=sentinel
+            ) as api,
+            mock.patch("benchmark.runner.TransformersLLMClient") as local,
+        ):
+            runner = BenchmarkRunner(model="api-model")
+            self.assertIs(runner.llm_client, sentinel)
+            api.assert_called_once_with()
+            local.assert_not_called()
+
+    def test_transformers_backend_loads_the_local_model_without_api_credentials(self):
+        sentinel = object()
+        with (
+            mock.patch("benchmark.runner.get_env_llm_client") as api,
+            mock.patch(
+                "benchmark.runner.TransformersLLMClient", return_value=sentinel
+            ) as local,
+        ):
+            runner = BenchmarkRunner(
+                model="/models/qwen",
+                llm_backend="transformers",
+                local_device="cuda",
+                local_dtype="bfloat16",
+                generation_seed=7,
+            )
+            self.assertIs(runner.llm_client, sentinel)
+            local.assert_called_once_with(
+                model="/models/qwen",
+                device="cuda",
+                dtype="bfloat16",
+                seed=7,
+            )
+            api.assert_not_called()
+
+    def test_unknown_backend_fails_before_any_model_is_loaded(self):
+        with self.assertRaises(ValueError):
+            BenchmarkRunner(llm_backend="unknown")
 
 
 if __name__ == "__main__":

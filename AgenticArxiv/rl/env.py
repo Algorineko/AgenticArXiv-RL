@@ -23,6 +23,7 @@
     get_paper_cache_status            纯本地   → 直接真实执行（读内存 store）
 """
 
+import inspect
 import json
 import os
 from hashlib import sha256
@@ -80,6 +81,9 @@ class MockArxivEnv:
         self.offline_download = offline_download
         self.snapshot_tools = snapshot_tools or set(DEFAULT_SNAPSHOT_TOOLS)
         self.snapshot: Dict[str, Dict[str, Any]] = {}
+        # 只记录当前 rollout 进程内的离线下载状态。不能用磁盘文件是否存在
+        # 判断，否则第二次复现实验会继承第一次留下的占位 PDF。
+        self._offline_downloaded: Set[tuple] = set()
 
         # 统计信息，便于确认 rollout 真的没打外网
         self.stats = {
@@ -102,6 +106,8 @@ class MockArxivEnv:
 
     def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
         """执行工具（返回值与 registry.execute_tool 保持同一契约：list/dict/str）"""
+        self._validate_tool_arguments(tool_name, args)
+
         # 1) 离线下载桩
         if tool_name == "download_arxiv_pdf" and self.offline_download:
             self.stats["offline_stubs"] += 1
@@ -172,7 +178,7 @@ class MockArxivEnv:
                 result = [
                     {
                         "id": f"2401.{10001 + i}",
-                        "title": f"Recent Advances in {aspect} Paper {i+1}",
+                        "title": f"Recent Advances in {aspect} Paper {i + 1}",
                         "abstract": f"Research on {aspect} topics and evaluation.",
                         "authors": ["Author A", "Author B"],
                         "categories": [f"cs.{aspect}" if aspect != "*" else "cs.AI"],
@@ -187,7 +193,35 @@ class MockArxivEnv:
         self._sync_session_papers(tool_name, args, result)
         return result
 
-    def _sync_session_papers(self, tool_name: str, args: Dict[str, Any], result: Any) -> None:
+    @staticmethod
+    def _validate_tool_arguments(tool_name: str, args: Dict[str, Any]) -> None:
+        """让离线桩保留真实 Python 工具的参数边界。
+
+        setup 会额外携带 session_id 以同步内存状态；对本身不接收它的搜索
+        函数，这是框架元数据而不是模型参数，因此绑定前移除。其余未知参数
+        （例如把 search_arxiv_papers 的 query 塞给 recent-search）必须报错，
+        否则 replay 会给错误动作返回一个看似成功的 observation。
+        """
+        tool = registry.get_tool(tool_name)
+        if tool is None:
+            raise ValueError(f"工具 '{tool_name}' 未注册")
+        func = tool["func"]
+        signature = inspect.signature(func)
+        call_args = dict(args or {})
+        if "session_id" not in signature.parameters:
+            call_args.pop("session_id", None)
+        if tool_name == _KEYWORD_SEARCH_TOOL:
+            query = " ".join(str(call_args.get("query") or "").split())
+            if not query:
+                raise ValueError("工具参数错误: query 不能为空")
+        try:
+            signature.bind(**call_args)
+        except TypeError as exc:
+            raise ValueError(f"工具参数错误: {exc}") from exc
+
+    def _sync_session_papers(
+        self, tool_name: str, args: Dict[str, Any], result: Any
+    ) -> None:
         """若带 session_id 且为搜索工具，同步更新 store 中的 papers 缓存"""
         if tool_name in _SEARCH_TOOLS and isinstance(result, list):
             session_id = args.get("session_id")
@@ -195,9 +229,17 @@ class MockArxivEnv:
                 try:
                     from models.schemas import Paper
                     from models.store import store
+
                     papers = [
-                        Paper(**{key: value for key, value in paper.items() if not key.startswith("_")})
-                        if isinstance(paper, dict) else paper
+                        Paper(
+                            **{
+                                key: value
+                                for key, value in paper.items()
+                                if not key.startswith("_")
+                            }
+                        )
+                        if isinstance(paper, dict)
+                        else paper
                         for paper in result
                     ]
                     store.set_last_papers(session_id, papers)
@@ -254,7 +296,7 @@ class MockArxivEnv:
             max_results = int(args.get("max_results", 10))
         except (TypeError, ValueError):
             max_results = 10
-        return result[:max(1, min(max_results, len(result)))]
+        return result[: max(1, min(max_results, len(result)))]
 
     @classmethod
     def _keyword_search_key(cls, args: Dict[str, Any]) -> str:
@@ -289,7 +331,9 @@ class MockArxivEnv:
             return None
 
         query = " ".join(str((args or {}).get("query", "")).split()).casefold()
-        start = int.from_bytes(sha256(query.encode("utf-8")).digest()[:8], "big") % len(pool)
+        start = int.from_bytes(sha256(query.encode("utf-8")).digest()[:8], "big") % len(
+            pool
+        )
         ordered = pool[start:] + pool[:start]
         selected = cls._limit_search_result(ordered, args)
         if not selected:
@@ -303,6 +347,10 @@ class MockArxivEnv:
         return marked
 
     # ---------- 离线下载桩 ----------
+
+    def reset_runtime_state(self) -> None:
+        """Clear mutable replay state between independent benchmark trials."""
+        self._offline_downloaded.clear()
 
     def _offline_download(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """不发 HTTP 的 download_arxiv_pdf 替身，返回契约与真实工具一致。
@@ -335,30 +383,42 @@ class MockArxivEnv:
                 )
             paper_id = paper.id
 
-        pdf_url = (paper.pdf_url if paper else None) or f"https://arxiv.org/pdf/{paper_id}.pdf"
+        pdf_url = (
+            paper.pdf_url if paper else None
+        ) or f"https://arxiv.org/pdf/{paper_id}.pdf"
         store.set_last_active_paper_id(session_id, paper_id)
 
         safe_id = str(paper_id).replace("/", "_")
         os.makedirs(settings.pdf_raw_path, exist_ok=True)
         local_path = os.path.join(settings.pdf_raw_path, f"{safe_id}.pdf")
 
-        existed = os.path.exists(local_path) and os.path.getsize(local_path) > 0
-        if not existed:
+        download_key = (str(session_id), str(paper_id))
+        existed = download_key in self._offline_downloaded
+        self._offline_downloaded.add(download_key)
+
+        stub_bytes = b"%PDF-1.4\n% offline stub for RL rollout\n"
+        if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
             # 最小合法 PDF 头，避免下游把它当成空文件
             with open(local_path, "wb") as f:
-                f.write(b"%PDF-1.4\n% offline stub for RL rollout\n")
+                f.write(stub_bytes)
 
-        size_bytes = os.path.getsize(local_path)
-        store.upsert_pdf_asset(
+        # 对外报告 mock 内容的固定大小，不读取可能由旧实验或真实下载留下的文件大小。
+        size_bytes = len(stub_bytes)
+        fixed_time = datetime(2000, 1, 1)
+        stored_asset = store.upsert_pdf_asset(
             PdfAsset(
                 paper_id=paper_id,
                 pdf_url=pdf_url,
                 local_path=local_path,
                 status="READY",
                 size_bytes=size_bytes,
-                downloaded_at=datetime.now(),
+                downloaded_at=fixed_time,
+                updated_at=fixed_time,
             )
         )
+        # MemoryStore.upsert_pdf_asset 会写入当前时间；离线回放必须固定它，
+        # 否则 cache-status Observation 会随墙上时钟变化并改变模型后续输出。
+        stored_asset.updated_at = fixed_time
 
         return {
             "session_id": session_id,
@@ -377,7 +437,8 @@ class MockArxivEnv:
     def _make_key(args: Dict[str, Any]) -> str:
         """构造参数 key（剔除易变字段后按键排序，保证跨 session 可命中）"""
         stable = {
-            k: v for k, v in (args or {}).items()
+            k: v
+            for k, v in (args or {}).items()
             if k not in _VOLATILE_ARG_KEYS and v is not None
         }
         return json.dumps(stable, sort_keys=True, ensure_ascii=False)
@@ -387,7 +448,9 @@ class MockArxivEnv:
     ) -> None:
         """添加到快照（供下次回放使用）"""
         self.snapshot.setdefault(tool_name, {})[key] = {
-            "args": {k: v for k, v in (args or {}).items() if k not in _VOLATILE_ARG_KEYS},
+            "args": {
+                k: v for k, v in (args or {}).items() if k not in _VOLATILE_ARG_KEYS
+            },
             "result": result,
         }
 

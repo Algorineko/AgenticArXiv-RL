@@ -92,6 +92,13 @@ class ReliabilityByAgentTest(unittest.TestCase):
         self.assertEqual(report.reliability_by_agent(criterion="accurate")["regex"]["pass^1"], 0.0)
         self.assertEqual(report.reliability_by_agent(criterion="completed")["regex"]["pass^1"], 1.0)
 
+    def test_default_strict_criterion_rejects_wrong_arguments(self):
+        metric = _m("a", "regex", 0, ok=True)
+        metric.arg_score = 0.0
+        report = BenchmarkReport([metric], model="test")
+        self.assertEqual(report.reliability_by_agent()["regex"]["criterion"], "strict")
+        self.assertEqual(report.reliability_by_agent()["regex"]["pass^1"], 0.0)
+
     def test_rejects_unknown_criterion(self):
         with self.assertRaises(ValueError):
             _report({"a": [1]}).reliability_by_agent(criterion="nope")

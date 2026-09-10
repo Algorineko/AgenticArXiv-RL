@@ -1,0 +1,37 @@
+{
+  "version": 3,
+  "kind": "qlora_sft_train_mix",
+  "shuffle_seed": 42,
+  "output": "data/sft/sft_v3_train_mix.jsonl",
+  "output_sha256": "51a44a4ed0d48aa72d62220c7e550ce999210499fd6e1339e4aef10ac8e2e909",
+  "output_rows": 2928,
+  "unique_sample_fingerprints": 2928,
+  "semantic_task_instances": 101,
+  "original_semantic_tasks": 36,
+  "parametric_semantic_tasks": 65,
+  "source_counts": {
+    "original_train_linguistic": 1020,
+    "parametric_v1_linguistic": 1908
+  },
+  "rows_per_semantic_task": {
+    "original": 28.333333333333332,
+    "parametric": 29.353846153846153
+  },
+  "sources": [
+    {
+      "path": "data/sft/sft_v1_linguistic.jsonl",
+      "sha256": "e234b34cf0fdc41c1b54b306781a6f18c4f1b48e0847755f83b1e33e5ef41431",
+      "manifest_sha256": "61d79ddfc335969f0664ee276db364613dd034b4616f6e7c64ccc72f94daf7da",
+      "rows": 1020,
+      "manifest_kind": "linguistic_semantics_preserving"
+    },
+    {
+      "path": "data/sft/sft_v2_parametric_linguistic.jsonl",
+      "sha256": "f665a1da9ab04bfc6433f2b2f7327d06f32d0ad1eede0b3e82a863cc2661baf7",
+      "manifest_sha256": "e20d724ca061698e587e189dc062baa636eaa7157b087d582d59343fc918504b",
+      "rows": 1908,
+      "manifest_kind": "parametric_v1_linguistic"
+    }
+  ],
+  "policy": "All rows are kept because the two sources are balanced per semantic task (28.33 vs 29.35 rows/task); file order is deterministically shuffled."
+}

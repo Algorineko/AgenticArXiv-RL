@@ -31,6 +31,39 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
+_BLOCKED_TERMINAL_THOUGHTS = {
+    "missing_context": (
+        "当前会话没有必要上下文，无法解析用户所指的论文",
+        "缺少会话上下文和最近操作的论文，因此无法解析该指代",
+    ),
+    "invalid_reference": (
+        "请求中的 ref 序号无效或超出 1-based 索引范围，无法执行",
+        "该 ref 序号违反 1-based 索引范围，属于非法取值，不能执行",
+    ),
+    "paper_not_found": (
+        "指定的 arXiv 论文 ID 不在快照记录中，无法下载该论文",
+        "快照中不存在指定的 arXiv 论文 ID，因此找不到该论文，不能下载",
+    ),
+    "unsupported_capability": (
+        "现有工具能力不支持该操作，任务超出工具范围",
+        "现有工具不支持所需功能，该请求超出能力边界，无法执行",
+    ),
+}
+
+
+def reference_terminal_thought(
+    task: Mapping[str, Any], *, variant: int = 0
+) -> str:
+    """按任务终止契约生成可验证的专家 Thought，不暴露 task id。"""
+    if task.get("expected_terminal_mode") != "blocked":
+        return "所有步骤均已成功执行，任务已完成"
+    reason = str(task.get("expected_terminal_reason") or "")
+    choices = _BLOCKED_TERMINAL_THOUGHTS.get(reason)
+    if not choices:
+        raise ValueError(f"未知的 blocked terminal reason: {reason!r}")
+    return choices[variant % len(choices)]
+
+
 @dataclass(frozen=True)
 class Step:
     """一次工具调用。task 的标准答案由若干 Step 组成。"""
@@ -53,6 +86,11 @@ class TaskSpec:
             判成 FORCE_STOP 而非能力不足。
         depends_on: 前置任务 id。同一会话里按依赖顺序跑，供
             `tasks.get_dependency_chain` 使用。
+        terminal_mode: 终止的业务语义。``completed`` 表示任务已执行完成；
+            ``blocked`` 表示任务因缺少上下文、非法参数或能力边界而无法执行，
+            此时模型必须在 FINISH 前明确说明阻塞原因，不能只声称“已完成”。
+        terminal_reason: ``blocked`` 的可验证原因类型；奖励只接受与该类型
+            一致的解释，避免模型用一句泛化的“无法执行”刷满分。
     """
 
     id: str
@@ -65,11 +103,31 @@ class TaskSpec:
     requires_offline: bool = False
     note: str = ""
     termination: str = "FINISH"
+    terminal_mode: str = "completed"
+    terminal_reason: Optional[str] = None
     max_iterations: Optional[int] = None
     depends_on: Optional[str] = None
 
     def to_task(self) -> Dict[str, Any]:
         """展开成 benchmark / RL 两侧共用的任务字典。"""
+        if self.terminal_mode not in {"completed", "blocked"}:
+            raise ValueError(
+                f"任务 {self.id!r} 的 terminal_mode={self.terminal_mode!r} 无效；"
+                "只支持 'completed' 或 'blocked'"
+            )
+        valid_reasons = {
+            "missing_context", "invalid_reference", "paper_not_found",
+            "unsupported_capability",
+        }
+        if self.terminal_mode == "blocked" and self.terminal_reason not in valid_reasons:
+            raise ValueError(
+                f"阻塞任务 {self.id!r} 必须声明 terminal_reason；"
+                f"可选值为 {sorted(valid_reasons)}"
+            )
+        if self.terminal_mode != "blocked" and self.terminal_reason is not None:
+            raise ValueError(
+                f"非阻塞任务 {self.id!r} 不能声明 terminal_reason"
+            )
         task: Dict[str, Any] = {
             "id": self.id,
             "task": self.task,
@@ -80,6 +138,10 @@ class TaskSpec:
             "category": self.category,
             "difficulty": self.difficulty,
         }
+        # 默认值不落盘，保持既有 43 条任务及其历史评测 fixture 字节兼容。
+        if self.terminal_mode != "completed":
+            task["expected_terminal_mode"] = self.terminal_mode
+            task["expected_terminal_reason"] = self.terminal_reason
         if self.setup:
             task["setup"] = [{"name": s.tool, "args": dict(s.args)} for s in self.setup]
         if self.template:

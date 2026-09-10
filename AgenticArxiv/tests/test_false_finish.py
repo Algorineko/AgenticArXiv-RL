@@ -122,6 +122,29 @@ class ReportAggregationTest(unittest.TestCase):
         rows = [("t", [DOWNLOAD], [_step(CACHE), _finish()], "regex")]
         self.assertIn("假完成率", self._report(rows).comparison_table_md())
 
+    def test_unapplicable_reference_metric_is_reported_as_na(self):
+        rows = [("t", [DOWNLOAD], [_step(DOWNLOAD), _finish()], "regex")]
+        report = self._report(rows)
+        self.assertIsNone(report.summary_by_agent()["regex"]["ref_accuracy"])
+        self.assertIn("| 指代解析准确率 | n/a |", report.comparison_table_md())
+
+    def test_reference_metric_only_averages_applicable_rows(self):
+        applicable = extract_metrics(
+            {"id": "with-ref", "expected_tools": [DOWNLOAD],
+             "expected_paper": "2601.00001v1"},
+            {"history": [
+                {"thought": "t", "action": json.dumps({"name": DOWNLOAD, "args": {"ref": 1}}),
+                 "observation": "{'paper_id': '2601.00001v1'}"},
+                _finish(),
+            ]},
+            "regex", 0,
+        )
+        not_applicable = self._report([
+            ("without-ref", [DOWNLOAD], [_step(DOWNLOAD), _finish()], "regex")
+        ]).metrics[0]
+        row = BenchmarkReport([applicable, not_applicable], model="test").summary_by_agent()["regex"]
+        self.assertEqual(row["ref_accuracy"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -109,16 +109,13 @@ class BaselineDiagnosticTest(unittest.TestCase):
         failures = category_gap_failures(leaky, min_gap=0.3)
         self.assertTrue(any("search/always_search" in f for f in failures), failures)
 
-    def test_per_category_check_ignores_rows_that_are_the_reference(self):
-        """infeasible 上 always_finish 就是参考解法：正确行为是一次都不调。
-
-        这不是漏洞，逐类目闸不能因此报警。
-        """
+    def test_empty_tool_path_does_not_make_false_finish_a_reference(self):
+        """blocked 任务还要解释原因，空工具路径不是完整参考答案。"""
         results = self._results(["reference", "always_finish"])
         infeasible = [r for r in results if r.category == "infeasible"]
         self.assertTrue(infeasible)
         self.assertTrue(all(
-            r.exact_reference for r in infeasible if r.policy == "always_finish"
+            not r.exact_reference for r in infeasible if r.policy == "always_finish"
         ))
         self.assertFalse(any(
             "infeasible/always_finish" in f
@@ -159,7 +156,7 @@ class BaselineDiagnosticTest(unittest.TestCase):
         always_finish_tasks = {
             task.task_id for task in top_tasks if task.policy == "always_finish"
         }
-        self.assertNotIn("infeasible_index_out_of_range", always_finish_tasks)
+        self.assertIn("infeasible_index_out_of_range", always_finish_tasks)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,21 @@ from benchmark.splits import (
 )
 from benchmark.tasks_expanded import EXPANDED_TASKS
 
-PINNED_PATH = Path(__file__).resolve().parents[2] / "data" / "splits" / "v1.json"
+SPLIT_DIR = Path(__file__).resolve().parents[2] / "data" / "splits"
+PINNED_PATH = SPLIT_DIR / "v1.json"
+PINNED_V2_PATH = SPLIT_DIR / "v2_62.json"
+GRPO_V5_PATH = SPLIT_DIR / "v5_grpo_train.json"
+
+PILOT_DEV_IDS = {
+    "search_AI_1d_3",
+    "search_kw_agentic_rl",
+    "opt_force_dl",
+    "ref_ctrl_id_download",
+    "state_dl_then_cache",
+    "multi_cv3_dl1",
+    "constraint_search_no_file",
+    "infeasible_unsupported_action",
+}
 
 
 def _task(tid, category="search", tools=1, template=None):
@@ -170,29 +184,29 @@ class SummarizeTest(unittest.TestCase):
 
 
 class PinnedV1SplitTest(unittest.TestCase):
-    """data/splits/v1.json 必须跟得上任务集。
+    """v1 是 59 条任务的历史切分，扩任务后也不能偷偷改写。
 
-    这个 pin 存在的意义是让训练前后两次运行引用同一份切分。可它是手工
-    落盘的静态文件，任务集一扩它就悄悄漏掉新任务——切分依然「有效」，
-    只是少了几条，没有任何东西会报错。同类漂移在本仓库已经发生过两次
-    （README 任务条数 7→8、58→59），所以这里直接钉死。
+    新增任务应进入新版本切分，而不是让历史实验的 v1 含义发生变化。
     """
 
     @classmethod
     def setUpClass(cls):
         cls.pinned = json.loads(PINNED_PATH.read_text(encoding="utf-8"))
         cls.split = cls.pinned["split"]
-        cls.ids = {t["id"] for t in EXPANDED_TASKS}
+        cls.current_ids = {t["id"] for t in EXPANDED_TASKS}
+        cls.v1_ids = {tid for ids in cls.split.values() for tid in ids}
 
-    def test_covers_every_task_exactly_once(self):
+    def test_historical_59_tasks_are_unique_and_still_exist(self):
         assigned = [tid for ids in self.split.values() for tid in ids]
         self.assertEqual(len(assigned), len(set(assigned)), "有任务被切到多份里")
-        self.assertEqual(set(assigned), self.ids)
+        self.assertEqual(len(assigned), 59)
+        self.assertTrue(self.v1_ids <= self.current_ids)
 
     def test_is_reproducible_from_the_recorded_seed_and_keys(self):
         """记下 seed / ood_keys / rates 就是为了能重算出同一份切分。"""
+        v1_tasks = [t for t in EXPANDED_TASKS if t["id"] in self.v1_ids]
         rebuilt = make_split(
-            EXPANDED_TASKS,
+            v1_tasks,
             ood_keys=[tuple(k) for k in self.pinned["ood_keys"]],
             seed=self.pinned["seed"],
             rates=self.pinned["rates"],
@@ -206,7 +220,74 @@ class PinnedV1SplitTest(unittest.TestCase):
         self.assertEqual(keys["train"] & keys["ood_test"], set())
 
     def test_recorded_rates_refer_to_real_tasks(self):
-        self.assertEqual(set(self.pinned["rates"]) - self.ids, set())
+        self.assertEqual(set(self.pinned["rates"]) - self.v1_ids, set())
+
+
+class PinnedV2SplitTest(unittest.TestCase):
+    """v2 覆盖当前 62 条，并把已经人工分析过的 pilot 与最终测试隔离。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pinned = json.loads(PINNED_V2_PATH.read_text(encoding="utf-8"))
+        cls.split = cls.pinned["split"]
+        cls.ids = {t["id"] for t in EXPANDED_TASKS}
+        cls.by_id = {t["id"]: t for t in EXPANDED_TASKS}
+
+    def test_covers_all_62_tasks_exactly_once(self):
+        assigned = [tid for ids in self.split.values() for tid in ids]
+        self.assertEqual(len(assigned), 62)
+        self.assertEqual(len(assigned), len(set(assigned)), "有任务被切到多份里")
+        self.assertEqual(set(assigned), self.ids)
+
+    def test_pilot_tasks_are_exactly_the_dev_split(self):
+        self.assertEqual(set(self.split["dev"]), PILOT_DEV_IDS)
+        self.assertEqual(set(self.pinned["pilot_dev_ids"]), PILOT_DEV_IDS)
+
+    def test_iid_templates_are_seen_in_training(self):
+        train_keys = {template_key(self.by_id[tid]) for tid in self.split["train"]}
+        for tid in self.split["iid_test"]:
+            self.assertIn(template_key(self.by_id[tid]), train_keys, tid)
+
+    def test_ood_templates_are_wholly_held_out(self):
+        held_out_keys = {tuple(key) for key in self.pinned["ood_keys"]}
+        self.assertEqual(
+            {template_key(self.by_id[tid]) for tid in self.split["ood_test"]},
+            held_out_keys,
+        )
+        non_ood = self.split["train"] + self.split["dev"] + self.split["iid_test"]
+        self.assertFalse(
+            {template_key(self.by_id[tid]) for tid in non_ood} & held_out_keys
+        )
+
+    def test_keyword_family_has_train_dev_and_iid_coverage(self):
+        self.assertIn("search_kw_llm", self.split["train"])
+        self.assertIn("search_kw_agentic_rl", self.split["dev"])
+        self.assertIn("search_kw_rag", self.split["iid_test"])
+
+    def test_rates_cover_exactly_train_after_the_frozen_base_run(self):
+        rates = self.pinned["rates"]
+        self.assertEqual(set(rates), set(self.split["train"]))
+        self.assertTrue(all(0.0 <= rate <= 1.0 for rate in rates.values()))
+
+    def test_rl_train_is_the_six_measured_middle_tasks(self):
+        expected = {
+            "chain_cv5_cache_dl_tr_cache",
+            "multi_cr5_cache1",
+            "search_CL_30d_10",
+            "search_CL_7d_5",
+            "search_LG_3d_10",
+            "search_RO_3d_8",
+        }
+        self.assertEqual(
+            set(load_split(f"{PINNED_V2_PATH}:rl_train")),
+            expected,
+        )
+
+    def test_explicit_dev_path_loads_the_pilot_set(self):
+        self.assertEqual(
+            set(load_split(f"{PINNED_V2_PATH}:dev")),
+            PILOT_DEV_IDS,
+        )
 
 
 class LoadSplitTest(unittest.TestCase):
@@ -267,6 +348,58 @@ class LoadSplitTest(unittest.TestCase):
                 {"split": {"train": ["a", "b"]}, "rates": {"a": 1.0, "b": 0.0}}))
             with self.assertRaises(ValueError):
                 load_split(f"{path}:rl_train")
+
+
+class GrpoV5SplitArtifactTest(unittest.TestCase):
+    """The setup-aware GRPO selection must never consume held-out tasks."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.v2 = json.loads(PINNED_V2_PATH.read_text(encoding="utf-8"))
+        cls.v5 = json.loads(GRPO_V5_PATH.read_text(encoding="utf-8"))
+
+    def test_train_tasks_are_only_from_v2_train(self):
+        selected = set(self.v5["split"]["rl_train"])
+        self.assertTrue(selected <= set(self.v2["split"]["train"]))
+        held_out = set(
+            self.v2["split"]["dev"]
+            + self.v2["split"]["iid_test"]
+            + self.v2["split"]["ood_test"]
+        )
+        self.assertFalse(selected & held_out)
+
+    def test_zero_variance_control_is_not_trained(self):
+        selected = set(self.v5["split"]["rl_train"])
+        controls = set(self.v5["split"]["ceiling_control"])
+        self.assertFalse(selected & controls)
+        for task_id in controls:
+            self.assertEqual(
+                self.v5["audit"][task_id]["informative_group_count"], 0
+            )
+
+    def test_summary_matches_selected_task_audit(self):
+        selected = self.v5["split"]["rl_train"]
+        informative = sum(
+            self.v5["audit"][task_id]["informative_group_count"]
+            for task_id in selected
+        )
+        groups = sum(
+            self.v5["audit"][task_id]["group_count"]
+            for task_id in selected
+        )
+        summary = self.v5["summary"]
+        self.assertEqual(summary["selected_task_count"], len(selected))
+        self.assertEqual(summary["informative_group_count"], informative)
+        self.assertEqual(summary["selected_prompt_group_count"], groups)
+        self.assertAlmostEqual(
+            summary["informative_group_fraction"], informative / groups
+        )
+
+    def test_explicit_split_loads_the_seven_selected_tasks(self):
+        self.assertEqual(
+            load_split(f"{GRPO_V5_PATH}:rl_train"),
+            self.v5["split"]["rl_train"],
+        )
 
 
 if __name__ == "__main__":

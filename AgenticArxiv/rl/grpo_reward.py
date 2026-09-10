@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from benchmark.metrics import NON_TOOL_ACTIONS
 from rl.reward import RewardCalculator
@@ -43,6 +43,129 @@ MIN_TRL_FOR_ROLLOUT_FUNC = "0.28.0"
 # 工具执行失败时写进 observation 的前缀。抽成常量是为了让
 # rl/observability.py 统计 tool_error_rate 时不必字面量匹配一段会漂的文案。
 TOOL_ERROR_PREFIX = "工具执行失败: "
+
+# Keep one explicit allow-list for rollout execution and audit.  An invented
+# tool must be observable even when the environment turns it into a normal
+# error string instead of raising out of training.
+SUPPORTED_TOOL_NAMES = {
+    "get_recently_submitted_cs_papers",
+    "search_arxiv_papers",
+    "download_arxiv_pdf",
+    "translate_arxiv_pdf",
+    "get_paper_cache_status",
+}
+
+
+def _dispatch_environment_tool(environment: Any, name: str, args: Mapping[str, Any]) -> Any:
+    """Execute one allow-listed tool against a per-rollout environment."""
+    tool_name = str(name)
+    if tool_name not in SUPPORTED_TOOL_NAMES:
+        raise ValueError(f"未知工具: {tool_name}")
+    method = getattr(environment, tool_name, None)
+    if method is None:
+        raise ValueError(f"环境未实现工具: {tool_name}")
+    clean_args = {
+        key: value for key, value in dict(args or {}).items()
+        if key != "session_id"
+    }
+    return method(**clean_args)
+
+
+def _resolve_prompt_task_id(
+    prompt: Any,
+    prompt_task_ids: Mapping[str, str],
+) -> Optional[str]:
+    """Recover a task id without exposing it to the policy text.
+
+    TRL versions differ in whether a custom rollout receives raw chat messages
+    or an already-rendered string.  Exact lookup handles raw messages; the
+    substring fallback handles a rendered chat template containing the same
+    full ReAct prompt.
+    """
+    candidates: List[str] = []
+    if isinstance(prompt, list):
+        for message in prompt:
+            if isinstance(message, Mapping):
+                hidden = message.get("_task_id")
+                if hidden:
+                    return str(hidden)
+                content = message.get("content")
+                if isinstance(content, str):
+                    candidates.append(content)
+    elif isinstance(prompt, str):
+        candidates.append(prompt)
+
+    for text in candidates:
+        direct = prompt_task_ids.get(text)
+        if direct is not None:
+            return str(direct)
+        matches = {
+            str(task_id)
+            for known_text, task_id in prompt_task_ids.items()
+            if known_text and known_text in text
+        }
+        if len(matches) == 1:
+            return matches.pop()
+    return None
+
+
+def _strip_prompt_task_metadata(prompt: Any) -> Any:
+    """Remove rollout-only task identity before tokenization.
+
+    Some benchmark cases intentionally share the exact same visible user text
+    while differing in hidden session setup.  ``_task_id`` travels inside the
+    structured message only so the rollout can choose the right environment;
+    stripping it here guarantees it never becomes a policy token even if a
+    future chat template starts rendering unknown message fields.
+    """
+    if not isinstance(prompt, list):
+        return prompt
+    cleaned = []
+    for message in prompt:
+        if isinstance(message, Mapping):
+            item = dict(message)
+            item.pop("_task_id", None)
+            cleaned.append(item)
+        else:
+            cleaned.append(message)
+    return cleaned
+
+
+def _prepare_rollout_environment(
+    environment: Any,
+    task_id: Optional[str],
+    tasks_by_id: Mapping[str, Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Reset one rollout and apply task setup outside the policy trajectory.
+
+    ``TaskSpec.setup`` describes pre-existing session state. BenchmarkRunner
+    executes it before the Agent and does not score it as a model action. GRPO
+    must do exactly the same; otherwise reference tasks are impossible while
+    their reward oracle still expects a direct paper operation.
+    """
+    if not tasks_by_id:
+        environment.reset()
+        return []
+    if not task_id or task_id not in tasks_by_id:
+        raise ValueError(
+            "GRPO rollout 无法将 prompt 映射回 task_id，"
+            "不能安全执行任务 setup"
+        )
+
+    environment.reset(task_id=task_id)
+    applied: List[Dict[str, Any]] = []
+    for action in tasks_by_id[task_id].get("setup") or []:
+        name = str(action.get("name") or "")
+        args = dict(action.get("args") or {})
+        try:
+            _dispatch_environment_tool(environment, name, args)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                f"任务 {task_id} 的 GRPO setup 执行失败: "
+                f"tool={name}, args={args}, error={exc}"
+            ) from exc
+        applied.append({"name": name, "args": args})
+    return applied
 
 
 def parse_react_action(completion: str):
@@ -227,6 +350,7 @@ def make_grpo_reward_fn(
     env: Any = None,
     reward_calc: Optional[RewardCalculator] = None,
     tracker: Any = None,
+    auditor: Any = None,
 ) -> Callable[..., List[float]]:
     """构造 TRL GRPOTrainer 用的 reward function。
 
@@ -245,7 +369,18 @@ def make_grpo_reward_fn(
                        trajectory_results=None,
                        **kwargs) -> List[float]:
         completions = completions or []
-        ids = task_id or [None] * len(completions)
+        if task_id is None:
+            ids = [None] * len(completions)
+        elif isinstance(task_id, str):
+            # 保持对单样本/手工调用的兼容；TRL 正常训练时传入的是列表。
+            ids = [task_id] * len(completions)
+        else:
+            ids = list(task_id)
+        if len(ids) != len(completions):
+            raise ValueError(
+                "GRPO reward 输入长度不一致: "
+                f"completions={len(completions)}, task_ids={len(ids)}"
+            )
 
         # RewardCalculator 自带课程：训练早期把权重压在结构正确性上，
         # 后期才给语义正确性满权重。TRL 会把 trainer_state 传进来，
@@ -253,11 +388,17 @@ def make_grpo_reward_fn(
         step = int(getattr(trainer_state, "global_step", 0) or 0)
 
         rewards: List[float] = []
+        breakdowns: List[Any] = []
+        resolved_trajectories: List[Dict[str, Any]] = []
         trajectories = trajectory_results or [None] * len(completions)
         for completion, tid, rollout_result in zip(completions, ids, trajectories):
             task_def = tasks_by_id.get(tid)
             if task_def is None:
                 rewards.append(0.0)
+                breakdowns.append(None)
+                resolved_trajectories.append(
+                    rollout_result or synthesize_trajectory(_completion_text(completion), env=env)
+                )
                 continue
             result = rollout_result or (
                 messages_to_trajectory(completion)
@@ -270,6 +411,19 @@ def make_grpo_reward_fn(
             if tracker is not None:
                 tracker.record(breakdown, result)
             rewards.append(float(breakdown.total))
+            breakdowns.append(breakdown)
+            resolved_trajectories.append(result)
+        if tracker is not None:
+            tracker.record_group(ids, rewards)
+        if auditor is not None:
+            auditor.record_batch(
+                completions=completions,
+                task_ids=ids,
+                trajectories=resolved_trajectories,
+                breakdowns=breakdowns,
+                rewards=rewards,
+                training_step=step,
+            )
         return rewards
 
     grpo_reward_fn.__name__ = "grpo_reward_fn"
@@ -301,7 +455,13 @@ def require_rollout_func_support() -> None:
         )
 
 
-def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
+def make_multiturn_rollout_func(
+    environment_factory,
+    max_turns: int = 4,
+    *,
+    tasks_by_id: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    prompt_task_ids: Optional[Mapping[str, str]] = None,
+):
     """Create a TRL custom rollout function for textual ReAct models.
 
     Every assistant turn is sampled from the current policy. Tool observations
@@ -320,7 +480,19 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
         # （num_generations=2 时收到的是 2 条一模一样的 prompt）。再展开一次会让
         # 返回条数变成 N*G*G，与 TRL 期望的 N*G 对不上，在 shuffle_sequence_dict
         # 处炸成 IndexError。
-        expanded_prompts = [copy.deepcopy(p) for p in prompts]
+        received_prompts = [copy.deepcopy(p) for p in prompts]
+        task_lookup = tasks_by_id or {}
+        prompt_lookup = prompt_task_ids or {}
+        rollout_task_ids = [
+            _resolve_prompt_task_id(prompt, prompt_lookup)
+            for prompt in received_prompts
+        ]
+        # Resolve the hidden identity first, then remove it before applying the
+        # chat template.  The model receives byte-for-byte the same visible
+        # ReAct prompt used by Benchmark; only the environment sees task_id.
+        expanded_prompts = [
+            _strip_prompt_task_metadata(prompt) for prompt in received_prompts
+        ]
         prompt_ids = []
         for prompt in expanded_prompts:
             if isinstance(prompt, list):
@@ -338,16 +510,23 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
             prompt_ids.append(list(ids))
 
         environments = [environment_factory() for _ in expanded_prompts]
+        applied_setups = []
         trajectory_results = []
         completion_ids = [[] for _ in expanded_prompts]
         env_masks = [[] for _ in expanded_prompts]
         histories = [[] for _ in expanded_prompts]
+        raw_assistant_turns = [[] for _ in expanded_prompts]
         active = list(range(len(expanded_prompts)))
         full_ids = [list(ids) for ids in prompt_ids]
 
         # Dataset rows are expanded prompt-major, matching TRL's reward columns.
-        for i, environment in enumerate(environments):
-            environment.reset()
+        # Apply TaskSpec.setup before policy generation, exactly as BenchmarkRunner
+        # does. Setup actions seed session state but are not model actions and must
+        # therefore stay out of history, reward tool sequence, and policy loss.
+        for task_id, environment in zip(rollout_task_ids, environments):
+            applied_setups.append(
+                _prepare_rollout_environment(environment, task_id, task_lookup)
+            )
 
         for _turn in range(max_turns):
             if not active:
@@ -368,6 +547,7 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
                 # 否则下一轮拼进 full_ids 后 torch.tensor() 无法处理
                 generated = [int(t) for t in turn_ids[batch_index]][:budget]
                 text = tokenizer.decode(generated, skip_special_tokens=True)
+                raw_assistant_turns[index].append(text)
                 completion_ids[index].extend(generated)
                 env_masks[index].extend([1] * len(generated))
 
@@ -387,18 +567,9 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
 
                 args = dict(action.get("args") or {})
                 try:
-                    if action["name"] == "get_recently_submitted_cs_papers":
-                        result = environments[index].get_recently_submitted_cs_papers(**args)
-                    elif action["name"] == "search_arxiv_papers":
-                        result = environments[index].search_arxiv_papers(**args)
-                    elif action["name"] == "download_arxiv_pdf":
-                        result = environments[index].download_arxiv_pdf(**args)
-                    elif action["name"] == "translate_arxiv_pdf":
-                        result = environments[index].translate_arxiv_pdf(**args)
-                    elif action["name"] == "get_paper_cache_status":
-                        result = environments[index].get_paper_cache_status(**args)
-                    else:
-                        raise ValueError(f"未知工具: {action['name']}")
+                    result = _dispatch_environment_tool(
+                        environments[index], action["name"], args
+                    )
                     observation = str(result)[:1000]
                 except Exception as exc:  # noqa: BLE001
                     observation = f"{TOOL_ERROR_PREFIX}{exc}"
@@ -418,12 +589,28 @@ def make_multiturn_rollout_func(environment_factory, max_turns: int = 4):
                     next_active.append(index)
             active = next_active
 
-        for history in histories:
+        for index, history in enumerate(histories):
+            last_action = str(history[-1].get("action") or "") if history else ""
+            clipped = (
+                len(completion_ids[index]) >= trainer.max_completion_length
+                and last_action != "FINISH"
+            )
             trajectory_results.append({
                 "history": history,
                 "timing": {},
-                "token_usage": {},
+                "token_usage": {
+                    "completion_tokens": len(completion_ids[index]),
+                    "policy_tokens": sum(env_masks[index]),
+                },
                 "iteration_count": len(history),
+                "raw_assistant_turns": raw_assistant_turns[index],
+                "task_id": rollout_task_ids[index],
+                "setup_actions": applied_setups[index],
+                "clipped": clipped,
+                "reached_max_turns": (
+                    len(raw_assistant_turns[index]) >= max_turns
+                    and last_action != "FINISH"
+                ),
             })
         return {
             "prompt_ids": prompt_ids,
@@ -445,17 +632,28 @@ def build_prompt_dataset(tasks: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
     prompt 用的就是推理时真正送进模型的那段 ReAct prompt（含工具描述与格式约束），
     保证训练与推理的输入分布一致。
     """
-    from agents.prompt_templates import format_tool_description, get_react_prompt
+    from agents.prompt_templates import (
+        build_visible_setup_context,
+        format_tool_description,
+        get_react_prompt,
+    )
     from tools.tool_registry import registry
 
     tools_description = format_tool_description(registry.list_tools())
     rows = []
     for task in tasks:
+        visible_context = build_visible_setup_context(task)
         prompt = get_react_prompt(
-            task=task["task"], tools_description=tools_description, history=""
+            task=task["task"],
+            tools_description=tools_description,
+            history=visible_context,
         )
         rows.append({
-            "prompt": [{"role": "user", "content": prompt}],
+            "prompt": [{
+                "role": "user",
+                "content": prompt,
+                "_task_id": task["id"],
+            }],
             "task_id": task["id"],
         })
     return rows

@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "task_set": "expanded",
+  "purpose": "stochastic GRPO reward-variance probe after semantic rescoring",
+  "split": {
+    "rl_probe": [
+      "chain_lg10_dl_tr_last",
+      "chain_ro5_dl_three",
+      "infeasible_no_session",
+      "infeasible_unknown_id",
+      "infeasible_zero_index",
+      "ref_ctrl_word_handover",
+      "ref_stress_image_restoration",
+      "ref_stress_state_across"
+    ]
+  },
+  "deterministic_rates": {
+    "chain_lg10_dl_tr_last": 0.0,
+    "chain_ro5_dl_three": 0.0,
+    "infeasible_no_session": 0.0,
+    "infeasible_unknown_id": 0.0,
+    "infeasible_zero_index": 0.0,
+    "ref_ctrl_word_handover": 0.0,
+    "ref_stress_image_restoration": 0.0,
+    "ref_stress_state_across": 0.0
+  },
+  "source": {
+    "model": "outputs/sft_qlora_v1_e1/final",
+    "metric": "semantic_strict_success",
+    "artifact": "artifacts/qwen25_15b_sft_e1_final_train_r3_semantic/summary.json",
+    "artifact_sha256": "8b37d7aa557a595c8fad04dc8c577fd93b9ea1228a7f40e59f059d3583c0f177",
+    "repeat": 3,
+    "strict_success_rate": 0.7777777777777778
+  },
+  "policy": {
+    "scope": "Only v2 train failures are included; dev, IID, and OOD remain untouched.",
+    "interpretation": "This is a probe set, not yet the final RL train set. Keep only tasks with non-zero within-prompt reward variance under stochastic sampling."
+  }
+}
