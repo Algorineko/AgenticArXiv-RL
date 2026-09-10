@@ -109,6 +109,33 @@ class KeywordSnapshotReplayTest(unittest.TestCase):
         self.assertEqual(second_env.stats["real_calls"], 0)
         self.assertEqual(second_env.stats["fallback"], 1)
 
+    def test_fallback_does_not_pollute_session_papers(self):
+        """回退结果带显式标记，且不得写入会话论文列表。
+
+        BaseAgent 检测到 offline_fallback 会向模型报告"工具执行失败"；
+        若 env 在回退分支同步 store，模型后续用 ref 操作会解析到这些
+        无关论文——观测说失败、状态里却有"论文"，两者矛盾。
+        """
+        from models.store import store, use_memory_store
+
+        use_memory_store(reset=True)
+        env = MockArxivEnv(self.snapshot_path, mode="replay")
+        args = {
+            "query": "all:unseen query",
+            "max_results": 2,
+            "days": 30,
+            "session_id": "sess-fallback-guard",
+        }
+        result = env.execute_tool("search_arxiv_papers", args)
+
+        self.assertTrue(result[0]["_mock_env"]["offline_fallback"])
+        self.assertEqual(env.stats["hit"], 0, "回退不是快照命中，不应计入 hit")
+        self.assertEqual(
+            store.get_last_papers("sess-fallback-guard"),
+            [],
+            "回退论文不应写入会话论文列表",
+        )
+
 
 class KeywordTaskSpecTest(unittest.TestCase):
     def test_keyword_tasks_have_a_complete_argument_oracle(self):
