@@ -1,0 +1,1977 @@
+{
+  "version": 1,
+  "kind": "train_only_parametric_expert_seed",
+  "split_file": "data/splits/v2_62.json",
+  "split_sha256": "6f220a5bddfb82c05685cb9d79fe4b3e83bde8eb3f637f9fb89c4b54e80a394e",
+  "snapshot": "data/mock_arxiv_snapshot.json",
+  "snapshot_sha256": "fc164371e848826cce4eba5842e585c9ff2bb9c345da148c08b65c0b98352c1e",
+  "output": "data/sft/sft_v4_terminalfix_parametric_seed.jsonl",
+  "output_sha256": "b83022843000b964cf244afe6f460acfb47af26bb81f20e0a42139b0aa5628b7",
+  "derived_tasks": 65,
+  "sample_rows": 159,
+  "unique_sample_fingerprints": 159,
+  "parent_train_tasks": 26,
+  "parent_counts": {
+    "chain_ai5_dl2_tr2": 2,
+    "chain_cv5_cache_dl_tr_cache": 2,
+    "chain_lg10_dl_tr_last": 2,
+    "chain_ro5_dl_three": 2,
+    "constraint_cache_only": 3,
+    "constraint_download_only": 3,
+    "constraint_search_only": 3,
+    "constraint_two_downloads_only": 3,
+    "infeasible_no_session": 2,
+    "infeasible_unknown_id": 2,
+    "infeasible_zero_index": 3,
+    "multi_cr5_cache1": 3,
+    "multi_lg10_dl3": 3,
+    "opt_force_tr": 2,
+    "opt_keep_dual": 2,
+    "opt_threads": 3,
+    "search_AI_30d_25": 2,
+    "search_CL_7d_5": 2,
+    "search_CR_7d_5": 2,
+    "search_CV_14d_3": 2,
+    "search_LG_3d_10": 2,
+    "search_RO_3d_8": 2,
+    "search_kw_llm": 3,
+    "state_cache_before_dl": 3,
+    "state_ref_last_of_10": 3,
+    "state_ref_ordinal_cn": 4
+  },
+  "category_counts": {
+    "composite": 6,
+    "constraint": 12,
+    "infeasible": 7,
+    "keyword_search": 3,
+    "long_chain": 8,
+    "optional": 7,
+    "search": 12,
+    "state": 10
+  },
+  "tool_chain_length_counts": {
+    "0": 7,
+    "1": 38,
+    "2": 12,
+    "3": 2,
+    "4": 4,
+    "5": 2
+  },
+  "heldout_parent_overlap": 0,
+  "exact_benchmark_text_overlap": 0,
+  "topology_policy": "Each derived task preserves its train parent's step/setup tool sequence.",
+  "task_manifest_sha256": "315ae06e024fefc05acca80c4c6b101a579549cd21dd22402624ba072f436ebc",
+  "tasks": [
+    {
+      "derived_task_id": "augp1_search_AI_30d_25_2d_4",
+      "parent_task_id": "search_AI_30d_25",
+      "task": "检索最近2天人工智能(cs.AI)方向论文，最多返回4篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 2,
+            "max_results": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 2,
+        "max_results": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_AI_30d_25_10d_8",
+      "parent_task_id": "search_AI_30d_25",
+      "task": "检索最近10天人工智能(cs.AI)方向论文，最多返回8篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 10,
+            "max_results": 8
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 10,
+        "max_results": 8
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_LG_3d_10_5d_4",
+      "parent_task_id": "search_LG_3d_10",
+      "task": "检索最近5天机器学习(cs.LG)方向论文，最多返回4篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "LG",
+            "days": 5,
+            "max_results": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "LG",
+        "days": 5,
+        "max_results": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_LG_3d_10_21d_7",
+      "parent_task_id": "search_LG_3d_10",
+      "task": "检索最近21天机器学习(cs.LG)方向论文，最多返回7篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "LG",
+            "days": 21,
+            "max_results": 7
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "LG",
+        "days": 21,
+        "max_results": 7
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_CL_7d_5_3d_4",
+      "parent_task_id": "search_CL_7d_5",
+      "task": "检索最近3天自然语言处理(cs.CL)方向论文，最多返回4篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 3,
+            "max_results": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CL",
+        "days": 3,
+        "max_results": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_CL_7d_5_14d_8",
+      "parent_task_id": "search_CL_7d_5",
+      "task": "检索最近14天自然语言处理(cs.CL)方向论文，最多返回8篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 14,
+            "max_results": 8
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CL",
+        "days": 14,
+        "max_results": 8
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_CV_14d_3_3d_6",
+      "parent_task_id": "search_CV_14d_3",
+      "task": "检索最近3天计算机视觉(cs.CV)方向论文，最多返回6篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CV",
+            "days": 3,
+            "max_results": 6
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CV",
+        "days": 3,
+        "max_results": 6
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_CV_14d_3_21d_9",
+      "parent_task_id": "search_CV_14d_3",
+      "task": "检索最近21天计算机视觉(cs.CV)方向论文，最多返回9篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CV",
+            "days": 21,
+            "max_results": 9
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CV",
+        "days": 21,
+        "max_results": 9
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_RO_3d_8_5d_4",
+      "parent_task_id": "search_RO_3d_8",
+      "task": "检索最近5天机器人学(cs.RO)方向论文，最多返回4篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "RO",
+            "days": 5,
+            "max_results": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "RO",
+        "days": 5,
+        "max_results": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_RO_3d_8_14d_7",
+      "parent_task_id": "search_RO_3d_8",
+      "task": "检索最近14天机器人学(cs.RO)方向论文，最多返回7篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "RO",
+            "days": 14,
+            "max_results": 7
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "RO",
+        "days": 14,
+        "max_results": 7
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_CR_7d_5_3d_6",
+      "parent_task_id": "search_CR_7d_5",
+      "task": "检索最近3天密码学与安全(cs.CR)方向论文，最多返回6篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CR",
+            "days": 3,
+            "max_results": 6
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CR",
+        "days": 3,
+        "max_results": 6
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_CR_7d_5_21d_9",
+      "parent_task_id": "search_CR_7d_5",
+      "task": "检索最近21天密码学与安全(cs.CR)方向论文，最多返回9篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CR",
+            "days": 21,
+            "max_results": 9
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CR",
+        "days": 21,
+        "max_results": 9
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_kw_llm_n2",
+      "parent_task_id": "search_kw_llm",
+      "task": "按关键词 all:large language model 检索 arXiv，最多返回2篇",
+      "steps": [
+        {
+          "name": "search_arxiv_papers",
+          "args": {
+            "query": "all:large language model",
+            "max_results": 2,
+            "days": 30
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "query": "all:large language model",
+        "max_results": 2,
+        "days": 30
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_kw_llm_n8",
+      "parent_task_id": "search_kw_llm",
+      "task": "按关键词 all:large language model 检索 arXiv，最多返回8篇",
+      "steps": [
+        {
+          "name": "search_arxiv_papers",
+          "args": {
+            "query": "all:large language model",
+            "max_results": 8,
+            "days": 30
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "query": "all:large language model",
+        "max_results": 8,
+        "days": 30
+      }
+    },
+    {
+      "derived_task_id": "augp1_search_kw_llm_n12",
+      "parent_task_id": "search_kw_llm",
+      "task": "按关键词 all:large language model 检索 arXiv，最多返回12篇",
+      "steps": [
+        {
+          "name": "search_arxiv_papers",
+          "args": {
+            "query": "all:large language model",
+            "max_results": 12,
+            "days": 30
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "query": "all:large language model",
+        "max_results": 12,
+        "days": 30
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_threads_t2",
+      "parent_task_id": "opt_threads",
+      "task": "翻译第1篇论文，使用2个线程",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 1,
+            "threads": 2
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 1,
+        "threads": 2
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_threads_t4",
+      "parent_task_id": "opt_threads",
+      "task": "翻译第1篇论文，使用4个线程",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 1,
+            "threads": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 1,
+        "threads": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_threads_t12",
+      "parent_task_id": "opt_threads",
+      "task": "翻译第1篇论文，使用12个线程",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 1,
+            "threads": 12
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 1,
+        "threads": 12
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_keep_dual_ref2",
+      "parent_task_id": "opt_keep_dual",
+      "task": "翻译第2篇论文并保留双语版本",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 2,
+            "keep_dual": true
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 2,
+        "keep_dual": true
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_keep_dual_ref4",
+      "parent_task_id": "opt_keep_dual",
+      "task": "翻译第4篇论文并保留双语版本",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 4,
+            "keep_dual": true
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 4,
+        "keep_dual": true
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_force_tr_ref2",
+      "parent_task_id": "opt_force_tr",
+      "task": "强制重新翻译第2篇论文",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 2,
+            "force": true
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 2,
+        "force": true
+      }
+    },
+    {
+      "derived_task_id": "augp1_opt_force_tr_ref3",
+      "parent_task_id": "opt_force_tr",
+      "task": "强制重新翻译第3篇论文",
+      "steps": [
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 3,
+            "force": true
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 3
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 3,
+        "force": true
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_ordinal_cn_ref1",
+      "parent_task_id": "state_ref_ordinal_cn",
+      "task": "把列表中的第1篇论文下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 1
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_ordinal_cn_ref2",
+      "parent_task_id": "state_ref_ordinal_cn",
+      "task": "把列表中的第2篇论文下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 2
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_ordinal_cn_ref4",
+      "parent_task_id": "state_ref_ordinal_cn",
+      "task": "把列表中的第4篇论文下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_ordinal_cn_ref5",
+      "parent_task_id": "state_ref_ordinal_cn",
+      "task": "把列表中的第5篇论文下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 5
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_last_of_10_last6",
+      "parent_task_id": "state_ref_last_of_10",
+      "task": "把刚才列出的6篇自然语言处理论文中的最后一篇（第6篇）下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 6
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 7,
+            "max_results": 6
+          }
+        }
+      ],
+      "parameters": {
+        "max_results": 6,
+        "ref": 6
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_last_of_10_last8",
+      "parent_task_id": "state_ref_last_of_10",
+      "task": "把刚才列出的8篇自然语言处理论文中的最后一篇（第8篇）下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 8
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 7,
+            "max_results": 8
+          }
+        }
+      ],
+      "parameters": {
+        "max_results": 8,
+        "ref": 8
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_ref_last_of_10_last12",
+      "parent_task_id": "state_ref_last_of_10",
+      "task": "把刚才列出的12篇自然语言处理论文中的最后一篇（第12篇）下载下来",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 12
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 7,
+            "max_results": 12
+          }
+        }
+      ],
+      "parameters": {
+        "max_results": 12,
+        "ref": 12
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_cache_before_dl_ref1",
+      "parent_task_id": "state_cache_before_dl",
+      "task": "先查看第1篇论文是否缓存，没有的话再下载它",
+      "steps": [
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 1
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 1
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_cache_before_dl_ref3",
+      "parent_task_id": "state_cache_before_dl",
+      "task": "先查看第3篇论文是否缓存，没有的话再下载它",
+      "steps": [
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 3
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 3
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 3
+      }
+    },
+    {
+      "derived_task_id": "augp1_state_cache_before_dl_ref4",
+      "parent_task_id": "state_cache_before_dl",
+      "task": "先查看第4篇论文是否缓存，没有的话再下载它",
+      "steps": [
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_cache_only_ref1",
+      "parent_task_id": "constraint_cache_only",
+      "task": "只检查第1篇论文的缓存状态，不要下载或翻译",
+      "steps": [
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 1
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 1
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_cache_only_ref3",
+      "parent_task_id": "constraint_cache_only",
+      "task": "只检查第3篇论文的缓存状态，不要下载或翻译",
+      "steps": [
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 3
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 3
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_cache_only_ref4",
+      "parent_task_id": "constraint_cache_only",
+      "task": "只检查第4篇论文的缓存状态，不要下载或翻译",
+      "steps": [
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_download_only_ref2",
+      "parent_task_id": "constraint_download_only",
+      "task": "只下载第2篇论文，不要翻译，也不要检查缓存",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 2
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_download_only_ref3",
+      "parent_task_id": "constraint_download_only",
+      "task": "只下载第3篇论文，不要翻译，也不要检查缓存",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 3
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 3
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_download_only_ref5",
+      "parent_task_id": "constraint_download_only",
+      "task": "只下载第5篇论文，不要翻译，也不要检查缓存",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "ref": 5
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_two_downloads_only_refs1_2",
+      "parent_task_id": "constraint_two_downloads_only",
+      "task": "下载第1篇和第2篇论文，完成后停止，不要翻译或检查缓存",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "refs": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_two_downloads_only_refs2_4",
+      "parent_task_id": "constraint_two_downloads_only",
+      "task": "下载第2篇和第4篇论文，完成后停止，不要翻译或检查缓存",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "refs": [
+          2,
+          4
+        ]
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_two_downloads_only_refs4_5",
+      "parent_task_id": "constraint_two_downloads_only",
+      "task": "下载第4篇和第5篇论文，完成后停止，不要翻译或检查缓存",
+      "steps": [
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "refs": [
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_search_only_ai_4_4",
+      "parent_task_id": "constraint_search_only",
+      "task": "只检索最近4天人工智能(cs.AI)论文，最多4篇；不要下载或翻译",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 4,
+            "max_results": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 4,
+        "max_results": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_search_only_lg_9_6",
+      "parent_task_id": "constraint_search_only",
+      "task": "只检索最近9天机器学习(cs.LG)论文，最多6篇；不要下载或翻译",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "LG",
+            "days": 9,
+            "max_results": 6
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "LG",
+        "days": 9,
+        "max_results": 6
+      }
+    },
+    {
+      "derived_task_id": "augp1_constraint_search_only_cr_18_8",
+      "parent_task_id": "constraint_search_only",
+      "task": "只检索最近18天密码学与安全(cs.CR)论文，最多8篇；不要下载或翻译",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CR",
+            "days": 18,
+            "max_results": 8
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CR",
+        "days": 18,
+        "max_results": 8
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_zero_index_neg1",
+      "parent_task_id": "infeasible_zero_index",
+      "task": "下载第-1篇论文",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "invalid_reference",
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "invalid_ref": -1
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_zero_index_six",
+      "parent_task_id": "infeasible_zero_index",
+      "task": "下载第6篇论文",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "invalid_reference",
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "invalid_ref": 6
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_zero_index_fifty",
+      "parent_task_id": "infeasible_zero_index",
+      "task": "下载第50篇论文",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "invalid_reference",
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "invalid_ref": 50
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_unknown_id_2998_12345v1",
+      "parent_task_id": "infeasible_unknown_id",
+      "task": "请下载 arXiv 论文 2998.12345v1",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "paper_not_found",
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "unknown_id": "2998.12345v1"
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_unknown_id_3999_00001v2",
+      "parent_task_id": "infeasible_unknown_id",
+      "task": "请下载 arXiv 论文 3999.00001v2",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "paper_not_found",
+      "setup": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 5
+          }
+        }
+      ],
+      "parameters": {
+        "unknown_id": "3999.00001v2"
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_no_session_translate",
+      "parent_task_id": "infeasible_no_session",
+      "task": "继续翻译上一条提到的论文",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "missing_context",
+      "setup": [],
+      "parameters": {
+        "session_state": "empty"
+      }
+    },
+    {
+      "derived_task_id": "augp1_infeasible_no_session_cache",
+      "parent_task_id": "infeasible_no_session",
+      "task": "查看刚刚那篇论文的缓存状态",
+      "steps": [],
+      "terminal_mode": "blocked",
+      "terminal_reason": "missing_context",
+      "setup": [],
+      "parameters": {
+        "session_state": "empty"
+      }
+    },
+    {
+      "derived_task_id": "augp1_multi_cr5_cache1_ai_4_ref2",
+      "parent_task_id": "multi_cr5_cache1",
+      "task": "检索人工智能(cs.AI)论文4篇，然后查看第2篇的缓存状态",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 4
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 7,
+        "max_results": 4,
+        "ref": 2
+      }
+    },
+    {
+      "derived_task_id": "augp1_multi_cr5_cache1_ro_6_ref3",
+      "parent_task_id": "multi_cr5_cache1",
+      "task": "检索机器人学(cs.RO)论文6篇，然后查看第3篇的缓存状态",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "RO",
+            "days": 7,
+            "max_results": 6
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 3
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "RO",
+        "days": 7,
+        "max_results": 6,
+        "ref": 3
+      }
+    },
+    {
+      "derived_task_id": "augp1_multi_cr5_cache1_cv_7_ref4",
+      "parent_task_id": "multi_cr5_cache1",
+      "task": "检索计算机视觉(cs.CV)论文7篇，然后查看第4篇的缓存状态",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CV",
+            "days": 7,
+            "max_results": 7
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 7,
+        "ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_multi_lg10_dl3_cl_6_ref4",
+      "parent_task_id": "multi_lg10_dl3",
+      "task": "检索最近10天自然语言处理(cs.CL)论文6篇，然后下载第4篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 10,
+            "max_results": 6
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CL",
+        "days": 10,
+        "max_results": 6,
+        "ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_multi_lg10_dl3_ai_7_ref5",
+      "parent_task_id": "multi_lg10_dl3",
+      "task": "检索最近10天人工智能(cs.AI)论文7篇，然后下载第5篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 10,
+            "max_results": 7
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 10,
+        "max_results": 7,
+        "ref": 5
+      }
+    },
+    {
+      "derived_task_id": "augp1_multi_lg10_dl3_cr_8_ref6",
+      "parent_task_id": "multi_lg10_dl3",
+      "task": "检索最近10天密码学与安全(cs.CR)论文8篇，然后下载第6篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CR",
+            "days": 10,
+            "max_results": 8
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 6
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CR",
+        "days": 10,
+        "max_results": 8,
+        "ref": 6
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_ai5_dl2_tr2_cl_6_2_4",
+      "parent_task_id": "chain_ai5_dl2_tr2",
+      "task": "检索自然语言处理论文6篇，下载第2篇和第4篇，再翻译第4篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CL",
+            "days": 7,
+            "max_results": 6
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CL",
+        "days": 7,
+        "max_results": 6,
+        "refs": [
+          2,
+          4
+        ],
+        "translate_ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_ai5_dl2_tr2_cr_7_1_5",
+      "parent_task_id": "chain_ai5_dl2_tr2",
+      "task": "检索密码学与安全论文7篇，下载第1篇和第5篇，再翻译第5篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CR",
+            "days": 7,
+            "max_results": 7
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        },
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CR",
+        "days": 7,
+        "max_results": 7,
+        "refs": [
+          1,
+          5
+        ],
+        "translate_ref": 5
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_cv5_cache_dl_tr_cache_ai_4_ref2",
+      "parent_task_id": "chain_cv5_cache_dl_tr_cache",
+      "task": "检索人工智能论文4篇，先查第2篇缓存，再下载、翻译并复查缓存",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 7,
+            "max_results": 4
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 2
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        },
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 2
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 7,
+        "max_results": 4,
+        "ref": 2
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_cv5_cache_dl_tr_cache_lg_6_ref4",
+      "parent_task_id": "chain_cv5_cache_dl_tr_cache",
+      "task": "检索机器学习论文6篇，先查第4篇缓存，再下载、翻译并复查缓存",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "LG",
+            "days": 7,
+            "max_results": 6
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "get_paper_cache_status",
+          "args": {
+            "ref": 4
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "LG",
+        "days": 7,
+        "max_results": 6,
+        "ref": 4
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_ro5_dl_three_cv_6_135",
+      "parent_task_id": "chain_ro5_dl_three",
+      "task": "检索计算机视觉论文6篇，依次下载第1、第3和第5篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CV",
+            "days": 7,
+            "max_results": 6
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 1
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 3
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 5
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 6,
+        "refs": [
+          1,
+          3,
+          5
+        ]
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_ro5_dl_three_cr_7_246",
+      "parent_task_id": "chain_ro5_dl_three",
+      "task": "检索密码学与安全论文7篇，依次下载第2、第4和第6篇",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "CR",
+            "days": 7,
+            "max_results": 7
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 2
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 4
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 6
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "CR",
+        "days": 7,
+        "max_results": 7,
+        "refs": [
+          2,
+          4,
+          6
+        ]
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_lg10_dl_tr_last_ai_last6",
+      "parent_task_id": "chain_lg10_dl_tr_last",
+      "task": "获取最近14天人工智能论文6篇，下载最后一篇并翻译，保留双语版本",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "AI",
+            "days": 14,
+            "max_results": 6
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 6
+          }
+        },
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 6,
+            "keep_dual": true
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "AI",
+        "days": 14,
+        "max_results": 6,
+        "ref": 6,
+        "keep_dual": true
+      }
+    },
+    {
+      "derived_task_id": "augp1_chain_lg10_dl_tr_last_ro_last8",
+      "parent_task_id": "chain_lg10_dl_tr_last",
+      "task": "获取最近14天机器人学论文8篇，下载最后一篇并翻译，保留双语版本",
+      "steps": [
+        {
+          "name": "get_recently_submitted_cs_papers",
+          "args": {
+            "aspect": "RO",
+            "days": 14,
+            "max_results": 8
+          }
+        },
+        {
+          "name": "download_arxiv_pdf",
+          "args": {
+            "ref": 8
+          }
+        },
+        {
+          "name": "translate_arxiv_pdf",
+          "args": {
+            "ref": 8,
+            "keep_dual": true
+          }
+        }
+      ],
+      "terminal_mode": "completed",
+      "terminal_reason": null,
+      "setup": [],
+      "parameters": {
+        "aspect": "RO",
+        "days": 14,
+        "max_results": 8,
+        "ref": 8,
+        "keep_dual": true
+      }
+    }
+  ]
+}

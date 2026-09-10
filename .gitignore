@@ -45,3 +45,6 @@ output/
 
 # local
 local_docs/
+
+# 省略笔记
+docs/

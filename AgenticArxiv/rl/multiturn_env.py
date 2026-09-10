@@ -28,16 +28,25 @@ class AgenticArxivMultiTurnEnv:
         )
         self.store = MemoryStore()
         self.session_id = ""
+        self._downloaded: set[str] = set()
+        self._translated: set[str] = set()
 
     def reset(self, task_id: str = "", **_: Any) -> str:
         """Reset per-rollout state and return optional initial observation."""
         self.store = MemoryStore()
+        self._downloaded = set()
+        self._translated = set()
         suffix = task_id or "task"
         self.session_id = f"grpo_{suffix}_{uuid.uuid4().hex[:10]}"
         return "环境已重置；请根据任务调用工具，完成后直接给出最终回答。"
 
     def get_recently_submitted_cs_papers(
-        self, aspect: str = "*", days: int = 7, max_results: int = 50
+        self,
+        aspect: str = "*",
+        days: int = 7,
+        max_results: int = 50,
+        output_path: Optional[str] = None,
+        save_to_file: bool = True,
     ) -> list[dict[str, Any]]:
         """Search recent computer-science papers.
 
@@ -51,7 +60,15 @@ class AgenticArxivMultiTurnEnv:
         """
         result = self.backend.execute_tool(
             "get_recently_submitted_cs_papers",
-            {"aspect": aspect, "days": days, "max_results": max_results},
+            {
+                "aspect": aspect,
+                "days": days,
+                "max_results": max_results,
+                # The RL environment never writes search results to disk, but
+                # accepts the production contract so valid actions do not fail.
+                "output_path": output_path,
+                "save_to_file": save_to_file,
+            },
         )
         papers = [Paper(**item) for item in result]
         self.store.set_last_papers(self.session_id, papers)
@@ -78,7 +95,9 @@ class AgenticArxivMultiTurnEnv:
         self.store.set_last_papers(self.session_id, papers)
         return result
 
-    def download_arxiv_pdf(self, ref: str | int = 1) -> dict[str, Any]:
+    def download_arxiv_pdf(
+        self, ref: str | int | None = 1, force: bool = False
+    ) -> dict[str, Any]:
         """Download a paper selected from the latest search results.
 
         Args:
@@ -91,14 +110,28 @@ class AgenticArxivMultiTurnEnv:
         if paper is None:
             raise ValueError("未找到论文；请先搜索，再按序号、ID 或标题下载")
         self.store.set_last_active_paper_id(self.session_id, paper.id)
+        existed = paper.id in self._downloaded
+        self._downloaded.add(paper.id)
         return {
             "paper_id": paper.id,
             "pdf_url": paper.pdf_url,
             "status": "READY",
             "offline": True,
+            "force": bool(force),
+            "existed": existed and not force,
         }
 
-    def translate_arxiv_pdf(self, ref: str | int = 1) -> dict[str, Any]:
+    def translate_arxiv_pdf(
+        self,
+        ref: str | int | None = None,
+        force: bool = False,
+        service: Optional[str] = None,
+        threads: Optional[int] = None,
+        keep_dual: bool = False,
+        paper_id: Optional[str] = None,
+        pdf_url: Optional[str] = None,
+        input_pdf_path: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Translate a paper selected from the latest search results.
 
         Args:
@@ -107,13 +140,28 @@ class AgenticArxivMultiTurnEnv:
         Returns:
             Deterministic translation status used during RL training.
         """
-        paper = self.store.resolve_paper(self.session_id, ref)
+        target = paper_id if paper_id else ref
+        paper = self.store.resolve_paper(self.session_id, target)
         if paper is None:
             raise ValueError("未找到论文；请先搜索，再按序号、ID 或标题翻译")
         self.store.set_last_active_paper_id(self.session_id, paper.id)
-        return {"paper_id": paper.id, "status": "READY", "offline": True}
+        self._downloaded.add(paper.id)
+        self._translated.add(paper.id)
+        return {
+            "paper_id": paper.id,
+            "status": "READY",
+            "offline": True,
+            "force": bool(force),
+            "service": service,
+            "threads": threads,
+            "keep_dual": bool(keep_dual),
+            "pdf_url": pdf_url,
+            "input_pdf_path": input_pdf_path,
+        }
 
-    def get_paper_cache_status(self, ref: str | int = 1) -> dict[str, Any]:
+    def get_paper_cache_status(
+        self, ref: str | int | None = None, paper_id: Optional[str] = None
+    ) -> dict[str, Any]:
         """Inspect cached state for a paper in the current rollout.
 
         Args:
@@ -122,10 +170,17 @@ class AgenticArxivMultiTurnEnv:
         Returns:
             Whether the paper is known in the current rollout session.
         """
-        paper = self.store.resolve_paper(self.session_id, ref)
+        target = paper_id if paper_id else ref
+        paper = self.store.resolve_paper(self.session_id, target)
+        if paper is None:
+            raise ValueError("未找到论文；请先搜索，再按序号、ID 或标题查询缓存")
+        self.store.set_last_active_paper_id(self.session_id, paper.id)
         return {
-            "known": paper is not None,
-            "paper_id": paper.id if paper is not None else None,
+            "paper_id": paper.id,
+            "pdf": {"status": "READY"} if paper.id in self._downloaded else None,
+            "translate": {"status": "READY"} if paper.id in self._translated else None,
+            "pdf_ready": paper.id in self._downloaded,
+            "translated_ready": paper.id in self._translated,
         }
 
 

@@ -43,13 +43,13 @@ class BaseAgent(ABC):
         for iteration in range(max_iterations):
             # 1. LLM 调用
             response = self.llm_client.chat_completions(...)
-            
+          
             # 2. 子类实现的解析
             thought, action_dict = self.parse_response(response)
-            
+          
             # 3. 统一的副作用处理（session、翻译异步、日志）
             observation = self._execute_with_side_effects(action_dict)
-            
+          
             # 4. 记录步骤 + SSE 推送
             self._log_step(...)
 
@@ -58,7 +58,7 @@ class ReActAgent(BaseAgent):
     def parse_response(raw_response) -> (thought, action_dict):
         # 正则提取 Thought/Action/Observation
         return thought, {"name": tool_name, "args": {...}}
-    
+  
     def invoke_tool(tool_name, args) -> result:
         return registry.execute_tool(tool_name, args)
 
@@ -70,7 +70,7 @@ class SkillAgent(BaseAgent):
     def parse_response(raw_response) -> (thought, action_dict):
         # 提取 Command: bash\n...\n
         return thought, {"name": tool_name, "args": {...}}
-    
+  
     def invoke_tool(tool_name, args) -> result:
         return subprocess.run(["python", "tool_cli.py", ...])
 
@@ -87,6 +87,7 @@ registry.execute_tool(tool_name, args) -> result
 ### 工作流程
 
 #### 1. 工具发现
+
 ```python
 def discover_tools(self) -> List[Dict]:
     return registry.list_tools()
@@ -101,6 +102,7 @@ def discover_tools(self) -> List[Dict]:
 ```
 
 #### 2. Prompt 构建
+
 ```python
 def build_messages(self, task, tools_description, history_text):
     prompt = get_react_prompt(
@@ -112,6 +114,7 @@ def build_messages(self, task, tools_description, history_text):
 ```
 
 **Prompt 模板** (`agents/prompt_templates.py`)：
+
 ```
 你是一个AI研究助手，可以获取最新的arXiv计算机科学论文。你有以下工具可以使用：
 
@@ -132,6 +135,7 @@ Action: FINISH
 ```
 
 #### 3. LLM 响应解析
+
 ```python
 def parse_response(self, raw_response: Dict) -> Tuple[str, Optional[Dict]]:
     content = raw_response["choices"][0]["message"]["content"]
@@ -141,15 +145,15 @@ def _parse_react_text(self, response: str) -> Tuple[str, Optional[Dict]]:
     # 正则提取 Thought
     thought_match = re.search(r"Thought:\s*(.*?)(?=\nAction:|$)", response, re.DOTALL)
     thought = thought_match.group(1).strip() if thought_match else "..."
-    
+  
     # 正则提取 Action
     action_match = re.search(r"Action:\s*(.*?)(?=\nObservation:|$)", response, re.DOTALL)
     action_text = action_match.group(1).strip()
-    
+  
     # 判断是否结束
     if action_text.upper() == "FINISH":
         return thought, None  # ← None 表示结束
-    
+  
     # JSON 解析 Action
     try:
         json_match = re.search(r"({.*})", action_text, re.DOTALL)
@@ -162,11 +166,12 @@ def _parse_react_text(self, response: str) -> Tuple[str, Optional[Dict]]:
                 }
     except json.JSONDecodeError:
         log.error(f"JSON解析失败")
-    
+  
     return thought, None
 ```
 
 #### 4. 工具执行
+
 ```python
 def invoke_tool(self, tool_name: str, args: Dict) -> Any:
     return registry.execute_tool(tool_name, args)
@@ -175,11 +180,11 @@ def invoke_tool(self, tool_name: str, args: Dict) -> Any:
 
 ### 优缺点
 
-| 优点 | 缺点 |
-|---|---|
+| 优点               | 缺点                 |
+| ------------------ | -------------------- |
 | 最快（无通信延迟） | 对 JSON 格式要求严格 |
-| 最简单（纯正则） | LLM 易生成格式错误 |
-| 最稳定（同步） | 工具无隔离 |
+| 最简单（纯正则）   | LLM 易生成格式错误   |
+| 最稳定（同步）     | 工具无隔离           |
 
 ---
 
@@ -212,11 +217,11 @@ FastAPI + MCPAgent          MCP 服务器 (子进程)
 ```python
 class MCPAgent(BaseAgent):
     agent_type = "mcp"
-    
+  
     def run(self, task, agent_model, session_id):
         # 覆写 run，在 MCP 会话中执行
         return self._run_with_mcp(task, agent_model, session_id)
-    
+  
     async def _async_run(self):
         # 启动 MCP 服务器作为子进程
         server_params = StdioServerParameters(
@@ -225,12 +230,12 @@ class MCPAgent(BaseAgent):
             cwd=PROJECT_ROOT,
             env={**os.environ, "PYTHONPATH": PROJECT_ROOT},
         )
-        
+      
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 self._session = session
-                
+              
                 # 通过 MCP 获取工具列表
                 tools_result = await session.list_tools()
                 self._mcp_tools = [
@@ -241,17 +246,18 @@ class MCPAgent(BaseAgent):
                     }
                     for t in tools_result.tools
                 ]
-                
+              
                 # 在线程池中运行同步的 BaseAgent.run()
                 result = await self._loop.run_in_executor(
                     None,
                     lambda: super(MCPAgent, self).run(task, agent_model, session_id),
                 )
-                
+              
                 return result
 ```
 
 **关键设计**：
+
 - 保持 event loop 处理 JSON-RPC（async）
 - 在线程池运行同步的 BaseAgent（executor）
 - 两者通过 `asyncio.run_coroutine_threadsafe()` 通信
@@ -268,7 +274,7 @@ def invoke_tool(self, tool_name: str, args: Dict) -> Any:
             if hasattr(item, "text"):
                 texts.append(item.text)
         return "\n".join(texts) if texts else ""
-    
+  
     # 从线程池调度到 event loop
     future = asyncio.run_coroutine_threadsafe(_call(), self._loop)
     return future.result(timeout=120)
@@ -303,6 +309,7 @@ async def call_tool(name: str, arguments: dict):
 ```
 
 **流程**：
+
 1. FastAPI 启动 MCPAgent
 2. MCPAgent 启动子进程运行 `mcp_protocol/server.py`
 3. 主进程通过 stdio 与子进程通信
@@ -310,11 +317,11 @@ async def call_tool(name: str, arguments: dict):
 
 ### 优缺点
 
-| 优点 | 缺点 |
-|---|---|
-| 符合 MCP 标准 | 通信延迟（stderr/stdout） |
-| 工具隔离（不同进程） | 配置复杂 |
-| 易扩展（支持远程服务器） | 需要 mcp 库依赖 |
+| 优点                     | 缺点                      |
+| ------------------------ | ------------------------- |
+| 符合 MCP 标准            | 通信延迟（stderr/stdout） |
+| 工具隔离（不同进程）     | 配置复杂                  |
+| 易扩展（支持远程服务器） | 需要 mcp 库依赖           |
 
 ---
 
@@ -333,11 +340,11 @@ async def call_tool(name: str, arguments: dict):
 ```python
 class SkillAgent(BaseAgent):
     agent_type = "skill_cli"
-    
+  
     def __init__(self, llm_client: LLMClient):
         super().__init__(llm_client)
         self._skill_doc = self._load_skill_doc()
-    
+  
     @staticmethod
     def _load_skill_doc() -> str:
         with open("skill_cli/SKILL.md", "r", encoding="utf-8") as f:
@@ -350,6 +357,7 @@ class SkillAgent(BaseAgent):
 ```
 
 **SKILL.md 内容示例**：
+
 ```markdown
 # 可用命令
 
@@ -380,6 +388,7 @@ def build_messages(self, task, tools_description, history_text):
 ```
 
 **Skill Prompt 模板**：
+
 ```
 你是一个CLI专家，能够理解和执行shell命令。
 
@@ -399,6 +408,7 @@ Command:
 Observation: 命令执行的结果
 
 {history}
+
 ```
 
 #### 3. 响应解析
@@ -412,43 +422,43 @@ def _parse_skill_text(self, response: str) -> Tuple[str, Optional[Dict]]:
     # 提取 Thought
     thought_match = re.search(r"Thought:\s*(.*?)(?=\nCommand:|$)", response, re.DOTALL)
     thought = thought_match.group(1).strip()
-    
+  
     # 提取 Command
     cmd_match = re.search(r"Command:\s*(.*?)(?=\nObservation:|$)", response, re.DOTALL)
     cmd_text = cmd_match.group(1).strip()
-    
+  
     if cmd_text.upper() == "FINISH":
         return thought, None
-    
+  
     # 提取 ```bash ... ``` 代码块
     bash_match = re.search(r"```(?:bash)?\s*\n?(.*?)\n?```", cmd_text, re.DOTALL)
     raw_cmd = bash_match.group(1).strip() if bash_match else cmd_text.strip()
-    
+  
     # 从命令解析出子命令和参数
     tool_name, args = self._parse_cli_command(raw_cmd)
     if not tool_name:
         return thought, None
-    
+  
     # 映射到 registry 工具名
     registry_name = CLI_TO_REGISTRY.get(tool_name, tool_name)
-    
+  
     return thought, {"name": registry_name, "args": args}
 
 @staticmethod
 def _parse_cli_command(raw_cmd: str) -> Tuple[Optional[str], Dict]:
     """从 CLI 命令字符串中解析子命令和参数"""
     parts = shlex.split(raw_cmd)
-    
+  
     # 查找子命令 (search_papers, download_pdf, translate_pdf, ...)
     sub_cmd = None
     for p in parts:
         if p in CLI_TO_REGISTRY:
             sub_cmd = p
             break
-    
+  
     if not sub_cmd:
         return None, {}
-    
+  
     # 解析 --key=value 参数
     args = {}
     for p in parts:
@@ -465,7 +475,7 @@ def _parse_cli_command(raw_cmd: str) -> Tuple[Optional[str], Dict]:
                     args[key] = int(val)
                 except ValueError:
                     args[key] = val
-    
+  
     return sub_cmd, args
 ```
 
@@ -478,15 +488,15 @@ def invoke_tool(self, tool_name: str, args: Dict) -> Any:
         # 非 CLI 工具，回退到 registry
         from tools.tool_registry import registry
         return registry.execute_tool(tool_name, args)
-    
+  
     # 从修正后的 args 重建命令
     cmd_parts = [sys.executable, "skill_cli/tool_cli.py", cli_name]
     for k, v in args.items():
         if v is not None and not k.startswith("_"):
             cmd_parts.append(f"--{k}={v}")
-    
+  
     log.info(f"执行 CLI: {' '.join(cmd_parts)}")
-    
+  
     try:
         result = subprocess.run(
             cmd_parts,
@@ -499,12 +509,12 @@ def invoke_tool(self, tool_name: str, args: Dict) -> Any:
         return "命令执行超时 (120s)"
     except Exception as e:
         return f"命令执行异常: {e}"
-    
+  
     if result.returncode != 0:
         return f"命令失败 (exit {result.returncode}): {result.stderr[:500]}"
-    
+  
     stdout = result.stdout.strip()
-    
+  
     # 尝试解析为 JSON
     try:
         return json.loads(stdout)
@@ -513,6 +523,7 @@ def invoke_tool(self, tool_name: str, args: Dict) -> Any:
 ```
 
 **CLI 子进程** (`skill_cli/tool_cli.py`)：
+
 ```python
 import argparse
 from tools.tool_registry import registry
@@ -520,16 +531,16 @@ from tools.tool_registry import registry
 def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command")
-    
+  
     # search_papers 子命令
     sp = subparsers.add_parser("search_papers")
     sp.add_argument("--session_id", required=True)
     sp.add_argument("--days", type=int, default=7)
     sp.add_argument("--aspect", default="cs.AI")
     sp.add_argument("--max_results", type=int, default=5)
-    
+  
     args = parser.parse_args()
-    
+  
     # 调用 registry
     result = registry.execute_tool(
         "get_recently_submitted_cs_papers",
@@ -540,7 +551,7 @@ def main():
             "max_results": args.max_results,
         }
     )
-    
+  
     # 输出 JSON，供 subprocess 调用者解析
     print(json.dumps(result))
 
@@ -550,11 +561,11 @@ if __name__ == "__main__":
 
 ### 优缺点
 
-| 优点 | 缺点 |
-|---|---|
-| 文档式，易理解 | 子进程开销 |
-| 命令可读性高 | 安全风险（bash 注入） |
-| 兼容现有 CLI | 启动多次进程 |
+| 优点           | 缺点                  |
+| -------------- | --------------------- |
+| 文档式，易理解 | 子进程开销            |
+| 命令可读性高   | 安全风险（bash 注入） |
+| 兼容现有 CLI   | 启动多次进程          |
 
 ---
 
@@ -569,27 +580,27 @@ def run(self, task: str, agent_model: str = None, session_id: str = "default") -
     log.info(f"开始执行任务: {task}")
     self.session_id = session_id
     msg_id = uuid.uuid4().hex
-    
+  
     # 记录用户消息
     try:
         log_service.create_chat_log(session_id, msg_id, "user", task, agent_type=self.agent_type)
     except Exception:
         pass
-    
+  
     tools = self.discover_tools()  # 子类实现
     tools_description = self.format_tools_for_prompt(tools)
-    
+  
     # 注入会话上下文，帮助 LLM 避免重复搜索
     enriched_task = self._enrich_task_with_context(task, session_id)
-    
+  
     history: List[Dict[str, str]] = []
-    
+  
     for iteration in range(self.max_iterations):  # 最多 5 次迭代
         history_text = self.format_history(history)
-        
+      
         # 构建 LLM 请求（子类实现）
         messages, extra = self.build_messages(enriched_task, tools_description, history_text)
-        
+      
         try:
             # LLM 调用
             t0 = time.time()
@@ -602,11 +613,11 @@ def run(self, task: str, agent_model: str = None, session_id: str = "default") -
                 extra=extra or None,
             )
             llm_ms = int((time.time() - t0) * 1000)
-            
+          
             # 解析响应（子类实现）
             thought, action_dict = self.parse_response(response)
             log.info(f"Thought: {thought}")
-            
+          
             # 判断是否结束
             if action_dict is None:
                 log.info("任务完成")
@@ -614,35 +625,35 @@ def run(self, task: str, agent_model: str = None, session_id: str = "default") -
                 history.append({"thought": thought, "action": "FINISH", "observation": observation})
                 self._log_step(msg_id, iteration, thought, "FINISH", "{}", observation, llm_ms, 0, session_id)
                 break
-            
+          
             # 执行工具（带副作用）
             t1 = time.time()
             observation = self._execute_with_side_effects(action_dict)
             tool_ms = int((time.time() - t1) * 1000)
-            
+          
             # 记录历史
             history.append({
                 "thought": thought,
                 "action": json.dumps(action_dict, ensure_ascii=False),
                 "observation": observation,
             })
-            
+          
             # 记录日志 + SSE 推送
             self._log_step(msg_id, iteration, thought, action_dict.get("name", ""), 
                           json.dumps(action_dict.get("args", {})), observation[:4000], 
                           llm_ms, tool_ms, session_id)
-            
+          
             # 达到迭代限制
             if iteration == self.max_iterations - 1:
                 log.warning("达到最大迭代次数，强制结束")
                 break
-        
+      
         except Exception as e:
             error_msg = f"LLM调用失败: {str(e)}"
             log.error(error_msg)
             history.append({"thought": "LLM调用失败", "action": "ERROR", "observation": error_msg})
             break
-    
+  
     # 提取最终结果
     final_observation = history[-1]["observation"] if history else "无执行结果"
     reply = ""
@@ -651,13 +662,13 @@ def run(self, task: str, agent_model: str = None, session_id: str = "default") -
             reply = step.get("observation", "")
             break
     reply = reply or final_observation
-    
+  
     # 记录助手回复
     try:
         log_service.create_chat_log(session_id, msg_id + "_reply", "assistant", reply, agent_type=self.agent_type)
     except Exception:
         pass
-    
+  
     return {
         "task": task,
         "msg_id": msg_id,
@@ -691,7 +702,7 @@ def _execute_with_side_effects(self, action_dict: Dict[str, Any]) -> str:
     try:
         tool_name = action_dict["name"]
         args = action_dict.get("args", {}) or {}
-        
+      
         # 强制覆盖 session_id（防止 LLM 传错）
         try:
             tool = registry.get_tool(tool_name)
@@ -700,12 +711,12 @@ def _execute_with_side_effects(self, action_dict: Dict[str, Any]) -> str:
                 args["session_id"] = self.session_id
         except Exception:
             pass
-        
+      
         # 验证工具存在
         available_tools = [t["name"] for t in registry.list_tools()]
         if tool_name not in available_tools:
             return f"错误: 工具 '{tool_name}' 不存在"
-        
+      
         # 翻译工具异步处理
         if tool_name == "translate_arxiv_pdf":
             t = translate_runner.enqueue(
@@ -720,10 +731,10 @@ def _execute_with_side_effects(self, action_dict: Dict[str, Any]) -> str:
                 input_pdf_path=args.get("input_pdf_path"),
             )
             return f"已创建翻译任务 task_id={t.task_id}，状态={t.status}"
-        
+      
         # 调用工具（子类实现）
         result = self.invoke_tool(tool_name, args)
-        
+      
         # 论文 ID 写入 last_active
         try:
             if isinstance(result, dict):
@@ -732,14 +743,14 @@ def _execute_with_side_effects(self, action_dict: Dict[str, Any]) -> str:
                     store.set_last_active_paper_id(self.session_id, pid.strip())
         except Exception:
             pass
-        
+      
         # arXiv 搜索结果存入 session
         if tool_name == "get_recently_submitted_cs_papers":
             if isinstance(result, list) and result:
                 papers_obj = [Paper(**p) for p in result]
                 store.set_last_papers(self.session_id, papers_obj)
                 return f"成功获取 {len(result)} 篇论文"
-        
+      
         # 通用格式化
         if isinstance(result, list):
             return f"成功获取 {len(result)} 条记录"
@@ -747,7 +758,7 @@ def _execute_with_side_effects(self, action_dict: Dict[str, Any]) -> str:
             return result[:1000] if len(result) > 1000 else result
         else:
             return str(result)[:1000]
-    
+  
     except Exception as e:
         log.error(f"工具执行失败: {str(e)}", exc_info=True)
         return f"工具执行失败: {str(e)}"
@@ -769,7 +780,7 @@ def _log_step(self, msg_id, step_index, thought, action_name, action_args, obser
             llm_latency_ms=llm_ms,
             tool_latency_ms=tool_ms,
         )
-        
+      
         # SSE 实时推送
         event_bus.publish(session_id, {
             "type": "agent_step",
@@ -800,7 +811,7 @@ class ToolRegistry:
     def __init__(self):
         self._tools = {}
         self._executors = {}
-    
+  
     def register_tool(self, name: str, description: str, parameters: Dict, handler: Callable):
         self._tools[name] = {
             "name": name,
@@ -808,16 +819,16 @@ class ToolRegistry:
             "parameters": parameters,
         }
         self._executors[name] = handler
-    
+  
     def list_tools(self) -> List[Dict]:
         return list(self._tools.values())
-    
+  
     def execute_tool(self, name: str, args: Dict) -> Any:
         handler = self._executors.get(name)
         if not handler:
             raise ValueError(f"Tool {name} not found")
         return handler(**args)
-    
+  
     def get_tool(self, name: str) -> Dict:
         return self._tools.get(name)
 
@@ -831,13 +842,13 @@ registry = ToolRegistry()
 def get_recently_submitted_cs_papers(session_id: str, aspect: str, days: int, max_results: int) -> List[Dict]:
     """
     检索最近 N 天内计算机科学领域的论文
-    
+  
     Args:
         session_id: 会话 ID
         aspect: 研究方向 (cs.AI, cs.ML, ...)
         days: 天数范围
         max_results: 最多结果数
-    
+  
     Returns:
         论文列表 (JSON 序列化)
     """
@@ -914,7 +925,7 @@ class LogService:
         session = get_sync_session()
         session.add(log_entry)
         session.commit()
-    
+  
     def save_agent_step(self, msg_id, step_index, thought, action_name, action_args, observation, llm_latency_ms, tool_latency_ms):
         step_entry = AgentStepRow(
             msg_id=msg_id,
@@ -943,25 +954,26 @@ log_service = LogService()
 # agents/my_custom_agent.py
 class MyCustomAgent(BaseAgent):
     agent_type = "my_custom"
-    
+  
     def discover_tools(self) -> List[Dict]:
         # 实现工具发现逻辑
         pass
-    
+  
     def build_messages(self, task, tools_description, history_text) -> Tuple[List[Dict], Dict]:
         # 实现 Prompt 构建逻辑
         pass
-    
+  
     def parse_response(self, raw_response) -> Tuple[str, Optional[Dict]]:
         # 实现 LLM 响应解析逻辑
         pass
-    
+  
     def invoke_tool(self, tool_name, args) -> Any:
         # 实现工具调用逻辑
         pass
 ```
 
 然后在 `api/endpoints.py` 注册：
+
 ```python
 AGENT_CLASSES = {
     "regex": ReActAgent,
@@ -975,9 +987,8 @@ AGENT_CLASSES = {
 
 ## 总结
 
-| 架构 | 优点 | 缺点 | 使用场景 |
-|---|---|---|---|
-| **ReActAgent** | 快、简、稳 | JSON 格式依赖强 | ✅ 推荐默认 |
-| **MCPAgent** | 标准、隔离、可扩展 | 延迟、复杂 | 团队开发、工具服务化 |
-| **SkillAgent** | 易理解、命令可读 | 子进程开销、安全风险 | 学习研究、CLI 工作流 |
-
+| 架构                 | 优点               | 缺点                 | 使用场景             |
+| -------------------- | ------------------ | -------------------- | -------------------- |
+| **ReActAgent** | 快、简、稳         | JSON 格式依赖强      | ✅ 推荐默认          |
+| **MCPAgent**   | 标准、隔离、可扩展 | 延迟、复杂           | 团队开发、工具服务化 |
+| **SkillAgent** | 易理解、命令可读   | 子进程开销、安全风险 | 学习研究、CLI 工作流 |

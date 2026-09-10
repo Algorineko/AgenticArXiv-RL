@@ -59,6 +59,32 @@ class MultiTurnEnvTest(unittest.TestCase):
         self.assertEqual(len(papers), 1)
         self.assertEqual(downloaded["paper_id"], PAPER["id"])
 
+    def test_optional_arguments_match_production_tool_contract(self):
+        self.env.get_recently_submitted_cs_papers(
+            "AI", 7, 3, output_path=None, save_to_file=False
+        )
+        downloaded = self.env.download_arxiv_pdf(1, force=True)
+        translated = self.env.translate_arxiv_pdf(
+            None, force=True, service="bing", threads=8, keep_dual=True
+        )
+        self.assertEqual(downloaded["paper_id"], PAPER["id"])
+        self.assertEqual(translated["paper_id"], PAPER["id"])
+        self.assertTrue(translated["keep_dual"])
+        self.assertEqual(translated["threads"], 8)
+
+    def test_cache_status_reflects_rollout_state(self):
+        self.env.get_recently_submitted_cs_papers("AI", 7, 3)
+        before = self.env.get_paper_cache_status(1)
+        self.assertFalse(before["pdf_ready"])
+        self.env.download_arxiv_pdf(None)
+        after = self.env.get_paper_cache_status(paper_id=PAPER["id"])
+        self.assertTrue(after["pdf_ready"])
+
+    def test_null_reference_without_active_paper_fails(self):
+        self.env.get_recently_submitted_cs_papers("AI", 7, 3)
+        with self.assertRaises(ValueError):
+            self.env.translate_arxiv_pdf(None)
+
 
 if __name__ == "__main__":
     unittest.main()

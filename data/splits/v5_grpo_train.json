@@ -1,0 +1,222 @@
+{
+  "version": 5,
+  "status": "validated_targeted_gain_pending_train_rescan",
+  "task_set": "expanded",
+  "purpose": "setup-aware GRPO train split selected from frozen-SFT within-prompt reward variance",
+  "derived_from": [
+    "data/splits/v2_62.json:train",
+    "data/splits/v3_grpo_probe.json:rl_probe",
+    "data/splits/v4_grpo_train.json"
+  ],
+  "source": {
+    "model": "outputs/sft_qlora_v1_e1/final",
+    "policy_frozen": true,
+    "learning_rate": 0.0,
+    "num_generations": 4,
+    "groups_per_task": 8,
+    "rollouts_per_task": 32,
+    "seed": 43,
+    "reward_curriculum_steps": 0,
+    "setup_aware_rollout": true,
+    "reward_summary": "artifacts/reward_probe_summary.json",
+    "reward_summary_sha256": "3b1dec7bb20653d874b34442de42b28e7d18e534caabd54042409555c1a1507",
+    "rollout_audit_summary": "artifacts/audit_sft_setupfix_v5_candidate_g4_s43_summary.json",
+    "rollout_audit_summary_sha256": "0d9ec91b30b5c5a51b325bed347f369bc01c33abb0d014115cff9b8ba7984c30"
+  },
+  "selection_policy": {
+    "eligibility": "Only tasks in data/splits/v2_62.json:train are eligible; dev, iid_test and ood_test remain held out.",
+    "include": "Keep tasks with at least 2 informative prompt groups out of 8 in the setup-aware frozen-SFT probe.",
+    "exclude": "Move tasks with zero informative prompt groups to ceiling_control.",
+    "rationale": "GRPO needs within-prompt reward variance. A task whose four generations always receive the same reward contributes no relative-advantage gradient."
+  },
+  "split": {
+    "rl_train": [
+      "chain_lg10_dl_tr_last",
+      "chain_ro5_dl_three",
+      "infeasible_no_session",
+      "infeasible_unknown_id",
+      "infeasible_zero_index",
+      "ref_stress_image_restoration",
+      "ref_stress_state_across"
+    ],
+    "ceiling_control": [
+      "ref_ctrl_word_handover"
+    ]
+  },
+  "audit": {
+    "chain_lg10_dl_tr_last": {
+      "group_count": 8,
+      "mean_reward": 0.8492186875,
+      "mean_group_std": 0.16841786692125493,
+      "informative_group_count": 4,
+      "informative_group_fraction": 0.5
+    },
+    "chain_ro5_dl_three": {
+      "group_count": 8,
+      "mean_reward": 0.7847545,
+      "mean_group_std": 0.26994532029369434,
+      "informative_group_count": 7,
+      "informative_group_fraction": 0.875
+    },
+    "infeasible_no_session": {
+      "group_count": 8,
+      "mean_reward": 0.2321875000000001,
+      "mean_group_std": 0.64782267865145,
+      "informative_group_count": 7,
+      "informative_group_fraction": 0.875
+    },
+    "infeasible_unknown_id": {
+      "group_count": 8,
+      "mean_reward": 0.23359375000000002,
+      "mean_group_std": 0.7216662966445563,
+      "informative_group_count": 8,
+      "informative_group_fraction": 1.0
+    },
+    "infeasible_zero_index": {
+      "group_count": 8,
+      "mean_reward": 0.84671875,
+      "mean_group_std": 0.1906844709492223,
+      "informative_group_count": 2,
+      "informative_group_fraction": 0.25
+    },
+    "ref_stress_image_restoration": {
+      "group_count": 8,
+      "mean_reward": 0.8851562500000001,
+      "mean_group_std": 0.1428675699772461,
+      "informative_group_count": 2,
+      "informative_group_fraction": 0.25
+    },
+    "ref_stress_state_across": {
+      "group_count": 8,
+      "mean_reward": 0.8468749999999999,
+      "mean_group_std": 0.26522027990898434,
+      "informative_group_count": 4,
+      "informative_group_fraction": 0.5
+    },
+    "ref_ctrl_word_handover": {
+      "group_count": 8,
+      "mean_reward": 1.0,
+      "mean_group_std": 0.0,
+      "informative_group_count": 0,
+      "informative_group_fraction": 0.0
+    }
+  },
+  "summary": {
+    "probe_task_count": 8,
+    "selected_task_count": 7,
+    "ceiling_control_task_count": 1,
+    "selected_prompt_group_count": 56,
+    "selected_rollout_count": 224,
+    "informative_group_count": 34,
+    "informative_group_fraction": 0.6071428571428571,
+    "format_anomalous_sample_fraction": 0.0
+  },
+  "promotion_gate": {
+    "smoke_steps": 30,
+    "result": "passed",
+    "evidence": {
+      "source_model": "outputs/sft_qlora_v1_e1/final",
+      "output_dir": "outputs/grpo_qlora_v5_smoke_s44",
+      "seed": 44,
+      "train_loss": 0.011773072120498303,
+      "peak_vram_gib": 9.019526481628418,
+      "seen_samples": 240,
+      "prompt_group_count": 60,
+      "informative_group_count": 30,
+      "informative_group_fraction": 0.5,
+      "anomalous_sample_count": 17,
+      "anomalous_sample_fraction": 0.07083333333333333,
+      "format_anomalous_sample_count": 0,
+      "format_anomalous_sample_fraction": 0.0,
+      "exact_duplicate_group_fraction": 0.11666666666666667,
+      "reward_summary": "artifacts/reward_probe_summary.json",
+      "rollout_audit_summary": "artifacts/audit_grpo_v5_smoke_s44_summary.json"
+    },
+    "monitor": {
+      "infeasible_zero_index": "Near ceiling in the smoke run (1 informative group out of 8). Keep for boundary-behavior diversity in this version, but remove or downsample in the next version if informative_group_fraction remains below 0.25.",
+      "exact_duplicate_groups": "7 out of 60 groups were exact duplicates. Acceptable for the smoke run; investigate if the fraction rises materially during formal training."
+    },
+    "requirements": [
+      "training loss and reward metrics remain finite",
+      "format anomaly fraction remains zero or near zero",
+      "informative-group fraction remains materially above zero",
+      "rollout setup errors do not reappear on setup-dependent reference tasks",
+      "a final adapter and training_manifest.json are saved successfully"
+    ]
+  },
+  "formal_run": {
+    "status": "stopped_on_reward_variance_window_pending_evaluation",
+    "output_dir": "outputs/grpo_qlora_v5_s44_120",
+    "source_model": "outputs/sft_qlora_v1_e1/final",
+    "requested_max_steps": 120,
+    "actual_steps": 47,
+    "actual_steps_provenance": "trainer console stop message and rollout audit batch_count",
+    "seed": 44,
+    "runtime_seconds": 515.0996,
+    "train_loss": 0.0002867583132180524,
+    "peak_vram_gib": 8.750517845153809,
+    "rollout_count": 376,
+    "prompt_group_count": 94,
+    "informative_group_count": 30,
+    "informative_group_fraction": 0.3191489361702128,
+    "anomalous_sample_count": 15,
+    "anomalous_sample_fraction": 0.0398936170212766,
+    "format_anomalous_sample_fraction": 0.0,
+    "stop_trigger": "five consecutive logging windows had zero within-group reward variance and reward 1.0",
+    "interpretation": "The sampled window saturated, but cumulative per-task statistics do not prove that all seven tasks converged. Evaluate the saved adapter on fixed rl_train and dev splits before continuing or selecting a new middle band.",
+    "next_action": "Do not resume this run blindly. Compare frozen SFT and saved GRPO on the same train diagnostic and dev evaluation protocol; only then rescore v2 train to construct a new middle-band split if more RL is justified."
+  },
+  "evaluation": {
+    "protocol": {
+      "seed": 45,
+      "repeat": 3,
+      "backend": "transformers",
+      "agent": "regex",
+      "tool_execution": "offline_snapshot_replay",
+      "train_diagnostic_split": "data/splits/v5_grpo_train.json:rl_train",
+      "development_split": "data/splits/v2_62.json:dev"
+    },
+    "rl_train": {
+      "sample_count": 21,
+      "sft_strict_success_rate": 0.047619047619047616,
+      "grpo_strict_success_rate": 0.3333333333333333,
+      "strict_success_delta": 0.2857142857142857,
+      "sft_tool_accuracy": 0.42857142857142855,
+      "grpo_tool_accuracy": 0.7142857142857143,
+      "sft_argument_accuracy": 0.2341269841269841,
+      "grpo_argument_accuracy": 0.5198412698412699,
+      "sft_avg_tool_failures": 0.6,
+      "grpo_avg_tool_failures": 0.4,
+      "sft_avg_tokens": 3918.9,
+      "grpo_avg_tokens": 3487.5,
+      "new_successes": [
+        "infeasible_no_session",
+        "infeasible_zero_index"
+      ],
+      "persistent_failures": [
+        "chain_ro5_dl_three",
+        "infeasible_unknown_id",
+        "ref_stress_image_restoration",
+        "ref_stress_state_across"
+      ]
+    },
+    "dev": {
+      "sample_count": 24,
+      "sft_strict_success_rate": 0.4166666666666667,
+      "grpo_strict_success_rate": 0.5,
+      "strict_success_delta": 0.08333333333333331,
+      "sft_tool_accuracy": 0.875,
+      "grpo_tool_accuracy": 0.875,
+      "sft_argument_accuracy": 0.5972222222222222,
+      "grpo_argument_accuracy": 0.625,
+      "sft_avg_tool_failures": 0.3,
+      "grpo_avg_tool_failures": 0.2,
+      "improved_task": "search_kw_agentic_rl",
+      "improved_task_sft_success": 0.3333333333333333,
+      "improved_task_grpo_success": 1.0
+    },
+    "decision": "GRPO produced a real but narrow targeted improvement without observed dev regression. The dev gain is only two additional successes from one task, so it is positive transfer evidence rather than proof of broad generalization.",
+    "reward_hacking_check": "No evidence of empty-output or false-FINISH exploitation. Correctly improved infeasible tasks emit an explicit inability thought and FINISH without calling a tool; completion and false-finish rates did not worsen, while tool failures and token cost decreased.",
+    "next_action": "Freeze this checkpoint as the v5 result. Do not continue on the saturated seven-task split. Rescan only v2 train with the frozen v5 policy to select a new middle band; keep dev, iid_test and ood_test out of selection."
+  }
+}

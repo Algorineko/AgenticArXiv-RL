@@ -59,6 +59,16 @@ class DerivationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             build([TaskSpec(id="dup", task="a"), TaskSpec(id="dup", task="b")])
 
+    def test_blocked_mode_requires_a_reason_contract(self):
+        with self.assertRaisesRegex(ValueError, "terminal_reason"):
+            TaskSpec(id="blocked", task="x", terminal_mode="blocked").to_task()
+
+    def test_terminal_reason_only_applies_to_blocked_tasks(self):
+        with self.assertRaisesRegex(ValueError, "非阻塞任务"):
+            TaskSpec(
+                id="normal", task="x", terminal_reason="missing_context"
+            ).to_task()
+
 
 class FamilyTest(unittest.TestCase):
     def test_text_and_ground_truth_share_one_param_set(self):
@@ -119,6 +129,11 @@ class ExpandedSetShapeTest(unittest.TestCase):
         for t in infeasible:
             with self.subTest(task=t["id"]):
                 self.assertEqual(t["expected_tools"], [], "不可行任务的正确行为是不调工具")
+                self.assertEqual(t["expected_terminal_mode"], "blocked")
+                self.assertIn(t["expected_terminal_reason"], {
+                    "missing_context", "invalid_reference", "paper_not_found",
+                    "unsupported_capability",
+                })
 
     def test_long_chains_declare_enough_iterations(self):
         """Agent 默认 5 轮 = 4 次工具调用 + FINISH。
@@ -174,7 +189,17 @@ class InfeasibleScoringTest(unittest.TestCase):
                   "iteration_count": len(history)}
         return RewardCalculator().compute_reward_breakdown(task, result, training_step=100)
 
-    REFUSE = [{"thought": "会话里只有 5 篇，做不到", "action": "FINISH", "observation": "任务完成"}]
+    REFUSE = [
+        {"thought": "第20篇超出当前5篇列表的索引范围，因此做不到",
+         "action": "FINISH", "observation": "任务完成"},
+    ]
+    FALSE_COMPLETE = [
+        {"thought": "任务要求的操作已经完成，应立即结束", "action": "FINISH",
+         "observation": "任务完成"},
+    ]
+    GENERIC_REFUSE = [
+        {"thought": "无法执行这个任务", "action": "FINISH", "observation": "任务完成"},
+    ]
     HALLUCINATE = [
         {"thought": "下载第20篇", "action": '{"name": "download_arxiv_pdf", "args": {"ref": 20}}',
          "observation": "工具执行失败: 未找到论文"},
@@ -185,6 +210,22 @@ class InfeasibleScoringTest(unittest.TestCase):
         breakdown, metrics = self._score("infeasible_index_out_of_range", self.REFUSE)
         self.assertTrue(metrics.tool_call_accurate)
         self.assertEqual(breakdown.tool, 1.0)
+        self.assertEqual(breakdown.outcome, 1.0)
+        self.assertEqual(breakdown.total, 1.0)
+
+    def test_false_completion_is_not_a_correct_refusal(self):
+        breakdown, _ = self._score(
+            "infeasible_index_out_of_range", self.FALSE_COMPLETE
+        )
+        self.assertEqual(breakdown.outcome, -0.25)
+        self.assertEqual(breakdown.total, 0.625)
+
+    def test_generic_refusal_must_name_the_task_specific_reason(self):
+        breakdown, _ = self._score(
+            "infeasible_index_out_of_range", self.GENERIC_REFUSE
+        )
+        self.assertEqual(breakdown.outcome, 0.0)
+        self.assertEqual(breakdown.total, 0.7)
 
     def test_hallucinated_call_is_penalised(self):
         breakdown, metrics = self._score("infeasible_index_out_of_range", self.HALLUCINATE)
@@ -196,6 +237,71 @@ class InfeasibleScoringTest(unittest.TestCase):
         good, _ = self._score("infeasible_index_out_of_range", self.REFUSE)
         bad, _ = self._score("infeasible_index_out_of_range", self.HALLUCINATE)
         self.assertGreater(good.total - bad.total, 0.5)
+
+    def test_reward_order_is_explanation_then_false_finish_then_tool_hallucination(self):
+        good, _ = self._score("infeasible_index_out_of_range", self.REFUSE)
+        false_finish, _ = self._score(
+            "infeasible_index_out_of_range", self.FALSE_COMPLETE
+        )
+        hallucinated, _ = self._score(
+            "infeasible_index_out_of_range", self.HALLUCINATE
+        )
+        self.assertGreater(good.total, false_finish.total)
+        self.assertGreater(false_finish.total, hallucinated.total)
+
+    def test_each_infeasible_reason_contract_accepts_a_grounded_explanation(self):
+        cases = {
+            "infeasible_no_session": "当前会话没有最近操作的论文，无法解析刚才那篇",
+            "infeasible_unknown_id": "该 arXiv ID 在快照中不存在，无法下载这篇论文",
+            "infeasible_zero_index": "ref 索引从 1 开始，第0篇是非法序号，不能下载",
+            "infeasible_unsupported_action": "现有工具不支持发送邮件，超出能力范围",
+        }
+        for task_id, thought in cases.items():
+            with self.subTest(task=task_id):
+                history = [{"thought": thought, "action": "FINISH",
+                            "observation": "任务结束"}]
+                breakdown, metrics = self._score(task_id, history)
+                self.assertEqual(breakdown.total, 1.0)
+                self.assertTrue(metrics.terminal_semantics_accurate)
+                self.assertTrue(metrics.terminal_semantics_applicable)
+
+    def test_wrong_block_reason_fails_strict_success(self):
+        from benchmark.metrics import is_strict_success
+
+        history = [{"thought": "索引非法，所以无法执行", "action": "FINISH",
+                    "observation": "任务结束"}]
+        breakdown, metrics = self._score("infeasible_no_session", history)
+        self.assertEqual(breakdown.outcome, 0.0)
+        self.assertFalse(metrics.terminal_semantics_accurate)
+        self.assertFalse(is_strict_success(metrics))
+
+    def test_mentioning_ref_without_the_actual_boundary_error_is_not_enough(self):
+        """实测假阳性：ref=0 已提供，不能把它说成“缺少 ref 参数”。"""
+        history = [{
+            "thought": "无法完成任务，因为缺少必须的 ref 参数",
+            "action": "FINISH",
+            "observation": "任务结束",
+        }]
+        breakdown, metrics = self._score("infeasible_zero_index", history)
+        self.assertEqual(breakdown.outcome, 0.0)
+        self.assertEqual(breakdown.total, 0.7)
+        self.assertFalse(metrics.terminal_semantics_accurate)
+
+    def test_invalid_ref_explanation_requires_boundary_evidence(self):
+        history = [{
+            "thought": "ref 使用 1-based 索引，第0篇是非法序号，无法下载",
+            "action": "FINISH",
+            "observation": "任务结束",
+        }]
+        breakdown, metrics = self._score("infeasible_zero_index", history)
+        self.assertEqual(breakdown.total, 1.0)
+        self.assertTrue(metrics.terminal_semantics_accurate)
+
+    def test_false_completion_is_reported_as_false_finish(self):
+        _, metrics = self._score(
+            "infeasible_no_session", self.FALSE_COMPLETE
+        )
+        self.assertTrue(metrics.false_finish)
 
     def test_penalty_matches_calling_the_wrong_tool_on_a_normal_task(self):
         """「本该什么都不做却动了手」不该比「做错了」罚得更轻。"""

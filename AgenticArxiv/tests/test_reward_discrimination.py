@@ -74,8 +74,8 @@ class PerCategoryRewardGapTest(unittest.TestCase):
         cls.expanded = _by_category(cls.expanded_rows)
 
     def test_expanded_set_separates_every_category(self):
-        # infeasible 上 always_finish **就是**参考解法（正确行为是一次工具
-        # 都不调），category_gap_failures 已按 exact_reference 把这类行剔除。
+        # blocked 任务还要求 FINISH Thought 解释具体阻塞原因，所以泛化的
+        # always_finish 不再是参考解法，也必须通过逐类目分差检查。
         self.assertEqual(category_gap_failures(self.expanded_rows, min_gap=MIN_GAP), [])
 
     def test_default_set_separates_every_category(self):
@@ -85,7 +85,8 @@ class PerCategoryRewardGapTest(unittest.TestCase):
         """正确答案是「什么都别做」，动了手必须是负分而不只是低分。"""
         rewards = self.expanded["infeasible"]
         self.assertEqual(rewards["reference"], 1.0)
-        self.assertEqual(rewards["always_finish"], 1.0)
+        self.assertLess(rewards["always_finish"], 1.0)
+        self.assertGreater(rewards["always_finish"], 0.0)
         for policy in ("always_search", "random_tool"):
             with self.subTest(policy=policy):
                 self.assertLess(rewards[policy], 0.0)

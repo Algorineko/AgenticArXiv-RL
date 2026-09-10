@@ -15,6 +15,7 @@ from statistics import mean, pstdev
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from rl.reward import RewardCalculator
+from benchmark.task_spec import reference_terminal_thought
 
 
 _SEARCH_ACTION = (
@@ -34,8 +35,12 @@ def _tool_step(name: str, args: Mapping[str, Any]) -> Dict[str, str]:
     return {"action": action, "observation": "synthetic baseline action"}
 
 
-def _finish_step() -> Dict[str, str]:
-    return {"action": "FINISH", "observation": "synthetic baseline finish"}
+def _finish_step(thought: str = "任务已完成") -> Dict[str, str]:
+    return {
+        "thought": thought,
+        "action": "FINISH",
+        "observation": "synthetic baseline finish",
+    }
 
 
 def _result(history: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -68,7 +73,12 @@ class ReferencePolicy(BaselinePolicy):
         for index, name in enumerate(expected_tools):
             args = expected_args[index] if index < len(expected_args) else {}
             history.append(_tool_step(name, args or {}))
-        history.append(_finish_step())
+        terminal_thought = (
+            reference_terminal_thought(task)
+            if task.get("expected_terminal_mode") == "blocked"
+            else "任务已完成"
+        )
+        history.append(_finish_step(terminal_thought))
         return _result(history)
 
 
@@ -278,6 +288,7 @@ def evaluate_baselines(
                     exact_reference=(
                         metrics.tool_call_accurate
                         and (arg_score is None or arg_score == 1.0)
+                        and breakdown.outcome == 1.0
                     ),
                     arg_score=arg_score,
                     components=breakdown.to_dict(),
@@ -379,10 +390,9 @@ def category_gap_failures(
     category is diluted by the rest. Search tasks once left ``always_search``
     only 0.167 below the reference while the aggregate check still passed.
 
-    Rows where a policy reproduced the reference trajectory are excluded: a
-    degenerate policy that happens to emit the reference solution has earned
-    the reference score, and on ``infeasible`` tasks ``always_finish`` *is*
-    the reference. A policy with no other rows in that category is skipped.
+    Rows where a policy reproduced the complete reference semantics are
+    excluded. For blocked tasks, matching the empty tool path is not enough:
+    the terminal Thought must also explain why the request cannot be executed.
     """
 
     if min_gap < 0:

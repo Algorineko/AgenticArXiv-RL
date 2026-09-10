@@ -13,10 +13,10 @@ if PROJECT_ROOT not in sys.path:
 
 import glob
 
-from utils.llm_client import get_env_llm_client, LLMClient
+from utils.llm_client import get_env_llm_client, LLMClient, TransformersLLMClient
 from utils.logger import log
 from benchmark.tasks import get_task_by_id, get_dependency_chain, BENCHMARK_TASKS
-from benchmark.metrics import TaskMetrics, extract_metrics
+from benchmark.metrics import TaskMetrics, extract_metrics, is_strict_success
 from config import settings as app_settings
 
 
@@ -35,6 +35,7 @@ class BenchmarkRunner:
     """对比测试三种 Agent 模式的性能和准确性"""
 
     AGENT_TYPES = ["regex", "mcp", "skill_cli"]
+    LLM_BACKENDS = ("api", "transformers")
 
     def __init__(
         self,
@@ -45,31 +46,57 @@ class BenchmarkRunner:
         llm_extra: Optional[Dict[str, Any]] = None,
         offline: bool = False,
         snapshot: Optional[str] = None,
+        llm_backend: str = "api",
+        local_device: str = "auto",
+        local_dtype: str = "auto",
+        generation_seed: Optional[int] = None,
     ):
+        if llm_backend not in self.LLM_BACKENDS:
+            raise ValueError(
+                f"llm_backend 必须是 {self.LLM_BACKENDS} 之一，收到 {llm_backend!r}"
+            )
         self.agent_types = agent_types or self.AGENT_TYPES
         self.repeat = repeat
         self.model = model
         self.llm_extra = dict(llm_extra or {})
         self.offline = offline
         self.snapshot = snapshot
+        self.llm_backend = llm_backend
+        self.local_device = local_device
+        self.local_dtype = local_dtype
+        self.generation_seed = generation_seed
         self._env = None
         if session_prefix is None:
             from datetime import datetime
             session_prefix = f"bench_r{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.session_prefix = session_prefix
-        self._llm_client: Optional[LLMClient] = None
+        self._llm_client: Optional[Any] = None
         self._side_fx = None
         # 缓存已执行的依赖任务，避免重复
         self._dep_done: Dict[str, bool] = {}
 
     @property
-    def llm_client(self) -> LLMClient:
+    def llm_client(self) -> Any:
         if self._llm_client is None:
-            self._llm_client = get_env_llm_client()
+            if self.llm_backend == "transformers":
+                if not self.model:
+                    raise ValueError("transformers 后端需要本地模型路径")
+                self._llm_client = TransformersLLMClient(
+                    model=self.model,
+                    device=self.local_device,
+                    dtype=self.local_dtype,
+                    seed=self.generation_seed,
+                )
+            else:
+                self._llm_client = get_env_llm_client()
         return self._llm_client
 
     def run_all(self, tasks: Optional[List[Dict]] = None) -> List[BenchmarkResult]:
         tasks = tasks or BENCHMARK_TASKS
+        if self.offline:
+            from benchmark.semantic_oracle import attach_expected_paper_ids
+
+            tasks = attach_expected_paper_ids(tasks, self._snapshot_path())
         results: List[BenchmarkResult] = []
         total = len(tasks) * len(self.agent_types) * self.repeat
         done = 0
@@ -85,6 +112,7 @@ class BenchmarkRunner:
                     print(f"[{done}/{total}] task={task_id} agent={agent_type} trial={trial}", flush=True)
 
                     try:
+                        self._reset_offline_trial_state()
                         # 确保依赖任务已执行
                         self._ensure_dependencies(task_def, session_id, agent_type)
                         self._apply_setup(task_def, session_id)
@@ -93,12 +121,23 @@ class BenchmarkRunner:
                         if task_def.get("category") in ("download", "translate"):
                             self._cleanup_paper_artifacts(session_id)
 
+                        # 每条轨迹使用由 task_id + trial 派生的独立随机流。
+                        # 不包含 session prefix，确保 Base/SFT/RL 换前缀后仍可配对；
+                        # 也不受前面任务实际用了多少轮 ReAct 调用的影响。
+                        self._start_generation_stream(task_id, trial)
                         agent = self._create_agent(
                             agent_type, task_def.get("max_iterations"))
+                        # setup 是当前请求之前已经发生的会话历史。环境状态由
+                        # _apply_setup 真实铺设；同一份声明再渲染为模型可见上下文，
+                        # 使 Benchmark 与 GRPO 面对一致的可观测状态。它不进入
+                        # raw_result.history，因此不会被当作策略动作参与评分。
+                        from agents.prompt_templates import build_visible_setup_context
+
                         raw = agent.run(
                             task=task_def["task"],
                             agent_model=self.model,
                             session_id=session_id,
+                            initial_history=build_visible_setup_context(task_def),
                         )
                         metrics = extract_metrics(task_def, raw, agent_type, trial, session_id=session_id)
                         br = BenchmarkResult(
@@ -125,6 +164,29 @@ class BenchmarkRunner:
 
         return results
 
+    def _start_generation_stream(self, task_id: str, trial: int) -> None:
+        reset = getattr(self.llm_client, "start_generation_stream", None)
+        if callable(reset):
+            reset(f"{task_id}:{trial}")
+
+    def _reset_offline_trial_state(self) -> None:
+        """Give every offline task/trial an independent mutable environment."""
+        if not self.offline:
+            return
+        from models.store import use_memory_store
+
+        use_memory_store(reset=True)
+        if self._env is not None:
+            reset_env = getattr(self._env, "reset_runtime_state", None)
+            if callable(reset_env):
+                reset_env()
+        if self._side_fx is not None:
+            # fake translation IDs and buffered events are also rollout-local.
+            if hasattr(self._side_fx, "_translate_seq"):
+                self._side_fx._translate_seq = 0
+            if hasattr(self._side_fx, "published_events"):
+                self._side_fx.published_events.clear()
+
     def _side_effects(self):
         """Benchmark 沿用原行为（MySQL 落库 + SSE）；无数据库时自动降级到本地内存。
 
@@ -147,8 +209,7 @@ class BenchmarkRunner:
         if self._env is None:
             from pathlib import Path as _Path
             from rl.env import MockArxivEnv
-            path = _Path(self.snapshot) if self.snapshot else (
-                _Path(PROJECT_ROOT).parent / "data" / "mock_arxiv_snapshot.json")
+            path = self._snapshot_path()
             if not path.exists():
                 raise SystemExit(
                     f"离线模式需要快照，但未找到: {path}\n"
@@ -157,6 +218,13 @@ class BenchmarkRunner:
             self._env = MockArxivEnv(snapshot_path=path, mode="replay")
             log.info(f"[Benchmark] 离线模式，回放快照 {path}")
         return self._env
+
+    def _snapshot_path(self):
+        from pathlib import Path as _Path
+
+        return _Path(self.snapshot) if self.snapshot else (
+            _Path(PROJECT_ROOT).parent / "data" / "mock_arxiv_snapshot.json"
+        )
 
     def _create_agent(self, agent_type: str, max_iterations: Optional[int] = None):
         """按任务声明的轮数预算创建 Agent。
@@ -273,7 +341,14 @@ class BenchmarkRunner:
         m = br.metrics
         if m is None:
             return
-        status = "PASS" if m.task_completed else f"FAIL({m.termination_type})"
+        # FINISH 只代表模型主动结束，不代表任务做对了。此前 infeasible
+        # 任务乱调工具后 FINISH 仍打印 PASS，和同一行 accurate=False 矛盾。
+        if is_strict_success(m):
+            status = "PASS"
+        elif m.task_completed:
+            status = "FAIL(WRONG_RESULT)"
+        else:
+            status = f"FAIL({m.termination_type})"
         tools = " -> ".join(m.tool_call_sequence) or "(none)"
         print(
             f"  {status} | {m.total_time_ms}ms "

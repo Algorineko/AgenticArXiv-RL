@@ -7,6 +7,7 @@
 """
 
 import sys
+import tempfile
 import unittest
 from collections import defaultdict
 from pathlib import Path
@@ -151,6 +152,35 @@ class TrackerTest(unittest.TestCase):
         breakdown, _ = calc.compute_reward_breakdown(task, result)
         tracker.record(breakdown, result)     # 不抛异常即可
 
+    def test_group_stats_distinguish_informative_and_zero_variance_tasks(self):
+        tracker = RewardComponentTracker()
+        trainer = FakeTrainer()
+        tracker.bind(trainer)
+
+        tracker.record_group(
+            ["task_a", "task_a", "task_b", "task_b"],
+            [0.2, 0.8, 0.5, 0.5],
+        )
+
+        summary = tracker.task_summary()["tasks"]
+        self.assertEqual(summary["task_a"]["informative_group_fraction"], 1.0)
+        self.assertEqual(summary["task_a"]["zero_std_fraction"], 0.0)
+        self.assertEqual(summary["task_b"]["informative_group_fraction"], 0.0)
+        self.assertEqual(summary["task_b"]["zero_std_fraction"], 1.0)
+
+        metrics = trainer._metrics["train"]
+        self.assertAlmostEqual(metrics["reward_by_task/task_a/mean"][0], 0.5)
+        self.assertAlmostEqual(metrics["reward_by_task/task_a/std"][0], 0.3)
+        self.assertEqual(metrics["reward_by_task/task_b/zero_std"], [1.0])
+
+    def test_group_summary_can_be_persisted(self):
+        tracker = RewardComponentTracker()
+        tracker.record_group(["task_a", "task_a"], [0.1, 0.9])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = tracker.save_task_summary(Path(tmpdir) / "summary.json")
+            self.assertTrue(path.exists())
+            self.assertIn('"task_a"', path.read_text(encoding="utf-8"))
+
     def test_curriculum_moves_total_while_components_hold_still(self):
         """这是「必须单独记分量」的核心论据，用一条固定轨迹钉住。
 
@@ -198,6 +228,18 @@ class RewardFnTrackerWiringTest(unittest.TestCase):
         )
         self.assertEqual(len(rewards), 1)
         self.assertIn("reward_components/tool", trainer._metrics["train"])
+        self.assertIn("reward_by_task/t/mean", trainer._metrics["train"])
+        self.assertEqual(trainer._metrics["train"]["reward_by_task/t/zero_std"], [1.0])
+
+    def test_reward_fn_rejects_misaligned_task_ids(self):
+        tasks = {"t": {"id": "t", "task": "x", "expected_tools": [],
+                       "expected_termination": "FINISH"}}
+        fn = make_grpo_reward_fn(tasks, env=None)
+        with self.assertRaisesRegex(ValueError, "输入长度不一致"):
+            fn(
+                completions=["Thought: 完成\nAction: FINISH"] * 2,
+                task_id=["t"],
+            )
 
     def test_reward_fn_without_tracker_still_works(self):
         tasks = {"t": {"id": "t", "task": "x", "expected_tools": [],
@@ -209,6 +251,7 @@ class RewardFnTrackerWiringTest(unittest.TestCase):
 class DescribeLoggingTest(unittest.TestCase):
     def test_disabled_message_tells_you_how_to_enable(self):
         text = describe_logging([], None)
+        self.assertIn("仍会输出到控制台", text)
         self.assertIn("--report_to tensorboard", text)
 
     def test_tensorboard_message_includes_command(self):
