@@ -154,9 +154,13 @@ class MockArxivEnv:
         if tool_name == _KEYWORD_SEARCH_TOOL:
             fallback = self._keyword_search_fallback(args, tool_data)
             if fallback is not None:
-                self.stats["hit"] += 1
+                # 降级回退池不是快照命中：只返回带标记的结果，不写会话记忆。
+                # BaseAgent 检测到 offline_fallback 会向模型报告"工具执行失败"，
+                # 若这里把回退论文同步进 store，模型后续用 ref 操作会解析到
+                # 无关论文——观测说失败、状态里却有"论文"，两者矛盾。
+                # （多轮 GRPO 的 AgenticArxivMultiTurnEnv 会在方法层显式
+                # set_last_papers，其行为不受此影响。）
                 self.stats["fallback"] += 1
-                self._sync_session_papers(tool_name, args, fallback)
                 return fallback
 
         self.stats["miss"] += 1
