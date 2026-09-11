@@ -327,6 +327,11 @@ class BaseAgent(ABC):
         try:
             tool_name = action_dict["name"]
             args = action_dict.get("args", {}) or {}
+            # 只在调用层注入 session_id，不写回 action_dict：
+            # action_dict 会被 json.dumps 进 history 的 Action JSON，
+            # 若 session_id（框架状态）混入，SFT/DPO 数据生成会把
+            # 本不该让模型学习的字段当成模型动作学习。
+            inject_args = dict(args)
 
             log.info(f"执行工具: {tool_name}, 参数: {args}")
 
@@ -335,7 +340,7 @@ class BaseAgent(ABC):
                 tool = registry.get_tool(tool_name)
                 props = (tool or {}).get("parameters", {}).get("properties", {})
                 if isinstance(args, dict) and ("session_id" in props):
-                    args["session_id"] = self.session_id
+                    inject_args["session_id"] = self.session_id
             except Exception:
                 pass
 
@@ -364,7 +369,7 @@ class BaseAgent(ABC):
                 )
 
             # 调用工具（注入了 env 则优先走 env）
-            result = self._dispatch_tool(tool_name, args)
+            result = self._dispatch_tool(tool_name, inject_args)
 
             # paper_id 写入 last_active
             try:
