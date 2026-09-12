@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+import copy
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
 
@@ -60,6 +61,34 @@ class MemoryStore:
         self._pdf_assets.clear()
         self._translate_assets.clear()
         self._tasks.clear()
+
+    def capture_state(self) -> Dict[str, object]:
+        """Return a deep snapshot of mutable in-memory state.
+
+        Rollout isolation must restore the state that existed *before* a
+        trajectory, rather than merely clearing the store.  The latter loses
+        legitimate setup state (for example a seeded paper list) and makes a
+        retry observe a different world.  Keeping this operation on the store
+        also avoids reaching into its private dictionaries from benchmark and
+        training code.
+        """
+        return copy.deepcopy({
+            "_sessions": self._sessions,
+            "_pdf_assets": self._pdf_assets,
+            "_translate_assets": self._translate_assets,
+            "_tasks": self._tasks,
+        })
+
+    def restore_state(self, state: Dict[str, object]) -> None:
+        """Restore a state returned by :meth:`capture_state`."""
+        required = {"_sessions", "_pdf_assets", "_translate_assets", "_tasks"}
+        missing = required - set(state)
+        if missing:
+            raise ValueError(f"MemoryStore snapshot missing keys: {sorted(missing)}")
+        self._sessions = copy.deepcopy(state["_sessions"])
+        self._pdf_assets = copy.deepcopy(state["_pdf_assets"])
+        self._translate_assets = copy.deepcopy(state["_translate_assets"])
+        self._tasks = copy.deepcopy(state["_tasks"])
 
     # -------- session memory --------
 

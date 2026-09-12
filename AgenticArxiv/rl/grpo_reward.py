@@ -254,6 +254,7 @@ def synthesize_trajectory(
         return {
             "history": [{"thought": thought, "action": "FINISH", "observation": "任务完成"}],
             "timing": {}, "token_usage": {}, "iteration_count": 1,
+            "forced_finish": False,
         }
 
     observation = ""
@@ -276,9 +277,15 @@ def synthesize_trajectory(
                 "action": json.dumps(action, ensure_ascii=False),
                 "observation": observation,
             },
-            {"thought": "", "action": "FINISH", "observation": "任务完成"},
+            {
+                "thought": "",
+                "action": "FINISH",
+                "observation": "任务完成",
+                "forced_finish": True,
+            },
         ],
         "timing": {}, "token_usage": {}, "iteration_count": 2,
+        "forced_finish": True,
     }
 
 
