@@ -218,7 +218,9 @@ class InfeasibleScoringTest(unittest.TestCase):
             "infeasible_index_out_of_range", self.FALSE_COMPLETE
         )
         self.assertEqual(breakdown.outcome, -0.25)
-        self.assertEqual(breakdown.total, 0.625)
+        # False FINISH is now a non-compensable failure: format/process points
+        # must not make it look better than a grounded refusal.
+        self.assertLessEqual(breakdown.total, -0.25)
 
     def test_generic_refusal_must_name_the_task_specific_reason(self):
         breakdown, _ = self._score(

@@ -110,7 +110,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 ### Verifiable Reward Components
 
-**Multi-granular five-component verifiable reward** (`rl/reward.py`, inspired by LLM-TIR's hierarchical reward). Each component is normalized to `[-1, 1]` and combined as a weighted sum divided by the total weight:
+**Multi-granular verifiable reward** (`rl/reward.py`, inspired by LLM-TIR's hierarchical reward). The original five components keep their curriculum weights; two additional diagnostics (`result_quality` and `efficiency`) provide non-compensable safety gates:
 
 | Component | Default weight | Signal |
 |-----------|:---:|--------|
@@ -120,9 +120,18 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | `process` | 1 | Valid-step credit minus parse/execution-failure and unnecessary-call penalties |
 | `outcome` | 3 | Correct completion +1, completion with a wrong tool path +0.25, forced stop −0.5, error −1 |
 
+| `result_quality` | diagnostic / gate | Checks whether tool observations represent a grounded success; empty, fallback, and failed observations are penalized |
+| `efficiency` | diagnostic / gate | Normalizes redundant calls and failed retries against the task's expected steps |
+
 **Curriculum learning**: for the first 30 training steps the `tool` / `argument` / `outcome` weights are scaled by 1/3 (learn the ReAct protocol first, semantics later); full weights apply from step 30 onward (`RewardCalculator.schedule`).
 
+**Non-compensable failures**: parse errors, tool execution failures, and false FINISH actions cannot be rescued by format points. Single-step GRPO rollouts mark framework-generated terminal steps as `forced_finish`, so they do not receive the full terminal bonus.
+
 **Key point**: All rewards are **verifiable** (rule-based), requiring no human annotation — corresponding to the RLVR (Reinforcement Learning with Verifiable Reward) framework. Every trajectory records a `reward_components` breakdown for auditing and reward-hacking analysis.
+
+### Rollout isolation
+
+`rl/sandbox.py` provides `RolloutSandbox`, which records the initial environment, in-memory store, and explicitly configured artifact roots, then restores that baseline before the next trajectory. Multi-turn GRPO, regular rollouts, and offline benchmarks use the same reset contract so search results, download/translation state, files, and counters cannot leak across trajectories.
 
 ---
 

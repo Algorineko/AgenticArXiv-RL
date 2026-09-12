@@ -15,6 +15,7 @@ from typing import Any, Optional
 from models.schemas import Paper
 from models.store_memory import MemoryStore
 from rl.env import MockArxivEnv
+from rl.sandbox import RolloutSandbox
 
 
 class AgenticArxivMultiTurnEnv:
@@ -30,10 +31,47 @@ class AgenticArxivMultiTurnEnv:
         self.session_id = ""
         self._downloaded: set[str] = set()
         self._translated: set[str] = set()
+        # Keep a baseline before any task setup is applied.  TRL may call
+        # reset() more than once on the same environment instance; restoring a
+        # snapshot is stronger than merely clearing the current session.
+        self._sandbox = RolloutSandbox(
+            self,
+            file_roots=self._artifact_roots(),
+        )
+
+    @staticmethod
+    def _artifact_roots() -> tuple[Path, ...]:
+        from config import settings
+
+        return (
+            Path(settings.pdf_raw_path),
+            Path(settings.pdf_translated_path),
+        )
+
+    def capture_state(self) -> dict[str, Any]:
+        """Capture all mutable state owned by this rollout environment."""
+        return {
+            "backend": self.backend.capture_state(),
+            "store": self.store.capture_state(),
+            "session_id": self.session_id,
+            "downloaded": set(self._downloaded),
+            "translated": set(self._translated),
+        }
+
+    def restore_state(self, state: dict[str, Any]) -> None:
+        """Restore a state returned by :meth:`capture_state`."""
+        required = {"backend", "store", "session_id", "downloaded", "translated"}
+        if set(state) != required:
+            raise ValueError("invalid AgenticArxivMultiTurnEnv sandbox snapshot")
+        self.backend.restore_state(state["backend"])
+        self.store.restore_state(state["store"])
+        self.session_id = str(state["session_id"])
+        self._downloaded = set(state["downloaded"])
+        self._translated = set(state["translated"])
 
     def reset(self, task_id: str = "", **_: Any) -> str:
         """Reset per-rollout state and return optional initial observation."""
-        self.store = MemoryStore()
+        self._sandbox.reset()
         self._downloaded = set()
         self._translated = set()
         suffix = task_id or "task"

@@ -72,6 +72,7 @@ class BenchmarkRunner:
         self.session_prefix = session_prefix
         self._llm_client: Optional[Any] = None
         self._side_fx = None
+        self._sandbox = None
         # 缓存已执行的依赖任务，避免重复
         self._dep_done: Dict[str, bool] = {}
 
@@ -173,19 +174,41 @@ class BenchmarkRunner:
         """Give every offline task/trial an independent mutable environment."""
         if not self.offline:
             return
-        from models.store import use_memory_store
+        from models.store import get_store, use_memory_store
 
-        use_memory_store(reset=True)
-        if self._env is not None:
+        if self._sandbox is None:
+            # Create the replay environment and capture its pristine state
+            # before dependency/setup actions are applied.  Subsequent trials
+            # restore this exact baseline instead of relying on ad-hoc clears.
+            use_memory_store(reset=True)
+            self._tool_env()
             reset_env = getattr(self._env, "reset_runtime_state", None)
             if callable(reset_env):
                 reset_env()
+            from rl.sandbox import RolloutSandbox
+
+            self._sandbox = RolloutSandbox(
+                self._env,
+                get_store(),
+                file_roots=self._artifact_roots(),
+            )
+        else:
+            self._sandbox.reset()
         if self._side_fx is not None:
             # fake translation IDs and buffered events are also rollout-local.
             if hasattr(self._side_fx, "_translate_seq"):
                 self._side_fx._translate_seq = 0
             if hasattr(self._side_fx, "published_events"):
                 self._side_fx.published_events.clear()
+
+    @staticmethod
+    def _artifact_roots():
+        from pathlib import Path as _Path
+
+        return (
+            _Path(app_settings.pdf_raw_path),
+            _Path(app_settings.pdf_translated_path),
+        )
 
     def _side_effects(self):
         """Benchmark 沿用原行为（MySQL 落库 + SSE）；无数据库时自动降级到本地内存。
