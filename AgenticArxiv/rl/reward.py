@@ -31,6 +31,10 @@ class RewardSchedule:
     argument: float
     process: float
     outcome: float
+    # Kept at zero in the legacy weighted average; these are logged so a
+    # dashboard can distinguish policy progress from a safety-gate activation.
+    result_quality: float = 0.0
+    efficiency: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,11 @@ class RewardBreakdown:
     process: float
     outcome: float
     weights: RewardSchedule
+    # Diagnostics/gates introduced for result-grounded reward.  They are kept
+    # outside the legacy weighted average so existing curriculum curves remain
+    # comparable; severe failures cap the final reward below.
+    result_quality: float = 0.0
+    efficiency: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -88,6 +97,8 @@ class RewardCalculator:
             argument=self.weights["argument"] * scale,
             process=self.weights["process"],
             outcome=self.weights["outcome"] * scale,
+            result_quality=0.0,
+            efficiency=0.0,
         )
 
     def compute_reward(
@@ -126,6 +137,8 @@ class RewardCalculator:
             ),
             "process": self._process_score(history, metrics),
             "outcome": self._outcome_score(task_def, history, metrics),
+            "result_quality": self._result_quality_score(task_def, history, metrics),
+            "efficiency": self._efficiency_score(task_def, history, metrics),
         }
         schedule = self.schedule(training_step)
         active = {
@@ -135,6 +148,14 @@ class RewardCalculator:
         }
         denominator = sum(abs(weight) for weight in active.values()) or 1.0
         total = sum(active[name] * components[name] for name in active) / denominator
+        total = self._apply_safety_gates(
+            total,
+            result=result,
+            history=history,
+            metrics=metrics,
+            result_quality=components["result_quality"],
+            efficiency=components["efficiency"],
+        )
         breakdown = RewardBreakdown(
             total=round(_clip(total), 6),
             format=round(components["format"], 6),
@@ -143,6 +164,8 @@ class RewardCalculator:
             process=round(components["process"], 6),
             outcome=round(components["outcome"], 6),
             weights=schedule,
+            result_quality=round(components["result_quality"], 6),
+            efficiency=round(components["efficiency"], 6),
         )
         return breakdown, metrics
 
@@ -263,6 +286,135 @@ class RewardCalculator:
         if metrics.task_completed:
             return 0.25
         return -0.25
+
+    @staticmethod
+    def _result_quality_score(
+        task_def: Mapping[str, Any],
+        history: Sequence[Dict[str, Any]],
+        metrics: TaskMetrics,
+    ) -> float:
+        """Score whether tool observations show a useful, grounded result.
+
+        Tool names and arguments are necessary but not sufficient: a search
+        fallback, an empty result, or a failed download must not look like a
+        successful episode merely because the policy selected the right tool.
+        The evaluator intentionally stays deterministic and uses the tool
+        observation/state contract rather than an LLM judge.
+        """
+        expected = list(task_def.get("expected_tools") or [])
+        actual_steps = [
+            step for step in history
+            if str(step.get("action", "")) not in TERMINAL_ACTIONS
+            and _parse_action(step.get("action", "")) is not None
+        ]
+        if not expected:
+            return 1.0 if not actual_steps else -1.0
+        if not actual_steps:
+            return -1.0
+
+        scores = []
+        for index, step in enumerate(actual_steps):
+            observation = str(step.get("observation", "") or "")
+            action = _parse_action(step.get("action", "")) or {}
+            tool_name = str(action.get("name", ""))
+            if (
+                step.get("parse_failed")
+                or "工具执行失败" in observation
+                or "无法解析" in observation
+                or "offline_fallback" in observation
+                or "回退结果" in observation
+            ):
+                scores.append(-1.0)
+                continue
+            if not observation.strip():
+                scores.append(-0.5)
+                continue
+
+            # The expected tool is checked separately by _tool_score.  Here we
+            # only grade whether its observation represents useful work.
+            if tool_name in {"get_recently_submitted_cs_papers", "search_arxiv_papers"}:
+                good = (
+                    "成功获取" in observation
+                    or "论文" in observation
+                    or "paper" in observation.lower()
+                    or "'id'" in observation
+                    or '"id"' in observation
+                )
+            elif tool_name in {
+                "download_arxiv_pdf",
+                "translate_arxiv_pdf",
+                "get_paper_cache_status",
+            }:
+                good = any(
+                    marker in observation
+                    for marker in ("READY", "成功", "已创建", "status", "pdf_ready")
+                )
+            else:
+                good = True
+            scores.append(1.0 if good else 0.0)
+
+        # Extra calls are not allowed to turn a grounded result into a full
+        # score.  They are already penalized by process/tool, but the result
+        # gate should also see them.
+        if len(actual_steps) > len(expected):
+            scores.extend([-1.0] * (len(actual_steps) - len(expected)))
+        return _clip(sum(scores) / max(1, len(scores)))
+
+    @staticmethod
+    def _efficiency_score(
+        task_def: Mapping[str, Any],
+        history: Sequence[Dict[str, Any]],
+        metrics: TaskMetrics,
+    ) -> float:
+        """Small, task-normalized cost signal for redundant tool calls."""
+        expected_count = len(task_def.get("expected_tools") or [])
+        actual_count = len(metrics.tool_call_sequence)
+        if expected_count == 0:
+            return 1.0 if actual_count == 0 else -1.0
+        excess = max(0, actual_count - expected_count)
+        error_count = metrics.parse_failures + metrics.tool_exec_failures
+        penalty = excess / expected_count + 0.25 * error_count
+        return _clip(1.0 - 2.0 * penalty)
+
+    @staticmethod
+    def _apply_safety_gates(
+        total: float,
+        *,
+        result: Mapping[str, Any],
+        history: Sequence[Dict[str, Any]],
+        metrics: TaskMetrics,
+        result_quality: float,
+        efficiency: float,
+    ) -> float:
+        """Apply non-compensable failure caps after the legacy score."""
+        capped = float(total)
+        hard_invalid = (
+            metrics.termination_type == "ERROR"
+            or metrics.parse_failures > 0
+            or metrics.tool_exec_failures > 0
+            or result_quality <= -0.75
+        )
+        if hard_invalid:
+            # A failed execution must remain distinguishable from a false
+            # FINISH and cannot be rescued by format/tool points.
+            capped = min(capped, -0.75)
+        elif metrics.false_finish:
+            capped = min(capped, -0.25)
+
+        # ``synthesize_trajectory`` uses a framework-generated FINISH when a
+        # one-step rollout ends after a tool call.  It is useful for scoring a
+        # partial action, but must not receive a full terminal success bonus.
+        forced_finish = bool(result.get("forced_finish")) or any(
+            bool(step.get("forced_finish")) for step in history
+        )
+        if forced_finish:
+            capped = min(capped, 0.25)
+
+        if efficiency <= -0.75:
+            capped = min(capped, -0.25)
+        # ``history`` is intentionally accepted above so a future gate can
+        # inspect trajectory-level markers without changing this API.
+        return _clip(capped)
 
 
 def compute_step_reward(step_dict: Dict[str, Any], metrics: TaskMetrics) -> float:

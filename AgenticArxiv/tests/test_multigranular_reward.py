@@ -225,6 +225,63 @@ class MultiGranularRewardTest(unittest.TestCase):
         self.assertAlmostEqual(advantages[1], 1.0, places=5)
         self.assertEqual(advantages[2:], [0.0, 0.0])
 
+    def test_result_quality_and_efficiency_are_exposed(self):
+        task = {
+            "id": "grounded",
+            "expected_tools": ["search"],
+            "expected_tool_args": [{}],
+        }
+        breakdown, _ = self.calculator.compute_reward_breakdown(
+            task,
+            _result([
+                {"action": '{"name":"search","args":{}}',
+                 "observation": "成功获取 1 篇论文"},
+                {"action": "FINISH", "observation": "任务完成"},
+            ]),
+            training_step=30,
+        )
+        self.assertEqual(breakdown.result_quality, 1.0)
+        self.assertEqual(breakdown.efficiency, 1.0)
+
+    def test_failed_observation_cannot_be_rescued_by_format_points(self):
+        task = {
+            "id": "grounded",
+            "expected_tools": ["download"],
+            "expected_tool_args": [{}],
+        }
+        breakdown, _ = self.calculator.compute_reward_breakdown(
+            task,
+            _result([
+                {"action": '{"name":"download","args":{}}',
+                 "observation": "工具执行失败: 未找到论文"},
+                {"action": "FINISH", "observation": "任务完成"},
+            ]),
+            training_step=30,
+        )
+        self.assertLessEqual(breakdown.result_quality, -0.75)
+        self.assertLessEqual(breakdown.total, -0.75)
+
+    def test_framework_forced_finish_does_not_receive_terminal_bonus(self):
+        task = {
+            "id": "grounded",
+            "expected_tools": ["search"],
+            "expected_tool_args": [{}],
+        }
+        breakdown, _ = self.calculator.compute_reward_breakdown(
+            task,
+            {
+                "history": [
+                    {"action": '{"name":"search","args":{}}',
+                     "observation": "成功获取 1 篇论文"},
+                    {"action": "FINISH", "observation": "任务完成",
+                     "forced_finish": True},
+                ],
+                "forced_finish": True,
+            },
+            training_step=30,
+        )
+        self.assertLessEqual(breakdown.total, 0.25)
+
 
 if __name__ == "__main__":
     unittest.main()
