@@ -109,7 +109,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 ### Verifiable Reward 组件
 
-**多粒度五分量可验证奖励**（`rl/reward.py`，借鉴 LLM-TIR 的分层奖励），每个分量归一化到 `[-1, 1]`，加权求和后除以权重和：
+**多粒度可验证奖励**（`rl/reward.py`，借鉴 LLM-TIR 的分层奖励）。核心五个分量归一化到 `[-1, 1]` 并沿用课程权重；另外记录结果质量与效率两个诊断分量，并对严重失败施加不可补偿的 reward 上限：
 
 | 分量 | 默认权重 | 信号 |
 |------|:---:|------|
@@ -119,9 +119,18 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | `process`（过程） | 1 | 合法步骤加分 − 解析失败 / 执行失败 / 多余调用惩罚 |
 | `outcome`（结果） | 3 | 正确完成 +1、工具路径错误的完成 +0.25、强制停止 −0.5、错误 −1 |
 
+| `result_quality`（结果质量） | 诊断 / gate | 检查工具 observation 是否真实表示成功结果；空结果、回退结果和执行错误会触发负向 gate |
+| `efficiency`（效率） | 诊断 / gate | 按任务标准步骤归一化多余调用和失败重试，严重冗余会触发 reward 上限 |
+
 **课程学习**：前 30 个训练步将 `tool` / `argument` / `outcome` 权重乘以 1/3（先学 ReAct 结构、后学语义正确性），30 步后全权重生效（`RewardCalculator.schedule`）。
 
+**非补偿性失败**：解析失败、工具执行失败和未知结果最多得到负奖励；虚假 FINISH 不得靠格式分抵消。单步 GRPO 为了构造完整轨迹而自动补的 `FINISH` 会标记为 `forced_finish`，不会拿到完整终止奖励。
+
 **关键**：所有奖励都是 **可验证的**（rule-based），无需人类标注 → 对应 RLVR（Reinforcement Learning with Verifiable Reward）框架。每条轨迹记录 `reward_components` 分量明细，便于审计与 reward-hacking 排查。
+
+### Rollout 隔离
+
+`rl/sandbox.py` 中的 `RolloutSandbox` 会在轨迹开始前记录环境、内存 Store 和指定产物目录的基线状态，在下一条轨迹前恢复该状态并清理新建文件。多轮 GRPO、普通 rollout 和离线 benchmark 都使用这一 reset 契约，避免搜索结果、下载缓存、翻译状态和统计计数在轨迹之间串联。
 
 ---
 

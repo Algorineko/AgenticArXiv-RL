@@ -26,6 +26,7 @@
 import inspect
 import json
 import os
+import copy
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -355,6 +356,25 @@ class MockArxivEnv:
     def reset_runtime_state(self) -> None:
         """Clear mutable replay state between independent benchmark trials."""
         self._offline_downloaded.clear()
+
+    def capture_state(self) -> Dict[str, Any]:
+        """Capture mutable runtime state for a rollout sandbox.
+
+        The immutable snapshot itself is deliberately not copied.  Only
+        counters and per-rollout download markers can change while a policy is
+        running and therefore need restoration.
+        """
+        return {
+            "_offline_downloaded": copy.deepcopy(self._offline_downloaded),
+            "stats": copy.deepcopy(self.stats),
+        }
+
+    def restore_state(self, state: Dict[str, Any]) -> None:
+        """Restore a state returned by :meth:`capture_state`."""
+        if set(state) != {"_offline_downloaded", "stats"}:
+            raise ValueError("invalid MockArxivEnv sandbox snapshot")
+        self._offline_downloaded = copy.deepcopy(state["_offline_downloaded"])
+        self.stats = copy.deepcopy(state["stats"])
 
     def _offline_download(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """不发 HTTP 的 download_arxiv_pdf 替身，返回契约与真实工具一致。

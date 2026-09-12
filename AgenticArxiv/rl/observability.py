@@ -112,8 +112,12 @@ class RewardComponentTracker:
     日志记不了就崩，但会打印一次提示，避免变成又一处静默失效。
     """
 
-    #: 与 RewardBreakdown 对齐的五个分量
-    COMPONENTS = ("format", "tool", "argument", "process", "outcome")
+    #: 与 RewardBreakdown 对齐的可审计分量。result_quality / efficiency
+    #: 是非补偿性 gate 的诊断信号，不直接替代旧的课程权重曲线。
+    COMPONENTS = (
+        "format", "tool", "argument", "process", "outcome",
+        "result_quality", "efficiency",
+    )
 
     def __init__(self) -> None:
         self._sink: Optional[Dict[str, List[float]]] = None

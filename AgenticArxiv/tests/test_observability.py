@@ -185,9 +185,9 @@ class TrackerTest(unittest.TestCase):
         """这是「必须单独记分量」的核心论据，用一条固定轨迹钉住。
 
         同一条轨迹（策略完全没变），跨过第 30 步的课程边界后：
-            total  +0.3125  ->  -0.03125
+            total  stays below the false-finish cap
         而五个分量一模一样。原因是课程把 tool/argument/outcome 的权重从
-        1/3 恢复到满权重，这条轨迹的 tool 分量是 -1，权重放开后被放大。
+        1/3 恢复到满权重；非补偿性 gate 额外确保这条轨迹不能靠格式分获正分。
 
         也就是说 total reward 在策略没有任何变化时**下跌**了。只看
         total 曲线会把它误读成策略退化。
@@ -208,9 +208,12 @@ class TrackerTest(unittest.TestCase):
 
         for name in RewardComponentTracker.COMPONENTS:
             self.assertAlmostEqual(getattr(early, name), getattr(late, name), places=6, msg=name)
-        self.assertAlmostEqual(early.total, 0.3125, places=4)
-        self.assertAlmostEqual(late.total, -0.03125, places=5)
-        self.assertLess(late.total, early.total)
+        # A false FINISH is now non-compensable; curriculum still changes the
+        # legacy weighted components while the safety cap keeps both scores
+        # below the failure boundary.
+        self.assertLessEqual(early.total, -0.25)
+        self.assertLessEqual(late.total, -0.25)
+        self.assertLessEqual(late.total, early.total)
 
 
 class RewardFnTrackerWiringTest(unittest.TestCase):

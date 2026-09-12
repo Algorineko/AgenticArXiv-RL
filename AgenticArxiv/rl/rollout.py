@@ -31,6 +31,7 @@ from benchmark.task_spec import build
 from benchmark.tasks import get_all_tasks, get_task_by_id
 from rl.env import MockArxivEnv
 from rl.reward import RewardCalculator
+from rl.sandbox import RolloutSandbox
 from rl.trajectory import create_trajectory, save_trajectory
 from utils.llm_client import TransformersLLMClient, get_env_llm_client
 
@@ -77,6 +78,15 @@ def _create_agent(
         max_iterations=max_iterations,
         llm_extra={"temperature": temperature},
     )
+    # rollout_all_tasks reuses one Agent instance.  Capture a pristine
+    # in-memory/filesystem baseline so each task starts from the same world.
+    from models.store import get_store
+    from config import settings
+
+    agent.rollout_sandbox = RolloutSandbox(
+        *(component for component in (env, get_store()) if component is not None),
+        file_roots=(Path(settings.pdf_raw_path), Path(settings.pdf_translated_path)),
+    )
     return agent, llm_client
 
 
@@ -106,6 +116,10 @@ def rollout_single_task(
 
     if agent is None:
         agent, llm_client = _create_agent()
+
+    sandbox = getattr(agent, "rollout_sandbox", None)
+    if sandbox is not None:
+        sandbox.reset()
 
     print(f"🤖 执行 Agent...")
     result = agent.run(task_def["task"], session_id=session_id)
@@ -151,6 +165,10 @@ def rollout_single_task(
     output_path = Path(output_dir) / f"rollout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
     save_trajectory(traj, output_path)
     print(f"💾 Trajectory 保存至: {output_path}")
+
+    # Do not let this rollout's papers/cache/files leak into the next task.
+    if sandbox is not None:
+        sandbox.reset()
 
 
 def rollout_all_tasks(
