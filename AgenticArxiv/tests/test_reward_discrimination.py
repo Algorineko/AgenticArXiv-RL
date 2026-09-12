@@ -86,7 +86,9 @@ class PerCategoryRewardGapTest(unittest.TestCase):
         rewards = self.expanded["infeasible"]
         self.assertEqual(rewards["reference"], 1.0)
         self.assertLess(rewards["always_finish"], 1.0)
-        self.assertGreater(rewards["always_finish"], 0.0)
+        # A no-op FINISH is now explicitly negative instead of receiving a
+        # small positive score from format/process credit.
+        self.assertLess(rewards["always_finish"], 0.0)
         for policy in ("always_search", "random_tool"):
             with self.subTest(policy=policy):
                 self.assertLess(rewards[policy], 0.0)
