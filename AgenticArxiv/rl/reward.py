@@ -126,6 +126,9 @@ class RewardCalculator:
     ) -> Tuple[RewardBreakdown, TaskMetrics]:
         metrics = extract_metrics(task_def, result, agent_type, trial, session_id)
         history = result.get("history", [])
+        forced_finish = bool(result.get("forced_finish")) or any(
+            bool(step.get("forced_finish")) for step in history
+        )
         components = {
             "format": self._format_score(history),
             "tool": self._tool_score(metrics.tool_call_sequence, metrics.expected_tools),
@@ -136,7 +139,9 @@ class RewardCalculator:
                 task_def.get("expected_paper_ids"),
             ),
             "process": self._process_score(history, metrics),
-            "outcome": self._outcome_score(task_def, history, metrics),
+            "outcome": self._outcome_score(
+                task_def, history, metrics, forced_finish=forced_finish
+            ),
             "result_quality": self._result_quality_score(task_def, history, metrics),
             "efficiency": self._efficiency_score(task_def, history, metrics),
         }
@@ -245,6 +250,7 @@ class RewardCalculator:
         task_def: Mapping[str, Any],
         history: Sequence[Dict[str, Any]],
         metrics: TaskMetrics,
+        forced_finish: bool = False,
     ) -> float:
         if metrics.termination_type == "ERROR":
             return -1.0
@@ -282,7 +288,15 @@ class RewardCalculator:
             # 罚得比工具全错还狠。任务未声明参数标准答案时 arg_score 恒为 1.0，
             # 该分支行为与原实现一致。
             semantic = min(metrics.arg_score, metrics.ref_score)
-            return max(0.25, 2 * semantic - 1)
+            outcome = max(0.25, 2 * semantic - 1)
+            if forced_finish:
+                # `synthesize_trajectory` 在单步 rollout 末尾自动补的 FINISH
+                # 不是策略的终止决策：outcome 封顶到「部分完成」档即可。
+                # 抑制范围只限 outcome 本身——format/tool/argument 的组内
+                # 区分度必须保留，否则单轮任务整组轨迹在安全门处被削平，
+                # 参数维度的优势在 GRPO 组内比较里彻底消失。
+                outcome = min(outcome, 0.25)
+            return outcome
         if metrics.task_completed:
             return 0.25
         return -0.25
@@ -401,14 +415,11 @@ class RewardCalculator:
         elif metrics.false_finish:
             capped = min(capped, -0.25)
 
-        # ``synthesize_trajectory`` uses a framework-generated FINISH when a
-        # one-step rollout ends after a tool call.  It is useful for scoring a
-        # partial action, but must not receive a full terminal success bonus.
-        forced_finish = bool(result.get("forced_finish")) or any(
-            bool(step.get("forced_finish")) for step in history
-        )
-        if forced_finish:
-            capped = min(capped, 0.25)
+        # ``synthesize_trajectory`` 用框架自动补的 FINISH 让单步 rollout 成形。
+        # 「不拿完整终止奖励」由 `_outcome_score` 的 forced_finish 分支在
+        # outcome 内部执行；此处不再对总分截断——否则 format/tool/argument
+        # 的组内区分度会在单轮任务上被一起削平（组内奖励全为同一常数，
+        # GRPO 无梯度），恰好破坏本文件其余 safety gate 试图维持的区分度。
 
         if efficiency <= -0.75:
             capped = min(capped, -0.25)
