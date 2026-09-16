@@ -134,6 +134,9 @@ def main(
         log_with=backends[0] if backends else None,
         project_kwargs={"logging_dir": logging_dir} if backends else None,
     )
+    # 多卡可见时 Trainer 会包 DataParallel；本项目单卡单进程训练（见 rl/precision.py）。
+    from rl.precision import pin_single_gpu
+    pin_single_gpu(config)
 
     print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 PPO 训练 (batch_size={batch_size}, mini_batch_size={mini_batch_size})...")
