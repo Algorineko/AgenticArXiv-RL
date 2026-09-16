@@ -4,6 +4,8 @@ import sys
 import os
 import json
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 注册工具
@@ -28,6 +30,7 @@ def test_list_tools():
         print()
 
 
+@pytest.mark.skip(reason="手动冒烟脚本：需 arXiv 网络访问与显式参数，请直接以 python 运行本文件")
 def test_execute_tool(name: str, args: dict):
     """测试执行特定工具"""
     print(f"=== 测试工具: {name} ===")

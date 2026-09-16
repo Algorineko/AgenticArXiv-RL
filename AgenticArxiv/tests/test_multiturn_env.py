@@ -33,6 +33,13 @@ class FakeBackend:
             return [{**PAPER, "_mock_env": {"offline_fallback": True}}]
         raise AssertionError(name)
 
+    # RolloutSandbox 契约：capture/restore 与 env 其余状态一起快照。
+    def capture_state(self):
+        return self.__dict__.copy()
+
+    def restore_state(self, state):
+        self.__dict__.update(state)
+
 
 class MultiTurnEnvTest(unittest.TestCase):
     def setUp(self):
