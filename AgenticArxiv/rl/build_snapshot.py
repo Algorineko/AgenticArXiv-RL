@@ -2,7 +2,7 @@
 
 跑一次即可，之后所有 rollout / 训练都能完全离线、确定性复现：
 
-    python -m rl.build_snapshot                       # 默认写 ../data/mock_arxiv_snapshot.json
+    python -m rl.build_snapshot                       # 默认写仓库内 data/mock_arxiv_snapshot.json
     python -m rl.build_snapshot --aspects AI LG CL CV --max_results 30
 
 设计说明
@@ -25,6 +25,10 @@ os.environ.setdefault("STORE_BACKEND", "memory")
 
 import tools.arxiv_tool  # noqa: F401  触发工具注册
 from rl.env import MockArxivEnv
+
+DEFAULT_SNAPSHOT = str(
+    Path(__file__).resolve().parents[2] / "data" / "mock_arxiv_snapshot.json"
+)
 
 # 覆盖 benchmark/rl 任务集里出现过的所有方向
 DEFAULT_ASPECTS = ["*", "AI", "LG", "CL", "CV", "RO", "CR"]
@@ -119,7 +123,7 @@ def _validate_reference_pools(env: MockArxivEnv) -> None:
 
 
 def build(
-    snapshot_path: str = "../data/mock_arxiv_snapshot.json",
+    snapshot_path: str = DEFAULT_SNAPSHOT,
     aspects=None,
     keyword_queries=None,
     max_results: int = 50,
@@ -189,7 +193,7 @@ def build(
 
 def main():
     parser = argparse.ArgumentParser(description="生成 MockArxivEnv 快照")
-    parser.add_argument("--snapshot", default="../data/mock_arxiv_snapshot.json")
+    parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT)
     parser.add_argument("--aspects", nargs="+", default=None)
     parser.add_argument("--keyword-queries", nargs="+", default=None)
     parser.add_argument("--max_results", type=int, default=50)
