@@ -42,13 +42,16 @@ def attach_expected_paper_ids(
     of silently weakening the evaluator or the RL reward.
     """
     from rl.multiturn_env import AgenticArxivMultiTurnEnv
+    from benchmark.tasks import get_dependency_chain, get_task_by_id
 
     path = Path(snapshot_path)
     if not path.exists():
         raise FileNotFoundError(f"语义标准答案需要离线快照: {path}")
 
+    materialized = list(tasks)
+    tasks_for_lookup = materialized
     enriched: List[Dict[str, Any]] = []
-    for original in tasks:
+    for original in materialized:
         task = deepcopy(original)
         tools = list(task.get("expected_tools") or [])
         args_list = task.get("expected_tool_args")
@@ -63,6 +66,26 @@ def attach_expected_paper_ids(
         environment = AgenticArxivMultiTurnEnv(path)
         environment.reset(task_id=f"oracle_{task.get('id', 'task')}")
         try:
+            # Dependent tasks assume session state created by their
+            # prerequisite (search first, then download/translate/cache).
+            # The benchmark runner satisfies this by running the dependency
+            # first (_ensure_dependencies); replay the dependency chain's
+            # declarative gold steps here so the oracle stays deterministic
+            # and agent-free while resolving the same session state.
+            if task.get("depends_on"):
+                known = {t.get("id"): t for t in tasks_for_lookup}
+                for dep_id in get_dependency_chain(task["id"])[:-1]:
+                    dep_task = known.get(dep_id) or get_task_by_id(dep_id)
+                    if dep_task is None:
+                        continue
+                    for action in dep_task.get("setup") or []:
+                        _call(environment, action["name"], action.get("args") or {})
+                    for name, args in zip(
+                        dep_task.get("expected_tools") or [],
+                        dep_task.get("expected_tool_args") or [],
+                    ):
+                        _call(environment, name, args or {})
+
             for action in task.get("setup") or []:
                 _call(environment, action["name"], action.get("args") or {})
 
