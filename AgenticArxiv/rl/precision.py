@@ -22,3 +22,21 @@ def precision_flags() -> dict:
     if torch.cuda.is_bf16_supported():
         return {"bf16": True}
     return {"fp16": True}
+
+
+def pin_single_gpu(config) -> None:
+    """Force single-GPU training regardless of how many cards are visible.
+
+    transformers wraps the model in ``torch.nn.DataParallel`` whenever
+    ``CUDA_VISIBLE_DEVICES`` exposes more than one GPU and the model is not
+    quantized (i.e. every non-QLoRA path: DPO, PPO, OPD). Trainer-managed
+    DataParallel replicates the model for each forward, and DPOTrainer's
+    interleaved policy/reference forwards crash inside
+    ``broadcast_coalesced`` with a hard segfault on current torch builds
+    (verified with torch 2.11.0+cu130, transformers 5.14.1, trl 0.29.1).
+
+    This project is single-process / single-GPU by design (see README);
+    pinning ``_n_gpu`` keeps the extra visible GPUs available for eval or
+    environment-side models while the trainer stays on ``cuda:0``.
+    """
+    config._n_gpu = 1

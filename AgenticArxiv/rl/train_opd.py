@@ -363,6 +363,9 @@ def main(
     if dropped:
         print(f"  提示：当前 TRL 不支持这些 GKDConfig 参数，已忽略 -> {dropped}")
     config = GKDConfig(**cfg)
+    # 多卡可见时 Trainer 会包 DataParallel；本项目单卡单进程训练（见 rl/precision.py）。
+    from rl.precision import pin_single_gpu
+    pin_single_gpu(config)
 
     print(describe_logging(backends, logging_dir if backends else None))
     mode_description = f"多轮，max_turns={max_turns}" if multiturn else "单轮兼容模式"
