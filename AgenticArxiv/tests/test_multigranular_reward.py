@@ -280,7 +280,11 @@ class MultiGranularRewardTest(unittest.TestCase):
             },
             training_step=30,
         )
-        self.assertLessEqual(breakdown.total, 0.25)
+        # 终止奖励只体现在 outcome：自动补的 FINISH 不得拿到 outcome 满分，
+        # 但 format/tool/argument 的组内区分度不受连坐（否则单轮任务整组
+        # 轨迹在安全门处被压成同一常数，GRPO 组内比较退化为零方差）。
+        self.assertLessEqual(breakdown.outcome, 0.25)
+        self.assertGreater(breakdown.outcome, 0.0)
 
 
 if __name__ == "__main__":
