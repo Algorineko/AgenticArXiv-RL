@@ -3,6 +3,8 @@ import argparse
 import sys
 import os
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.arxiv_tool import get_recently_submitted_cs_papers
@@ -11,6 +13,7 @@ from config import settings
 from tools.tool_registry import registry
 
 
+@pytest.mark.skip(reason="手动冒烟脚本：需 arXiv 网络访问与显式参数，请直接以 python 运行本文件")
 def test_arxiv(aspect: str, max_results: int) -> None:
     # 直接调用
     papers = get_recently_submitted_cs_papers(max_results=max_results, aspect=aspect)
@@ -26,6 +29,7 @@ def test_arxiv(aspect: str, max_results: int) -> None:
     print(f"成功获取 {len(result)} 篇论文")
 
 
+@pytest.mark.skip(reason="手动冒烟脚本：需 LLM API 凭据与显式 prompt，请直接以 python 运行本文件")
 def test_llm(prompt: str) -> None:
     client = get_env_llm_client()
     resp = client.chat_completions(
