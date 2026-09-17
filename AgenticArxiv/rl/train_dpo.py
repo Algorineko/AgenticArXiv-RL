@@ -36,6 +36,14 @@ def _precision_flags():
     return precision_flags()
 
 
+def _pin_single_gpu(config):
+    """见 rl/precision.py：多卡可见时 Trainer 会包 DataParallel 并在
+    DPOTrainer 的 policy/reference 交替前向上 segfault；本项目按 README
+    承诺单卡单进程训练。"""
+    from rl.precision import pin_single_gpu
+    pin_single_gpu(config)
+
+
 def main(
     model: str = None,
     data: str = None,
@@ -95,6 +103,7 @@ def main(
         run_name=run_name or Path(out_dir).name,
         **_precision_flags(),     # 只有 CUDA 才开 fp16
     )
+    _pin_single_gpu(config)
 
     # 4. 训练
     print(f"🚀 开始 DPO 训练...")
