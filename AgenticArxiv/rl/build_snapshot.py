@@ -24,6 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("STORE_BACKEND", "memory")
 
 import tools.arxiv_tool  # noqa: F401  触发工具注册
+import tools.pdf_download_tool  # noqa: F401
+import tools.paper_content_tool  # noqa: F401
+from models.schemas import Paper
+from models.store import store
 from rl.env import MockArxivEnv
 
 DEFAULT_SNAPSHOT = str(
@@ -122,6 +126,43 @@ def _validate_reference_pools(env: MockArxivEnv) -> None:
         raise RuntimeError("快照与固定评测任务不一致: " + "; ".join(failures))
 
 
+
+def _snapshot_paper_content(env: MockArxivEnv) -> tuple[int, int]:
+    """Download each unique snapshotted paper once and pre-extract readable sections."""
+    unique = {}
+    for tool_name in ("get_recently_submitted_cs_papers", "search_arxiv_papers"):
+        for entry in env.snapshot.get(tool_name, {}).values():
+            for item in entry.get("result") or []:
+                if isinstance(item, dict) and item.get("id") and not item.get("_offline_fallback"):
+                    unique[str(item["id"])] = item
+
+    session_id = "__snapshot_paper_content__"
+    ok = fail = 0
+    for item in unique.values():
+        clean = {k: v for k, v in item.items() if not str(k).startswith("_")}
+        try:
+            paper = Paper(**clean)
+            store.set_last_papers(session_id, [paper])
+            env.execute_tool("download_arxiv_pdf", {"session_id": session_id, "ref": 1})
+            # Full text is guaranteed; named sections are best-effort because
+            # papers use heterogeneous headings. Missing sections stay a
+            # deterministic tool error rather than fabricated content.
+            env.execute_tool("get_paper_content", {"session_id": session_id, "ref": 1})
+            for section in ("abstract", "method", "result", "conclusion"):
+                try:
+                    env.execute_tool(
+                        "get_paper_content",
+                        {"session_id": session_id, "ref": 1, "section": section},
+                    )
+                except (ValueError, RuntimeError):
+                    pass
+            ok += 1
+        except Exception as exc:
+            print(f"  [WARN] content paper={item.get('id')} → {exc}")
+            fail += 1
+    return ok, fail
+
+
 def build(
     snapshot_path: str = DEFAULT_SNAPSHOT,
     aspects=None,
@@ -134,7 +175,7 @@ def build(
     aspects = list(aspects or DEFAULT_ASPECTS)
     keyword_queries = list(keyword_queries or DEFAULT_KEYWORD_QUERIES)
     path = Path(snapshot_path)
-    env = MockArxivEnv(snapshot_path=path, mode="record")
+    env = MockArxivEnv(snapshot_path=path, mode="record", offline_download=False)
 
     print(f"生成 MockEnv 快照 → {path}")
     print(f"  aspects={aspects} keyword_queries={keyword_queries}")
@@ -184,6 +225,10 @@ def build(
         print("  固定并校验 benchmark 锚点论文")
         _pin_reference_papers(env)
         _validate_reference_pools(env)
+
+    print("  预下载并抽取快照论文文本")
+    content_ok, content_fail = _snapshot_paper_content(env)
+    print(f"  content: {content_ok} 成功 / {content_fail} 失败")
 
     env.save_snapshot()
     total = sum(len(v) for v in env.snapshot.values())

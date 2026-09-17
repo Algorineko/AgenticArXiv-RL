@@ -49,9 +49,8 @@ class AgenticArxivMultiTurnEnv:
         )
 
     def capture_state(self) -> dict[str, Any]:
-        """Capture all mutable state owned by this rollout environment."""
+        """Capture mutable state owned directly by this rollout environment."""
         return {
-            "backend": self.backend.capture_state(),
             "store": self.store.capture_state(),
             "session_id": self.session_id,
             "downloaded": set(self._downloaded),
@@ -60,10 +59,10 @@ class AgenticArxivMultiTurnEnv:
 
     def restore_state(self, state: dict[str, Any]) -> None:
         """Restore a state returned by :meth:`capture_state`."""
-        required = {"backend", "store", "session_id", "downloaded", "translated"}
+        required = {"store", "session_id", "downloaded", "translated"}
         if set(state) != required:
             raise ValueError("invalid AgenticArxivMultiTurnEnv sandbox snapshot")
-        self.backend.restore_state(state["backend"])
+
         self.store.restore_state(state["store"])
         self.session_id = str(state["session_id"])
         self._downloaded = set(state["downloaded"])
@@ -158,6 +157,34 @@ class AgenticArxivMultiTurnEnv:
             "force": bool(force),
             "existed": existed and not force,
         }
+
+    def get_paper_content(
+        self,
+        ref: str | int | None = 1,
+        section: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Read paper text through the deterministic snapshot backend."""
+        paper = self.store.resolve_paper(
+            self.session_id,
+            ref,
+        )
+
+        if paper is None:
+            raise ValueError(
+                "Paper not found; search for the paper and check the ref."
+            )
+
+        return self.backend.execute_tool(
+            "get_paper_content",
+            {
+                "session_id": self.session_id,
+                "ref": ref,
+                "section": section,
+                # Refs are session-local, while snapshot identity must remain
+                # stable across independent rollouts.
+                "_resolved_paper_id": paper.id,
+            },
+        )
 
     def translate_arxiv_pdf(
         self,
