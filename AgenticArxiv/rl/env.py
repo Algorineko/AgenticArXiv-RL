@@ -32,16 +32,18 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 from tools.tool_registry import registry
+from models.store import store
 from utils.logger import log
 
 # 构造缓存 key 时忽略的易变字段
-_VOLATILE_ARG_KEYS = {"session_id", "output_path", "save_to_file"}
+_VOLATILE_ARG_KEYS = {"session_id", "output_path", "save_to_file", "_resolved_paper_id"}
 
 # 需要走快照回放的"网络型"工具
 _RECENT_SEARCH_TOOL = "get_recently_submitted_cs_papers"
 _KEYWORD_SEARCH_TOOL = "search_arxiv_papers"
 _SEARCH_TOOLS = {_RECENT_SEARCH_TOOL, _KEYWORD_SEARCH_TOOL}
-DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS)
+_PAPER_CONTENT_TOOL = "get_paper_content"
+DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS) | {_PAPER_CONTENT_TOOL}
 
 
 class MockArxivEnv:
@@ -107,7 +109,12 @@ class MockArxivEnv:
 
     def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
         """执行工具（返回值与 registry.execute_tool 保持同一契约：list/dict/str）"""
-        self._validate_tool_arguments(tool_name, args)
+        # ``_resolved_paper_id`` is private environment metadata used by the
+        # isolated multi-turn store. It is never exposed to or passed into a tool.
+        internal_args = dict(args or {})
+        resolved_paper_id = internal_args.pop("_resolved_paper_id", None)
+        self._validate_tool_arguments(tool_name, internal_args)
+        args = internal_args
 
         # 1) 离线下载桩
         if tool_name == "download_arxiv_pdf" and self.offline_download:
@@ -123,6 +130,8 @@ class MockArxivEnv:
         key = self._make_key(args)
         if tool_name == _KEYWORD_SEARCH_TOOL:
             key = self._keyword_search_key(args)
+        elif tool_name == _PAPER_CONTENT_TOOL:
+            key = self._paper_content_key(args, resolved_paper_id=resolved_paper_id)
         tool_data = self.snapshot.get(tool_name, {})
 
         # record 模式必须每次都真打，否则派生逻辑会"帮倒忙"：
@@ -466,6 +475,34 @@ class MockArxivEnv:
             if k not in _VOLATILE_ARG_KEYS and v is not None
         }
         return json.dumps(stable, sort_keys=True, ensure_ascii=False)
+
+
+    @staticmethod
+    def _paper_content_key(
+        args: Dict[str, Any], resolved_paper_id: Optional[str] = None
+    ) -> str:
+        """Key paper reads by resolved paper id, not session-local ``ref``.
+
+        ``ref=1`` can point to different papers after different searches, so a
+        raw argument key would replay the wrong paper.  Resolve the reference
+        against the current session before building the stable snapshot key.
+        """
+        session_id = str((args or {}).get("session_id") or "default")
+        ref = (args or {}).get("ref", 1)
+        if resolved_paper_id:
+            paper_id = str(resolved_paper_id)
+        else:
+            paper = store.resolve_paper(session_id, ref)
+            if paper is None:
+                raise ValueError("Paper not found; search for the paper and check the ref.")
+            paper_id = paper.id
+        section = (args or {}).get("section")
+        if isinstance(section, str):
+            section = section.strip().lower() or None
+        return json.dumps(
+            {"paper_id": paper_id, "section": section},
+            sort_keys=True, ensure_ascii=False,
+        )
 
     def _add_to_snapshot(
         self, tool_name: str, key: str, args: Dict[str, Any], result: Any
