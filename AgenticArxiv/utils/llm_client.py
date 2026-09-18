@@ -44,6 +44,7 @@ class LLMClient:
         stream: bool = False,
         extra: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        self.model_name = model
         url = f"{self.base_url}/v1/chat/completions"
         headers = {
             "Content-Type": "application/json",
