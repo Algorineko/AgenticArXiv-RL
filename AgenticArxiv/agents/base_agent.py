@@ -234,6 +234,7 @@ class BaseAgent(ABC):
                 if iteration == self.max_iterations - 1:
                     log.warning("达到最大迭代次数，强制结束")
                     history.append({"thought": "达到最大迭代次数", "action": "FORCE_STOP", "observation": "迭代限制"})
+                    step_timings.append({"llm_ms": 0, "tool_ms": 0})
                     self._log_step(msg_id, iteration + 1, "达到最大迭代次数", "FORCE_STOP", "", "迭代限制", 0, 0, session_id)
                     break
 
