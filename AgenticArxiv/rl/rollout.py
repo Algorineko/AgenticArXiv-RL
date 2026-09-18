@@ -48,6 +48,22 @@ def _get_model_name(llm_client: Optional[Any]) -> str:
     return ""
 
 
+def _history_with_timings(result: dict) -> list:
+    """Attach each Agent timing record to its corresponding history step."""
+    history = result["history"]
+    timings = result["timing"]["steps"]
+    if len(history) != len(timings):
+        raise ValueError("Agent history and step timings have different lengths")
+    return [
+        {
+            **step,
+            "llm_latency_ms": timing["llm_ms"],
+            "tool_latency_ms": timing["tool_ms"],
+        }
+        for step, timing in zip(history, timings)
+    ]
+
+
 def _create_agent(
     model: Optional[str] = None,
     snapshot: Optional[str] = None,
@@ -146,7 +162,7 @@ def rollout_single_task(
         task_id=task_def["id"],
         task=task_def["task"],
         session_id=session_id,
-        history=result.get("history", []),
+        history=_history_with_timings(result),
         final_reward=reward,
         metrics={
             "task_completed": metrics.task_completed,
