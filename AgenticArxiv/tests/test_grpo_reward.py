@@ -217,6 +217,88 @@ class TestMultiTurnTrajectory(unittest.TestCase):
         self.assertIn(1, output["env_mask"][0])
         self.assertEqual(len(output["completion_ids"][0]), len(output["env_mask"][0]))
 
+    @patch("rl.grpo_reward.require_rollout_func_support")
+    def test_custom_rollout_excludes_generated_observations(self, _require_trl):
+        fabricated = "FABRICATED_RESULT\nThought: pretend done\nAction: FINISH"
+        cases = [
+            ("clean", list(CORRECT), len(CORRECT), 1024),
+            ("split_marker", list(CORRECT + "\nObservation: " + fabricated),
+             len(CORRECT) + 1, 1024),
+            ("merged_marker", list(CORRECT) + ["\nOb", "servation: " + fabricated],
+             len(CORRECT), 1024),
+            ("budget_inside_marker", list(CORRECT + "\nObservation: " + fabricated),
+             len(CORRECT) + 1, len(CORRECT) + 5),
+            ("overlapping_action", list(CORRECT[:-1]) + ["}\nObservation: " + fabricated],
+             len(CORRECT) - 1, 1024),
+            ("marker_at_start", list("Observation: " + fabricated), 1, 1024),
+        ]
+
+        for name, pieces, retained, budget in cases:
+            with self.subTest(name=name):
+                class Tokenizer:
+                    # Sampled IDs deliberately differ from re-encoding the text.
+                    tokens = {1000000 + i: piece for i, piece in enumerate(pieces)}
+
+                    def __call__(self, text, add_special_tokens=False):
+                        return {"input_ids": [ord(char) for char in text]}
+
+                    def decode(self, ids, skip_special_tokens=True):
+                        return "".join(self.tokens.get(t, chr(t)) for t in ids)
+
+                class Trainer:
+                    processing_class = Tokenizer()
+                    max_completion_length = budget
+
+                    def __init__(self):
+                        self.inputs = []
+
+                    def _generate_single_turn(self, prompt_ids, images, fields):
+                        self.inputs.append([list(ids) for ids in prompt_ids])
+                        ids = (list(self.processing_class.tokens) if len(self.inputs) == 1
+                               else [ord(char) for char in BARE_FINISH])
+                        return [ids], None, {}
+
+                class Environment:
+                    def reset(self):
+                        pass
+
+                    def get_recently_submitted_cs_papers(self, **kwargs):
+                        return "REAL_RESULT"
+
+                trainer = Trainer()
+                output = make_multiturn_rollout_func(Environment, max_turns=2)(
+                    ["task"], trainer,
+                )
+                ids = output["completion_ids"][0]
+                mask = output["env_mask"][0]
+                tokenizer = trainer.processing_class
+                expected = list(tokenizer.tokens)[:retained]
+                invalid = name in {"overlapping_action", "marker_at_start"}
+                if name != "budget_inside_marker" and not invalid:
+                    expected += [ord(char) for char in BARE_FINISH]
+                self.assertEqual([t for t, m in zip(ids, mask) if m], expected)
+                self.assertTrue(ids)  # TRL inspects completion_ids[-1].
+                self.assertEqual(len(ids), len(mask))
+                self.assertLessEqual(len(ids), budget)
+
+                trajectory = output["trajectory_results"][0]
+                self.assertEqual(trajectory["raw_assistant_turns"][0], "".join(pieces))
+                self.assertNotIn("FABRICATED_RESULT", tokenizer.decode(ids))
+                if invalid:
+                    self.assertEqual(trajectory["history"][0]["action"], "PARSE_ERROR")
+                    self.assertEqual(len(trainer.inputs), 1)
+                    continue
+
+                suffix = "\nObservation: REAL_RESULT\nThought:"
+                env_text = tokenizer.decode([t for t, m in zip(ids, mask) if not m])
+                self.assertEqual(env_text, suffix[:budget - retained])
+                self.assertEqual(trajectory["history"][0]["observation"], "REAL_RESULT")
+                if name != "budget_inside_marker":
+                    self.assertEqual(trainer.inputs[1][0],
+                                     output["prompt_ids"][0] + ids[:retained + len(suffix)])
+                    self.assertNotIn("FABRICATED_RESULT", tokenizer.decode(trainer.inputs[1][0]))
+                    self.assertEqual(trajectory["history"][-1]["action"], "FINISH")
+
 
 class TestRewardOrdering(unittest.TestCase):
     def setUp(self):
