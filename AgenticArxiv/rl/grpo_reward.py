@@ -552,9 +552,27 @@ def make_multiturn_rollout_func(
                 budget = trainer.max_completion_length - len(completion_ids[index])
                 # turn_ids 是 TRL 返回的完成 token；可能是 tensor，统一转成 int 列表，
                 # 否则下一轮拼进 full_ids 后 torch.tensor() 无法处理
-                generated = [int(t) for t in turn_ids[batch_index]][:budget]
+                generated = [int(t) for t in turn_ids[batch_index]]
+                raw_text = tokenizer.decode(generated, skip_special_tokens=True)
+                raw_assistant_turns[index].append(raw_text)
+                # Match inference's Observation stop before applying the budget:
+                # the budget itself may split the stop marker across tokens.
+                stop = raw_text.find("Observation:")
+                generated = generated[:budget]
                 text = tokenizer.decode(generated, skip_special_tokens=True)
-                raw_assistant_turns[index].append(text)
+                if stop >= 0:
+                    assistant_text = raw_text[:stop]
+                    # Keep only an original sampled prefix, never re-tokenize it.
+                    # A token overlapping the boundary must be dropped whole.
+                    while generated and not assistant_text.startswith(text):
+                        generated.pop()
+                        text = tokenizer.decode(generated, skip_special_tokens=True)
+                    if not generated and not completion_ids[index]:
+                        # TRL requires a non-empty completion. Retain one sampled
+                        # token for this invalid action, but parse the empty prefix
+                        # below as PARSE_ERROR and never execute the forged action.
+                        completion_ids[index].append(int(turn_ids[batch_index][0]))
+                        env_masks[index].append(1)
                 completion_ids[index].extend(generated)
                 env_masks[index].extend([1] * len(generated))
 
