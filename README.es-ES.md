@@ -96,19 +96,20 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | Dimensión | Definición |
 |------|------|
 | **State** | Descripción de la tarea + historial de diálogo + resultados de herramientas |
-| **Action** | 4 herramientas (búsqueda/descarga/traducción/consulta de caché de arxiv) + FINISH |
+| **Action** | 6 herramientas (navegación/búsqueda por palabras clave/descarga/traducción/consulta de caché/lectura de papers) + FINISH |
 | **Reward** | Recompensa verificable multigranular de cinco componentes (format / tool / argument / process / outcome, ver más abajo) |
 | **Transition** | `execute_tool(action) → observation` (`MockArxivEnv` con replay de snapshot offline, determinista y reproducible) |
 
-### Espacio de Acciones (4 herramientas)
+### Espacio de Acciones (6 herramientas)
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — Buscar papers en arXiv
 2. `download_arxiv_pdf(ref, session_id)` — Descargar PDF
 3. `translate_arxiv_pdf(ref, session_id)` — Traducir PDF
 4. `get_paper_cache_status(ref, session_id)` — Consultar estado de la caché
 5. `search_arxiv_papers(query, max_results, days=None)` — Buscar por palabra clave, título o autor
+6. `get_paper_content(ref, session_id, section=None)` — Leer el resumen o una sección concreta de un paper descargado
 
-> La búsqueda por palabras clave ya está disponible. La lectura de papers, el resumen y el análisis de figuras tienen un diseño cerrado, pero aún no están implementados; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
+> La búsqueda por palabras clave y la lectura de papers ya están disponibles. El resumen y el análisis de figuras tienen un diseño cerrado, pero aún no están implementados; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
 
 ### Componentes de Verifiable Reward
 
@@ -276,10 +277,11 @@ AgenticArXiv-RL/
 │  │  └─ side_effects.py           # Interfaz desacoplada para efectos secundarios
 │  ├─ tools/                         # Capa de herramientas (espacio de acciones)
 │  │  ├─ tool_registry.py          # Registro de herramientas
-│  │  ├─ arxiv_tool.py             # Búsqueda en arXiv
+│  │  ├─ arxiv_tool.py             # Búsqueda por categoría/palabra clave en arXiv
 │  │  ├─ pdf_download_tool.py      # Descarga de PDF
 │  │  ├─ pdf_translate_tool.py     # Traducción de PDF
-│  │  └─ cache_status_tool.py      # Consulta de caché
+│  │  ├─ cache_status_tool.py      # Consulta de caché
+│  │  └─ paper_content_tool.py     # Lectura determinista del contenido
 │  ├─ benchmark/                     # ⭐ Fuente de Verifiable Reward
 │  │  ├─ metrics.py               # TaskMetrics, coincidencia estricta de herramientas y parámetros
 │  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 tareas de humo)
@@ -568,23 +570,25 @@ Se complementan entre sí: SFT es el punto de partida de todas las rutas; OPD y 
 
 ---
 
-## 🧰 Diseño de Evolución del Conjunto de Herramientas (borrador de diseño, sin implementar)
+## 🧰 Diseño de Evolución del Conjunto de Herramientas (hoja de ruta incremental)
 
-> El objetivo final de este proyecto es un **LLM ligero desplegado localmente que resuelva de forma autónoma la búsqueda, descarga e interpretación de papers de arXiv**. Esta sección es solo diseño; nada está implementado aún.
+> El objetivo final de este proyecto es un **LLM ligero desplegado localmente que resuelva de forma autónoma la búsqueda, descarga e interpretación de papers de arXiv**. T1/T2 están implementados; T3–T5 siguen siendo propuestas de diseño.
 
 ### Estado actual y brechas
 
 | Herramienta | Capacidad | Límite |
 |------|------|------|
-| `get_recently_submitted_cs_papers` | Búsqueda por categoría + ventana temporal | Solo entiende `cat:cs.*` + fecha de envío — **sin búsqueda por palabras clave / título / autor**, sin paginación; resúmenes truncados a 200 caracteres |
+| `get_recently_submitted_cs_papers` | Búsqueda por categoría + ventana temporal | Solo entiende `cat:cs.*` + fecha de envío; sin paginación; resúmenes truncados a 200 caracteres |
+| `search_arxiv_papers` | Búsqueda por palabra clave / título / autor | Sin paginación; las consultas ausentes del snapshot reciben un fallback determinista marcado explícitamente |
 | `download_arxiv_pdf` | Descargar PDF | — |
-| `translate_arxiv_pdf` | Traducción del paper completo con pdf2zh | Produce un archivo PDF traducido — **el contenido del paper nunca entra en el contexto del modelo**; depende del extra opcional |
+| `translate_arxiv_pdf` | Traducción del paper completo con pdf2zh | Produce un archivo PDF traducido; el cuerpo traducido no entra en el contexto del modelo; depende del extra opcional |
 | `get_paper_cache_status` | Consulta de caché | — |
+| `get_paper_content` | Leer el resumen o una sección method/result/conclusion | Requiere un PDF descargado; extracción determinista sin llamar a un LLM |
 
 Dos conclusiones:
 
-1. **La mitad de «búsqueda» del bucle está incompleta**: las tareas de navegación («qué hay de nuevo en cs.AI») funcionan, pero las tareas de búsqueda puntual («busca el paper xxx», «quién propuso xxx») son imposibles en el espacio de acciones actual.
-2. **La mitad de «interpretación» del bucle falta por completo**: lo único que el modelo llega a «ver» de un paper es un recorte de 200 caracteres del resumen en los resultados de búsqueda. Sin una herramienta de lectura, resumir / preguntar / analizar figuras no tienen recorrido — traducir produce un archivo, y eso no es interpretar.
+1. **La mitad de recuperación del bucle está conectada**: ya funcionan la navegación por ventana temporal y la búsqueda por palabra clave/título/autor; la paginación sigue sin implementar.
+2. **La interpretación ya tiene una entrada de lectura determinista**: el modelo puede leer el resumen o una sección concreta de un paper descargado; el resumen automático, QA y análisis de figuras siguen sin implementar.
 
 Además, **un espacio de acciones más grande no es automáticamente mejor**: la política es un modelo de ~1.5B, y cada herramienta nueva amplía la carga de aprendizaje de selección de herramientas y formato JSON. El criterio de admisión de una herramienta nueva es «habilita una nueva categoría de tareas», no «puede que sea útil» — de los 5 candidatos de la tabla, T1/T2 son el camino crítico, T3 es el incremento principal, T4/T5 son opcionales.
 
@@ -593,7 +597,7 @@ Además, **un espacio de acciones más grande no es automáticamente mejor**: la
 | Prioridad | Herramienta | Diseño | Por qué sigue siendo amiga de RLVR |
 |--------|------|----------|----------------------|
 | **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | Búsqueda por palabras clave mapeada a los campos `all:` / `ti:` / `au:` de la API de arXiv; coexiste con la herramienta actual (navegar por ventana temporal y búsqueda puntual son tipos de tarea distintos) | Las herramientas/parámetros esperados siguen derivándose de `task_spec.steps`; `MockArxivEnv` repite offline indexado por un hash del query, y los query no recogidos degradan de forma **determinista** (devuelve un subconjunto fijo, marcado explícitamente en la observation) — reproducible, y evita que el modelo confunda un resultado vacío con una búsqueda exitosa |
-| **T2** | `get_paper_content(ref, section=None)` | PDF → texto plano (PyMuPDF); por defecto devuelve title/abstract, y por secciones (method / result / conclusion) a petición | Extracción de texto determinista, sin LLM; los resultados de extracción van pre-guardados en el snapshot. **Es el prerrequisito de todas las tareas de interpretación** |
+| **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → texto plano (PyMuPDF); por defecto devuelve title/abstract, y por secciones (method / result / conclusion) a petición | Extracción de texto determinista, sin LLM; los resultados de extracción van pre-guardados en el snapshot. **Es el prerrequisito de todas las tareas de interpretación** |
 | **T3** | `summarize_paper(ref, style, max_words)` | Resumir un paper: un modelo resumidor local **en el lado del entorno** (con el texto de T2 como entrada) devuelve el resumen | Lo entrenable es «cuándo llamarlo, sobre qué ref, si style/longitud son correctos» — todo verificable por reglas; la calidad del resumen en sí **no entra en la recompensa** (ver abajo) |
 | **T4** (opcional) | `extract_paper_figures(ref)` | Preparación de figuras/tablas: extrae imágenes de figuras + captions, devuelve rutas de archivos | Determinista; se verifica «ref correcto + archivos existen + cantidad ≥ 1» |
 | **T5** (opcional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Análisis de figuras: un VLM local del lado del entorno (p. ej. Qwen2.5-VL) lee la figura y responde | Las reglas solo juzgan «si se llamó bien y si los parámetros son correctos»; la calidad de la respuesta del VLM no entra en la recompensa, manteniendo el ruido de un modelo tercero fuera del gradiente de política |
@@ -631,10 +635,10 @@ Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribui
 
 ### P0 — Expansión del conjunto de herramientas (bucle de interpretación)
 
-T1 está implementado; el resto tiene diseño cerrado (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»):
+T1/T2 están implementados; el resto tiene diseño cerrado (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»):
 
 - [x] **T1 Búsqueda por palabras clave** `search_arxiv_papers`: añade la búsqueda puntual de «encontrar un paper concreto»
-- [ ] **T2 Lectura de papers** `get_paper_content`: PDF → texto, el prerrequisito de todas las tareas de interpretación (camino crítico)
+- [x] **T2 Lectura de papers** `get_paper_content`: PDF → texto determinista con replay offline del snapshot, el prerrequisito de todas las tareas de interpretación (camino crítico)
 - [ ] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable
 - [ ] **T4/T5 Extracción y análisis de figuras** (opcional, entorno multimodal): después de T1–T3; el VLM vive solo en el lado del entorno
 
