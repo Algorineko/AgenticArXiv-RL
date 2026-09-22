@@ -49,7 +49,7 @@ def _normalize_text(text: str) -> str:
 def _heading_name(line: str) -> Optional[str]:
     """Return a canonical section name when *line* looks like a section heading."""
     cleaned = re.sub(
-        r"^\s*(?:\d+(?:\.\d+)*|[IVXLC]+)[.)]?\s*",
+        r"^\s*(?:\d+(?:\.\d+)*|[IVXLC]+)(?:[.)]\s*|\s+)",
         "",
         line,
         flags=re.I,
