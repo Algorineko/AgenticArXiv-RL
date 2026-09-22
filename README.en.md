@@ -94,19 +94,20 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | Dimension | Definition |
 |-----------|------------|
 | **State** | Task description + conversation history + tool results |
-| **Action** | 4 tools (arxiv search/download/translate/cache query) + FINISH |
+| **Action** | 6 tools (arXiv browsing/keyword search/download/translate/cache query/paper reading) + FINISH |
 | **Reward** | Five-component multi-granular verifiable reward (format / tool / argument / process / outcome, see below) |
 | **Transition** | `execute_tool(action) → observation` (`MockArxivEnv` offline snapshot replay, deterministic & reproducible) |
 
-### Action Space (4 Tools)
+### Action Space (6 Tools)
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — Search arXiv papers
 2. `download_arxiv_pdf(ref, session_id)` — Download PDF
 3. `translate_arxiv_pdf(ref, session_id)` — Translate PDF
 4. `get_paper_cache_status(ref, session_id)` — Query cache status
 5. `search_arxiv_papers(query, max_results, days=None)` — Search by keyword, title, or author
+6. `get_paper_content(ref, session_id, section=None)` — Read an abstract or a selected section from a downloaded paper
 
-> Keyword search is available. Paper reading, summarization, and figure analysis remain designed but unimplemented; see "🧰 Toolset Evolution Design" below.
+> Keyword search and paper reading are available. Paper summarization and figure analysis remain designed but unimplemented; see "🧰 Toolset Evolution Design" below.
 
 ### Verifiable Reward Components
 
@@ -290,10 +291,11 @@ AgenticArXiv-RL/
 │  │  └─ side_effects.py           # Decoupled side effects interface
 │  ├─ tools/                         # Tool layer (action space)
 │  │  ├─ tool_registry.py          # Tool registry
-│  │  ├─ arxiv_tool.py             # arXiv search
+│  │  ├─ arxiv_tool.py             # arXiv category/keyword search
 │  │  ├─ pdf_download_tool.py      # PDF download
 │  │  ├─ pdf_translate_tool.py     # PDF translation
-│  │  └─ cache_status_tool.py      # Cache query
+│  │  ├─ cache_status_tool.py      # Cache query
+│  │  └─ paper_content_tool.py     # Deterministic paper-content reading
 │  ├─ benchmark/                     # ⭐ Verifiable Reward source
 │  │  ├─ metrics.py               # TaskMetrics, strict tool-sequence & argument matching
 │  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 smoke tasks)
@@ -582,23 +584,25 @@ They complement each other: SFT is the starting point of every route; OPD and GR
 
 ---
 
-## 🧰 Toolset Evolution Design (design doc, not implemented)
+## 🧰 Toolset Evolution Design (incremental roadmap)
 
-> The end goal of this project is a **locally deployed lightweight LLM that independently handles arXiv paper retrieval, download, and interpretation**. This section is design only; nothing is implemented yet.
+> The end goal of this project is a **locally deployed lightweight LLM that independently handles arXiv paper retrieval, download, and interpretation**. T1/T2 are implemented; T3–T5 remain design proposals.
 
 ### Current state and gaps
 
 | Tool | Capability | Boundary |
 |------|------------|----------|
-| `get_recently_submitted_cs_papers` | Category + time-window search | Only understands `cat:cs.*` + submission date — **no keyword / title / author search**, no pagination; abstracts truncated to 200 chars |
+| `get_recently_submitted_cs_papers` | Category + time-window search | Only understands `cat:cs.*` + submission date; no pagination; abstracts truncated to 200 chars |
+| `search_arxiv_papers` | Keyword / title / author search | No pagination; offline queries absent from the snapshot return an explicitly flagged deterministic fallback |
 | `download_arxiv_pdf` | Download PDF | — |
-| `translate_arxiv_pdf` | Full-paper translation via pdf2zh | Produces a translated PDF file — **paper content never enters the model's context**; depends on the optional extra |
+| `translate_arxiv_pdf` | Full-paper translation via pdf2zh | Produces a translated PDF file; the translated body does not enter the model's context; depends on the optional extra |
 | `get_paper_cache_status` | Cache query | — |
+| `get_paper_content` | Read the abstract or a method/result/conclusion section | Requires a downloaded PDF; deterministic extraction with no LLM call |
 
 Two conclusions:
 
-1. **The "retrieval" half-loop is incomplete**: browse-type tasks ("what's new in cs.AI lately") work, but lookup-type tasks ("find the paper xxx", "who proposed xxx") are impossible in the current action space.
-2. **The "interpretation" half-loop is entirely missing**: the only paper content the model ever sees is a 200-char abstract snippet from search results. Without a reading tool, summarization / QA / figure analysis are out of reach — translation produces a file, which is not interpretation.
+1. **The retrieval half-loop is connected**: both time-window browsing and keyword/title/author lookup are available; pagination remains unimplemented.
+2. **Interpretation has a deterministic reading entry point**: the model can read an abstract or selected section from a downloaded paper; summarization, QA, and figure analysis remain unimplemented.
 
 Also, **a bigger action space is not automatically better**: the policy is a ~1.5B model, and every added tool enlarges the tool-selection and JSON-format learning burden. The admission bar for a new tool is "it enables a new task category", not "it might be useful" — of the 5 candidates below, T1/T2 are the critical path, T3 is the main increment, T4/T5 are optional.
 
@@ -607,7 +611,7 @@ Also, **a bigger action space is not automatically better**: the policy is a ~1.
 | Priority | Tool | Design | Why it stays RLVR-friendly |
 |--------|------|----------|----------------------|
 | **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | Keyword search mapped to the arXiv API's `all:` / `ti:` / `au:` fields; coexists with the existing tool (time-window browsing vs precise lookup are different task types) | Expected tools/args still derive from `task_spec.steps`; `MockArxivEnv` replays offline keyed by a hash of the query string, and unseen queries degrade **deterministically** (return a fixed subset, explicitly flagged in the observation) — reproducible, and it prevents the model from mistaking an empty result for a successful search |
-| **T2** | `get_paper_content(ref, section=None)` | PDF → plain text (PyMuPDF); returns title/abstract by default, per section (method / result / conclusion) on demand | Deterministic text extraction, no LLM involved; extraction results pre-stored in the snapshot. **It is the prerequisite of every interpretation task** |
+| **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → plain text (PyMuPDF); returns title/abstract by default, per section (method / result / conclusion) on demand | Deterministic text extraction, no LLM involved; extraction results pre-stored in the snapshot. **It is the prerequisite of every interpretation task** |
 | **T3** | `summarize_paper(ref, style, max_words)` | Summarize a paper: an **env-side** local summarizer model (input from T2's text) returns the summary | What is trainable is "when to call it, on which ref, whether style/length args are right" — all rule-checkable; summary quality itself is **not rewarded** (see below) |
 | **T4** (optional) | `extract_paper_figures(ref)` | Figure/table preparation: extract figure images + captions, return file paths | Deterministic; verify "correct ref + files exist + count ≥ 1" |
 | **T5** (optional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Figure analysis: an env-side local VLM (e.g. Qwen2.5-VL) reads the figure and answers | Rules only judge "was it called correctly, are the args right"; VLM answer quality does not enter the reward, keeping third-party model noise out of the policy gradient |
@@ -645,10 +649,10 @@ Ordered by priority. Contributions welcome (see 🤝 Contributing).
 
 ### P0 — Toolset expansion (interpretation loop)
 
-T1 is implemented; the remaining tools have finalized designs (see "🧰 Toolset Evolution Design"):
+T1/T2 are implemented; the remaining tools have finalized designs (see "🧰 Toolset Evolution Design"):
 
 - [x] **T1 Keyword search** `search_arxiv_papers`: adds the "find a specific paper" lookup-type retrieval
-- [ ] **T2 Paper reading** `get_paper_content`: PDF → text, the prerequisite of all interpretation tasks (critical path)
+- [x] **T2 Paper reading** `get_paper_content`: deterministic PDF → text with offline snapshot replay, the prerequisite of all interpretation tasks (critical path)
 - [ ] **T3 Paper summarization** `summarize_paper`: env-side summarization, turning "interpretation" into a trainable tool-invocation decision
 - [ ] **T4/T5 Figure extraction & analysis** (optional, multimodal env): after T1–T3; the VLM lives only on the env side
 
