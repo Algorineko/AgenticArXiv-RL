@@ -16,7 +16,7 @@ from models.schemas import Paper, PdfAsset
 from models.store import store, use_memory_store
 from rl.env import MockArxivEnv
 from rl.multiturn_env import AgenticArxivMultiTurnEnv
-from tools.paper_content_tool import get_paper_content
+from tools.paper_content_tool import _heading_name, get_paper_content
 from tools.tool_registry import registry
 
 
@@ -73,6 +73,20 @@ class PaperContentToolTest(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_heading_name_preserves_plain_headings(self):
+        expected = {
+            "Introduction": "_other",
+            "Conclusion": "conclusion",
+            "I. Introduction": "_other",
+            "IV Conclusion": "conclusion",
+            "1 Introduction": "_other",
+            "4. Conclusion": "conclusion",
+        }
+
+        for heading, canonical in expected.items():
+            with self.subTest(heading=heading):
+                self.assertEqual(_heading_name(heading), canonical)
 
     def test_registered_in_tool_registry(self):
         tool = registry.get_tool("get_paper_content")

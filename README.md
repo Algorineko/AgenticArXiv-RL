@@ -93,19 +93,20 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | 维度 | 定义 |
 |------|------|
 | **State** | 任务描述 + 对话历史 + 工具结果 |
-| **Action** | 4 个工具（arxiv搜索/下载/翻译/缓存查询）+ FINISH |
+| **Action** | 6 个工具（arXiv 浏览/关键词检索/下载/翻译/缓存查询/论文阅读）+ FINISH |
 | **Reward** | 五分量多粒度可验证奖励（format / tool / argument / process / outcome，见下节） |
 | **Transition** | `execute_tool(action) → observation`（`MockArxivEnv` 离线快照回放，确定性可复现） |
 
-### 动作空间（4 个工具）
+### 动作空间（6 个工具）
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — 搜索 arXiv 论文
 2. `download_arxiv_pdf(ref, session_id)` — 下载 PDF
 3. `translate_arxiv_pdf(ref, session_id)` — 翻译 PDF
 4. `get_paper_cache_status(ref, session_id)` — 查询缓存状态
 5. `search_arxiv_papers(query, max_results, days=None)` — 按关键词、标题或作者检索
+6. `get_paper_content(ref, session_id, section=None)` — 读取已下载论文的摘要或指定章节
 
-> 关键词检索已经可用；论文阅读、总结和图表分析已有设计稿、暂不实现，见下文「🧰 工具集演进设计」。
+> 关键词检索和论文阅读已经可用；论文总结和图表分析已有设计稿、暂未实现，见下文「🧰 工具集演进设计」。
 
 ### Verifiable Reward 组件
 
@@ -308,10 +309,11 @@ AgenticArXiv-RL/
 │  │  └─ side_effects.py           # 副作用解耦接口
 │  ├─ tools/                         # 工具层（动作空间）
 │  │  ├─ tool_registry.py          # 工具注册表
-│  │  ├─ arxiv_tool.py             # arXiv 搜索
+│  │  ├─ arxiv_tool.py             # arXiv 分类/关键词搜索
 │  │  ├─ pdf_download_tool.py      # PDF 下载
 │  │  ├─ pdf_translate_tool.py     # PDF 翻译
-│  │  └─ cache_status_tool.py      # 缓存查询
+│  │  ├─ cache_status_tool.py      # 缓存查询
+│  │  └─ paper_content_tool.py     # 确定性论文内容读取
 │  ├─ benchmark/                     # ⭐ Verifiable Reward 来源
 │  │  ├─ metrics.py               # TaskMetrics、工具序列严格匹配、参数匹配
 │  │  ├─ tasks.py                 # BENCHMARK_TASKS（8 条冒烟任务）
@@ -598,23 +600,25 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 四者是互补关系：SFT 是所有路径的起点；OPD 与 GRPO 都在 SFT 之上，前者走教师蒸馏（上限=教师）、后者走奖励优化（可探索超越），两者产出可互为对方的初始化或对照基线。
 
 ---
-## 🧰 工具集演进设计（设计稿，未实现）
+## 🧰 工具集演进设计（增量路线图）
 
-> 本项目的最终目标是**本地部署的轻量 LLM 独立完成 arXiv 论文的检索、下载与分析解读**。本节只做设计，不改实现。
+> 本项目的最终目标是**本地部署的轻量 LLM 独立完成 arXiv 论文的检索、下载与分析解读**。T1/T2 已实现；T3–T5 仍是设计稿。
 
 ### 现状盘点与缺口
 
 | 工具 | 能力 | 边界 |
 |------|------|------|
-| `get_recently_submitted_cs_papers` | 子领域 + 时间窗检索 | 只认 `cat:cs.*` + 提交日期，**无关键词/篇名/作者检索**，无翻页；摘要截断 200 字符 |
+| `get_recently_submitted_cs_papers` | 子领域 + 时间窗检索 | 只认 `cat:cs.*` + 提交日期，无翻页；摘要截断 200 字符 |
+| `search_arxiv_papers` | 关键词/篇名/作者检索 | 无翻页；离线模式对快照外查询返回显式标记的确定性降级结果 |
 | `download_arxiv_pdf` | 下载 PDF | — |
-| `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，**论文内容从未进入模型上下文**；依赖可选 extra |
+| `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，翻译后的正文不进入模型上下文；依赖可选 extra |
 | `get_paper_cache_status` | 查缓存 | — |
+| `get_paper_content` | 读取摘要或 method/result/conclusion 章节 | 需要先下载 PDF；确定性抽取，不调用 LLM |
 
 两个结论：
 
-1. **「检索」半环不完整**：浏览型任务（最近几天 cs.AI 有什么）没问题，但查找型任务（"找一下xxx这篇论文"、"谁提出了xxx"）在当前动作空间里做不到。
-2. **「分析解读」半环完全缺失**：模型唯一能"看到"的论文信息是搜索结果里 200 字符的摘要截断。没有阅读工具，总结、问答、图表分析都无从谈起——翻译只是产出一个文件，不等于解读。
+1. **「检索」半环已打通**：既支持时间窗浏览，也支持关键词、篇名和作者查找；翻页仍未实现。
+2. **「分析解读」已有确定性阅读入口**：模型可以读取已下载论文的摘要或指定章节；总结、问答和图表分析仍待实现。
 
 同时，**动作空间不是越大越好**：策略是 1.5B 量级小模型，每加一个工具都放大工具选择与 JSON 格式的学习负担。新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」——下表 5 个候选里，T1/T2 是关键路径，T3 是主要增量，T4/T5 可选。
 
@@ -623,7 +627,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 | 优先级 | 工具 | 设计要点 | 为什么仍是 RLVR 友好 |
 |--------|------|----------|----------------------|
 | **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数照常由 `task_spec.steps` 派生；`MockArxivEnv` 按查询串哈希离线回放，未收录的 query 走**确定性降级**（返回固定子集并在 observation 里显式标注），保证可复现、也防止模型把空结果当检索成功 |
-| **T2** | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
+| **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
 | **T3** | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**调本地摘要模型（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
 | **T4**（可选） | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 文件存在 + 数量 ≥ 1」 |
 | **T5**（可选，多模态） | `analyze_figure(ref, figure_no, question=None)` | 图表分析：env 侧调本地 VLM（如 Qwen2.5-VL）读图回答 | 规则只判「调没调对、参数对不对」；VLM 回答质量不进奖励，避免把第三方模型的噪声写进策略梯度 |
@@ -659,10 +663,10 @@ T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读
 
 ### P0 — 工具集扩展（解读闭环）
 
-T1 已实现；其余工具设计已定稿（见「🧰 工具集演进设计」）：
+T1/T2 已实现；其余工具设计已定稿（见「🧰 工具集演进设计」）：
 
 - [x] **T1 关键词检索** `search_arxiv_papers`：补全「找一篇具体论文」的查找型检索
-- [ ] **T2 论文阅读** `get_paper_content`：PDF → 文本，全部解读类任务的前置件（关键路径）
+- [x] **T2 论文阅读** `get_paper_content`：确定性 PDF → 文本与离线快照回放，全部解读类任务的前置件（关键路径）
 - [ ] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策
 - [ ] **T4/T5 图表抽取与分析**（可选，多模态环境）：排在 T1–T3 之后；VLM 只在 env 侧
 
