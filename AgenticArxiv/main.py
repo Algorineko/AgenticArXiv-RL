@@ -5,10 +5,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 导入工具模块，确保工具被注册
-import tools.arxiv_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
-import tools.cache_status_tool  # noqa: F401
+from tools.bootstrap import register_all_tools
+
+register_all_tools()
 
 from utils.llm_client import get_env_llm_client
 from agents.agent_engine import ReActAgent

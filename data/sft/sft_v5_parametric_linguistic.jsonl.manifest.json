@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "kind": "parametric_v1_linguistic",
+  "input": "data/sft/sft_v5_parametric_seed.jsonl",
+  "input_sha256": "8668f2a0ff74efa047f4961bedc9113c2aa740d766c9be4625ec8a881617f65a",
+  "input_manifest": "data/sft/sft_v5_parametric_seed.jsonl.manifest.json",
+  "input_manifest_sha256": "9a67b0b83ad6970e393acb1a1c4728203cd3e9e2b618660375263a7eb54e8ba1",
+  "split_file": "data/splits/v3_77.json",
+  "split_sha256": "48bd91063c0b935e9c1f9eacab92be4f1a98f044e4ac42db826d867c47d366b9",
+  "output": "data/sft/sft_v5_parametric_linguistic.jsonl",
+  "output_sha256": "66079e9015780f8e1a76837999df8f9a37b77d5a284e587affb22d84d0dfc793",
+  "seed_rows": 219,
+  "output_rows": 2628,
+  "derived_tasks": 80,
+  "parent_train_tasks": 29,
+  "task_variants": 6,
+  "thought_variants": 2,
+  "unique_sample_fingerprints": 2628,
+  "heldout_parent_overlap": 0,
+  "note": "1908 rows are 12 linguistic views of 159 decisions from 65 derived tasks."
+}

@@ -23,6 +23,7 @@ from benchmark.tasks_expanded import EXPANDED_TASKS
 SPLIT_DIR = Path(__file__).resolve().parents[2] / "data" / "splits"
 PINNED_PATH = SPLIT_DIR / "v1.json"
 PINNED_V2_PATH = SPLIT_DIR / "v2_62.json"
+PINNED_V3_PATH = SPLIT_DIR / "v3_81.json"
 GRPO_V5_PATH = SPLIT_DIR / "v5_grpo_train.json"
 
 PILOT_DEV_IDS = {
@@ -224,20 +225,25 @@ class PinnedV1SplitTest(unittest.TestCase):
 
 
 class PinnedV2SplitTest(unittest.TestCase):
-    """v2 覆盖当前 62 条，并把已经人工分析过的 pilot 与最终测试隔离。"""
+    """v2 是 62 条任务的历史切分，并把已经人工分析过的 pilot 与最终测试隔离。
+
+    与 v1 一样：扩任务只能新增切分版本，不能改写历史版本 —— 否则引用 v2 的
+    实验（artifacts/qwen25_15b_base_v2_62 等）成功率全部作废。
+    """
 
     @classmethod
     def setUpClass(cls):
         cls.pinned = json.loads(PINNED_V2_PATH.read_text(encoding="utf-8"))
         cls.split = cls.pinned["split"]
-        cls.ids = {t["id"] for t in EXPANDED_TASKS}
+        cls.ids = {tid for ids in cls.split.values() for tid in ids}
+        cls.current_ids = {t["id"] for t in EXPANDED_TASKS}
         cls.by_id = {t["id"]: t for t in EXPANDED_TASKS}
 
-    def test_covers_all_62_tasks_exactly_once(self):
+    def test_historical_62_tasks_are_unique_and_still_exist(self):
         assigned = [tid for ids in self.split.values() for tid in ids]
         self.assertEqual(len(assigned), 62)
         self.assertEqual(len(assigned), len(set(assigned)), "有任务被切到多份里")
-        self.assertEqual(set(assigned), self.ids)
+        self.assertTrue(self.ids <= self.current_ids)
 
     def test_pilot_tasks_are_exactly_the_dev_split(self):
         self.assertEqual(set(self.split["dev"]), PILOT_DEV_IDS)
@@ -288,6 +294,79 @@ class PinnedV2SplitTest(unittest.TestCase):
             set(load_split(f"{PINNED_V2_PATH}:dev")),
             PILOT_DEV_IDS,
         )
+
+
+class PinnedV3SplitTest(unittest.TestCase):
+    """v3 覆盖加入 T2/T3 解读族之后的全部任务。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pinned = json.loads(PINNED_V3_PATH.read_text(encoding="utf-8"))
+        cls.split = cls.pinned["split"]
+        cls.by_id = {t["id"]: t for t in EXPANDED_TASKS}
+        cls.ids = set(cls.by_id)
+
+    def test_covers_every_current_task_exactly_once(self):
+        assigned = [tid for ids in self.split.values() for tid in ids]
+        self.assertEqual(len(assigned), len(set(assigned)), "有任务被切到多份里")
+        self.assertEqual(set(assigned), self.ids)
+
+    def test_task_count_matches_the_declaration(self):
+        self.assertEqual(self.pinned["task_count"], len(self.ids))
+
+    def test_v2_assignments_are_preserved(self):
+        """v3 只在 v2 基础上追加，不能把老任务挪到别的组里。"""
+        v2 = json.loads(PINNED_V2_PATH.read_text(encoding="utf-8"))
+        for group, ids in v2["split"].items():
+            with self.subTest(group=group):
+                self.assertEqual(self.split[group][:0], [])
+                self.assertTrue(set(ids) <= set(self.split[group]))
+
+    def test_pilot_tasks_are_exactly_the_dev_split(self):
+        self.assertEqual(set(self.split["dev"]), PILOT_DEV_IDS)
+
+    def test_iid_templates_are_seen_in_training(self):
+        train_keys = {template_key(self.by_id[tid]) for tid in self.split["train"]}
+        for tid in self.split["iid_test"]:
+            with self.subTest(task=tid):
+                self.assertIn(template_key(self.by_id[tid]), train_keys)
+
+    def test_ood_templates_are_wholly_held_out(self):
+        held_out_keys = {tuple(key) for key in self.pinned["ood_keys"]}
+        self.assertEqual(
+            {template_key(self.by_id[tid]) for tid in self.split["ood_test"]},
+            held_out_keys,
+        )
+        non_ood = self.split["train"] + self.split["dev"] + self.split["iid_test"]
+        self.assertFalse(
+            {template_key(self.by_id[tid]) for tid in non_ood} & held_out_keys
+        )
+
+    def test_reading_and_summary_families_are_trainable(self):
+        """新增的解读族必须有训练实例，否则 P0 的能力永远学不到。"""
+        for family_name in ("paper_reading", "paper_summary"):
+            with self.subTest(family=family_name):
+                trained = [
+                    tid for tid in self.split["train"]
+                    if self.by_id[tid]["category"] == family_name
+                ]
+                self.assertGreaterEqual(len(trained), 3)
+
+    def test_rates_stay_inside_the_pinned_ids(self):
+        self.assertTrue(set(self.pinned["rates"]) <= self.ids)
+
+    def test_unmeasured_tasks_are_excluded_from_rl_train(self):
+        """没有实测成功率的任务分不了档，不能进 RL 训练集。"""
+        rates = self.pinned["rates"]
+        rl_train = set(load_split(f"{PINNED_V3_PATH}:rl_train"))
+        self.assertTrue(rl_train <= set(rates))
+        self.assertTrue(rl_train <= set(self.split["train"]))
+        unmeasured = set(self.split["train"]) - set(rates)
+        self.assertTrue(
+            unmeasured,
+            "v3 应当记录新增族尚未测率；测完删掉这条断言并回填 rates",
+        )
+        self.assertFalse(rl_train & unmeasured)
 
 
 class LoadSplitTest(unittest.TestCase):

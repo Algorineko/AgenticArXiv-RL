@@ -43,7 +43,15 @@ _RECENT_SEARCH_TOOL = "get_recently_submitted_cs_papers"
 _KEYWORD_SEARCH_TOOL = "search_arxiv_papers"
 _SEARCH_TOOLS = {_RECENT_SEARCH_TOOL, _KEYWORD_SEARCH_TOOL}
 _PAPER_CONTENT_TOOL = "get_paper_content"
-DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS) | {_PAPER_CONTENT_TOOL}
+_PAPER_SUMMARY_TOOL = "summarize_paper"
+_PAPER_FIGURES_TOOL = "extract_paper_figures"
+_FIGURE_ANALYSIS_TOOL = "analyze_figure"
+DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS) | {
+    _PAPER_CONTENT_TOOL,
+    _PAPER_SUMMARY_TOOL,
+    _PAPER_FIGURES_TOOL,
+    _FIGURE_ANALYSIS_TOOL,
+}
 
 
 class MockArxivEnv:
@@ -132,6 +140,12 @@ class MockArxivEnv:
             key = self._keyword_search_key(args)
         elif tool_name == _PAPER_CONTENT_TOOL:
             key = self._paper_content_key(args, resolved_paper_id=resolved_paper_id)
+        elif tool_name == _PAPER_SUMMARY_TOOL:
+            key = self._paper_summary_key(args, resolved_paper_id=resolved_paper_id)
+        elif tool_name == _PAPER_FIGURES_TOOL:
+            key = self._paper_figures_key(args, resolved_paper_id=resolved_paper_id)
+        elif tool_name == _FIGURE_ANALYSIS_TOOL:
+            key = self._figure_analysis_key(args, resolved_paper_id=resolved_paper_id)
         tool_data = self.snapshot.get(tool_name, {})
 
         # record 模式必须每次都真打，否则派生逻辑会"帮倒忙"：
@@ -502,6 +516,90 @@ class MockArxivEnv:
         return json.dumps(
             {"paper_id": paper_id, "section": section},
             sort_keys=True, ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _paper_summary_key(
+        args: Dict[str, Any], resolved_paper_id: Optional[str] = None
+    ) -> str:
+        """Key summaries by (paper, style, bucketed budget).
+
+        ``style`` and ``max_words`` are normalised here rather than in the tool
+        so that an invalid argument is rejected deterministically *before* the
+        snapshot lookup.  Otherwise replay mode would report a missing-snapshot
+        KeyError for what is really a malformed action, and the two failure
+        modes would be indistinguishable in the reward.
+        """
+        from tools.paper_summary_tool import bucket_max_words, normalize_style
+
+        session_id = str((args or {}).get("session_id") or "default")
+        ref = (args or {}).get("ref", 1)
+        if resolved_paper_id:
+            paper_id = str(resolved_paper_id)
+        else:
+            paper = store.resolve_paper(session_id, ref)
+            if paper is None:
+                raise ValueError("Paper not found; search for the paper and check the ref.")
+            paper_id = paper.id
+
+        return json.dumps(
+            {
+                "paper_id": paper_id,
+                "style": normalize_style((args or {}).get("style")),
+                "max_words": bucket_max_words((args or {}).get("max_words")),
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _paper_figures_key(
+        args: Dict[str, Any], resolved_paper_id: Optional[str] = None
+    ) -> str:
+        """Key figure extraction by resolved paper id (no other arguments)."""
+        session_id = str((args or {}).get("session_id") or "default")
+        ref = (args or {}).get("ref", 1)
+        if resolved_paper_id:
+            paper_id = str(resolved_paper_id)
+        else:
+            paper = store.resolve_paper(session_id, ref)
+            if paper is None:
+                raise ValueError("Paper not found; search for the paper and check the ref.")
+            paper_id = paper.id
+        return json.dumps({"paper_id": paper_id}, sort_keys=True, ensure_ascii=False)
+
+    @staticmethod
+    def _figure_analysis_key(
+        args: Dict[str, Any], resolved_paper_id: Optional[str] = None
+    ) -> str:
+        """Key figure analyses by (paper, figure_no, question).
+
+        ``figure_no`` and ``question`` are validated here rather than in the
+        tool so a malformed action fails deterministically *before* the
+        snapshot lookup — otherwise replay would report a missing-snapshot
+        KeyError for what is really a bad argument, and the reward could not
+        tell the two apart.
+        """
+        from tools.figure_analysis_tool import normalize_question, validate_figure_no
+
+        session_id = str((args or {}).get("session_id") or "default")
+        ref = (args or {}).get("ref", 1)
+        if resolved_paper_id:
+            paper_id = str(resolved_paper_id)
+        else:
+            paper = store.resolve_paper(session_id, ref)
+            if paper is None:
+                raise ValueError("Paper not found; search for the paper and check the ref.")
+            paper_id = paper.id
+
+        return json.dumps(
+            {
+                "paper_id": paper_id,
+                "figure_no": validate_figure_no((args or {}).get("figure_no", 1)),
+                "question": normalize_question((args or {}).get("question")),
+            },
+            sort_keys=True,
+            ensure_ascii=False,
         )
 
     def _add_to_snapshot(

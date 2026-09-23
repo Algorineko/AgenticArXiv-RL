@@ -1,5 +1,5 @@
 {
-  "model": "[LOCAL_PATH_WITHHELD]",
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
   "sample_count": 12,
   "error_count": 0,
   "summary_by_agent": {

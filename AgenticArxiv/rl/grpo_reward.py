@@ -53,6 +53,10 @@ SUPPORTED_TOOL_NAMES = {
     "download_arxiv_pdf",
     "translate_arxiv_pdf",
     "get_paper_cache_status",
+    "get_paper_content",
+    "summarize_paper",
+    "extract_paper_figures",
+    "analyze_figure",
 }
 
 

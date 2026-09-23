@@ -14,6 +14,9 @@ from augment_sft_data import canonical_hash  # noqa: E402
 from build_sft_train_mix import build_mix  # noqa: E402
 
 
+SPLIT_NAME = "v2_62.json"
+
+
 def prompt(task: str) -> str:
     return (
         "tools\n当前任务：" + task
@@ -28,7 +31,7 @@ def row(task_id: str, parent: str, task: str, trajectory_step: int):
     ]
     return {
         "source_task_id": task_id,
-        "source_split": "v2_62.json:train:parametric_v1",
+        "source_split": f"{SPLIT_NAME}:train:parametric_v1",
         "trajectory_step": trajectory_step,
         "derived_task_id": task_id,
         "parent_task_id": parent,
@@ -72,21 +75,41 @@ class ParametricRowValidationTest(unittest.TestCase):
 
     def test_valid_rows_pass(self):
         self.assertEqual(
-            len(validate_parametric_rows(self.rows, self.payload, self.manifest)), 2
+            len(validate_parametric_rows(
+                self.rows, self.payload, self.manifest,
+                split_name=SPLIT_NAME,
+            )),
+            2,
         )
 
     def test_changed_messages_without_new_hash_are_rejected(self):
         bad = deepcopy(self.rows)
         bad[0]["messages"][1]["content"] += " corrupted"
         with self.assertRaisesRegex(ValueError, "sample_sha256"):
-            validate_parametric_rows(bad, self.payload, self.manifest)
+            validate_parametric_rows(
+                bad, self.payload, self.manifest, split_name=SPLIT_NAME,
+            )
 
     def test_heldout_parent_is_rejected(self):
         payload = deepcopy(self.payload)
         payload["split"]["train"] = []
         payload["split"]["iid_test"] = [self.parent]
         with self.assertRaisesRegex(ValueError, "纯 train"):
-            validate_parametric_rows(self.rows, payload, self.manifest)
+            validate_parametric_rows(
+                self.rows, payload, self.manifest, split_name=SPLIT_NAME,
+            )
+
+    def test_source_split_must_match_the_split_actually_used(self):
+        """种子记录的是生成它的那份切分，校验必须按它比对而不是按版本号猜。
+
+        早先这里由 version 拼出 `*_62.json`，于是任何更新的切分（比如 v3_73）
+        都会被判成不匹配，参数化流水线根本无法往前走。
+        """
+        with self.assertRaisesRegex(ValueError, "source_split"):
+            validate_parametric_rows(
+                self.rows, self.payload, self.manifest,
+                split_name="v3_73.json",
+            )
 
 
 class MixTest(unittest.TestCase):

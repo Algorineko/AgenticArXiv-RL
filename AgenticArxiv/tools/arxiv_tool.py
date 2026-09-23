@@ -1,7 +1,9 @@
 # AgenticArxiv/tools/arxiv_tool.py
 import arxiv  # type: ignore
 from datetime import datetime, timezone, timedelta
+from contextlib import contextmanager
 from typing import List, Dict, Optional
+import socket
 import sys
 import os
 import re
@@ -60,6 +62,30 @@ def _default_output_path() -> str:
     # 项目根目录 = tools/ 的上一级
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(project_root, "output", "recent_cs_papers.txt")
+
+
+#: `arxiv.Client` builds its own ``requests.Session`` and never passes a
+#: timeout, so a stalled export.arxiv.org blocks the caller forever.  That
+#: matters most in ``rl.build_snapshot``, which is the single networked step of
+#: the whole pipeline: without a bound it can hang instead of failing.
+ARXIV_NETWORK_TIMEOUT_S = float(os.getenv("ARXIV_NETWORK_TIMEOUT", "45"))
+
+
+@contextmanager
+def _network_timeout(seconds: Optional[float] = None):
+    """Bound every socket the arXiv client opens for the duration of a call.
+
+    urllib3 falls back to the process-wide socket default when the caller gives
+    no timeout, so scoping that default is enough to reach inside the library
+    without depending on its private attributes.  The previous value is always
+    restored, so this stays safe to nest and to call from a long-lived process.
+    """
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(ARXIV_NETWORK_TIMEOUT_S if seconds is None else seconds)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(previous)
 
 
 def _paper_info(result) -> Dict:
@@ -130,8 +156,9 @@ def get_recently_submitted_cs_papers(
     )
 
     papers: List[Dict] = []
-    for result in client.results(search):
-        papers.append(_paper_info(result))
+    with _network_timeout():
+        for result in client.results(search):
+            papers.append(_paper_info(result))
 
     if save_to_file:
         path = output_path or _default_output_path()
@@ -168,7 +195,8 @@ def search_arxiv_papers(
         sort_by=arxiv.SortCriterion.Relevance,
         sort_order=arxiv.SortOrder.Descending,
     )
-    return [_paper_info(result) for result in client.results(search)]
+    with _network_timeout():
+        return [_paper_info(result) for result in client.results(search)]
 
 
 ARXIV_TOOL_SCHEMA = {

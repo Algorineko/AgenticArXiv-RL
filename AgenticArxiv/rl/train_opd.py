@@ -57,10 +57,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # 恰好先被 import，否则 test_opd 单独运行和整套测试的结果会依赖发现顺序。
 from rl import trl_compat  # noqa: F401
 
-import tools.arxiv_tool  # noqa: F401  触发工具注册（canary / 阶段验证打分要用）
-import tools.cache_status_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
+from tools.bootstrap import require_all_tools
 
 from benchmark.tasks import get_all_tasks
 from benchmark.tasks_expanded import get_expanded_tasks
@@ -227,6 +224,7 @@ def _model_context_limit(model) -> Optional[int]:
 
 
 def main(
+
     model: str = "outputs/sft/final",
     teacher: str = DEFAULT_TEACHER,
     output_dir: str = "outputs/opd",
@@ -251,6 +249,8 @@ def main(
     run_name: str = None,
 ):
     # 先校验日志后端再加载模型：参数写错时应立刻失败，而不是等模型加载完
+    require_all_tools("OPD 训练")
+
     backends = resolve_report_to(report_to)
     logging_dir = str(REPO_ROOT / output_dir / "logs")
 

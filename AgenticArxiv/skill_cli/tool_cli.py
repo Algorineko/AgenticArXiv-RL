@@ -93,6 +93,61 @@ class ArxivToolCLI:
         result = get_paper_cache_status(session_id=session_id, ref=ref, paper_id=paper_id)
         _json_out(result)
 
+    # ---- 以下四个子命令与 registry 里的工具名一一对应。缺了它们，
+    # ---- SkillAgent 的 _parse_cli_command 就认不出这些动作：
+    # ---- 模型即使写出语法正确的命令，也会被判成「未找到有效子命令」。
+
+    def search_keyword(self, session_id: str = "default", query: str = "",
+                       max_results: int = 10, days: int = None):
+        """按关键词检索论文
+
+        Args:
+            query: 关键词，可带 all: / ti: / au: 前缀
+            max_results: 最大返回结果数
+            days: 可选的时间窗（天）
+        """
+        from tools.arxiv_tool import search_arxiv_papers
+        _json_out(
+            search_arxiv_papers(query=query, max_results=max_results, days=days)
+        )
+
+    def read_paper(self, session_id: str = "default", ref=None, section: str = None):
+        """读取已下载论文的摘要或指定章节
+
+        Args:
+            ref: 论文引用 (序号/ID/标题), null 表示最近操作的论文
+            section: abstract / method / result / conclusion，缺省为标题+摘要
+        """
+        from tools.paper_content_tool import get_paper_content
+        _json_out(
+            get_paper_content(session_id=session_id, ref=ref, section=section)
+        )
+
+    def summarize_paper(self, session_id: str = "default", ref=None,
+                        style: str = None, max_words: int = None):
+        """总结已下载的论文
+
+        Args:
+            ref: 论文引用 (序号/ID/标题), null 表示最近操作的论文
+            style: tldr / structured / bullet
+            max_words: 词数预算，会被向上取整到最近的档位
+        """
+        from tools.paper_summary_tool import summarize_paper
+        _json_out(
+            summarize_paper(
+                session_id=session_id, ref=ref, style=style, max_words=max_words
+            )
+        )
+
+    def extract_figures(self, session_id: str = "default", ref=None):
+        """抽取已下载论文的图表
+
+        Args:
+            ref: 论文引用 (序号/ID/标题), null 表示最近操作的论文
+        """
+        from tools.paper_figures_tool import extract_paper_figures
+        _json_out(extract_paper_figures(session_id=session_id, ref=ref))
+
 
 if __name__ == "__main__":
     fire.Fire(ArxivToolCLI)

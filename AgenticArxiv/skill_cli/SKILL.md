@@ -82,6 +82,67 @@ python skill_cli/tool_cli.py cache_status --ref=1
 | `--ref` | int/string/None | None | 论文引用 |
 | `--paper_id` | string | None | 直接指定 paper_id |
 
+### 5. 关键词检索 (search_keyword)
+
+按关键词、篇名或作者精确查找论文。
+
+```bash
+python skill_cli/tool_cli.py search_keyword --query="all:agentic reinforcement learning" --max_results=5 --days=30
+```
+
+**参数说明**:
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--query` | string | "" | 关键词；支持 `all:` / `ti:` / `au:` 前缀 |
+| `--max_results` | int | 10 | 最大返回结果数 |
+| `--days` | int | None | 可选的时间窗（天） |
+
+### 6. 阅读论文 (read_paper)
+
+读取已下载论文的摘要或指定章节（需要先 download_pdf）。
+
+```bash
+python skill_cli/tool_cli.py read_paper --ref=1 --section=method
+```
+
+**参数说明**:
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--ref` | int/string/None | None | 论文引用 |
+| `--section` | string | None | abstract / method / result / conclusion；缺省返回标题+摘要 |
+
+### 7. 总结论文 (summarize_paper)
+
+对已下载论文做环境侧摘要（需要先 download_pdf）。
+
+```bash
+python skill_cli/tool_cli.py summarize_paper --ref=1 --style=tldr --max_words=60
+```
+
+**参数说明**:
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--ref` | int/string/None | None | 论文引用 |
+| `--style` | string | tldr | tldr / structured / bullet |
+| `--max_words` | int | 120 | 词数预算，向上取整到最近的档位（60/120/250） |
+
+### 8. 抽取图表 (extract_figures)
+
+抽出已下载论文的内嵌图表文件与 caption（需要先 download_pdf）。
+
+```bash
+python skill_cli/tool_cli.py extract_figures --ref=1
+```
+
+**参数说明**:
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--ref` | int/string/None | None | 论文引用 |
+
 ## 输出格式
 
 所有命令输出 JSON 到 stdout。

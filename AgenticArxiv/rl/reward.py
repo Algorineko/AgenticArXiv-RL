@@ -7,6 +7,7 @@ It adapts LLM-TIR's format/correctness/process curriculum to ReAct trajectories.
 
 import json
 import math
+import re
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -20,6 +21,17 @@ from benchmark.metrics import (
 
 
 TERMINAL_ACTIONS = {"FINISH", "FORCE_STOP", "ERROR"}
+
+# Observations reach the scorer as a truncated ``repr``/``json`` string rather
+# than a parsed payload, and the two call sites disagree on quoting.  Matching
+# both spellings keeps the check working without re-parsing a half-truncated
+# document.
+_EMPTY_FIGURE_COUNT_RE = re.compile(r"['\"]count['\"]\s*:\s*0(?![\d.])")
+
+
+def _reports_zero_figures(observation: str) -> bool:
+    """True when an ``extract_paper_figures`` payload says it found nothing."""
+    return bool(_EMPTY_FIGURE_COUNT_RE.search(observation))
 
 
 @dataclass(frozen=True)
@@ -362,6 +374,27 @@ class RewardCalculator:
                 good = any(
                     marker in observation
                     for marker in ("READY", "成功", "已创建", "status", "pdf_ready")
+                )
+            elif tool_name in {"get_paper_content", "summarize_paper", "analyze_figure"}:
+                # The reading tools answer with the resolved paper and the
+                # extracted text.  Grounding is the point: a payload that names
+                # a paper but carries no text is not useful work, even though
+                # the call itself did not raise.
+                good = "paper_id" in observation and any(
+                    marker in observation
+                    for marker in (
+                        "'summary'", '"summary"',
+                        "'content'", '"content"',
+                        "'answer'", '"answer"',
+                    )
+                )
+            elif tool_name == "extract_paper_figures":
+                # "The call succeeded" is not the claim being graded here: a
+                # paper may genuinely have no embedded raster figures, and the
+                # tool reports that as an empty list rather than an error.
+                # Producing at least one figure file is the useful outcome.
+                good = "paper_id" in observation and not _reports_zero_figures(
+                    observation
                 )
             else:
                 good = True

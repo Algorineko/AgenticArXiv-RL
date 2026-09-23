@@ -23,13 +23,20 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-# 导入工具模块（触发注册）
-import tools.arxiv_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
-import tools.cache_status_tool  # noqa: F401
+# 导入工具模块（触发注册）。走 tools/bootstrap.py 的注册表而不是逐个 import：
+# 这里原先只列了 4 个模块，`search_arxiv_papers` 和后来加的解读类工具全都缺席，
+# 而 MCP Agent 是通过 session.list_tools() 发现工具的 —— 模型看不到，就永远
+# 调不出来，跑分时却看不出任何异常（只是那些任务必然失败）。
+from tools.bootstrap import missing_tools, register_all_tools
+
+_registration_failures = register_all_tools()
 
 from tools.tool_registry import registry
+
+if _registration_failures:  # pragma: no cover - 依赖缺失时的诊断输出
+    print(f"[mcp] 工具模块导入失败: {_registration_failures}", file=sys.stderr)
+if missing_tools():  # pragma: no cover
+    print(f"[mcp] registry 缺少工具: {missing_tools()}", file=sys.stderr)
 
 server = Server("arxiv-tools-mcp")
 

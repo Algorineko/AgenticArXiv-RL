@@ -96,11 +96,11 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | Dimensión | Definición |
 |------|------|
 | **State** | Descripción de la tarea + historial de diálogo + resultados de herramientas |
-| **Action** | 6 herramientas (navegación/búsqueda por palabras clave/descarga/traducción/consulta de caché/lectura de papers) + FINISH |
+| **Action** | 8 herramientas (navegación/búsqueda por palabras clave/descarga/traducción/consulta de caché/lectura de papers/resumen de papers/extracción de figuras) + FINISH |
 | **Reward** | Recompensa verificable multigranular de cinco componentes (format / tool / argument / process / outcome, ver más abajo) |
 | **Transition** | `execute_tool(action) → observation` (`MockArxivEnv` con replay de snapshot offline, determinista y reproducible) |
 
-### Espacio de Acciones (6 herramientas)
+### Espacio de Acciones (8 herramientas)
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — Buscar papers en arXiv
 2. `download_arxiv_pdf(ref, session_id)` — Descargar PDF
@@ -108,12 +108,14 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 4. `get_paper_cache_status(ref, session_id)` — Consultar estado de la caché
 5. `search_arxiv_papers(query, max_results, days=None)` — Buscar por palabra clave, título o autor
 6. `get_paper_content(ref, session_id, section=None)` — Leer el resumen o una sección concreta de un paper descargado
+7. `summarize_paper(ref, style, max_words)` — Resumen del lado del entorno sobre un paper descargado (tldr / structured / bullet)
+8. `extract_paper_figures(ref)` — Extraer los archivos de figuras y sus captions de un paper descargado
 
-> La búsqueda por palabras clave y la lectura de papers ya están disponibles. El resumen y el análisis de figuras tienen un diseño cerrado, pero aún no están implementados; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
+> El bucle de interpretación «buscar → descargar → leer → resumir → extraer figuras» ya está conectado. El **análisis** de figuras (T5, requiere un VLM del lado del entorno) sigue siendo una propuesta de diseño; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
 
 ### Componentes de Verifiable Reward
 
-**Recompensa verificable multigranular de cinco componentes** (`rl/reward.py`, inspirada en la recompensa jerárquica de LLM-TIR). Cada componente se normaliza a `[-1, 1]` y se combina como suma ponderada dividida por la suma de pesos:
+**Recompensa verificable multigranular** (`rl/reward.py`, inspirada en la recompensa jerárquica de LLM-TIR). Los cinco componentes principales se normalizan a `[-1, 1]` y conservan los pesos del currículo; además se registran dos componentes de diagnóstico, calidad del resultado y eficiencia, y los fallos graves reciben un techo de recompensa no compensable:
 
 | Componente | Peso por defecto | Señal |
 |------|:---:|------|
@@ -123,9 +125,18 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | `process` (proceso) | 1 | Crédito por pasos válidos menos penalizaciones por fallos de parseo/ejecución y llamadas innecesarias |
 | `outcome` (resultado) | 3 | Completado correcto +1, completado con ruta de herramientas errónea +0.25, detención forzosa −0.5, error −1 |
 
+| `result_quality` (calidad del resultado) | diagnóstico / gate | Comprueba que la observation de la herramienta represente de verdad un resultado exitoso; los resultados vacíos, los fallbacks y los errores de ejecución disparan una puerta negativa |
+| `efficiency` (eficiencia) | diagnóstico / gate | Normaliza llamadas redundantes y reintentos fallidos contra los pasos estándar de la tarea; una redundancia grave dispara un techo de recompensa |
+
 **Aprendizaje curricular**: durante los primeros 30 pasos de entrenamiento los pesos de `tool` / `argument` / `outcome` se multiplican por 1/3 (primero el protocolo ReAct, después la semántica); desde el paso 30 todos los pesos están activos (`RewardCalculator.schedule`).
 
+**Fallos no compensables**: los fallos de parseo, los fallos de ejecución de herramientas y los resultados desconocidos obtienen como mucho una recompensa negativa; un FINISH falso no puede compensarse con puntos de formato. El `FINISH` que el GRPO de un solo paso añade automáticamente para construir la trayectoria completa se marca como `forced_finish` y no recibe la bonificación terminal completa.
+
 **Clave**: Todas las recompensas son **verificables** (basadas en reglas), sin necesidad de anotación humana → corresponde al marco RLVR (Reinforcement Learning with Verifiable Reward). Cada trayectoria guarda un desglose `reward_components` para auditar y detectar reward hacking.
+
+### Aislamiento de Rollout
+
+`RolloutSandbox`, en `rl/sandbox.py`, registra antes de empezar una trayectoria el estado base del entorno, del Store en memoria y de los directorios de artefactos indicados, y restaura ese estado eliminando los archivos nuevos antes de la siguiente trayectoria. El GRPO multiturno, el rollout normal y el benchmark offline usan el mismo contrato de reset, de modo que los resultados de búsqueda, la caché de descargas, el estado de traducción y los contadores no se encadenan entre trayectorias.
 
 ---
 
@@ -145,6 +156,10 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
    python -m AgenticArxiv.rl.train_sft
    ```
 3. Salida: Modelo en `./outputs/sft/final`
+
+> **Pesos publicados** (SFT a parámetros completos sobre Qwen2.5-1.5B, 2 épocas con 2628 trayectorias expertas parametrizadas, loss 0.079):
+> [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT)
+> Ten en cuenta que este checkpoint cubre solo las 8 primeras herramientas: `analyze_figure` (T5) se añadió después y el generador de datos SFT parametrizados aún no tiene regla de derivación para ella.
 
 **Formato de datos** (`data/sft/sft_train.jsonl`):
 ```json
@@ -168,6 +183,24 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
    ```bash
    python scripts/generate_dpo_data.py
    ```
+
+Este comando carga directamente el modelo local de Hugging Face en `outputs/sft/final`
+y muestrea varias veces, así que no necesita `LLM_API_KEY`. Parámetros opcionales
+habituales:
+
+```bash
+python scripts/generate_dpo_data.py \
+  --model outputs/sft/final \
+  --num_rollouts_per_task 8 \
+  --temperature 0.8 \
+  --seed 42
+```
+
+Si ya existe `data/mock_arxiv_snapshot.json`, las llamadas a herramientas usan
+automáticamente el replay offline, lo que hace reproducible la generación de datos;
+en caso contrario se recurre a la red en vivo. Solo forman un par de preferencia las
+trayectorias cuya diferencia de recompensa supera `--min_reward_gap` (0.05 por defecto)
+y cuya primera acción de herramienta es distinta.
 2. Entrenar:
    ```bash
    python -m AgenticArxiv.rl.train_dpo
@@ -210,7 +243,17 @@ python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 # Registrar curvas de entrenamiento (el mismo parámetro en todas las fases)
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
+
+# Opciones de la familia DAPO (los valores por defecto no cambian nada, así que los experimentos históricos siguen comparables)
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --epsilon_high 0.2   # solo clip-higher
+
+# Multi-GPU (DDP; lanzar accelerate con el intérprete que tiene las dependencias de entrenamiento)
+accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
+  -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
 ```
+
+**Multi-GPU**: `configs/accelerate/` incluye una configuración DDP y otra FSDP. Los scripts de entrenamiento detectan el `LOCAL_RANK` que exporta `accelerate launch` y entonces dejan de anclar una sola GPU (anclarla ocultaría los dispositivos de los demás ranks); en ejecución mono-proceso siguen anclando, lo que evita que el Trainer caiga a `DataParallel` y provoque un segfault. El `device_map={"": 0}` de QLoRA es incompatible con el arranque multiproceso, así que esa combinación falla de forma explícita en lugar de entrenar en silencio con una sola tarjeta. FSDP necesita `torch>=2.6`.
 
 **Curvas de entrenamiento** (`rl/observability.py`): `--report_to` acepta `none` / `auto` / `tensorboard` / `wandb` (separados por comas), compartido por las cinco fases (SFT / DPO / GRPO / OPD / PPO). Además de las métricas que ya trae TRL, se registran:
 
@@ -262,6 +305,21 @@ OPD también puede usarse como truco: warm start antes de RL, regularización te
 
 **Comparación offline**: ejecuta SFT, `--max_turns 1`, `--max_turns > 1` y GRPO con el mismo snapshot y task set, y compara los resultados comunes de `StageVerifier` en `final/verification_report.json` de cada directorio de salida. Esas recompensas solo se usan para evaluación y nunca entran en la pérdida OPD.
 
+### Fase 4: PPO (Optimización de Política Proximal) — ⚠️ no disponible con las dependencias actuales
+
+**Objetivo**: Ajustar en línea la política y la red de valor con una arquitectura Actor-Critic estándar.
+
+**Estado**: TRL deprecó y después **eliminó** el trainer PPO clásico — `PPOTrainer` / `PPOConfig` / `AutoModelForCausalLMWithValueHead` no existen en el `trl>=0.28.0` que permite `requirements.txt`, así que `train_ppo.py` ni siquiera se puede importar. Ahora lo dice explícitamente al importarse, en lugar de lanzar un ImportError sin causa visible.
+
+Hacer que PPO funcione implica reescribir el script contra la API `trl.experimental.ppo` (campos de configuración y formato de dataset distintos) o fijar trl por debajo de 0.9. En este proyecto PPO es una comparación didáctica: con recompensa verificable la vía es GRPO, y con un buen profesor, OPD — ambas consumen menos VRAM que PPO.
+
+```bash
+# sale de inmediato con la explicación anterior
+python -m AgenticArxiv.rl.train_ppo --model outputs/grpo/final
+```
+
+**Salida** (tras reescribirlo): Modelo en `./outputs/ppo/final`
+
 ---
 
 ## 📂 Estructura de Directorios
@@ -281,11 +339,13 @@ AgenticArXiv-RL/
 │  │  ├─ pdf_download_tool.py      # Descarga de PDF
 │  │  ├─ pdf_translate_tool.py     # Traducción de PDF
 │  │  ├─ cache_status_tool.py      # Consulta de caché
-│  │  └─ paper_content_tool.py     # Lectura determinista del contenido
+│  │  ├─ paper_content_tool.py     # Lectura determinista del contenido (T2)
+│  │  ├─ paper_summary_tool.py     # Resumen de papers del lado del entorno (T3)
+│  │  └─ paper_figures_tool.py     # Extracción determinista de figuras (T4)
 │  ├─ benchmark/                     # ⭐ Fuente de Verifiable Reward
 │  │  ├─ metrics.py               # TaskMetrics, coincidencia estricta de herramientas y parámetros
 │  │  ├─ tasks.py                 # BENCHMARK_TASKS (8 tareas de humo)
-│  │  ├─ tasks_expanded.py        # Conjunto de tareas ampliado (59 tareas, 8 familias de plantillas)
+│  │  ├─ tasks_expanded.py        # Conjunto de tareas ampliado (77 tareas, 12 familias de plantillas)
 │  │  ├─ task_spec.py             # TaskSpec: expected_tools / expected_tool_args derivados de steps
 │  │  ├─ badcases.py              # Veredictos y replay de casos malos
 │  │  ├─ splits.py                # Partición train/iid/ood a nivel de plantilla
@@ -314,10 +374,14 @@ AgenticArXiv-RL/
 │  ├─ services/                      # Servicios de efectos secundarios (event_bus / log / runtime)
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # Capas de compatibilidad Web / MCP / Skill archivadas
 │  ├─ utils/                         # llm_client, logger, utilidades PDF
-│  ├─ tests/                         # 30 tests unitarios (unittest)
+│  ├─ tests/                         # Tests unitarios (unittest / pytest)
 │  └─ requirements.txt
+├─ configs/accelerate/                # Configuración de arranque multi-GPU (ddp_2gpu / fsdp_2gpu)
 ├─ scripts/                          # Generación de datos
 │  ├─ generate_sft_data.py          # Trayectorias expertas con LLM API
+│  ├─ generate_parametric_sft_data.py  # Trayectorias expertas derivadas paramétricamente de las plantillas (sin API)
+│  ├─ augment_sft_data.py           # Aumento de redacción que preserva la semántica
+│  ├─ build_sft_train_mix.py        # Mezcla de entrenamiento auditable + manifest
 │  └─ generate_dpo_data.py          # Pares de preferencia muestreando el modelo SFT local
 ├─ docs/
 │  ├─ rl_building.md               # Plan de refactorización completo
@@ -326,6 +390,7 @@ AgenticArXiv-RL/
 ├─ data/                             # Datasets (sft/ y dpo/ están en .gitignore — generarlos primero)
 │  ├─ sft/                           # Dataset SFT (JSONL)
 │  ├─ dpo/                           # Pares DPO (JSONL)
+│  ├─ splits/                        # Particiones train/iid/ood por plantilla (v1 → v3_81)
 │  └─ mock_arxiv_snapshot.json       # Snapshot del MockEnv
 ├─ eval/                             # Bucle de replay de casos malos
 │  ├─ badcase_replay.py             # CLI de replay / captura (sin LLM)
@@ -411,9 +476,13 @@ print(f'Reward: {reward:.2f}')  # Rango de recompensa: [-1, 1]; el valor depende
 | `cache_01` | Ver estado de caché del 1er paper | Caché | `get_paper_cache_status` |
 | `composite_01` | Búsqueda + Descarga | Compuesta | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
 
-### Conjunto ampliado (`benchmark/tasks_expanded.py`, 59 tareas)
+### Conjunto ampliado (`benchmark/tasks_expanded.py`, 77 tareas)
 
-Se activa con `run_benchmark.py --task-set expanded` y cubre ocho familias de plantillas: search / ref_form / composite / state / optional / constraint / long_chain / infeasible. Ambos conjuntos pasan por el `TaskSpec` de `benchmark/task_spec.py`: `expected_tools` y `expected_tool_args` se derivan de la misma fuente `steps`, así que dos listas mantenidas a mano nunca pueden divergir.
+Se activa con `run_benchmark.py --task-set expanded` y cubre doce familias de plantillas: search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction. Ambos conjuntos pasan por el `TaskSpec` de `benchmark/task_spec.py`: `expected_tools` y `expected_tool_args` se derivan de la misma fuente `steps`, así que dos listas mantenidas a mano nunca pueden divergir.
+
+La familia de interpretación (`paper_reading` / `paper_summary`) fija en el oráculo de argumentos la exigencia de «esta clave debe omitirse» con un `{clave: None}` explícito: `argument_match_score` solo cuenta el acierto de las claves esperadas y no penaliza las extra, así que sin declarar la clave `section`, una tarea que pide «solo título + resumen» también aceptaría `section="method"` con la puntuación de argumentos completa.
+
+Los `ref` de `figure_extraction` están **elegidos contra el snapshot**: en el snapshot offline esas posiciones sí llevan mapas de bits incrustados (las 12 primeras del pool de CV, todas). Que un paper tenga figuras es una propiedad del snapshot y no de la tarea, así que al cambiar de snapshot hay que repasarlo — `extract_paper_figures` devuelve `count: 0` en lugar de fallar cuando un paper no tiene mapas de bits, de modo que un desajuste se manifiesta como ruido en la recompensa y no como un fallo sonoro.
 
 ### Métricas de evaluación y particiones
 
@@ -482,6 +551,9 @@ fire
 ---
 
 ## 🔗 Recursos Relacionados
+
+### Pesos del modelo
+- [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) — checkpoint de la fase 1 (SFT), ajuste a parámetros completos sobre Qwen2.5-1.5B (ModelScope)
 
 ### Documentación Oficial
 - [Documentación de TRL](https://huggingface.co/docs/trl/)
@@ -572,7 +644,7 @@ Se complementan entre sí: SFT es el punto de partida de todas las rutas; OPD y 
 
 ## 🧰 Diseño de Evolución del Conjunto de Herramientas (hoja de ruta incremental)
 
-> El objetivo final de este proyecto es un **LLM ligero desplegado localmente que resuelva de forma autónoma la búsqueda, descarga e interpretación de papers de arXiv**. T1/T2 están implementados; T3–T5 siguen siendo propuestas de diseño.
+> El objetivo final de este proyecto es un **LLM ligero desplegado localmente que resuelva de forma autónoma la búsqueda, descarga e interpretación de papers de arXiv**. T1–T4 están implementados; T5 sigue siendo una propuesta de diseño.
 
 ### Estado actual y brechas
 
@@ -584,13 +656,14 @@ Se complementan entre sí: SFT es el punto de partida de todas las rutas; OPD y 
 | `translate_arxiv_pdf` | Traducción del paper completo con pdf2zh | Produce un archivo PDF traducido; el cuerpo traducido no entra en el contexto del modelo; depende del extra opcional |
 | `get_paper_cache_status` | Consulta de caché | — |
 | `get_paper_content` | Leer el resumen o una sección method/result/conclusion | Requiere un PDF descargado; extracción determinista sin llamar a un LLM |
+| `summarize_paper` | Generar un resumen según style/presupuesto de palabras | Requiere un PDF descargado; por defecto usa un backend extractivo determinista, con un backend `local_model` opcional |
+| `extract_paper_figures` | Extraer las imágenes de figuras incrustadas + captions y devolver las rutas de archivo | Requiere un PDF descargado; un paper solo vectorial (sin mapas de bits incrustados) devuelve `count: 0` |
 
-Dos conclusiones:
+Tres conclusiones:
 
 1. **La mitad de recuperación del bucle está conectada**: ya funcionan la navegación por ventana temporal y la búsqueda por palabra clave/título/autor; la paginación sigue sin implementar.
-2. **La interpretación ya tiene una entrada de lectura determinista**: el modelo puede leer el resumen o una sección concreta de un paper descargado; el resumen automático, QA y análisis de figuras siguen sin implementar.
-
-Además, **un espacio de acciones más grande no es automáticamente mejor**: la política es un modelo de ~1.5B, y cada herramienta nueva amplía la carga de aprendizaje de selección de herramientas y formato JSON. El criterio de admisión de una herramienta nueva es «habilita una nueva categoría de tareas», no «puede que sea útil» — de los 5 candidatos de la tabla, T1/T2 son el camino crítico, T3 es el incremento principal, T4/T5 son opcionales.
+2. **El bucle de interpretación ya está conectado**: leer contenido → resumir → extraer figuras son tres herramientas deterministas, así que el modelo puede completar por sí solo una cadena de interpretación de un paper. El **análisis semántico** de figuras (T5) sigue pendiente: requiere un VLM residente en el lado del entorno.
+3. **Un espacio de acciones más grande no es automáticamente mejor**: la política es un modelo de ~1.5B, y cada herramienta nueva amplía la carga de aprendizaje de selección de herramientas y formato JSON. El criterio de admisión de una herramienta nueva es «habilita una nueva categoría de tareas», no «puede que sea útil» — de los 5 candidatos de la tabla, T1/T2 son el camino crítico, T3 es el incremento principal, T4 ya está implementado, T5 es opcional.
 
 ### Herramientas nuevas propuestas (en orden de dependencia)
 
@@ -598,16 +671,20 @@ Además, **un espacio de acciones más grande no es automáticamente mejor**: la
 |--------|------|----------|----------------------|
 | **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | Búsqueda por palabras clave mapeada a los campos `all:` / `ti:` / `au:` de la API de arXiv; coexiste con la herramienta actual (navegar por ventana temporal y búsqueda puntual son tipos de tarea distintos) | Las herramientas/parámetros esperados siguen derivándose de `task_spec.steps`; `MockArxivEnv` repite offline indexado por un hash del query, y los query no recogidos degradan de forma **determinista** (devuelve un subconjunto fijo, marcado explícitamente en la observation) — reproducible, y evita que el modelo confunda un resultado vacío con una búsqueda exitosa |
 | **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → texto plano (PyMuPDF); por defecto devuelve title/abstract, y por secciones (method / result / conclusion) a petición | Extracción de texto determinista, sin LLM; los resultados de extracción van pre-guardados en el snapshot. **Es el prerrequisito de todas las tareas de interpretación** |
-| **T3** | `summarize_paper(ref, style, max_words)` | Resumir un paper: un modelo resumidor local **en el lado del entorno** (con el texto de T2 como entrada) devuelve el resumen | Lo entrenable es «cuándo llamarlo, sobre qué ref, si style/longitud son correctos» — todo verificable por reglas; la calidad del resumen en sí **no entra en la recompensa** (ver abajo) |
-| **T4** (opcional) | `extract_paper_figures(ref)` | Preparación de figuras/tablas: extrae imágenes de figuras + captions, devuelve rutas de archivos | Determinista; se verifica «ref correcto + archivos existen + cantidad ≥ 1» |
+| **T3** ✅ | `summarize_paper(ref, style, max_words)` | Resumir un paper: el resumen se genera **en el lado del entorno** (con el texto de T2 como entrada) y devuelve el texto | Lo entrenable es «cuándo llamarlo, sobre qué ref, si style/longitud son correctos» — todo verificable por reglas; la calidad del resumen en sí **no entra en la recompensa** (ver abajo) |
+| **T4** ✅ | `extract_paper_figures(ref)` | Preparación de figuras/tablas: extrae imágenes de figuras + captions, devuelve rutas de archivos | Determinista; se verifica «ref correcto + cantidad ≥ 1» |
 | **T5** (opcional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Análisis de figuras: un VLM local del lado del entorno (p. ej. Qwen2.5-VL) lee la figura y responde | Las reglas solo juzgan «si se llamó bien y si los parámetros son correctos»; la calidad de la respuesta del VLM no entra en la recompensa, manteniendo el ruido de un modelo tercero fuera del gradiente de política |
 
-Plantillas de tareas asociadas (siguiendo las ocho familias de `tasks_expanded.py`, todas derivadas declarativamente de `task_spec.steps`):
+**El backend de resumen de T3**: este README decía originalmente «un modelo resumidor local del lado del entorno». Al implementarlo se adoptó por defecto un **backend extractivo determinista** (frases enteras por sección, recortadas al presupuesto de palabras, sin muestreo y sin modelo), por tres razones: hace que una misma trayectoria se repita byte a byte en cualquier momento; evita añadir, fuera de `build_snapshot`, otro prerrequisito que necesite pesos; y como la recompensa solo mira la decisión de llamada a herramientas y no el texto del resumen, el backend con modelo no aporta nada a la señal de entrenamiento. Para resúmenes de lenguaje más natural se puede cambiar al backend con modelo con `SUMMARY_BACKEND=local_model SUMMARY_MODEL_PATH=<directorio del modelo local>` (decodificación greedy, también determinista), a cambio de cargar pesos durante la construcción del snapshot.
+
+Plantillas de tareas asociadas (siguiendo las familias de `tasks_expanded.py`, todas derivadas declarativamente de `task_spec.steps`):
 
 - `search_kw_*`: tareas de búsqueda por palabras clave (T1)
-- `read_*` / `qa_*`: buscar → descargar → leer contenido (T1/T2)
-- `summary_*`: buscar → descargar → leer → resumir (T3), nuevo material `long_chain`
-- `figure_*` (opcional): buscar → descargar → extraer figuras → análisis de figuras (T4/T5), activo solo en entornos multimodales
+- `paper_reading`: buscar → descargar → leer contenido (T2), 5 tareas
+- `paper_summary`: buscar → descargar → resumir (T3), 5 tareas
+- `figure_extraction`: buscar → descargar → extraer figuras (T4), 4 tareas
+- `long_chain`, la tarea `chain_ai5_read_then_summary`: leer → resumir encadenado en 4 pasos (T2+T3)
+- `analyze_figure(ref, figure_no)` (T5, opcional): buscar → descargar → extraer figuras → análisis de figuras, activo solo en entornos multimodales
 
 ### Diseño derivado para entrenamiento y evaluación
 
@@ -616,16 +693,21 @@ Plantillas de tareas asociadas (siguiendo las ocho familias de `tasks_expanded.p
 3. **Prevención de reward hacking**: las herramientas de interpretación abren una superficie nueva para «llamar herramientas al azar para farmear puntos de process» — reutilizar las puertas por categoría de `run_baselines.py` + clavar casos individuales en `eval/eval_cases.jsonl` (p. ej. llamar a `summarize_paper` con un ref que apunta a un paper inexistente debe restar puntos).
 4. **El problema de la recompensa por calidad del resumen (deliberadamente no hecho)**: convertir «si el resumen es bueno» en recompensa requiere LLM-as-judge o rúbricas, lo que introduce recompensas no deterministas y una nueva superficie de hacking. El diseño reduce primero el resumen a un **problema de decisión de llamada a herramientas** (cuándo llamar, a quién); evaluar calidad queda como un proyecto aparte a largo plazo.
 5. **La frontera multimodal (aislada deliberadamente)**: el VLM de T5 vive solo en el lado del entorno; la política sigue siendo un modelo pequeño de solo texto — en el espacio de acciones solo está «llamar o no, cómo preguntar», y la comprensión de figuras se externaliza al entorno. Solo si la política en sí se vuelve multimodal se consideraría meter imágenes en la observation.
-6. **Requisito de hardware**: T3/T5 añaden cada uno un modelo del lado del entorno (~2GB el resumidor, ~6GB el VLM, menos cuantizados); no afectan a la VRAM de entrenamiento (sin gradientes). Si el hardware no llega, hacer solo T1/T2/T4 — el camino crítico real del bucle de interpretación es T2.
+6. **Requisito de hardware**: T5 añade un modelo del lado del entorno (~6GB el VLM, menos cuantizado); no afecta a la VRAM de entrenamiento (sin gradientes). El backend por defecto de T3 es extractivo y no necesita pesos extra, así que el bucle de interpretación funciona sin más hardware que la máquina de entrenamiento.
 
 ### Orden de implantación
 
 ```
-T1 búsqueda por palabras clave ──→ T2 leer contenido ──→ T3 resumir   (bucle de interpretación)
-                                        └────→ T4 extraer → T5 analizar figuras (opcional, entorno multimodal)
+T1 búsqueda por palabras clave ──→ T2 leer contenido ──→ T3 resumir   (bucle de interpretación, completado)
+                                        └────→ T4 extraer → T5 analizar figuras (T4 completado; T5 opcional, entorno multimodal)
 ```
 
-Cada vez que aterriza una herramienta: ampliar las plantillas de tareas → re-ejecutar `run_baselines.py` para recalcular los umbrales de discriminación por categoría → regenerar los datos SFT/DPO → añadir los casos correspondientes a `eval/eval_cases.jsonl`.
+Cada vez que aterriza una herramienta: ampliar las plantillas de tareas → re-ejecutar `run_baselines.py` para recalcular los umbrales de discriminación por categoría → regenerar los datos SFT/DPO → añadir los casos correspondientes a `eval/eval_cases.jsonl`. Al aterrizar T3/T4 se hizo además:
+
+- Plantillas de tareas: nuevas familias `paper_reading` (5 tareas), `paper_summary` (5 tareas) y `figure_extraction` (4 tareas) más 1 cadena de interpretación de 4 pasos; el conjunto ampliado pasa de 62 a 77 tareas
+- Particiones: nuevo `data/splits/v3_81.json` (v1/v2 quedan intactos, así que las tasas de éxito de los experimentos históricos siguen siendo comparables)
+- Discriminación: las puertas por categoría de `run_baselines.py` cubren las categorías nuevas (`tests/test_reward_discrimination.py`)
+- Casos malos: `eval/eval_cases.jsonl` suma 8 casos `hack/summary-*` / `hack/read-*` / `hack/figure-*`, que clavan formas de trampa como «presupuesto mal pasado», «resumir o extraer figuras sin descargar», «pasar una section de más» o «extraer figuras del paper equivocado» (la biblioteca tiene ya 14 casos)
 
 ---
 
@@ -635,25 +717,52 @@ Ordenado por prioridad. ¡Las contribuciones son bienvenidas (ver 🤝 Contribui
 
 ### P0 — Expansión del conjunto de herramientas (bucle de interpretación)
 
-T1/T2 están implementados; el resto tiene diseño cerrado (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»):
+T1–T4 están implementados (ver «🧰 Diseño de Evolución del Conjunto de Herramientas»):
 
 - [x] **T1 Búsqueda por palabras clave** `search_arxiv_papers`: añade la búsqueda puntual de «encontrar un paper concreto»
 - [x] **T2 Lectura de papers** `get_paper_content`: PDF → texto determinista con replay offline del snapshot, el prerrequisito de todas las tareas de interpretación (camino crítico)
-- [ ] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable
-- [ ] **T4/T5 Extracción y análisis de figuras** (opcional, entorno multimodal): después de T1–T3; el VLM vive solo en el lado del entorno
+- [x] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable (backend extractivo determinista por defecto; `SUMMARY_BACKEND=local_model` cambia a un modelo local)
+- [x] **T4 Extracción de figuras** `extract_paper_figures`: extracción determinista de figuras incrustadas y captions, con replay offline del snapshot
+- [ ] **T5 Análisis de figuras** `analyze_figure` (opcional, entorno multimodal): **la herramienta, la integración en el entorno, las plantillas de tareas y los tests unitarios están hechos**; solo queda el paso de datos. El VLM vive solo en el lado del entorno y la política sigue siendo un modelo pequeño de solo texto.
+  - ⏳ **El único hueco**: el snapshot offline todavía no tiene entradas de `analyze_figure`. Durante la construcción del 2026-09-22 arXiv limitó este host a ~5KB/s (un paper de 34MB entregó 492KB en 90s), lo que hizo inviable volver a descargar 30 PDFs, así que no se ejecutó una reconstrucción completa del snapshot. Ejecuta `python -m AgenticArXiv.rl.build_snapshot --skip-prefetch` cuando la red se recupere; hasta entonces las tareas de T5 fallan en modo replay por la clave ausente.
+  - Backends: `extractive` por defecto (reutiliza el caption que T4 ya extrajo — determinista y sin pesos); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<dir del VLM local>` cambia a un VLM local (decodificación greedy, respuestas registradas al construir el snapshot).
+  - Límite conocido: **sin cobertura de entrenamiento** — el generador de datos SFT parametrizados aún no tiene regla de derivación para `analyze_figure`, así que ninguno de los modelos existentes lo ha aprendido.
 
 ### P1 — Ajuste del currículo de recompensa
 
-- [ ] **Calibración del currículo multigranular**: la rebaja de pesos de los primeros 30 pasos es un valor a priori; calibrarlo necesita datos de entrenamientos reales. La puerta de casos de reward hacking ya está en su sitio (ver la parte de replay de casos malos en «Conjunto de Tareas y Evaluación»).
+- [x] **Calibración del currículo multigranular (medida; veredicto: la rampa de 30 pasos no se sostiene partiendo de SFT)**
+
+  `scripts/analyze_curriculum.py` lee las curvas de entrenamiento reales. Hicimos una comparación de dos brazos: mismo punto de partida SFT (Qwen2.5-1.5B, 2 épocas, loss ≈ 0.08), las mismas 9 tareas que realmente producen gradiente intragrupo, 60 pasos cada uno, con la única diferencia de `--reward_curriculum_steps`.
+
+  | Componente | currículo 30: suprimido → completo | currículo 0 |
+  |---|---|---|
+  | `format` | 0.983 → 1.000 | 0.983 → 1.000 |
+  | `process` | 0.937 → 1.000 | 0.934 → 1.000 |
+  | `tool` | −0.074 → +0.215 | −0.074 → +0.215 |
+  | `argument` | −0.545 → −0.335 | −0.530 → −0.319 |
+  | `outcome` | −0.127 → +0.028 | −0.127 → +0.030 |
+
+  Dos conclusiones:
+
+  1. **La premisa del currículo ya se cumple en el primer paso**: `format` arranca en 0.983 y `process` en 0.937. La rampa existe para «aprender primero el protocolo ReAct», y SFT ya lo ha enseñado — la puerta protege una etapa que el modelo ya ha superado.
+  2. **Los dos brazos son indistinguibles**: las curvas de componentes se solapan casi punto por punto. Suprimir `tool`/`argument`/`outcome` durante treinta pasos no mejoró ni empeoró el aprendizaje semántico; solo gastó treinta pasos sobre una señal atenuada.
+
+  Recomendación: **usa `--reward_curriculum_steps 0` para GRPO partiendo de SFT**; reserva la rampa para arranques en frío / entrenar directamente desde un modelo base. Advertencia honesta: 9 tareas × 60 pasos es una ejecución pequeña y la diferencia cae dentro del ruido — la conclusión no es «el currículo perjudica», sino «no se ha ganado esos 30 pasos».
+
+- [x] **Defecto en la selección de tareas corregido de paso**: `rl_train` toma la banda media de tasa de éxito, pero las `rates` se midieron con el modelo **base**. Tras SFT la banda de dificultad se desplaza: de 48 tareas de train, solo **9 (19 %)** siguen dando gradiente intragrupo, y **24 de las 39 tareas de varianza cero están en el caso «banda media pero constante»** — «tasa media ⇒ varianza de grupo» es falso para una política saturada, y esas tareas queman pasos con `frac_reward_zero_std=1` hasta que `RewardVarianceGuard` aborta. Hay que volver a medir las rates cada vez que cambia el modelo en vez de arrastrarlas.
 
 ### P2 — Rendimiento y escala
 
+- [x] **Soporte multi-GPU**: `configs/accelerate/ddp_2gpu.yaml` (DDP) y `fsdp_2gpu.yaml` (FSDP) ya están listos; los scripts de entrenamiento omiten automáticamente el anclaje a una sola GPU bajo `accelerate launch`, y arrancar QLoRA en multiproceso falla de forma explícita. DDP se verificó en una máquina de dos GPU (ambos ranks levantan la comunicación NCCL, sincronizan gradientes y guardan el modelo con normalidad).
+  - La configuración FSDP necesita `torch>=2.6`: el `rl/trl_compat.py` de este repositorio solo ofrece un marcador de posición mono-GPU por debajo de esa versión, y esa ruta no se verificó en esta máquina.
+  - Uso: `accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml -m AgenticArxiv.rl.train_sft --no-qlora ...` (el lanzador `accelerate` debe usar el mismo intérprete de Python que tiene las dependencias de entrenamiento)
 - [ ] **Muestreo acelerado con vLLM**: sustituir HF generate para aumentar el throughput de muestreo del rollout multiturno.
-- [ ] **Soporte multi-GPU**: configuración accelerate / FSDP (accelerate ya es dependencia, pero hoy sin configurar, un proceso en una sola GPU).
+  - **Estado**: TRL 0.29 exige vLLM 0.10.2–0.12.0, mientras que la versión disponible en esta máquina es una compilación de plataforma 0.6.2; instalar ambas hace que `trl.trainer.grpo_trainer` falle ya en la fase de import. Para avanzar haría falta primero una compilación de vLLM para la plataforma que case con el TRL actual: es una dependencia del entorno, no un cambio de código, así que queda en espera.
 
 ### P3 — Largo plazo (evolución algorítmica)
 
-- [ ] **Mejoras estilo DAPO**: clip-higher, dynamic sampling, filtro de overlong, loss a nivel de token (loss/clip viven dentro de TRL; requieren un fork o sobrescribir `compute_loss`).
+- [x] **Mejoras estilo DAPO (la parte que TRL ya soporta de forma nativa)**: los tres interruptores `--loss_type` (loss a nivel de token), `--epsilon_high` (clip-higher) y `--mask_truncated_completions` (filtro de overlong) ya están conectados en `train_grpo.py`, y hay un preset `--dapo` que los rellena de una vez (`loss_type=dapo`, `epsilon_high=0.28`, `mask_truncated_completions=True`, `beta=0`). Los valores por defecto no cambian nada, así que los experimentos históricos siguen siendo comparables.
+  - **dynamic sampling (remuestreo de grupos con varianza cero) no está implementado**: TRL 0.29 no expone ningún gancho de generación interceptable, y sobrescribir `_generate_and_score_completions` se desviaría entre versiones. La red actual es `RewardVarianceGuard` (aborta el entrenamiento si la varianza es cero de forma consecutiva) junto con la curva `frac_reward_zero_std`, que convierte el «giro en vacío silencioso» en una señal visible.
 - [ ] **Framework de entrenamiento asíncrono**: migrar a verl `fully_async_policy` / AReaL para alojar SAO (abajo).
 
 ### 🔭 SAO: el algoritmo RL agéntico asíncrono de próxima generación

@@ -433,9 +433,6 @@ class BaseAgent(ABC):
                 else:
                     return f"工具返回结果格式异常: {type(result)}, 内容: {str(result)[:200]}"
 
-            elif tool_name == "format_papers_console":
-                return "FINISH"
-
             # 通用结果格式化
             if isinstance(result, list):
                 return f"成功获取 {len(result)} 条记录"

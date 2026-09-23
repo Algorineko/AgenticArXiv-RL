@@ -484,6 +484,272 @@ _OTHERS: List[TaskSpec] = [
 
 
 # ============================================================================
+# 解读闭环（README T2/T3）：检索 → 下载 → 读内容 → 总结
+# ============================================================================
+# 这两族把「解读」拆成可判定的工具调用决策：调不调、对哪篇调、参数对不对。
+# 摘要/正文的**文字质量不进奖励**（那需要 LLM judge，并引入新的骗分面），
+# 奖励只看上述决策，所以整族沿用现成的五分量方案，reward.py 不需要为它们
+# 新增规则。
+#
+# 参数档靠显式声明 ``{键: None}`` 来钉死「该键必须缺省」：
+# ``argument_match_score`` 只统计期望键的命中率、不多算多余键，若省略 section
+# 这个键，传 ``section="method"`` 也能拿满参数分。声明 None 之后，
+# 「省略或显式传 None」才算对。
+_PAPER_READING: List[TaskSpec] = [
+    TaskSpec(
+        id='read_ai5_default',
+        task='检索最近7天人工智能(cs.AI)论文5篇，下载第2篇，然后读出它的标题与摘要',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'AI', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 2}),
+            Step('get_paper_content', {'ref': 2, 'section': None}),
+        ),
+        category='paper_reading',
+        difficulty='hard',
+        requires_offline=True,
+        note='section 必须缺省；要的是 title+abstract，不是正文章节',
+    ),
+    TaskSpec(
+        id='read_cv5_method',
+        task='检索最近7天计算机视觉(cs.CV)论文5篇，下载第5篇，然后读它的方法(method)章节',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CV', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 5}),
+            Step('get_paper_content', {'ref': 5, 'section': 'method'}),
+        ),
+        category='paper_reading',
+        difficulty='hard',
+        requires_offline=True,
+        note='ref 是对着快照挑的：小节抽取是尽力而为的，不是每篇论文都有 method',
+    ),
+    TaskSpec(
+        id='read_cl5_result',
+        task='搜索最近7天自然语言处理(cs.CL)论文5篇，下载第3篇，读出它的实验结果(result)章节',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CL', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 3}),
+            Step('get_paper_content', {'ref': 3, 'section': 'result'}),
+        ),
+        category='paper_reading',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='read_lg5_conclusion',
+        task='获取最近14天机器学习(cs.LG)论文5篇，下载第1篇，读它的结论(conclusion)章节',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'LG', 'days': 14, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('get_paper_content', {'ref': 1, 'section': 'conclusion'}),
+        ),
+        category='paper_reading',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='qa_cr5_abstract',
+        task='检索最近7天密码学与安全(cs.CR)论文5篇，下载第2篇，然后读出它的摘要(abstract)',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CR', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 2}),
+            Step('get_paper_content', {'ref': 2, 'section': 'abstract'}),
+        ),
+        category='paper_reading',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+]
+
+_PAPER_SUMMARY: List[TaskSpec] = [
+    TaskSpec(
+        id='summary_ai5_tldr60',
+        task='检索最近7天人工智能(cs.AI)论文5篇，下载第1篇，然后用 60 词以内的一句话风格(tldr)总结它',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'AI', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('summarize_paper', {'ref': 1, 'style': 'tldr', 'max_words': 60}),
+        ),
+        category='paper_summary',
+        difficulty='hard',
+        requires_offline=True,
+        note='T3：奖励只判「何时调、对哪篇调、style/预算对不对」',
+    ),
+    TaskSpec(
+        id='summary_cv5_structured120',
+        task='检索最近7天计算机视觉(cs.CV)论文5篇，下载第2篇，用 120 词以内的结构化风格(structured)总结它',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CV', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 2}),
+            Step('summarize_paper', {'ref': 2, 'style': 'structured', 'max_words': 120}),
+        ),
+        category='paper_summary',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='summary_cl5_bullet250',
+        task='搜索最近7天自然语言处理(cs.CL)论文5篇，下载第3篇，用 250 词以内的要点风格(bullet)总结它',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CL', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 3}),
+            Step('summarize_paper', {'ref': 3, 'style': 'bullet', 'max_words': 250}),
+        ),
+        category='paper_summary',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='summary_lg5_tldr120',
+        task='获取最近14天机器学习(cs.LG)论文5篇，下载第1篇，用 120 词以内的一句话风格(tldr)总结它',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'LG', 'days': 14, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('summarize_paper', {'ref': 1, 'style': 'tldr', 'max_words': 120}),
+        ),
+        category='paper_summary',
+        difficulty='hard',
+        requires_offline=True,
+        note='与 summary_ai5_tldr60 成对：同样的风格、不同的预算，考察预算是否真的传对',
+    ),
+    TaskSpec(
+        id='summary_ro5_structured250',
+        task='检索最近7天机器人学(cs.RO)论文5篇，下载第1篇，用 250 词以内的结构化风格(structured)总结它',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'RO', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('summarize_paper', {'ref': 1, 'style': 'structured', 'max_words': 250}),
+        ),
+        category='paper_summary',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+]
+
+
+# T4 图表抽取。ref 是挑过的：离线快照里这些位置确实有内嵌图表（CV 池前 12 篇
+# 每篇都有），否则「抽出来是空的」会让任务本身变得无解。论文是否有位图是快照
+# 的属性，换快照后需要对一遍——`extract_paper_figures` 对没有位图的论文返回
+# `count: 0` 而不是报错，所以这类任务失效时表现为奖励噪声而不是响亮失败。
+_FIGURE_EXTRACTION: List[TaskSpec] = [
+    TaskSpec(
+        id='figure_cv5_ref1',
+        task='检索最近7天计算机视觉(cs.CV)论文5篇，下载第1篇，把它的图表抽出来',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CV', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('extract_paper_figures', {'ref': 1}),
+        ),
+        category='figure_extraction',
+        difficulty='hard',
+        requires_offline=True,
+        note='T4：奖励只判「调没调对、对哪篇调」；抽出的图片质量不进奖励',
+    ),
+    TaskSpec(
+        id='figure_cv5_ref3',
+        task='检索最近7天计算机视觉(cs.CV)论文5篇，下载第3篇，抽出它的图表',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CV', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 3}),
+            Step('extract_paper_figures', {'ref': 3}),
+        ),
+        category='figure_extraction',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='figure_ro5_ref2',
+        task='检索最近7天机器人学(cs.RO)论文5篇，下载第2篇，然后抽出它的图表',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'RO', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 2}),
+            Step('extract_paper_figures', {'ref': 2}),
+        ),
+        category='figure_extraction',
+        difficulty='hard',
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='figure_ai5_ref4',
+        task='检索最近7天人工智能(cs.AI)论文5篇，下载第4篇，抽出它的图表',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'AI', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 4}),
+            Step('extract_paper_figures', {'ref': 4}),
+        ),
+        category='figure_extraction',
+        difficulty='hard',
+        requires_offline=True,
+        note='与 figure_cv5_ref1 成对：同样的工具链、不同的池与序号',
+    ),
+]
+
+
+# T5 图表分析。工具链比 T4 多一步：抽图是分析的前置件，所以是
+# 检索 → 下载 → 抽图 → 分析 四步。ref 沿用 T4 挑过的那些（快照里确有图表）。
+_FIGURE_ANALYSIS: List[TaskSpec] = [
+    TaskSpec(
+        id='analyze_cv5_ref1_desc',
+        task='检索最近7天计算机视觉(cs.CV)论文5篇，下载第1篇，抽出它的图表，然后描述一下第1张图画的是什么',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CV', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 1}),
+            Step('extract_paper_figures', {'ref': 1}),
+            Step('analyze_figure', {'ref': 1, 'figure_no': 1, 'question': 'describe'}),
+        ),
+        category='figure_analysis',
+        difficulty='hard',
+        max_iterations=6,
+        requires_offline=True,
+        note='T5：看图能力外包给 env 侧 VLM，奖励只判「调没调对、问法对不对」',
+    ),
+    TaskSpec(
+        id='analyze_cv5_ref3_trend',
+        task='检索最近7天计算机视觉(cs.CV)论文5篇，下载第3篇，抽出图表后总结第1张图的趋势',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'CV', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 3}),
+            Step('extract_paper_figures', {'ref': 3}),
+            Step('analyze_figure', {'ref': 3, 'figure_no': 1, 'question': 'trend'}),
+        ),
+        category='figure_analysis',
+        difficulty='hard',
+        max_iterations=6,
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='analyze_ro5_ref2_axes',
+        task='检索最近7天机器人学(cs.RO)论文5篇，下载第2篇，抽出图表，再说明第2张图用了哪些坐标轴',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'RO', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 2}),
+            Step('extract_paper_figures', {'ref': 2}),
+            Step('analyze_figure', {'ref': 2, 'figure_no': 2, 'question': 'axes'}),
+        ),
+        category='figure_analysis',
+        difficulty='hard',
+        max_iterations=6,
+        requires_offline=True,
+        note='figure_no=2：考察图序是否真的传对，而不只是照抄默认值',
+    ),
+    TaskSpec(
+        id='analyze_ai5_ref4_desc',
+        task='检索最近7天人工智能(cs.AI)论文5篇，下载第4篇，抽出图表并描述第1张图',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'AI', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 4}),
+            Step('extract_paper_figures', {'ref': 4}),
+            Step('analyze_figure', {'ref': 4, 'figure_no': 1, 'question': 'describe'}),
+        ),
+        category='figure_analysis',
+        difficulty='hard',
+        max_iterations=6,
+        requires_offline=True,
+        note='与 analyze_cv5_ref1_desc 成对：同工具链、不同池与序号',
+    ),
+]
+
+
+# ============================================================================
 # 负向约束：完成可行任务，但不要执行用户明确排除的操作
 # ============================================================================
 # infeasible 覆盖的是「一次工具都不该调」；这一组覆盖更常见、也更难判定的情况：
@@ -705,11 +971,29 @@ _LONG_CHAIN: List[TaskSpec] = [
         difficulty='hard',
         note='把「最后一篇」的序数推断和可选参数叠在同一条链上',
     ),
+    TaskSpec(
+        id='chain_ai5_read_then_summary',
+        task='检索最近7天人工智能(cs.AI)论文5篇，下载第2篇，先读它的方法(method)章节，再用 60 词以内的一句话风格(tldr)总结它',
+        steps=(
+            Step('get_recently_submitted_cs_papers', {'aspect': 'AI', 'days': 7, 'max_results': 5}),
+            Step('download_arxiv_pdf', {'ref': 2}),
+            Step('get_paper_content', {'ref': 2, 'section': 'method'}),
+            Step('summarize_paper', {'ref': 2, 'style': 'tldr', 'max_words': 60}),
+        ),
+        category='long_chain',
+        difficulty='hard',
+        max_iterations=6,
+        requires_offline=True,
+        note='解读闭环（T2+T3）串成一条链：先读后总结，共 4 次工具调用；'
+             'ref 要选快照里确有 method 章节的那篇',
+    ),
 ]
 
 
 EXPANDED_SPECS: List[TaskSpec] = (
-    _SEARCH + _KEYWORD_SEARCH + _OTHERS + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
+    _SEARCH + _KEYWORD_SEARCH + _OTHERS + _PAPER_READING + _PAPER_SUMMARY
+    + _FIGURE_EXTRACTION + _FIGURE_ANALYSIS
+    + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
 )
 
 # 生成器使用 TaskSpec（保留 Step/setup），Benchmark 使用展开后的 dict；两者必须

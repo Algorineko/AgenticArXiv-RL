@@ -93,11 +93,11 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | 维度 | 定义 |
 |------|------|
 | **State** | 任务描述 + 对话历史 + 工具结果 |
-| **Action** | 6 个工具（arXiv 浏览/关键词检索/下载/翻译/缓存查询/论文阅读）+ FINISH |
+| **Action** | 8 个工具（arXiv 浏览/关键词检索/下载/翻译/缓存查询/论文阅读/论文总结/图表抽取）+ FINISH |
 | **Reward** | 五分量多粒度可验证奖励（format / tool / argument / process / outcome，见下节） |
 | **Transition** | `execute_tool(action) → observation`（`MockArxivEnv` 离线快照回放，确定性可复现） |
 
-### 动作空间（6 个工具）
+### 动作空间（8 个工具）
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — 搜索 arXiv 论文
 2. `download_arxiv_pdf(ref, session_id)` — 下载 PDF
@@ -105,8 +105,10 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 4. `get_paper_cache_status(ref, session_id)` — 查询缓存状态
 5. `search_arxiv_papers(query, max_results, days=None)` — 按关键词、标题或作者检索
 6. `get_paper_content(ref, session_id, section=None)` — 读取已下载论文的摘要或指定章节
+7. `summarize_paper(ref, style, max_words)` — 对已下载论文做 env 侧摘要（tldr / structured / bullet）
+8. `extract_paper_figures(ref)` — 抽出已下载论文的图表文件与 caption
 
-> 关键词检索和论文阅读已经可用；论文总结和图表分析已有设计稿、暂未实现，见下文「🧰 工具集演进设计」。
+> 「检索 → 下载 → 阅读 → 总结 → 抽图」这条解读闭环已经打通。图表**分析**（T5，需要 env 侧 VLM）仍是设计稿，见下文「🧰 工具集演进设计」。
 
 ### Verifiable Reward 组件
 
@@ -151,6 +153,10 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
    python -m AgenticArxiv.rl.train_sft
    ```
 3. 产出：`./outputs/sft/final` 模型
+
+> **已发布的权重**（Qwen2.5-1.5B 全参 SFT，2 epoch / 2628 条参数化专家轨迹，loss 0.079）：
+> [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT)
+> 注意该产物**只覆盖前 8 个工具**——`analyze_figure`（T5）是之后加入的，参数化 SFT 数据生成器还没有它的派生规则。
 
 **数据格式**（`data/sft/sft_train.jsonl`）：
 ```json
@@ -231,7 +237,17 @@ python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 # 记录训练曲线（各阶段同一套参数）
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
+
+# DAPO 系选项（默认不改变任何值，历史实验仍然可比）
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --epsilon_high 0.2   # 只开 clip-higher
+
+# 多卡（DDP；须用装了训练依赖的那个解释器启动 accelerate）
+accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
+  -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
 ```
+
+**多卡**：`configs/accelerate/` 提供 DDP 与 FSDP 两份配置。训练脚本会检测 `accelerate launch` 导出的 `LOCAL_RANK`，此时不再钉单卡（钉了反而会让其它 rank 看不到设备）；单进程下仍然钉住，避免 Trainer 退化成 `DataParallel` 而段错误。QLoRA 的 `device_map={"": 0}` 与多进程互斥，检测到就直接报错而不是静默按单卡训练。FSDP 需要 `torch>=2.6`。
 
 **训练曲线**（`rl/observability.py`）：`--report_to` 取 `none` / `auto` / `tensorboard` / `wandb`（可逗号分隔），五个训练阶段（SFT / DPO / GRPO / OPD / PPO）共用。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，额外记录：
 
@@ -283,16 +299,20 @@ OPD 也能当 trick 用：RL 前的 warm start、RL 中的 teacher-KL 正则、v
 
 **离线对比**：用相同的 snapshot 与 task set 分别运行 SFT、`--max_turns 1`、`--max_turns > 1` 和 GRPO，并比较各输出目录 `final/verification_report.json` 中由 `StageVerifier` 生成的同口径结果；这些 reward 只用于评测，不会进入 OPD loss。
 
-### 阶段4：PPO（Proximal Policy Optimization）
+### 阶段4：PPO（Proximal Policy Optimization）— ⚠️ 当前依赖下不可用
 
 **目标**：标准 Actor-Critic 架构在线微调策略与价值网络。
 
-**步骤**：
+**现状**：TRL 自 0.9 起弃用、并在后续版本**移除**了经典 PPO trainer —— `PPOTrainer` / `PPOConfig` / `AutoModelForCausalLMWithValueHead` 在 `requirements.txt` 允许的 `trl>=0.28.0` 上都不存在，`train_ppo.py` 因此连 import 都过不去。它现在会在 import 阶段给出明确说明，而不是抛一句看不出因果的 ImportError。
+
+要真正跑 PPO，需要按 `trl.experimental.ppo` 的实验 API 重写本脚本（配置项与数据集格式都不同），或把 trl 固定到 0.9 之前。本项目里 PPO 是学习性对照：有可验证奖励走 GRPO、有强教师走 OPD，两者都比 PPO 更省显存。
+
 ```bash
+# 当前会带着说明直接退出
 python -m AgenticArxiv.rl.train_ppo --model outputs/grpo/final
 ```
 
-**产出**：`./outputs/ppo/final` 模型
+**产出**（重写后）：`./outputs/ppo/final` 模型
 
 ---
 
@@ -313,11 +333,13 @@ AgenticArXiv-RL/
 │  │  ├─ pdf_download_tool.py      # PDF 下载
 │  │  ├─ pdf_translate_tool.py     # PDF 翻译
 │  │  ├─ cache_status_tool.py      # 缓存查询
-│  │  └─ paper_content_tool.py     # 确定性论文内容读取
+│  │  ├─ paper_content_tool.py     # 确定性论文内容读取（T2）
+│  │  ├─ paper_summary_tool.py     # env 侧论文摘要（T3）
+│  │  └─ paper_figures_tool.py     # 确定性图表抽取（T4）
 │  ├─ benchmark/                     # ⭐ Verifiable Reward 来源
 │  │  ├─ metrics.py               # TaskMetrics、工具序列严格匹配、参数匹配
 │  │  ├─ tasks.py                 # BENCHMARK_TASKS（8 条冒烟任务）
-│  │  ├─ tasks_expanded.py        # 扩展任务集（59 条、八类模板）
+│  │  ├─ tasks_expanded.py        # 扩展任务集（81 条、十三类模板）
 │  │  ├─ task_spec.py             # TaskSpec：expected_tools / expected_tool_args 由 steps 统一派生
 │  │  ├─ badcases.py              # 坏例用例的判定与回放
 │  │  ├─ splits.py                # 模板层 train/iid/ood 切分
@@ -346,10 +368,14 @@ AgenticArXiv-RL/
 │  ├─ services/                      # 副作用服务（event_bus / log / runtime）
 │  ├─ api/ · mcp_protocol/ · skill_cli/   # 归档的 Web / MCP / Skill 兼容层
 │  ├─ utils/                         # llm_client、logger、PDF 工具
-│  ├─ tests/                         # 30 个单元测试（unittest）
+│  ├─ tests/                         # 单元测试（unittest / pytest）
 │  └─ requirements.txt
+├─ configs/accelerate/                # 多卡启动配置（ddp_2gpu / fsdp_2gpu）
 ├─ scripts/                          # 数据生成
 │  ├─ generate_sft_data.py          # 用 LLM API 生成 expert 轨迹
+│  ├─ generate_parametric_sft_data.py  # 从任务模板参数化派生专家轨迹（无需 API）
+│  ├─ augment_sft_data.py           # 语义保持的措辞增强
+│  ├─ build_sft_train_mix.py        # 合成可审计的训练混合集 + manifest
 │  └─ generate_dpo_data.py          # 用本地 SFT 模型采样构造偏好对
 ├─ docs/
 │  ├─ rl_building.md               # 完整改造计划
@@ -358,6 +384,7 @@ AgenticArXiv-RL/
 ├─ data/                             # 数据集（sft/ 与 dpo/ 为 gitignored，需自行生成）
 │  ├─ sft/                           # SFT 数据集（JSONL）
 │  ├─ dpo/                           # DPO 偏好对（JSONL）
+│  ├─ splits/                        # 模板级 train/iid/ood 切分（v1 → v3_81）
 │  └─ mock_arxiv_snapshot.json       # MockEnv 离线快照
 ├─ eval/                             # 坏例回放闭环
 │  ├─ badcase_replay.py             # 回放 / 捕获 CLI（无需 LLM）
@@ -443,9 +470,13 @@ print(f'Reward: {reward:.2f}')  # 奖励范围：[-1, 1]，具体值取决于轨
 | `cache_01` | 查看第1篇论文缓存状态 | 缓存 | `get_paper_cache_status` |
 | `composite_01` | 搜索+下载 | 复合 | `get_recently_submitted_cs_papers`, `download_arxiv_pdf` |
 
-### 扩展集（`benchmark/tasks_expanded.py`，59 条）
+### 扩展集（`benchmark/tasks_expanded.py`，81 条）
 
-`run_benchmark.py --task-set expanded` 启用，涵盖 search / ref_form / composite / state / optional / constraint / long_chain / infeasible 八类模板。两套任务统一走 `benchmark/task_spec.py` 的 `TaskSpec`：`expected_tools` 与 `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表的漂移。
+`run_benchmark.py --task-set expanded` 启用，涵盖 search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction 十二类模板。两套任务统一走 `benchmark/task_spec.py` 的 `TaskSpec`：`expected_tools` 与 `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表的漂移。
+
+解读族（`paper_reading` / `paper_summary`）的参数档用显式 `{键: None}` 把「该键必须缺省」变成可判定的要求：`argument_match_score` 只统计期望键的命中率、不多算多余键，不声明 `section` 键的话，「只要 title+abstract」的任务传 `section="method"` 也能拿满参数分。
+
+`figure_extraction` 的 ref 是**对着快照挑过的**：离线快照里那些位置确实有内嵌位图（CV 池前 12 篇都有）。论文有没有位图是快照的属性，换一份快照就要对一遍——`extract_paper_figures` 对没有位图的论文返回 `count: 0` 而不是报错，所以这类任务一旦失配，表现是奖励噪声而不是响亮失败。
 
 ### 评测口径与切分
 
@@ -513,6 +544,9 @@ fire
 ---
 
 ## 🔗 相关资源
+
+### 模型权重
+- [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) —— 阶段 1 SFT 产物，Qwen2.5-1.5B 全参微调（ModelScope）
 
 ### 官方文档
 - [TRL 文档](https://huggingface.co/docs/trl/)
@@ -614,13 +648,14 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 | `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，翻译后的正文不进入模型上下文；依赖可选 extra |
 | `get_paper_cache_status` | 查缓存 | — |
 | `get_paper_content` | 读取摘要或 method/result/conclusion 章节 | 需要先下载 PDF；确定性抽取，不调用 LLM |
+| `summarize_paper` | 按 style/budget 生成摘要 | 需要先下载 PDF；默认走确定性抽取式后端，`local_model` 后端为可选 |
+| `extract_paper_figures` | 抽出内嵌图表图片 + caption，返回文件路径 | 需要先下载 PDF；纯向量图（无内嵌位图）会返回 `count: 0` |
 
-两个结论：
+三个结论：
 
 1. **「检索」半环已打通**：既支持时间窗浏览，也支持关键词、篇名和作者查找；翻页仍未实现。
-2. **「分析解读」已有确定性阅读入口**：模型可以读取已下载论文的摘要或指定章节；总结、问答和图表分析仍待实现。
-
-同时，**动作空间不是越大越好**：策略是 1.5B 量级小模型，每加一个工具都放大工具选择与 JSON 格式的学习负担。新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」——下表 5 个候选里，T1/T2 是关键路径，T3 是主要增量，T4/T5 可选。
+2. **「分析解读」闭环已打通**：读内容 → 总结 → 抽图三步都是确定性工具，模型可以独立完成一篇论文的解读链。图表**语义分析**（T5）仍待实现，它需要 env 侧常驻一个 VLM。
+3. **动作空间不是越大越好**：策略是 1.5B 量级小模型，每加一个工具都放大工具选择与 JSON 格式的学习负担。新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」——下表 5 个候选里 T1/T2 是关键路径，T3 是主要增量，T4 已实现，T5 可选。
 
 ### 建议新增的工具（按依赖顺序）
 
@@ -628,16 +663,20 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 |--------|------|----------|----------------------|
 | **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数照常由 `task_spec.steps` 派生；`MockArxivEnv` 按查询串哈希离线回放，未收录的 query 走**确定性降级**（返回固定子集并在 observation 里显式标注），保证可复现、也防止模型把空结果当检索成功 |
 | **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
-| **T3** | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**调本地摘要模型（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
-| **T4**（可选） | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 文件存在 + 数量 ≥ 1」 |
+| **T3** ✅ | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**生成摘要（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
+| **T4** ✅ | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 数量 ≥ 1」 |
 | **T5**（可选，多模态） | `analyze_figure(ref, figure_no, question=None)` | 图表分析：env 侧调本地 VLM（如 Qwen2.5-VL）读图回答 | 规则只判「调没调对、参数对不对」；VLM 回答质量不进奖励，避免把第三方模型的噪声写进策略梯度 |
 
-配套任务模板（沿用 `tasks_expanded.py` 的八类分类，全部由 `task_spec.steps` 声明式派生）：
+**T3 的摘要后端**：README 原本写的是「env 侧调本地摘要模型」。落地时默认采用**确定性抽取式后端**（按 section 取整句、按词数预算裁剪，不采样、不调模型），原因有三：它让同一条轨迹在任意时刻回放都逐字节一致；它不需要在 `build_snapshot` 之外再引入一个需要权重的前置条件；而奖励只看工具调用决策、不看摘要文字，模型后端对训练信号没有贡献。需要更自然语言的摘要时可用 `SUMMARY_BACKEND=local_model SUMMARY_MODEL_PATH=<本地模型目录>` 切到模型后端（贪心解码，仍然确定性），代价是快照构建阶段要加载权重。
+
+配套任务模板（沿用 `tasks_expanded.py` 的分类，全部由 `task_spec.steps` 声明式派生）：
 
 - `search_kw_*`：关键词检索类（T1）
-- `read_*` / `qa_*`：检索 → 下载 → 读内容（T1/T2）
-- `summary_*`：检索 → 下载 → 读内容 → 总结（T3），新的 `long_chain` 素材
-- `figure_*`（可选）：检索 → 下载 → 抽图 → 图表分析（T4/T5），仅多模态环境启用
+- `paper_reading`：检索 → 下载 → 读内容（T2），5 条
+- `paper_summary`：检索 → 下载 → 总结（T3），5 条
+- `long_chain` 的 `chain_ai5_read_then_summary`：读 → 总结串成 4 步链（T2+T3）
+- `figure_extraction`：检索 → 下载 → 抽图（T4），4 条
+- `analyze_figure`（T5，可选）：检索 → 下载 → 抽图 → 图表分析，仅多模态环境启用
 
 ### 训练与评测侧的连带设计
 
@@ -646,16 +685,21 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 3. **防 reward hacking**：解读类工具天然多出「乱调工具刷 process 分」的面——沿用 `run_baselines.py` 逐类目闸门 + `eval/eval_cases.jsonl` 单例钉死（例如：ref 指向不存在论文时调 `summarize_paper` 必须扣分）。
 4. **摘要质量的奖励问题（刻意不做）**：把「摘要写得好不好」变成奖励需要 LLM-as-judge 或 rubric 打分，会引入非确定性奖励与新的 hacking 面。设计上先把总结收敛为**工具调用决策问题**（何时调、对谁调），质量评估留到长期单独立项。
 5. **多模态的边界（刻意隔离）**：T5 的 VLM 只活在 env 侧，策略仍是纯文本小模型——动作空间里只有「调不调、怎么问」，看图能力外包给环境。只有策略本身换成多模态模型时，才考虑把图片放进 observation。
-6. **硬件门槛**：T3/T5 各引入一个 env 侧模型（摘要模型约 2GB、VLM 约 6GB 量级，量化后更低），与训练显存互不影响（它们不进梯度）。不满足时只做 T1/T2/T4——解读闭环的真正关键路径是 T2。
+6. **硬件门槛**：只有 T5 需要一个 env 侧模型（VLM 约 6GB 量级，量化后更低），它与训练显存互不影响（不进梯度）。T3 默认的抽取式后端不加载任何权重，所以解读闭环（T1–T4）在训练机之外不需要额外硬件。
 
 ### 落地顺序
 
 ```
-T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读闭环）
-                      └────→ T4 抽图 → T5 图分析 （可选，多模态环境）
+T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读闭环，已完成）
+                      └────→ T4 抽图 → T5 图分析 （T4 已完成；T5 可选，多模态环境）
 ```
 
-每落一个工具：扩任务模板 → 重跑 `run_baselines.py` 重新卡各类目区分度门槛 → 重新生成 SFT/DPO 数据 → `eval/eval_cases.jsonl` 补对应用例。
+每落一个工具：扩任务模板 → 重跑 `run_baselines.py` 重新卡各类目区分度门槛 → 重新生成 SFT/DPO 数据 → `eval/eval_cases.jsonl` 补对应用例。T3/T4 落地时同步做了：
+
+- 任务模板：新增 `paper_reading`（5 条）、`paper_summary`（5 条）、`figure_extraction`（4 条）与 4 步解读链 1 条，扩展集 62 → 81 条
+- 切分：新增 `data/splits/v3_81.json`（v1/v2 保持不变，历史实验的成功率仍然可比）
+- 区分度：`run_baselines.py` 逐类目闸门覆盖新类目（`tests/test_reward_discrimination.py`）
+- 坏例：`eval/eval_cases.jsonl` 新增 8 条 `hack/summary-*` / `hack/read-*` / `hack/figure-*` 用例，钉住「预算传错」「跳过下载直接总结/抽图」「多传 section」「抽错论文」等骗分形态（用例库现共 14 条）
 
 ---
 
@@ -663,25 +707,52 @@ T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读
 
 ### P0 — 工具集扩展（解读闭环）
 
-T1/T2 已实现；其余工具设计已定稿（见「🧰 工具集演进设计」）：
+T1–T4 已实现（见「🧰 工具集演进设计」）：
 
 - [x] **T1 关键词检索** `search_arxiv_papers`：补全「找一篇具体论文」的查找型检索
 - [x] **T2 论文阅读** `get_paper_content`：确定性 PDF → 文本与离线快照回放，全部解读类任务的前置件（关键路径）
-- [ ] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策
-- [ ] **T4/T5 图表抽取与分析**（可选，多模态环境）：排在 T1–T3 之后；VLM 只在 env 侧
+- [x] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策（默认确定性抽取式后端，`SUMMARY_BACKEND=local_model` 可切本地模型）
+- [x] **T4 图表抽取** `extract_paper_figures`：确定性抽出内嵌图表与 caption，离线快照回放
+- [ ] **T5 图表分析** `analyze_figure`（可选，多模态环境）：**工具、环境集成、任务模板与单测已完成**，只剩数据集这一环；VLM 只在 env 侧，策略仍是纯文本小模型。
+  - ⏳ **唯一缺口**：离线快照的 T5 条目尚未录制。2026-09-22 构建时 arXiv 对本机限速到 ~5KB/s（34MB 的论文 90 秒只传了 492KB），30 篇 PDF 重下不可行，因此没有跑完整的快照重建。网络恢复后执行 `python -m AgenticArXiv.rl.build_snapshot --skip-prefetch` 即可补齐；在那之前 T5 任务在 replay 模式下会因快照缺失而报错。
+  - 后端：默认 `extractive`（只复用 T4 已抽出的 caption，确定性强、不需要权重）；`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<本地 VLM 目录>` 切本地 VLM（贪心解码，答案在构建快照时录制）。
+  - 已知边界：**没有训练覆盖** —— 参数化 SFT 数据生成器还没有 `analyze_figure` 的派生规则，现有模型都没学过它。
 
 ### P1 — 奖励课程调优
 
-- [ ] **多粒度权重课程定档**：前 30 步压 `tool` / `argument` / `outcome` 权重的档位是先验设定，需要真实训练跑的数据支撑来调整；reward hacking 的用例闸门已就位（见「任务集与评测」的坏例回放一节）。
+- [x] **多粒度权重课程定档（已有实测数据，结论：SFT 起点的 30 步压制档位不成立）**
+
+  用 `scripts/analyze_curriculum.py` 读了真实训练曲线，做了两臂对照：同一个 SFT 起点（Qwen2.5-1.5B，2 epoch，loss≈0.08），同样的 9 条能产生组内梯度的任务，各 60 步，只差 `--reward_curriculum_steps`。
+
+  | 分量 | 课程 30：压制期 → 全权重期 | 课程 0 |
+  |---|---|---|
+  | `format` | 0.983 → 1.000 | 0.983 → 1.000 |
+  | `process` | 0.937 → 1.000 | 0.934 → 1.000 |
+  | `tool` | −0.074 → +0.215 | −0.074 → +0.215 |
+  | `argument` | −0.545 → −0.335 | −0.530 → −0.319 |
+  | `outcome` | −0.127 → +0.028 | −0.127 → +0.030 |
+
+  两个结论：
+
+  1. **课程的前提在第一步就已经被满足**：`format` 起点 0.983、`process` 0.937 —— 30 步压制存在的理由是「先学会 ReAct 结构」，而 SFT 已经把结构教完了。它保护的是一个已经走过去的阶段。
+  2. **两臂结果不可区分**：分量曲线几乎逐点重合。压制 `tool`/`argument`/`outcome` 三十步，既没有让语义学得更好，也没有更差——只是把三十分之三十的步数花在了被压低的信号上。
+
+  建议：**从 SFT 起点的 GRPO 用 `--reward_curriculum_steps 0`**；这个档位留给冷启动 / 基座模型直接开训的场景。诚实的前提说明：9 条任务 × 60 步是小规模运行，差异本身落在噪声里——所以结论不是「课程有害」，而是「它没有挣到那 30 步」。
+
+- [x] **顺带修掉的选任务规则缺陷**：`rl_train` 按 `rates` 取成功率中间带，而 `rates` 是 **base 模型**实测的。SFT 之后难度带整体移位，实测 48 条 train 任务里只剩 **9 条（19%）**还能给出组内梯度；39 条零方差任务中有 **24 条落在「中间带但恒定」**——「中间带 ⇒ 有组内方差」对饱和策略并不成立，它们会以 `frac_reward_zero_std=1` 的形式浪费步数并触发 `RewardVarianceGuard`。换模型后需要重新测量 rates，而不是沿用上一次的档位。
 
 ### P2 — 性能与规模
 
+- [x] **多卡支持**：`configs/accelerate/ddp_2gpu.yaml`（DDP）与 `fsdp_2gpu.yaml`（FSDP）已就位，训练脚本在 `accelerate launch` 下自动跳过单卡钉死，QLoRA 多进程启动会显式报错。DDP 已在双卡机器上实测跑通（两 rank 建 NCCL 通信、梯度同步、正常保存）。
+  - FSDP 配置需要 `torch>=2.6`：本仓库的 `rl/trl_compat.py` 在 torch<2.6 上只提供单卡占位，那条路径未在本机验证。
+  - 用法：`accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml -m AgenticArxiv.rl.train_sft --no-qlora ...`（`accelerate` 必须用装了训练依赖的那个 Python 解释器启动）
 - [ ] **vLLM 加速采样**：替换 HF generate，提升多轮 rollout 的采样吞吐。
-- [ ] **多卡支持**：accelerate / FSDP 配置（依赖已有 accelerate，但当前零配置、单卡单进程）。
+  - **现状**：TRL 0.29 要求 vLLM 0.10.2–0.12.0，而本机可用的 vLLM 是平台定制版 0.6.2，装在一起会让 `trl.trainer.grpo_trainer` 在 import 阶段就失败。要推进得先拿到与当前 TRL 匹配的平台上 vLLM 构建，属于环境依赖而非代码改动，因此暂缓。
 
 ### P3 — 长期（算法演进）
 
-- [ ] **DAPO 系改进**：clip-higher、dynamic sampling、overlong filtering、token-level loss（loss/clip 在 TRL 内部，需 fork 或覆写 `compute_loss`）。
+- [x] **DAPO 系改进（TRL 已原生支持的部分）**：`--loss_type`（token-level loss）、`--epsilon_high`（clip-higher）、`--mask_truncated_completions`（overlong filtering）三个开关已接到 `train_grpo.py`，并提供 `--dapo` 预设一次填齐（`loss_type=dapo`、`epsilon_high=0.28`、`mask_truncated_completions=True`、`beta=0`）。默认不改变任何值，历史实验仍然可比。
+  - **dynamic sampling（组内零方差重采样）未实现**：TRL 0.29 没有暴露可拦截的生成钩子，覆写 `_generate_and_score_completions` 会随版本漂移。当前的兜底是 `RewardVarianceGuard`（连续零方差即中止训练）加上 `frac_reward_zero_std` 曲线，先把「静默空转」变成可见信号。
 - [ ] **异步训练框架**：迁移 verl `fully_async_policy` / AReaL 全异步架构，承接 SAO（见下）。
 
 ### 🔭 SAO：下一代异步 Agentic RL 算法
