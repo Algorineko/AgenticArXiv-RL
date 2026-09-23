@@ -48,7 +48,7 @@ def main(
     model: str = None,
     data: str = None,
     output_dir: str = None,
-    verify: bool = False,
+    verify: bool = True,
     min_reward: float = -0.3,
     report_to: str = "none",
     run_name: str = None,
@@ -142,8 +142,8 @@ if __name__ == "__main__":
     parser.add_argument("--data", default=None, help="DPO 数据集路径")
     parser.add_argument("--output_dir", default=None, help="输出目录")
     parser.add_argument(
-        "--verify", action="store_true", default=False,
-        help="训练结束后运行阶段验证（检查模型奖励是否达标）",
+        "--verify", action=argparse.BooleanOptionalAction, default=True,
+        help="训练结束后运行阶段验证（默认开启，与 GRPO/PPO/OPD 一致）；冒烟可显式写 --no-verify",
     )
     parser.add_argument(
         "--min_reward", type=float, default=-0.3,

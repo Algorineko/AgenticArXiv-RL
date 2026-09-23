@@ -106,6 +106,31 @@ def build_visible_setup_context(task: Mapping[str, Any]) -> str:
                 f"- 此前已查看 ref={last_active_ref!r} 的缓存状态；"
                 "它现在是最近操作的论文，ref=null 会指向它。"
             )
+        # 解读类工具（T2/T3/T4）同样会写 last_active，漏掉它们的后果和上面
+        # 三个一样：会话状态块不提，ref=null 的指代就无从解释。
+        elif name == "get_paper_content":
+            last_active_ref = args.get("ref")
+            section = args.get("section")
+            scope = f"{section!r} 章节" if section else "标题与摘要"
+            lines.append(
+                f"- 此前已读取 ref={last_active_ref!r} 的{scope}；"
+                "它现在是最近操作的论文，ref=null 会指向它。"
+            )
+        elif name == "summarize_paper":
+            last_active_ref = args.get("ref")
+            style = args.get("style") or "tldr"
+            max_words = args.get("max_words")
+            budget = f"（{max_words} 词以内）" if max_words else ""
+            lines.append(
+                f"- 此前已用 {style} 风格{budget}总结 ref={last_active_ref!r} 的论文；"
+                "它现在是最近操作的论文，ref=null 会指向它。"
+            )
+        elif name == "extract_paper_figures":
+            last_active_ref = args.get("ref")
+            lines.append(
+                f"- 此前已抽取 ref={last_active_ref!r} 的图表；"
+                "它现在是最近操作的论文，ref=null 会指向它。"
+            )
 
     if not has_paper_list:
         lines.append("- 当前会话没有由先前检索建立的论文候选列表。")

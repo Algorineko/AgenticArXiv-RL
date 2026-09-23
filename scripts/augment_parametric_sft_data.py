@@ -32,6 +32,7 @@ def validate_parametric_rows(
     split_payload: Dict[str, Any],
     manifest: Dict[str, Any],
     *,
+    split_name: str,
     input_path: Path | None = None,
 ) -> List[Dict[str, Any]]:
     rows = list(rows)
@@ -52,7 +53,10 @@ def validate_parametric_rows(
     if len(task_manifest) != manifest.get("derived_tasks"):
         raise ValueError("manifest 派生任务数量或 id 唯一性错误")
 
-    expected_source = f"v{split_payload['version']}_62.json:train:parametric_v1"
+    # The seed records the split file it was generated from.  Rebuilding the
+    # name from the version number used to assume the `*_62.json` filename and
+    # so rejected any newer split; take the actual filename instead.
+    expected_source = f"{split_name}:train:parametric_v1"
     source_ids = {row.get("source_task_id") for row in rows}
     if source_ids != set(task_manifest):
         raise ValueError("seed 的 source_task_id 与 manifest 派生任务不一致")
@@ -135,7 +139,8 @@ def main() -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     split_payload = json.loads(split_path.read_text(encoding="utf-8"))
     validated = validate_parametric_rows(
-        rows, split_payload, manifest, input_path=input_path
+        rows, split_payload, manifest, split_name=split_path.name,
+        input_path=input_path,
     )
     augmented = augment_validated_rows(validated)
     for row in augmented:

@@ -5,7 +5,7 @@ import hashlib
 import os
 import re
 import time
-from typing import Tuple
+from typing import Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import requests
@@ -63,44 +63,83 @@ def _looks_like_pdf(path: str) -> bool:
         return False
 
 
-def download_pdf(url: str, dest_path: str, timeout: Tuple[int, int] = (10, 120)) -> Tuple[int, str]:
-    """
-    下载 PDF 到 dest_path，使用 .part 临时文件，完成后原子替换
-    返回 (size_bytes, sha256_hex)
-    """
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+#: 读超时是「两次读到字节之间的间隔」而不是总时长，所以它可以压得比总量级
+#: 低得多：一条健康的连接不会几十秒一个字节都没有。arXiv 会间歇性地让连接
+#: 悬住（实测同一批 URL 里有的 4.4MB/s 传完、有的完全不动），把 120s 缩短到
+#: 30s 能让每次挂起少等 90 秒。
+DEFAULT_READ_TIMEOUT_S = 30
+DEFAULT_DOWNLOAD_RETRIES = 3
 
-    tmp_path = dest_path + ".part"
-    if os.path.exists(tmp_path):
-        # 避免上次异常残留
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
 
+def _download_once(
+    url: str, tmp_path: str, timeout: Tuple[int, int]
+) -> Tuple[int, str]:
+    """One transfer attempt into *tmp_path*; validates the PDF magic number."""
     sha = hashlib.sha256()
     size = 0
 
     headers = {"User-Agent": "AgenticArxiv/0.1 (+pdf downloader)"}
-    with requests.get(url, stream=True, allow_redirects=True, headers=headers, timeout=timeout) as r:
-        r.raise_for_status()
+    with requests.get(
+        url, stream=True, allow_redirects=True, headers=headers, timeout=timeout
+    ) as response:
+        response.raise_for_status()
 
-        with open(tmp_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
+        with open(tmp_path, "wb") as handle:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if not chunk:
                     continue
-                f.write(chunk)
+                handle.write(chunk)
                 sha.update(chunk)
                 size += len(chunk)
 
-    # 基础校验：PDF 魔数
     if size < 1024 or not _looks_like_pdf(tmp_path):
-        # 保留 part 便于排查？这里直接删掉避免污染
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-        raise RuntimeError("下载结果不像有效 PDF（content 可能是 HTML/重定向页/错误页）")
+        raise RuntimeError(
+            "下载结果不像有效 PDF（content 可能是 HTML/重定向页/错误页）"
+        )
 
-    os.replace(tmp_path, dest_path)
     return size, sha.hexdigest()
+
+
+def download_pdf(
+    url: str,
+    dest_path: str,
+    timeout: Tuple[int, int] = (10, DEFAULT_READ_TIMEOUT_S),
+    retries: int = DEFAULT_DOWNLOAD_RETRIES,
+) -> Tuple[int, str]:
+    """
+    下载 PDF 到 dest_path，使用 .part 临时文件，完成后原子替换
+    返回 (size_bytes, sha256_hex)
+
+    arXiv 的 PDF 端点是间歇性不稳定的：同一批并发请求里，一部分以 MB/s 传完，
+    另一部分长时间一个字节都不回。没有重试时，一次抖动就等于这篇论文永久缺失，
+    而 build_snapshot 是整条离线流水线唯一联网的一步 —— 缺一篇就要重跑一次。
+    """
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+    tmp_path = dest_path + ".part"
+    attempts = max(1, int(retries))
+    last_error: Optional[Exception] = None
+
+    for attempt in range(attempts):
+        try:
+            if os.path.exists(tmp_path):
+                # 避免上次异常残留
+                os.remove(tmp_path)
+            size, digest = _download_once(url, tmp_path, timeout)
+        except Exception as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(2 ** attempt)
+            continue
+
+        os.replace(tmp_path, dest_path)
+        return size, digest
+
+    # 全部重试都失败：清掉残片，让调用方看到的是「这篇没下下来」而不是半个文件
+    try:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    except OSError:
+        pass
+
+    raise RuntimeError(f"PDF 下载失败（已重试 {attempts} 次）: {last_error}") from last_error

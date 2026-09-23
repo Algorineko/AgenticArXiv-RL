@@ -1,5 +1,5 @@
 ## Benchmark 对比报告
-模型: /mnt/disk4/gaojiayu/models/Qwen2.5-1.5B-Instruct | 样本数: 108 | 异常: 0
+模型: Qwen/Qwen2.5-1.5B-Instruct | 样本数: 108 | 异常: 0
 
 ### 性能对比（平均值）
 

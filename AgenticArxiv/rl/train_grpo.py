@@ -30,6 +30,10 @@ from typing import Optional
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
 
+#: 历史实验一律跑在这个 KL 系数上。`--dapo` 预设只在调用方没有显式改过它时
+#: 才把它归零（DAPO 不用 KL 正则），否则会把用户传的值默默吃掉。
+DEFAULT_BETA = 0.04
+
 # 添加 AgenticArxiv 到 Python 路径
 sys.path.insert(0, str(PACKAGE_ROOT))
 
@@ -42,10 +46,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from rl import trl_compat  # noqa: F401  (torch<2.6 时兜底 FSDPModule，须在 trl 之前)
 from trl import GRPOConfig, GRPOTrainer
 
-import tools.arxiv_tool  # noqa: F401  触发工具注册
-import tools.cache_status_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
+# 工具集从 tools/bootstrap.py 的注册表来，不在这里手写模块清单：
+# 手写的那份漏掉过 paper_content / paper_summary / paper_figures，后果是
+# prompt 里的工具列表少了三个，而策略的动作空间缩小是**静默**的。
+from tools.bootstrap import require_all_tools
 
 from benchmark.tasks import get_all_tasks
 from benchmark.splits import DEFAULT_SPLIT_PATH, load_split
@@ -58,7 +62,6 @@ from rl.grpo_reward import (
     load_mock_env,
     make_grpo_reward_fn,
     make_multiturn_rollout_func,
-    parse_react_action,
 )
 from rl.multiturn_env import make_environment_factory
 from rl.rollout_audit import RolloutAuditWriter
@@ -321,6 +324,43 @@ class RewardVarianceGuard(TrainerCallback):
         )
 
 
+#: DAPO 论文的推荐取值（clip-higher 上界、overlong filtering 开关、KL 系数）。
+DAPO_PRESET = {
+    "loss_type": "dapo",
+    "epsilon_high": 0.28,
+    "mask_truncated_completions": True,
+    "beta": 0.0,
+}
+
+
+def resolve_dapo_options(
+    *,
+    dapo: bool,
+    loss_type: Optional[str],
+    epsilon_high: Optional[float],
+    mask_truncated_completions: Optional[bool],
+    beta: float,
+) -> tuple:
+    """Fill in the DAPO preset without overwriting anything set explicitly.
+
+    ``--dapo --epsilon_high 0.2`` must keep 0.2.  ``beta`` is the exception: it
+    has no "unset" sentinel, so it only drops to zero when the caller left it at
+    the project default, which is what ``DEFAULT_BETA`` is for.
+    """
+    if not dapo:
+        return loss_type, epsilon_high, mask_truncated_completions, beta
+    return (
+        loss_type or DAPO_PRESET["loss_type"],
+        DAPO_PRESET["epsilon_high"] if epsilon_high is None else epsilon_high,
+        (
+            DAPO_PRESET["mask_truncated_completions"]
+            if mask_truncated_completions is None
+            else mask_truncated_completions
+        ),
+        DAPO_PRESET["beta"] if beta == DEFAULT_BETA else beta,
+    )
+
+
 def main(
     model: str = "outputs/dpo/final",
     output_dir: str = "outputs/grpo",
@@ -329,12 +369,16 @@ def main(
     batch_size: int = 4,
     grad_accum: int = 1,
     lr: float = 1e-5,
-    beta: float = 0.04,
+    beta: float = DEFAULT_BETA,
     reward_curriculum_steps: int = 30,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
     temperature: float = 1.0,
+    loss_type: str = None,
+    epsilon_high: float = None,
+    mask_truncated_completions: bool = None,
+    dapo: bool = False,
     seed: int = 42,
     snapshot: str = None,
     task_set: str = "default",
@@ -360,8 +404,25 @@ def main(
     rollout_trace_path: str = None,
     rollout_trace_max_samples: int = 0,
 ):
+    # 工具没注册齐就直接失败：模型不会因为工具列表不全而报错，
+    # 它会编工具名，训练照跑、奖励照记，只是那些工具对应的任务永远做不成。
+    require_all_tools("GRPO 训练")
+
     # 先校验日志后端再加载模型：参数写错时应立刻失败，而不是等模型加载完
     backends = resolve_report_to(report_to)
+    dapo_options = resolve_dapo_options(
+        dapo=dapo,
+        loss_type=loss_type,
+        epsilon_high=epsilon_high,
+        mask_truncated_completions=mask_truncated_completions,
+        beta=beta,
+    )
+    loss_type, epsilon_high, mask_truncated_completions, beta = dapo_options
+    if dapo:
+        print(
+            f"🧬 DAPO 预设: loss_type={loss_type}, epsilon_high={epsilon_high}, "
+            f"mask_truncated_completions={mask_truncated_completions}, beta={beta}"
+        )
     if rollout_trace_max_samples < 0:
         raise SystemExit("❌ rollout_trace_max_samples 不能为负数")
     if save_steps < 0:
@@ -554,6 +615,23 @@ def main(
         "run_name": run_name or Path(output_dir).name,
         **_precision_flags(),
     }
+
+    # ---- DAPO 系选项（README P3） ----
+    # 这三项 TRL 已经原生支持，无需 fork GRPOTrainer：clip-higher 走
+    # epsilon_high、overlong filtering 走 mask_truncated_completions、
+    # token-level loss 走 loss_type。默认全部保持 TRL 现值，只有显式指定
+    # （或用 --dapo 预设）才改变行为 —— 历史实验的可比性不能被默认值悄悄改掉。
+    #
+    # 唯一没有实现的是 dynamic sampling（组内方差为 0 就重采样）。TRL 0.29
+    # 没有暴露可拦截的生成钩子，覆写 _generate_and_score_completions 会随
+    # 版本漂移；当前的兜底是 RewardVarianceGuard（连续零方差即中止）加上
+    # frac_reward_zero_std 曲线，先把「静默空转」变成可见信号。
+    if loss_type is not None:
+        cfg_kwargs["loss_type"] = loss_type
+    if epsilon_high is not None:
+        cfg_kwargs["epsilon_high"] = epsilon_high
+    if mask_truncated_completions is not None:
+        cfg_kwargs["mask_truncated_completions"] = mask_truncated_completions
     # GRPOConfig 的字段在 TRL 各版本间有增删，按实际安装版本过滤，
     # 避免因为一个参数名不存在就整个训练起不来
     valid = {f.name for f in dataclasses.fields(GRPOConfig)}
@@ -561,6 +639,13 @@ def main(
     if dropped:
         print(f"  提示：当前 TRL 不支持这些 GRPOConfig 参数，已忽略 -> {dropped}")
     config = GRPOConfig(**{k: v for k, v in cfg_kwargs.items() if k in valid})
+
+    # 单进程时钉住单卡（避免 Trainer 走 DataParallel 的段错误）；
+    # accelerate launch 下 accelerator 自己管设备，这里自动跳过。
+    from rl.precision import assert_quantization_is_single_process, pin_single_gpu
+
+    assert_quantization_is_single_process(qlora)
+    pin_single_gpu(config)
 
     print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 GRPO 训练（每个 prompt 采样 {num_generations} 条，规则奖励）")
@@ -777,6 +862,29 @@ if __name__ == "__main__":
         help="每条 rollout 最多执行多少轮工具调用；环境 observation 不计入策略 loss",
     )
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument(
+        "--loss_type", default=None,
+        choices=["grpo", "dapo", "bnpo", "dr_grpo", "cispo", "sapo", "luspo"],
+        help="token 级损失的归一化口径。'dapo' 按全局有效 token 数归一化，"
+             "消除长度偏置（DAPO 论文）。默认不传，沿用当前 TRL 的默认值",
+    )
+    p.add_argument(
+        "--epsilon_high", type=float, default=None,
+        help="重要性比的上界（clip-higher）。DAPO 论文建议 0.28；"
+             "默认不传，上下界取同一个 epsilon",
+    )
+    p.add_argument(
+        "--mask_truncated_completions",
+        action=argparse.BooleanOptionalAction, default=None,
+        help="把撞上 max_completion_length 的截断轨迹从 loss 里剔除（DAPO overlong "
+             "filtering）。默认不传，沿用 TRL 现值",
+    )
+    p.add_argument(
+        "--dapo", action="store_true",
+        help="DAPO 预设：loss_type=dapo、epsilon_high=0.28、"
+             "mask_truncated_completions=True、beta=0（DAPO 不用 KL 正则）。"
+             "显式给出的单项参数优先于该预设",
+    )
     p.add_argument(
         "--seed", type=int, default=42,
         help="训练与 rollout 采样种子；对比两个策略的原始轨迹时必须保持一致",

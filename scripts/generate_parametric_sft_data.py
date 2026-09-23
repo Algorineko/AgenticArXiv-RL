@@ -281,6 +281,83 @@ def build_parametric_tasks() -> List[DerivedTask]:
             parameters={**args, "ref": count, "keep_dual": True},
         )
 
+    # 9) 解读族（README T2/T3）。工具链拓扑与父任务一致：检索 → 下载 → 读/总结。
+    #
+    # 快照里 get_paper_content 的**默认**读取（section=None，标题+摘要）对每篇论文
+    # 都有记录；命名小节是尽力而为的，同一篇论文未必有 method/result/conclusion。
+    # 所以只参数化确定可执行的那部分：read 族固定在 section=None 上变化 aspect/ref，
+    # 小节抽取由父任务自己覆盖；summarize 族的 3 风格 × 3 预算对每篇论文都有记录，
+    # 可以放心一起变。
+    for ref in (1, 3, 4):
+        add(
+            "read_ai5_default", f"ref{ref}",
+            f"检索最近7天人工智能(cs.AI)论文5篇，下载第{ref}篇，然后读出它的标题与摘要",
+            [
+                step("get_recently_submitted_cs_papers", aspect="AI", days=7, max_results=5),
+                step("download_arxiv_pdf", ref=ref),
+                step("get_paper_content", ref=ref, section=None),
+            ],
+            parameters={"aspect": "AI", "ref": ref, "section": None},
+        )
+    for aspect, ref in (("CV", 2), ("CL", 4)):
+        add(
+            "read_ai5_default", f"{aspect.lower()}_ref{ref}",
+            f"检索最近7天{CN[aspect]}论文5篇，下载第{ref}篇，然后读出它的标题与摘要",
+            [
+                step("get_recently_submitted_cs_papers", aspect=aspect, days=7, max_results=5),
+                step("download_arxiv_pdf", ref=ref),
+                step("get_paper_content", ref=ref, section=None),
+            ],
+            parameters={"aspect": aspect, "ref": ref, "section": None},
+        )
+
+    for style, budget in (("structured", 60), ("bullet", 120), ("tldr", 250)):
+        args = {"aspect": "AI", "ref": 2, "style": style, "max_words": budget}
+        add(
+            "summary_ai5_tldr60", f"{style}{budget}",
+            f"检索最近7天人工智能(cs.AI)论文5篇，下载第2篇，"
+            f"用 {budget} 词以内的 {style} 风格总结它",
+            [
+                step("get_recently_submitted_cs_papers", aspect="AI", days=7, max_results=5),
+                step("download_arxiv_pdf", ref=2),
+                step("summarize_paper", ref=2, style=style, max_words=budget),
+            ],
+            parameters=args,
+        )
+    for aspect, ref, style, budget in (
+        ("CV", 3, "tldr", 60), ("CL", 2, "structured", 120), ("RO", 4, "bullet", 250),
+    ):
+        args = {
+            "aspect": aspect, "ref": ref, "style": style, "max_words": budget,
+        }
+        add(
+            "summary_ai5_tldr60", f"{aspect.lower()}_ref{ref}_{style}{budget}",
+            f"检索最近7天{CN[aspect]}论文5篇，下载第{ref}篇，"
+            f"用 {budget} 词以内的 {style} 风格总结它",
+            [
+                step("get_recently_submitted_cs_papers", aspect=aspect, days=7, max_results=5),
+                step("download_arxiv_pdf", ref=ref),
+                step("summarize_paper", ref=ref, style=style, max_words=budget),
+            ],
+            parameters=args,
+        )
+
+    # 10) 图表抽取（README T4）。ref 同样只走快照里确实有内嵌位图的位置：
+    # 抽图在「论文没有位图」时返回 count=0 而不是报错，所以选错 ref 不会响亮
+    # 失败，只会安静地生成一条空结果轨迹。CV 池前 12 篇都有，RO/AI 取已核对的
+    # 序号。
+    for aspect, ref in (("CV", 2), ("CV", 4), ("RO", 3), ("AI", 1)):
+        add(
+            "figure_cv5_ref1", f"{aspect.lower()}_ref{ref}",
+            f"检索最近7天{CN[aspect]}论文5篇，下载第{ref}篇，把它的图表抽出来",
+            [
+                step("get_recently_submitted_cs_papers", aspect=aspect, days=7, max_results=5),
+                step("download_arxiv_pdf", ref=ref),
+                step("extract_paper_figures", ref=ref),
+            ],
+            parameters={"aspect": aspect, "ref": ref},
+        )
+
     return out
 
 

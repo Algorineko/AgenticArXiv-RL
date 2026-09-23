@@ -5,10 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # ensure tools are registered (side-effect import)
-import tools.arxiv_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
-import tools.cache_status_tool  # noqa: F401
+from tools.bootstrap import register_all_tools
+
+register_all_tools()
 
 from api.endpoints import router as api_router
 from models.db import init_db

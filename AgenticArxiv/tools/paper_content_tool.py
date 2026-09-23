@@ -83,6 +83,68 @@ def _heading_name(line: str) -> Optional[str]:
     return None
 
 
+#: 有些模板把标签和正文连在一起（"Abstract—We propose…"），这种行靠
+#: `_heading_name` 认不出来，需要在恢复出的段落开头把它剥掉。
+_INLINE_ABSTRACT_RE = re.compile(r"^\s*abstract\s*[:—–\-]+\s*", re.IGNORECASE)
+
+#: 一段文字至少要有这么多词才可能是一个摘要（而不是标题、作者或单位）。
+_MIN_ABSTRACT_WORDS = 25
+
+
+def _abstract_without_heading(lines: list) -> Optional[str]:
+    """Recover the abstract when the PDF typesets it without a heading line.
+
+    A large share of arXiv papers use a template (CVPR/ICCV and friends) that
+    renders the abstract with no visible "Abstract" label, so the heading
+    search finds nothing and every reading task fails on an otherwise perfectly
+    readable paper.
+
+    The abstract is then, reliably, the **longest contiguous prose block before
+    the first section heading**: title, author list and affiliations come
+    earlier and are short by construction, while the abstract is a paragraph of
+    a couple hundred words. Blocks are joined with spaces because the
+    hard-wrapped lines are one paragraph, not separate ones.
+    """
+    cut = len(lines)
+
+    for i, line in enumerate(lines):
+        if _heading_name(line) is not None:
+            cut = i
+            break
+
+    blocks: list = []
+    current: list = []
+
+    for line in lines[:cut]:
+        if line.strip():
+            current.append(line.strip())
+        elif current:
+            blocks.append(current)
+            current = []
+
+    if current:
+        blocks.append(current)
+
+    best: Optional[list] = None
+    best_words = 0
+
+    for block in blocks:
+        words = len(" ".join(block).split())
+        if words > best_words:
+            best, best_words = block, words
+
+    if best is None or best_words < _MIN_ABSTRACT_WORDS:
+        return None
+
+    joined = _normalize_text(" ".join(best))
+
+    # The same templates often run the label into the text ("Abstract—Broad
+    # public adoption…" / "Abstract: Behavior cloning…") so the heading search
+    # misses it. Drop the label when it leads the recovered block; otherwise it
+    # is just noise in front of the abstract.
+    return _INLINE_ABSTRACT_RE.sub("", joined, count=1).strip()
+
+
 def _extract_section(text: str, section: str) -> str:
     wanted = section.lower().strip()
 
@@ -101,6 +163,16 @@ def _extract_section(text: str, section: str) -> str:
             break
 
     if start is None:
+        # Only the abstract gets this fallback. Method/result/conclusion really
+        # can be absent from a given paper, and a task that explicitly asks for
+        # one must keep getting a deterministic "not found" error rather than a
+        # guess. An arXiv paper, by contrast, always has an abstract — a miss
+        # here is a typesetting quirk, not a missing section.
+        if wanted == "abstract":
+            recovered = _abstract_without_heading(lines)
+            if recovered:
+                return recovered
+
         raise ValueError(f"section {wanted!r} was not found in the paper")
 
     end = len(lines)

@@ -1,5 +1,5 @@
 {
-  "model": "/mnt/disk4/gaojiayu/models/Qwen2.5-1.5B-Instruct",
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
   "sample_count": 42,
   "error_count": 0,
   "summary_by_agent": {

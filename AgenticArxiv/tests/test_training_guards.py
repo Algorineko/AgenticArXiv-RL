@@ -7,14 +7,27 @@
 import unittest
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 from benchmark.splits import load_split
 from benchmark.tasks import get_all_tasks
 from benchmark.tasks_expanded import get_expanded_tasks
-from rl.precision import precision_flags
-from rl.train_grpo import RewardVarianceGuard, _build_reward_calculator, _load_tasks
+from rl.precision import (
+    assert_quantization_is_single_process,
+    is_distributed_launch,
+    pin_single_gpu,
+    precision_flags,
+)
+from rl.train_grpo import (
+    DAPO_PRESET,
+    DEFAULT_BETA,
+    RewardVarianceGuard,
+    _build_reward_calculator,
+    _load_tasks,
+    resolve_dapo_options,
+)
 from rl.train_sft import (
     QLORA_TARGET_MODULES,
     _assert_lora_only_trainable,
@@ -133,6 +146,82 @@ class PromptCompletionConversionTest(unittest.TestCase):
         row = {"messages": [{"role": "user", "content": "task"}]}
         with self.assertRaisesRegex(ValueError, "assistant"):
             _to_prompt_completion(row)
+
+
+class SftRowLoadingTest(unittest.TestCase):
+    """审计列不能把训练数据加载搞崩。
+
+    参数化 SFT 数据每行都带 `generation_parameters` 之类的溯源结构，它们的
+    形状逐行不同（检索行没有 section/style/max_words，解读行有）。`datasets`
+    为整个文件推断一套 Arrow schema，一行多一个键就会让整个数据集 cast 失败
+    —— 曾经就是这样：2436 条数据一条都加载不进来。
+    """
+
+    def setUp(self):
+        import tempfile
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "rows.jsonl"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, rows):
+        import json as _json
+
+        self.path.write_text(
+            "\n".join(_json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_keeps_only_the_training_columns(self):
+        from rl.train_sft import _load_sft_rows
+
+        self._write([{
+            "messages": [{"role": "user", "content": "t"}],
+            "generation_parameters": {"aspect": "AI"},
+            "sample_sha256": "abc",
+        }])
+
+        rows = _load_sft_rows(self.path)
+
+        self.assertEqual(rows, [{"messages": [{"role": "user", "content": "t"}]}])
+
+    def test_rows_with_different_provenance_still_load(self):
+        from rl.train_sft import _load_sft_rows
+
+        self._write([
+            {"messages": [{"role": "user", "content": "a"}],
+             "generation_parameters": {"aspect": "AI", "ref": 1}},
+            {"messages": [{"role": "user", "content": "b"}],
+             "generation_parameters": {"aspect": "CV", "ref": 2, "style": "tldr",
+                                       "max_words": 60, "section": None}},
+        ])
+
+        rows = _load_sft_rows(self.path)
+
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(set(r) == {"messages"} for r in rows))
+
+    def test_prompt_completion_rows_pass_through(self):
+        from rl.train_sft import _load_sft_rows
+
+        self._write([{
+            "prompt": [{"role": "user", "content": "t"}],
+            "completion": [{"role": "assistant", "content": "a"}],
+            "task_id": "x",
+        }])
+
+        rows = _load_sft_rows(self.path)
+
+        self.assertEqual(set(rows[0]), {"prompt", "completion"})
+
+    def test_blank_lines_are_ignored_and_empty_input_fails(self):
+        from rl.train_sft import _load_sft_rows
+
+        self.path.write_text("\n\n", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            _load_sft_rows(self.path)
 
 
 class CheckLengthsTest(unittest.TestCase):
@@ -349,6 +438,266 @@ class PrecisionFlagsTest(unittest.TestCase):
         from rl.train_sft import _precision_flags as sft
         self.assertEqual(sft(), dpo())
         self.assertEqual(dpo(), grpo())
+
+
+class DistributedLaunchGuardTest(unittest.TestCase):
+    """多卡启动下不能再钉单卡，QLoRA 也不能静默按单卡跑。"""
+
+    def _env(self, **values):
+        import os
+        from unittest.mock import patch
+
+        return patch.dict(os.environ, values, clear=False)
+
+    def test_no_launch_marker_means_single_process(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("LOCAL_RANK", None)
+            self.assertFalse(is_distributed_launch())
+
+    def test_local_rank_marks_a_distributed_launch(self):
+        with self._env(LOCAL_RANK="1"):
+            self.assertTrue(is_distributed_launch())
+
+    def test_pin_single_gpu_is_skipped_under_launch(self):
+        config = SimpleNamespace()
+        with self._env(LOCAL_RANK="0"):
+            pin_single_gpu(config)
+        self.assertFalse(hasattr(config, "_n_gpu"))
+
+    def test_pin_single_gpu_applies_without_launch(self):
+        import os
+        from unittest.mock import patch
+
+        config = SimpleNamespace()
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("LOCAL_RANK", None)
+            os.environ.pop("RANK", None)
+            pin_single_gpu(config)
+        self.assertEqual(config._n_gpu, 1)
+
+    def test_qlora_is_rejected_under_launch(self):
+        with self._env(LOCAL_RANK="0"):
+            with self.assertRaises(SystemExit):
+                assert_quantization_is_single_process(True)
+
+    def test_full_precision_is_allowed_under_launch(self):
+        with self._env(LOCAL_RANK="0"):
+            assert_quantization_is_single_process(False)
+
+
+class DapoPresetTest(unittest.TestCase):
+    """DAPO 预设只填空，不覆盖显式给出的参数。"""
+
+    def _resolve(self, dapo, **overrides):
+        kwargs = {
+            "loss_type": None,
+            "epsilon_high": None,
+            "mask_truncated_completions": None,
+            "beta": DEFAULT_BETA,
+        }
+        kwargs.update(overrides)
+        return resolve_dapo_options(dapo=dapo, **kwargs)
+
+    def test_without_the_flag_nothing_changes(self):
+        self.assertEqual(self._resolve(False), (None, None, None, DEFAULT_BETA))
+
+    def test_preset_fills_every_default(self):
+        self.assertEqual(
+            self._resolve(True),
+            (
+                DAPO_PRESET["loss_type"],
+                DAPO_PRESET["epsilon_high"],
+                DAPO_PRESET["mask_truncated_completions"],
+                DAPO_PRESET["beta"],
+            ),
+        )
+
+    def test_explicit_values_beat_the_preset(self):
+        self.assertEqual(
+            self._resolve(
+                True,
+                loss_type="dr_grpo",
+                epsilon_high=0.2,
+                mask_truncated_completions=False,
+                beta=0.1,
+            ),
+            ("dr_grpo", 0.2, False, 0.1),
+        )
+
+    def test_a_changed_beta_survives_the_preset(self):
+        """beta 没有「未设置」哨兵值，所以只认「没动过默认值」这一种情况。"""
+        self.assertEqual(self._resolve(True, beta=0.2)[3], 0.2)
+        self.assertEqual(self._resolve(True, beta=DEFAULT_BETA)[3], 0.0)
+
+    def test_preset_values_are_trl_field_names(self):
+        import dataclasses
+
+        from trl import GRPOConfig
+
+        fields = {f.name for f in dataclasses.fields(GRPOConfig)}
+        for name in DAPO_PRESET:
+            with self.subTest(field=name):
+                self.assertIn(name, fields)
+
+
+class StageVerificationDefaultTest(unittest.TestCase):
+    """五个训练阶段的 `--verify` 默认值必须一致，而且必须默认开启。
+
+    README 把阶段验证写成每个阶段都有的质量闸门（「每个阶段产出模型须过最低
+    质量阈值……`--no-verify` 可跳过」）。SFT 与 DPO 曾经默认关闭、GRPO/PPO/OPD
+    默认开启，于是最基础的两步实际上没有闸门：SFT 训坏了要一路跑到 GRPO 才看得
+    出来，而中间那轮 DPO 数据采样已经白烧掉一两个小时。
+    """
+
+    STAGES = ("train_sft", "train_dpo", "train_grpo", "train_ppo", "train_opd")
+
+    def test_sources_declare_verify_defaulting_to_true(self):
+        import re
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[2]
+        for stage in self.STAGES:
+            source = (repo / "AgenticArxiv" / "rl" / f"{stage}.py").read_text(encoding="utf-8")
+            with self.subTest(stage=stage):
+                match = re.search(
+                    r'"--verify",\s*action=[^,]+,\s*default=(True|False)', source
+                )
+                self.assertIsNotNone(match, f"{stage} 里找不到 --verify 的默认值")
+                self.assertEqual(
+                    match.group(1),
+                    "True",
+                    f"{stage} 的 --verify 默认关闭，阶段闸门对这一步形同不存在",
+                )
+
+    def test_every_stage_accepts_no_verify(self):
+        """「可跳过」要真的能跳过：必须是 BooleanOptionalAction。"""
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[2]
+        for stage in self.STAGES:
+            source = (repo / "AgenticArxiv" / "rl" / f"{stage}.py").read_text(encoding="utf-8")
+            with self.subTest(stage=stage):
+                self.assertIn("argparse.BooleanOptionalAction", source)
+
+
+class ToolRegistrationCoverageTest(unittest.TestCase):
+    """所有训练入口都必须注册齐工具。
+
+    每个入口曾经各自手写一段 `import tools.xxx  # 触发注册`，四行里只列了当时
+    存在的四个工具。后来加了 `search_arxiv_papers`、`get_paper_content`、
+    `summarize_paper`、`extract_paper_figures`，这些入口没有跟着更新 —— 后果不是
+    报错，而是 prompt 里的工具列表少了几个：策略根本不知道那些工具存在，对应的
+    任务永远做不成，日志上却什么都看不出来。现在统一走 tools/bootstrap.py。
+    """
+
+    ENTRY_POINTS = (
+        "rl.train_grpo",
+        "rl.train_opd",
+        "rl.stage_verifier",
+        "rl.build_snapshot",
+    )
+
+    def test_every_entry_point_registers_the_full_tool_set(self):
+        from tools.bootstrap import missing_tools, register_all_tools
+
+        # 先把注册表清干净不可行（注册是模块级副作用），所以改为逐个 import
+        # 入口模块后再整体核对：任何入口只要漏注册，这里就会看见缺项。
+        for module in self.ENTRY_POINTS:
+            with self.subTest(module=module):
+                __import__(module)
+
+        register_all_tools()
+        self.assertEqual(missing_tools(), [])
+
+    def test_entry_points_do_not_hand_list_tool_modules(self):
+        """手写模块清单本身就是这个 bug 的成因，别再长回来。"""
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[2]
+        for module in self.ENTRY_POINTS:
+            path = repo / "AgenticArxiv" / (module.replace(".", "/") + ".py")
+            source = path.read_text(encoding="utf-8")
+            with self.subTest(module=module):
+                self.assertNotIn(
+                    "import tools.pdf_download_tool",
+                    source,
+                    f"{module} 又在手写工具模块清单了，改用 tools.bootstrap",
+                )
+
+
+class PpoAvailabilityTest(unittest.TestCase):
+    """PPO 对当前 TRL 不可用时，必须响亮失败而不是静默消失。
+
+    TRL 从 0.9 起弃用、并在后续版本移除了经典 PPO trainer
+    （`PPOTrainer` / `PPOConfig` / `AutoModelForCausalLMWithValueHead`）。
+    requirements.txt 只写了 `trl>=0.28.0`，所以 README 里作为「阶段4」宣传的这条
+    路径在受支持的版本上根本跑不起来 —— 这正是需要被说出来的那类不一致。
+    """
+
+    def test_import_either_succeeds_or_explains_itself(self):
+        import importlib
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        try:
+            importlib.import_module("rl.train_ppo")
+        except SystemExit as exc:
+            message = str(exc)
+            for expected in ("PPOTrainer", "trl.experimental.ppo", "GRPO"):
+                with self.subTest(fragment=expected):
+                    self.assertIn(expected, message)
+        except ImportError as exc:  # pragma: no cover - 未受控的失败形态
+            self.fail(
+                "train_ppo 抛出了不带解释的 ImportError，应当改成 SystemExit 并说明"
+                f"受支持的替代路径: {exc}"
+            )
+
+
+class VerificationModelDeviceTest(unittest.TestCase):
+    """阶段验证必须在训练设备上生成。
+
+    `StageVerifier` 里的三个 verify_* 原本用裸 `from_pretrained` 加载产物模型，
+    模型落在 CPU；`CanaryEvaluator` 又是从参数上读设备，于是整道闸门在 CPU 上
+    做生成。1.5B 模型跑 8×256 token 要几十分钟一个阶段 —— 闸门慢到这个程度就
+    没人愿意留着它，这正是它当初被默认关掉的原因之一。
+    """
+
+    def _loaded(self, cuda: bool):
+        from unittest.mock import MagicMock, patch
+
+        from rl import stage_verifier
+
+        model = MagicMock()
+        tokenizer = MagicMock()
+        tokenizer.pad_token = None
+        tokenizer.eos_token = "</s>"
+
+        with patch.object(stage_verifier.torch.cuda, "is_available", return_value=cuda), \
+             patch.object(
+                 stage_verifier.AutoModelForCausalLM, "from_pretrained", return_value=model
+             ), patch.object(
+                 stage_verifier.AutoTokenizer, "from_pretrained", return_value=tokenizer
+             ):
+            loaded_model, loaded_tokenizer = stage_verifier._load_verification_model(
+                "/tmp/fake-model"
+            )
+        # 助手返回的是 .to() 的结果，断言要看被调用的那个对象
+        return model, loaded_model, loaded_tokenizer
+
+    def test_model_is_moved_to_the_cuda_device_when_available(self):
+        loaded, _moved, _tokenizer = self._loaded(cuda=True)
+        loaded.to.assert_called_once_with("cuda")
+
+    def test_cpu_only_environment_does_not_try_to_move(self):
+        loaded, _moved, _tokenizer = self._loaded(cuda=False)
+        loaded.to.assert_not_called()
+
+    def test_missing_pad_token_falls_back_to_eos(self):
+        _loaded, _moved, tokenizer = self._loaded(cuda=True)
+        self.assertEqual(tokenizer.pad_token, tokenizer.eos_token)
 
 
 class StageVerifierTest(unittest.TestCase):

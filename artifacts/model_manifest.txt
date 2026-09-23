@@ -1,6 +1,6 @@
 ]633;E;echo "source=https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct";a79716a5-b64f-43f6-97f6-d618e15b26bd]633;Csource=https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct
-local_path=/mnt/disk4/gaojiayu/models/Qwen2.5-1.5B-Instruct
+local_path=Qwen/Qwen2.5-1.5B-Instruct
 download_method=manual_browser_download
 verified_tensor_count=338
 verified_numel=1543714304
-dd924a11b4c220f385b51ffa522daea7c9f3d850e31b162bb5661df483c6d3ee  /mnt/disk4/gaojiayu/models/Qwen2.5-1.5B-Instruct/model.safetensors
+dd924a11b4c220f385b51ffa522daea7c9f3d850e31b162bb5661df483c6d3ee  Qwen/Qwen2.5-1.5B-Instruct/model.safetensors

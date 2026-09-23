@@ -17,7 +17,7 @@ from generate_parametric_sft_data import (  # noqa: E402
 from benchmark.tasks_expanded import EXPANDED_SPECS  # noqa: E402
 
 
-SPLIT_PATH = REPO_ROOT / "data" / "splits" / "v2_62.json"
+SPLIT_PATH = REPO_ROOT / "data" / "splits" / "v3_81.json"
 
 
 class ParametricSftTaskTest(unittest.TestCase):
@@ -28,7 +28,7 @@ class ParametricSftTaskTest(unittest.TestCase):
         cls.by_id = {spec.id: spec for spec in EXPANDED_SPECS}
 
     def test_expected_count_and_unique_ids(self):
-        self.assertEqual(len(self.derived), 65)
+        self.assertEqual(len(self.derived), 80)
         ids = [item.spec.id for item in self.derived]
         self.assertEqual(len(ids), len(set(ids)))
 

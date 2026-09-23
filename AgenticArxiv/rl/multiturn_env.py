@@ -46,6 +46,7 @@ class AgenticArxivMultiTurnEnv:
         return (
             Path(settings.pdf_raw_path),
             Path(settings.pdf_translated_path),
+            Path(settings.figures_path),
         )
 
     def capture_state(self) -> dict[str, Any]:
@@ -182,6 +183,100 @@ class AgenticArxivMultiTurnEnv:
                 "section": section,
                 # Refs are session-local, while snapshot identity must remain
                 # stable across independent rollouts.
+                "_resolved_paper_id": paper.id,
+            },
+        )
+
+    def summarize_paper(
+        self,
+        ref: str | int | None = 1,
+        style: Optional[str] = None,
+        max_words: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """Summarise a downloaded paper through the deterministic backend.
+
+        Args:
+            ref: One-based result index, arXiv id, or title fragment.
+            style: One of tldr / structured / bullet.
+            max_words: Word budget; rounded up to the nearest supported value.
+
+        Returns:
+            Summary text plus the paper it was produced from.
+        """
+        paper = self.store.resolve_paper(self.session_id, ref)
+        if paper is None:
+            raise ValueError(
+                "Paper not found; search for the paper and check the ref."
+            )
+
+        return self.backend.execute_tool(
+            "summarize_paper",
+            {
+                "session_id": self.session_id,
+                "ref": ref,
+                "style": style,
+                "max_words": max_words,
+                # Refs are session-local, while snapshot identity must remain
+                # stable across independent rollouts.
+                "_resolved_paper_id": paper.id,
+            },
+        )
+
+    def extract_paper_figures(
+        self, ref: str | int | None = 1
+    ) -> dict[str, Any]:
+        """Extract a downloaded paper's figures through the snapshot backend.
+
+        Args:
+            ref: One-based result index, arXiv id, or title fragment.
+
+        Returns:
+            Extracted figure files with page numbers and captions.
+        """
+        paper = self.store.resolve_paper(self.session_id, ref)
+        if paper is None:
+            raise ValueError(
+                "Paper not found; search for the paper and check the ref."
+            )
+
+        return self.backend.execute_tool(
+            "extract_paper_figures",
+            {
+                "session_id": self.session_id,
+                "ref": ref,
+                "_resolved_paper_id": paper.id,
+            },
+        )
+
+    def analyze_figure(
+        self,
+        ref: str | int | None = 1,
+        figure_no: int = 1,
+        question: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Answer a question about one figure through the snapshot backend.
+
+        Args:
+            ref: One-based result index, arXiv id, or title fragment.
+            figure_no: 1-based figure index within the paper.
+            question: One of describe / axes / trend.
+
+        Returns:
+            The environment's answer plus the figure it came from.
+        """
+        paper = self.store.resolve_paper(self.session_id, ref)
+        if paper is None:
+            raise ValueError(
+                "Paper not found; search for the paper and check the ref."
+            )
+
+        return self.backend.execute_tool(
+            "analyze_figure",
+            {
+                "session_id": self.session_id,
+                "ref": ref,
+                "figure_no": figure_no,
+                "question": question,
                 "_resolved_paper_id": paper.id,
             },
         )

@@ -217,6 +217,100 @@ class PaperContentToolTest(unittest.TestCase):
                 section="conclusion",
             )
 
+    def _pdf_with_text(self, name: str, body: str) -> Path:
+        path = Path(self.tmp.name) / name
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(50, 50, 550, 780), body, fontsize=11)
+        doc.save(path)
+        doc.close()
+        return path
+
+    def _point_at(self, path: Path) -> None:
+        store.upsert_pdf_asset(
+            PdfAsset(
+                paper_id=PAPER.id,
+                local_path=str(path),
+                status="READY",
+                size_bytes=path.stat().st_size,
+            )
+        )
+
+    def test_abstract_is_recovered_when_the_template_has_no_heading(self):
+        """CVPR 一类模板不排 "Abstract" 标题，纯靠标题行会整篇读不出摘要。"""
+        path = self._pdf_with_text(
+            "noheading.pdf",
+            "A Study of Headingless Abstracts\n"
+            "A. Author, B. Author\n"
+            "Institute of Examples, Somewhere\n\n"
+            "This paper studies what happens when a template typesets the "
+            "abstract without any label at all. We show that the longest prose "
+            "block before the first section heading is exactly the abstract "
+            "paragraph, because title and author lines are short by "
+            "construction and the abstract is not.\n\n"
+            "1 Introduction\n"
+            "Introductory material.",
+        )
+        self._point_at(path)
+
+        result = get_paper_content(session_id="s", ref=1)
+
+        self.assertIn("studies what happens when a template", result["content"])
+        self.assertIn("longest prose block", result["content"])
+        self.assertNotIn("Introductory material", result["content"])
+        self.assertNotIn("Institute of Examples", result["content"])
+
+    def test_inline_abstract_label_is_stripped(self):
+        path = self._pdf_with_text(
+            "inline.pdf",
+            "A Study of Inline Labels\n"
+            "A. Author\n\n"
+            "Abstract—We propose a method that keeps the label glued to the "
+            "text, which is what several conference templates actually do, and "
+            "which defeats a heading-only parser completely.\n\n"
+            "1 Introduction\n"
+            "Introductory material.",
+        )
+        self._point_at(path)
+
+        result = get_paper_content(session_id="s", ref=1)
+        abstract = result["content"].split("Abstract", 1)[-1]
+
+        self.assertIn("We propose a method", abstract)
+        self.assertNotIn("—We propose", result["content"])
+
+    def test_other_sections_keep_failing_without_a_heading(self):
+        """兜底只给摘要：正文小节确实可能没有，显式要它就该报错而不是猜。"""
+        path = self._pdf_with_text(
+            "noconclusion.pdf",
+            "A Study Without Sections\n"
+            "A. Author\n\n"
+            "This paper has a reasonably long abstract paragraph but no "
+            "conclusion section at all, so asking for one must fail rather "
+            "than fall back to whatever text happens to be longest.\n\n"
+            "1 Introduction\n"
+            "Introductory material.",
+        )
+        self._point_at(path)
+
+        with self.assertRaisesRegex(ValueError, "was not found"):
+            get_paper_content(session_id="s", ref=1, section="conclusion")
+
+    def test_short_front_matter_does_not_become_an_abstract(self):
+        """没有摘要、只有标题与作者时不能把作者行当成摘要交出去。"""
+        path = self._pdf_with_text(
+            "noprose.pdf",
+            "Short Paper\n"
+            "A. Author, B. Author\n"
+            "Institute of Examples\n\n"
+            "1 Introduction\n"
+            "Introductory material.",
+        )
+        self._point_at(path)
+
+        with self.assertRaisesRegex(ValueError, "was not found"):
+            get_paper_content(session_id="s", ref=1)
+
     def test_snapshot_replay_is_offline_and_deterministic(self):
         record_path = Path(self.tmp.name) / "snapshot.json"
 

@@ -28,9 +28,13 @@ TOOL_CLI_PATH = os.path.join(os.path.dirname(__file__), "tool_cli.py")
 # CLI 子命令 → registry 工具名映射
 CLI_TO_REGISTRY = {
     "search_papers": "get_recently_submitted_cs_papers",
+    "search_keyword": "search_arxiv_papers",
     "download_pdf": "download_arxiv_pdf",
     "translate_pdf": "translate_arxiv_pdf",
     "cache_status": "get_paper_cache_status",
+    "read_paper": "get_paper_content",
+    "summarize_paper": "summarize_paper",
+    "extract_figures": "extract_paper_figures",
 }
 REGISTRY_TO_CLI = {v: k for k, v in CLI_TO_REGISTRY.items()}
 

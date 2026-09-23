@@ -199,6 +199,10 @@ def build_preference_pair(
     }
 
 
+#: 低于这个产出率就认为这条链路没有可用信号；见文件末尾的告警说明。
+MIN_USEFUL_PAIR_RATIO = 0.25
+
+
 def generate_dpo_dataset(
     num_rollouts_per_task: int = 5,
     model: Optional[str] = None,
@@ -215,7 +219,7 @@ def generate_dpo_dataset(
     sft_model_path = Path(model) if model else REPO_ROOT / "outputs" / "sft" / "final"
     if not sft_model_path.exists():
         print(f"❌ SFT 模型不存在: {sft_model_path}")
-        print(f"请先运行: python -m AgenticArxiv.rl.train_sft")
+        print("请先运行: python -m AgenticArxiv.rl.train_sft")
         return
 
     print(f"📦 加载本地 SFT 模型: {sft_model_path}")
@@ -276,18 +280,17 @@ def generate_dpo_dataset(
                 print(f"   rollout {j+1}: ❌ {e}")
 
         if len(rollouts) < 2:
-            print(f"   ⚠️ rollout 数量不足，跳过")
+            print("   ⚠️ rollout 数量不足，跳过")
             continue
 
         pair = build_preference_pair(
             rollouts, task_def, tools_desc, min_reward_gap=min_reward_gap
         )
         if pair is None:
-            print(f"   ⚠️ 未发现有效分歧决策点（动作相同或奖励无显著差异），跳过")
+            print("   ⚠️ 未发现有效分歧决策点（动作相同或奖励无显著差异），跳过")
             continue
 
         dpo_data.append(pair)
-        rewards = [r["reward"] for r in rollouts]
         print(
             f"   ✅ 提取偏好对: gap={pair['reward_gap']:.2f}, step={pair['divergence_step']}"
         )
@@ -303,6 +306,24 @@ def generate_dpo_dataset(
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     print(f"\n✅ DPO 数据生成完成：共 {len(dpo_data)} 条偏好样本 → {output_path}")
+
+    # 产出率低到一定程度就不是「这次任务集偏难」，而是这条链路没有信号。
+    # 实测：一个 2 epoch、loss≈0.08 的 SFT 模型在 77 条 expanded 任务上每任务采样
+    # 6 次，只有 8 条任务组内出现过奖励差异 —— 会做的每次都做对、不会做的每次以
+    # 同一形态失败，温度 0.8 也拉不开。这时候继续训 DPO 只是拿 7 条样本过一遍
+    # 优化器，报告里却会显示「DPO 阶段已完成」。按仓库别处的惯例，把静默的空转
+    # 写成响亮提示。
+    yield_ratio = len(dpo_data) / max(1, len(tasks))
+    if yield_ratio < MIN_USEFUL_PAIR_RATIO:
+        print(
+            f"\n⚠️  偏好对产出率偏低：{len(dpo_data)}/{len(tasks)} 条任务"
+            f"（{yield_ratio:.0%}，低于 {MIN_USEFUL_PAIR_RATIO:.0%}）。\n"
+            "   常见原因：SFT 模型在每个任务上已经饱和 —— 会做的每次都做对，"
+            "不会做的每次以同一形态失败，组内没有可比较的分歧。\n"
+            "   继续训 DPO 大概率是过一遍优化器而不是真的学偏好。可尝试：\n"
+            "     --num_rollouts_per_task 提高到 12~16、--temperature 提到 1.0~1.2，"
+            "或先确认 SFT 阶段没有把某些任务训成恒定输出。"
+        )
 
 
 if __name__ == "__main__":
@@ -324,4 +345,3 @@ if __name__ == "__main__":
         "--task_set", choices=["basic", "expanded"], default="basic"
     )
     generate_dpo_dataset(**vars(parser.parse_args()))
-

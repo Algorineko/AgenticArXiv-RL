@@ -35,12 +35,26 @@ import torch
 from datasets import Dataset
 from transformers import AutoTokenizer
 from rl import trl_compat  # noqa: F401  (torch<2.6 时兜底 FSDPModule，须在 trl 之前)
-from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
 
-import tools.arxiv_tool  # noqa: F401  触发工具注册
-import tools.cache_status_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
+# TRL 已经把经典的 PPO trainer 从主命名空间移除（`PPOTrainer` / `PPOConfig` /
+# `AutoModelForCausalLMWithValueHead` 在 0.29.1 里都不存在），这套脚本因此对
+# requirements.txt 允许的 TRL 版本整体不可用。与其让它在 import 阶段抛出
+# 一句看不出因果的 ImportError，不如在这里说清楚现状与出路。
+try:
+    from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
+except ImportError as exc:  # pragma: no cover - 取决于安装的 TRL 版本
+    raise SystemExit(
+        "❌ 当前 TRL 版本没有经典 PPO trainer，本脚本无法运行。\n"
+        f"   trl 报错: {exc}\n"
+        "   TRL 自 0.9 起弃用、并在后续版本移除了 `PPOTrainer` / `PPOConfig` /\n"
+        "   `AutoModelForCausalLMWithValueHead`；替代品是 trl.experimental.ppo，\n"
+        "   但它是实验 API（配置项与数据集格式都与这里不同），需要单独适配。\n"
+        "   在本项目里 PPO 属于学习性对照，不是训练路线的一部分：\n"
+        "   有可验证奖励走 GRPO（更强、更省显存），有强教师走 OPD。\n"
+        "   要跑 PPO 请先按实验 API 重写本脚本，或把 trl 固定到 0.9 之前。"
+    ) from exc
+
+from tools.bootstrap import require_all_tools
 
 from benchmark.tasks import get_all_tasks
 from rl.canary import CanaryCallback, CanaryEvaluator
@@ -58,6 +72,7 @@ def collator(data):
 
 
 def main(
+
     model: str = "outputs/grpo/final",
     output_dir: str = "outputs/ppo",
     epochs: int = 1,
@@ -76,6 +91,8 @@ def main(
     report_to: str = "none",
     run_name: Optional[str] = None,
 ):
+    require_all_tools("PPO 训练")
+
     backends = resolve_report_to(report_to)
     logging_dir = str(REPO_ROOT / output_dir / "logs")
 

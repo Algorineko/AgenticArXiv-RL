@@ -23,12 +23,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # 快照生成阶段不需要数据库
 os.environ.setdefault("STORE_BACKEND", "memory")
 
-import tools.arxiv_tool  # noqa: F401  触发工具注册
-import tools.pdf_download_tool  # noqa: F401
-import tools.paper_content_tool  # noqa: F401
+from tools.bootstrap import require_all_tools
 from models.schemas import Paper
 from models.store import store
 from rl.env import MockArxivEnv
+from tools.figure_analysis_tool import FIGURE_QUESTIONS
+from tools.paper_summary_tool import MAX_WORDS_BUCKETS, SUMMARY_STYLES
 
 DEFAULT_SNAPSHOT = str(
     Path(__file__).resolve().parents[2] / "data" / "mock_arxiv_snapshot.json"
@@ -127,14 +127,139 @@ def _validate_reference_pools(env: MockArxivEnv) -> None:
 
 
 
-def _snapshot_paper_content(env: MockArxivEnv) -> tuple[int, int]:
-    """Download each unique snapshotted paper once and pre-extract readable sections."""
+def _unique_snapshot_papers(env: MockArxivEnv, max_ref: int = 0) -> dict:
+    """Collect every distinct paper referenced by a recorded search pool.
+
+    ``max_ref`` caps how deep into each pool to go.  Search results themselves
+    are free (no PDF transfer), but pre-extracting text and figures means
+    downloading one PDF per paper, and that transfer is the whole cost of a
+    snapshot build.  On a slow or flaky route to arXiv, prefetching all ~400
+    papers of a default build can take hours, while the task templates only ever
+    address the first few entries of a pool (``ref`` ordinals).  ``0`` keeps
+    every paper, which is still the default so existing snapshots are unchanged.
+    """
     unique = {}
     for tool_name in ("get_recently_submitted_cs_papers", "search_arxiv_papers"):
         for entry in env.snapshot.get(tool_name, {}).values():
-            for item in entry.get("result") or []:
+            for item in (entry.get("result") or [])[: (max_ref or None)]:
                 if isinstance(item, dict) and item.get("id") and not item.get("_offline_fallback"):
                     unique[str(item["id"])] = item
+    return unique
+
+
+#: 预取的整体墙钟预算。单次请求的超时只管「两次读到字节之间的间隔」，而 arXiv
+#: 会间歇性让连接彻底悬住 —— 实测有请求卡在 SSL 读上二十多分钟，逐请求超时并未
+#: 生效。没有整体预算时，一次网络抽风就能把快照构建无限期拖住，而快照是整条
+#: 离线流水线的入口。
+DEFAULT_PREFETCH_BUDGET_S = 900
+
+
+def _prefetch_pdfs(
+    papers: dict,
+    workers: int,
+    budget_seconds: int = DEFAULT_PREFETCH_BUDGET_S,
+    downloader=None,
+) -> tuple[int, int, int]:
+    """Transfer the snapshot's PDFs concurrently before the serial content pass.
+
+    PDF transfer is pure network wait and takes the overwhelming majority of
+    snapshot build time, so it parallelises almost perfectly.  Only the HTTP
+    transfer and the file write happen in the pool: the in-memory store is not
+    thread-safe, and the serial pass below updates it anyway when it finds each
+    file already on disk.  Returns ``(downloaded, cached, failed)``.
+
+    The whole stage is bounded by ``budget_seconds``: anything still pending when
+    the budget runs out is counted as failed and left to the serial pass, which
+    retries it with its own (shorter) path.  Snapshot construction therefore
+    always reaches the content phase instead of hanging on one bad connection.
+    """
+    from concurrent.futures import (
+        ThreadPoolExecutor,
+        TimeoutError as FuturesTimeoutError,
+        as_completed,
+    )
+
+    from config import settings
+    from tools.pdf_download_tool import _fallback_pdf_url
+    from utils.pdf_downloader import (
+        download_pdf as default_downloader,
+        normalize_arxiv_pdf_url,
+        safe_filename,
+    )
+
+    fetch_pdf = downloader or default_downloader
+
+    jobs = []
+    for paper_id, item in papers.items():
+        url = normalize_arxiv_pdf_url(
+            item.get("pdf_url") or _fallback_pdf_url(paper_id)
+        )
+        jobs.append(
+            (
+                paper_id,
+                url,
+                os.path.join(settings.pdf_raw_path, safe_filename(paper_id) + ".pdf"),
+            )
+        )
+
+    os.makedirs(settings.pdf_raw_path, exist_ok=True)
+    counters = {"downloaded": 0, "cached": 0, "failed": 0}
+    errors: list[str] = []
+
+    cached_jobs = []
+    pending_jobs = []
+    for job in jobs:
+        path = job[2]
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            cached_jobs.append(job)
+        else:
+            pending_jobs.append(job)
+    counters["cached"] = len(cached_jobs)
+
+    def fetch(job):
+        paper_id, url, path = job
+        fetch_pdf(url, path)
+
+    # 不用 with：线程池的 __exit__ 走 shutdown(wait=True)，而卡在 SSL 读上的
+    # 工作线程杀不掉，等于把「超时预算」架空。这里显式 shutdown(wait=False)，
+    # 让主流程带着已完成的结果继续走内容阶段。注意 Python 3.10 里
+    # concurrent.futures.TimeoutError 与内建 TimeoutError 还不是同一个类，
+    # 必须按前者捕获。
+    pool = ThreadPoolExecutor(max_workers=max(1, workers))
+    futures = {pool.submit(fetch, job): job for job in pending_jobs}
+    try:
+        try:
+            for future in as_completed(futures, timeout=budget_seconds):
+                job = futures[future]
+                try:
+                    future.result()
+                    counters["downloaded"] += 1
+                except Exception as exc:  # noqa: BLE001
+                    counters["failed"] += 1
+                    errors.append(f"{job[0]}: {exc}")
+        except FuturesTimeoutError:
+            stuck = [job[0] for future, job in futures.items() if not future.done()]
+            counters["failed"] += len(stuck)
+            errors.append(
+                f"预取超时（{budget_seconds}s）：仍有 {len(stuck)} 篇未完成，"
+                "交给串行阶段重试"
+            )
+            for future in futures:
+                future.cancel()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    for message in errors[:10]:
+        print(f"  [WARN] 预取失败 {message}")
+    if len(errors) > 10:
+        print(f"  [WARN] ... 另有 {len(errors) - 10} 个预取失败")
+
+    return counters["downloaded"], counters["cached"], counters["failed"]
+
+
+def _snapshot_paper_content(env: MockArxivEnv, max_ref: int = 0) -> tuple[int, int]:
+    """Download each unique snapshotted paper once and pre-extract readable sections."""
+    unique = _unique_snapshot_papers(env, max_ref=max_ref)
 
     session_id = "__snapshot_paper_content__"
     ok = fail = 0
@@ -156,6 +281,56 @@ def _snapshot_paper_content(env: MockArxivEnv) -> tuple[int, int]:
                     )
                 except (ValueError, RuntimeError):
                     pass
+            # T3 summaries: the offline key space is exactly
+            # styles × word-budget buckets, so recording that full grid here
+            # makes every valid policy action replayable.  A paper that cannot
+            # be summarised (no usable sections) is a deterministic tool error
+            # at rollout time too, so it is not recorded.
+            for style in SUMMARY_STYLES:
+                for max_words in MAX_WORDS_BUCKETS:
+                    try:
+                        env.execute_tool(
+                            "summarize_paper",
+                            {
+                                "session_id": session_id,
+                                "ref": 1,
+                                "style": style,
+                                "max_words": max_words,
+                            },
+                        )
+                    except (ValueError, RuntimeError):
+                        pass
+            # T4 figure extraction.  Recorded for every paper, including the
+            # empty result: "this paper has no embedded raster figures" is a
+            # fact the tool reports rather than an error, and offline replay
+            # has to be able to answer it too.
+            figures = 0
+            try:
+                extraction = env.execute_tool(
+                    "extract_paper_figures",
+                    {"session_id": session_id, "ref": 1},
+                )
+                figures = int(extraction.get("count") or 0)
+            except (ValueError, RuntimeError):
+                pass
+            # T5 图表分析。question 是枚举、figure_no 有上界，所以每篇论文的
+            # 键空间正好是「实际抽出的图数 × 问法数」，可以一次录满；任何合法
+            # 动作在回放时都能命中。抽不出图的论文不录——它在环境里本来就会以
+            # 确定性的「图号越界」报错。
+            for figure_no in range(1, figures + 1):
+                for question in FIGURE_QUESTIONS:
+                    try:
+                        env.execute_tool(
+                            "analyze_figure",
+                            {
+                                "session_id": session_id,
+                                "ref": 1,
+                                "figure_no": figure_no,
+                                "question": question,
+                            },
+                        )
+                    except (ValueError, RuntimeError):
+                        pass
             ok += 1
         except Exception as exc:
             print(f"  [WARN] content paper={item.get('id')} → {exc}")
@@ -171,7 +346,15 @@ def build(
     days: int = 30,
     pin_references: bool = True,
     allow_partial: bool = False,
+    content_workers: int = 8,
+    content_max_ref: int = 0,
+    prefetch_budget: int = DEFAULT_PREFETCH_BUDGET_S,
+    skip_prefetch: bool = False,
 ) -> None:
+    # 快照要覆盖全部工具，否则回放时缺哪一类工具就少哪一类的记录，
+    # 而缺的那部分会以「replay 模式下快照缺失」的形式在训练时才炸出来。
+    require_all_tools("快照构建")
+
     aspects = list(aspects or DEFAULT_ASPECTS)
     keyword_queries = list(keyword_queries or DEFAULT_KEYWORD_QUERIES)
     path = Path(snapshot_path)
@@ -226,8 +409,22 @@ def build(
         _pin_reference_papers(env)
         _validate_reference_pools(env)
 
-    print("  预下载并抽取快照论文文本")
-    content_ok, content_fail = _snapshot_paper_content(env)
+    unique_papers = _unique_snapshot_papers(env, max_ref=content_max_ref)
+    scope = f"每池前 {content_max_ref} 篇" if content_max_ref else "全部论文"
+    if skip_prefetch:
+        # PDF 已经在磁盘上时（例如上一次构建下完但中途失败），并行预取这一步
+        # 只是重复劳动，而且 arXiv 的间歇性挂起恰好发生在这一阶段。直接进内容
+        # 阶段：它自己会为缺的论文走带重试的串行下载。
+        print(f"  跳过预取（--skip-prefetch），直接进入内容阶段（{len(unique_papers)} 篇）")
+    else:
+        print(f"  预取 {len(unique_papers)} 篇论文的 PDF（{scope}，并发 {content_workers}）")
+        fetched, cached, failed = _prefetch_pdfs(
+            unique_papers, content_workers, budget_seconds=prefetch_budget
+        )
+        print(f"  PDF: 新下载 {fetched} / 已缓存 {cached} / 失败 {failed}")
+
+    print("  抽取快照论文文本与图表")
+    content_ok, content_fail = _snapshot_paper_content(env, max_ref=content_max_ref)
     print(f"  content: {content_ok} 成功 / {content_fail} 失败")
 
     env.save_snapshot()
@@ -253,6 +450,33 @@ def main():
         action="store_true",
         help="允许部分查询失败后仍保存快照（训练/正式评测不建议）",
     )
+    parser.add_argument(
+        "--content-workers",
+        type=int,
+        default=8,
+        help="并发预取 PDF 的线程数；PDF 传输是快照构建的耗时大头",
+    )
+    parser.add_argument(
+        "--skip-prefetch",
+        action="store_true",
+        help="跳过并行预取，直接进入内容抽取阶段。PDF 已在本地（上次构建下完但"
+             "中途失败）时用，可绕开 arXiv 在预取阶段的间歇性挂起",
+    )
+    parser.add_argument(
+        "--prefetch-budget",
+        type=int,
+        default=DEFAULT_PREFETCH_BUDGET_S,
+        help="预取阶段的整体墙钟预算（秒）。arXiv 会间歇性让连接彻底悬住，"
+             "逐请求超时管不住；超预算的论文记为失败并交给串行阶段重试",
+    )
+    parser.add_argument(
+        "--content-max-ref",
+        type=int,
+        default=0,
+        help="只为每个论文池的前 N 篇预取正文与图表（0=全部）。搜索池本身不受影响，"
+             "所以检索类任务看到的论文数量不变。网络到 arXiv 慢或抖动时，"
+             "把范围压到任务真正会用到的 ref 上可以省掉绝大部分下载",
+    )
     args = parser.parse_args()
 
     build(
@@ -263,6 +487,10 @@ def main():
         days=args.days,
         pin_references=not args.no_pin_references,
         allow_partial=args.allow_partial,
+        content_workers=args.content_workers,
+        content_max_ref=args.content_max_ref,
+        prefetch_budget=args.prefetch_budget,
+        skip_prefetch=args.skip_prefetch,
     )
 
 

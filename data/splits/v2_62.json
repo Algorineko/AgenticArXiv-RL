@@ -135,7 +135,7 @@
   },
   "rates_metadata": {
     "metric": "strict_success_rate",
-    "model": "/mnt/disk4/gaojiayu/models/Qwen2.5-1.5B-Instruct",
+    "model": "Qwen/Qwen2.5-1.5B-Instruct",
     "agent": "regex",
     "backend": "transformers",
     "tool_execution": "offline_snapshot_replay",

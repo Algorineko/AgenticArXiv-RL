@@ -14,7 +14,12 @@ os.environ.setdefault("STORE_BACKEND", "memory")
 
 from benchmark.tasks_expanded import get_by_category  # noqa: E402
 from rl.env import MockArxivEnv  # noqa: E402
-from tools.arxiv_tool import _keyword_query_expression, search_arxiv_papers  # noqa: E402
+from tools.arxiv_tool import (  # noqa: E402
+    ARXIV_NETWORK_TIMEOUT_S,
+    _keyword_query_expression,
+    _network_timeout,
+    search_arxiv_papers,
+)
 
 
 def _paper(index: int) -> dict:
@@ -135,6 +140,59 @@ class KeywordSnapshotReplayTest(unittest.TestCase):
             [],
             "回退论文不应写入会话论文列表",
         )
+
+
+class ArxivNetworkTimeoutTest(unittest.TestCase):
+    """arXiv API 调用必须有时间上界。
+
+    `arxiv.Client` 自建 requests.Session 且从不传 timeout，export.arxiv.org
+    一旦卡住就会把调用方永久挂起——而 build_snapshot 是整条流水线唯一联网的
+    一步，挂在那里等于整个离线训练链起不来。
+    """
+
+    def test_scopes_and_restores_the_socket_default(self):
+        import socket
+
+        original = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(None)
+            with _network_timeout(7):
+                self.assertEqual(socket.getdefaulttimeout(), 7)
+            self.assertIsNone(socket.getdefaulttimeout())
+        finally:
+            socket.setdefaulttimeout(original)
+
+    def test_restores_the_previous_value_on_error(self):
+        import socket
+
+        original = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(11)
+            with self.assertRaises(RuntimeError):
+                with _network_timeout(3):
+                    raise RuntimeError("boom")
+            self.assertEqual(socket.getdefaulttimeout(), 11)
+        finally:
+            socket.setdefaulttimeout(original)
+
+    def test_default_is_a_finite_positive_number(self):
+        self.assertGreater(ARXIV_NETWORK_TIMEOUT_S, 0)
+
+    def test_search_never_leaves_an_unbounded_socket_behind(self):
+        import socket
+
+        original = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(None)
+            with mock.patch(
+                "tools.arxiv_tool.arxiv.Client",
+                side_effect=RuntimeError("network down"),
+            ):
+                with self.assertRaises(RuntimeError):
+                    search_arxiv_papers("all:anything")
+            self.assertIsNone(socket.getdefaulttimeout())
+        finally:
+            socket.setdefaulttimeout(original)
 
 
 class KeywordTaskSpecTest(unittest.TestCase):

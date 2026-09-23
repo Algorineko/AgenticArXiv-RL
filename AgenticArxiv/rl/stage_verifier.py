@@ -15,7 +15,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -23,14 +22,13 @@ from typing import Any, Dict, List, Optional, Sequence
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
-from rl.grpo_reward import parse_react_action, synthesize_trajectory
+from rl.grpo_reward import parse_react_action
 from rl.reward import RewardCalculator
 
 # 工具导入（触发注册）
-import tools.arxiv_tool  # noqa: F401
-import tools.cache_status_tool  # noqa: F401
-import tools.pdf_download_tool  # noqa: F401
-import tools.pdf_translate_tool  # noqa: F401
+from tools.bootstrap import register_all_tools
+
+register_all_tools()
 
 
 @dataclass
@@ -54,6 +52,32 @@ class VerificationReport:
         if self.failures:
             lines.append(f"  失败: {', '.join(self.failures)}")
         return "\n".join(lines)
+
+
+def _load_verification_model(
+    model_path: str,
+    tokenizer: Optional[PreTrainedTokenizer] = None,
+) -> tuple:
+    """Load a produced model for stage verification onto the training device.
+
+    Verification used to load with a bare ``from_pretrained``, which lands on
+    CPU, and ``CanaryEvaluator`` reads the device off the parameters — so the
+    gate was generating on the CPU.  A 1.5B model doing 8 × 256-token
+    generations that way takes tens of minutes per stage, slow enough that
+    running the gate by default stopped being defensible.
+    """
+    if torch.cuda.is_available():
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+        model = model.to("cuda")
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+
+    if tokenizer is None:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+    return model, tokenizer
 
 
 class StageVerifier:
@@ -103,11 +127,7 @@ class StageVerifier:
         print(f"🔍 验证 SFT 模型: {model_path}")
 
         try:
-            model = AutoModelForCausalLM.from_pretrained(model_path)
-            if tokenizer is None:
-                tokenizer = AutoTokenizer.from_pretrained(model_path)
-                if tokenizer.pad_token is None:
-                    tokenizer.pad_token = tokenizer.eos_token
+            model, tokenizer = _load_verification_model(model_path, tokenizer)
         except Exception as e:
             return VerificationReport(
                 stage="sft",
@@ -159,11 +179,7 @@ class StageVerifier:
         print(f"🔍 验证 DPO 模型: {model_path}")
 
         try:
-            model = AutoModelForCausalLM.from_pretrained(model_path)
-            if tokenizer is None:
-                tokenizer = AutoTokenizer.from_pretrained(model_path)
-                if tokenizer.pad_token is None:
-                    tokenizer.pad_token = tokenizer.eos_token
+            model, tokenizer = _load_verification_model(model_path, tokenizer)
         except Exception as e:
             return VerificationReport(
                 stage="dpo",
@@ -214,11 +230,7 @@ class StageVerifier:
         print(f"🔍 验证 GRPO 模型: {model_path}")
 
         try:
-            model = AutoModelForCausalLM.from_pretrained(model_path)
-            if tokenizer is None:
-                tokenizer = AutoTokenizer.from_pretrained(model_path)
-                if tokenizer.pad_token is None:
-                    tokenizer.pad_token = tokenizer.eos_token
+            model, tokenizer = _load_verification_model(model_path, tokenizer)
         except Exception as e:
             return VerificationReport(
                 stage="grpo",

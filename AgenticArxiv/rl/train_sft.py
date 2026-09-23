@@ -30,7 +30,7 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 from rl import trl_compat  # noqa: F401
 from trl import SFTConfig, SFTTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import load_dataset
+from datasets import Dataset
 
 from rl.observability import describe_logging, resolve_report_to
 from rl.stage_verifier import StageVerifier
@@ -172,6 +172,42 @@ def _precision_flags():
     return precision_flags()
 
 
+def _load_sft_rows(path: Path) -> list:
+    """Read only the columns training needs.
+
+    The JSONL also carries provenance columns (``generation_parameters``,
+    ``sample_sha256`` and friends) that belong in the artifact but not in the
+    tensors.  ``datasets`` infers a single Arrow schema for the whole file, and
+    those structs do not share a shape between rows — the parametric rows add
+    ``section``/``style``/``max_words``, search rows have none of them — so one
+    broader row makes the cast fail for the entire dataset.  Selecting the
+    training columns here keeps the audit trail on disk without letting it
+    break the loader.
+    """
+    rows = []
+
+    with Path(path).open(encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            if "messages" in row:
+                rows.append({"messages": row["messages"]})
+            else:
+                rows.append(
+                    {
+                        "prompt": row.get("prompt") or [],
+                        "completion": row.get("completion") or [],
+                    }
+                )
+
+    if not rows:
+        raise SystemExit(f"训练数据为空: {path}")
+
+    return rows
+
+
 def _messages_of(row):
     """兼容两种数据格式：{"messages": [...]} 与 {"prompt": [...], "completion": [...]}。"""
     if "messages" in row:
@@ -249,7 +285,7 @@ def main(
     inspect_only: bool = False,
     skip_data_manifest_check: bool = False,
     seed: int = 42,
-    verify: bool = False,
+    verify: bool = True,
     min_parse_rate: float = 0.3,
     report_to: str = "none",
     run_name: str = None,
@@ -285,7 +321,7 @@ def main(
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    train_dataset = load_dataset("json", data_files=str(train_data_path), split="train")
+    train_dataset = Dataset.from_list(_load_sft_rows(train_data_path))
     if "messages" in train_dataset.column_names:
         train_dataset = train_dataset.map(
             _to_prompt_completion,
@@ -310,6 +346,9 @@ def main(
     quantization_config = None
     peft_config = None
     policy = resolved_model
+    from rl.precision import assert_quantization_is_single_process
+
+    assert_quantization_is_single_process(qlora)
     if qlora:
         _qlora_runtime_guard()
         quantization_config, peft_config = _build_qlora_configs(
@@ -389,6 +428,12 @@ def main(
             + ", ".join(dropped_config_keys)
         )
     config = SFTConfig(**config_kwargs)
+
+    # 单进程时钉住单卡（避免 Trainer 走 DataParallel 的段错误）；
+    # accelerate launch 下 accelerator 自己管设备，这里自动跳过。
+    from rl.precision import pin_single_gpu
+
+    pin_single_gpu(config)
 
     print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 SFT 训练...")
@@ -532,8 +577,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
-        "--verify", action=argparse.BooleanOptionalAction, default=False,
-        help="训练结束后运行阶段验证（默认关闭；冒烟可显式写 --no-verify）",
+        "--verify", action=argparse.BooleanOptionalAction, default=True,
+        help="训练结束后运行阶段验证（默认开启，与 GRPO/PPO/OPD 一致）；冒烟可显式写 --no-verify",
     )
     parser.add_argument(
         "--min_parse_rate", type=float, default=0.3,

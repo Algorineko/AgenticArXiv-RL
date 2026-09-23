@@ -37,6 +37,11 @@ class Settings:
         "PDF_CACHE_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "pdf_cache.json")
     )
 
+    # --- Extracted paper figures (README T4) ---
+    figures_path: str = os.getenv(
+        "PDF_FIGURES_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "pdf_figures")
+    )
+
     # --- PDF translate/cache ---
     pdf_translated_path: str = os.getenv(
         "PDF_TRANSLATED_PATH", os.path.join(DEFAULT_OUTPUT_DIR, "pdf_translated")
