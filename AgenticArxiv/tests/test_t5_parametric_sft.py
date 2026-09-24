@@ -1,4 +1,4 @@
-"""T5 SFT variants retain train lineage and produce distinct expert samples."""
+"""检查 T5 SFT 派生任务的训练集血缘与专家样本唯一性。"""
 
 import json
 import sys
@@ -28,7 +28,7 @@ T5_PARENTS = {
 
 
 class _OfflineT5Env:
-    """Return deterministic observations without a PDF, network, or model."""
+    """无需 PDF、网络或模型，返回确定性的观察结果。"""
 
     def reset_runtime_state(self):
         pass
@@ -104,7 +104,7 @@ class T5ParametricSftTest(unittest.TestCase):
             "fixture tools",
             source_split="v3_81.json:train:parametric_v1_t5",
         )
-        self.assertEqual(len(rows), 6 * 5)  # four actions plus FINISH
+        self.assertEqual(len(rows), 6 * 5)  # 每个任务四步工具调用和一步 FINISH
         self.assertEqual(
             {row["source_task_id"] for row in rows},
             {item.spec.id for item in self.t5},
