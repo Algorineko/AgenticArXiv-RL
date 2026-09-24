@@ -1,249 +1,368 @@
 # Benchmark 模块
 
-三种 Agent 模式（regex / mcp / skill_cli）的性能与健壮性对比测试。
+> 本文按当前扩展任务集和 CLI 源码维护。当前正式扩展切分是
+> `data/splits/v3_81.json`；`v2_62.json` 和 `v1.json` 保留为历史实验输入，
+> 不要在新实验中把它们写成“当前版本”。
 
-## 运行 Benchmark
+Benchmark 用同一套任务声明驱动三种执行模式（`regex` / `mcp` / `skill_cli`），
+再从轨迹中提取工具序列、参数、终止状态、时间和 token 指标。任务声明位于
+`tasks.py` 和 `tasks_expanded.py`；`TaskSpec` 的 `steps` 同源派生
+`expected_tools` 与 `expected_tool_args`。
+
+## 1. 快速运行
+
+以下命令从 `AgenticArxiv/` 目录运行：
 
 ```bash
 cd AgenticArxiv
 
-# 全部任务、全部 Agent、重复 3 次（默认）
+# 基础 smoke set：8 条任务 × 3 种 Agent × 3 次重复 = 72 次运行
 python -m benchmark.run_benchmark
 
-# 指定 Agent 类型
-python -m benchmark.run_benchmark --agents regex mcp
+# 只跑一种 Agent；适合比较 Base/SFT/GRPO 的策略能力
+python -m benchmark.run_benchmark --agents regex
 
-# 指定任务类别: search / download / translate / cache / composite
-python -m benchmark.run_benchmark --tasks search
+# 当前 v3 的开发集：8 条任务，结果不能当盲测
+python -m benchmark.run_benchmark \
+  --task-set expanded \
+  --offline \
+  --split ../data/splits/v3_81.json:dev
 
-# 指定任务 ID
-python -m benchmark.run_benchmark --task-ids search_01 cache_01
+# 当前 v3 的 IID 留出集
+python -m benchmark.run_benchmark \
+  --task-set expanded \
+  --offline \
+  --split ../data/splits/v3_81.json:iid_test \
+  --agents regex
 
-# 调整重复次数
-python -m benchmark.run_benchmark --repeat 5
+# 当前 v3 的 OOD 留出集
+python -m benchmark.run_benchmark \
+  --task-set expanded \
+  --offline \
+  --split ../data/splits/v3_81.json:ood_test \
+  --agents regex
 
-# 指定 LLM 模型
-python -m benchmark.run_benchmark --model gpt-4-turbo
+# 按任务 id 运行，不把新解读类别误写成 --tasks choice
+python -m benchmark.run_benchmark \
+  --task-set expanded --offline \
+  --task-ids summary_cv5_structured120 analyze_cv5_ref1_desc
+```
 
-# 使用本地 Hugging Face 模型（不读取 LLM_API_KEY）
+默认 `task-set=default` 读取 `benchmark/tasks.py` 的 8 条任务；
+`task-set=expanded` 才读取 `tasks_expanded.py` 的 81 条任务。expanded 任务中
+有一部分 ground truth 绑定快照；没有 `--offline` 时，运行器会按
+`offline_only_ids()` 跳过它们，并提示任务池已经缩小。要做正式的阶段对比，
+必须固定 `task-set`、split 文件、snapshot、agent、seed、repeat 和 backend。
+
+## 2. CLI 参数与选择边界
+
+`run_benchmark.py` 的实际 argparse 选项如下：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--agents` | `regex mcp skill_cli` | 可重复传入一个或多个 agent |
+| `--repeat` | `3` | 每个任务的重复次数 |
+| `--tasks` | `None` | 按类别筛选 |
+| `--task-ids` | `None` | 按 id 筛选，优先于 split/category |
+| `--output` | 仓库根目录 `data/` | 报告输出目录 |
+| `--model` | settings 中的模型 | API 模型名或 transformers 本地路径 |
+| `--backend` | `api` | `api` 或 `transformers` |
+| `--local-device` | `auto` | transformers 的 `auto` / `cuda` / `cpu` |
+| `--local-dtype` | `auto` | `auto` / `float16` / `bfloat16` / `float32` |
+| `--seed` | `42` | 本地生成基础随机种子 |
+| `--prefix` | `bench_r<timestamp>` | session id 前缀 |
+| `--no-thinking` | 关闭 | 关闭支持模型的 thinking 模式 |
+| `--offline` | 关闭 | 使用快照回放，不请求真实 arXiv |
+| `--snapshot` | `None` | 覆盖默认快照路径 |
+| `--save-traces [PATH]` | 关闭 | 保存每条 history 的 JSONL |
+| `--split [FILE:]NAME` | `None` | 使用显式或默认切分 |
+| `--task-set` | `default` | `default` 或 `expanded` |
+
+`--tasks` 的 choices 是源码硬边界：
+
+```text
+search, download, translate, cache, composite,
+keyword_search, ref_form, optional, state,
+long_chain, constraint, infeasible
+```
+
+因此 `paper_reading`、`paper_summary`、`figure_extraction`、`figure_analysis`
+虽然是当前 expanded 任务的 category，却不能写成
+`--tasks paper_summary`。请改用 `--task-ids` 或显式 split。
+
+### 本地模型和离线工具是两个开关
+
+```bash
 python -m benchmark.run_benchmark \
   --backend transformers \
   --model /path/to/Qwen2.5-1.5B-Instruct \
   --local-device cuda \
   --local-dtype bfloat16 \
   --agents regex \
-  --offline
-
-# 指定输出目录（默认 ../data）
-python -m benchmark.run_benchmark --output /path/to/output
-
-# 指定 session 前缀（用于区分不同测试轮次，默认 bench_r<timestamp>）
-python -m benchmark.run_benchmark --prefix bench_r1
-
-# 当前 62 条任务的开发集（从 AgenticArxiv/ 目录运行）
-python -m benchmark.run_benchmark \
   --task-set expanded \
   --offline \
-  --split ../data/splits/v2_62.json:dev
+  --split ../data/splits/v3_81.json:iid_test
 ```
 
-默认 8 个任务 x 3 种 Agent x 3 次重复 = 72 次运行。
+`--backend transformers` 只控制 LLM 加载方式；`--offline` 才控制工具环境。
+本地模型仍可能访问真实 arXiv，除非同时加 `--offline`。反过来，API 模型也
+可以使用固定 snapshot。
 
-### 本地模型后端
+## 3. v1、v2、v3 的版本区别
 
-`--backend api` 保持原来的 OpenAI-compatible API 行为，也是默认值。
-`--backend transformers` 直接通过 `AutoModelForCausalLM` 加载 `--model`
-指定的本地目录，不依赖 API key。模型在同一次 Benchmark 中只加载一次，供所有
-任务和 Agent 复用。
+当前仓库中三份 JSON 的静态切分如下：
 
-本地后端专用参数：
+| 文件 | train | dev | iid_test | ood_test | 合计 | 角色 |
+|---|---:|---:|---:|---:|---:|---|
+| `data/splits/v1.json` | 42 | 0 | 13 | 4 | 59 | 历史默认文件，保留旧实验复现 |
+| `data/splits/v2_62.json` | 36 | 8 | 14 | 4 | 62 | 历史扩展版，仍是部分 SFT 血缘的来源 |
+| `data/splits/v3_81.json` | 51 | 8 | 18 | 4 | 81 | 当前 expanded 版 |
 
-| 参数 | 含义 |
-|---|---|
-| `--local-device` | `auto` / `cuda` / `cpu`，默认 `auto` |
-| `--local-dtype` | `auto` / `float16` / `bfloat16` / `float32` |
-| `--seed` | 生成随机种子；每次调用使用 seed 加调用序号 |
+### v1：历史默认路径
 
-本地模型仍应配合 `--offline` 使用：前者控制 LLM 从哪里加载，后者控制工具是否
-访问真实 arXiv，两者解决的是不同问题。为了测模型能力而不是三种执行框架的差异，
-Base/SFT/GRPO 阶段默认只跑 `--agents regex`；三种 Agent 的对比实验再单独运行。
+`benchmark/splits.py` 的 `DEFAULT_SPLIT_PATH` 仍然指向 `v1.json`。所以只写
+`--split iid_test` 会读取历史默认文件；这是为了保持旧实验可复现，不是
+“自动选择最新切分”。正式报告和阶段比较必须写完整的 `FILE:NAME`。
 
-### 训练/开发/留出集切分
+### v2：历史 62 条扩展集
 
-当前 62 条扩展任务使用 `../data/splits/v2_62.json`：
+v2 的 train=36、dev=8、iid=14、ood=4。旧数据生成器、已有 manifest 和部分
+历史 SFT 方案使用 `v2_62.json:train`；不要为了“统一命名”把 v2 全局替换成
+v3，因为这会改变既有实验的任务集合。
 
-| 名字 | 条数 | 是什么 |
-|---|---:|---|
-| `train` | 36 | 可用于构建 SFT/后续 RL 数据的任务 |
-| `dev` | 8 | 已在 pilot 中反复查看轨迹的任务，用于调试和 Bad Case 分析 |
-| `iid_test` | 14 | 与 train 同模板、但参数不同的盲测实例——「换个参数还会不会」 |
-| `ood_test` | 4 | train/dev/iid 均未出现的模板或链长——「换个形态还会不会」 |
+### v3：当前 81 条扩展集
 
-这 8 条 pilot 任务不能再放进最终测试集：我们已经根据其轨迹决定了后续数据方向，继续把
-它们称作“盲测”会产生人为调参泄漏。它们仍很有价值，但角色是 `dev`，不是整个 Benchmark。
+v3 在 v2 的基础上加入并重新安排了解读任务族。当前 train=51、dev=8、
+iid=18、ood=4；`rates` 仍只覆盖延续自 v2 的 36 个 train id：
 
-`v2_62.json` 的 `rates` 来自冻结环境中当前 Qwen Base 对 train 的三次重复，以严格成功率
-统计；`rl_train` 由此计算为 6 条 20%～80% 的中间难度任务。rates 只覆盖 train，不使用
-iid/ood 的任务级结果做训练选择。沿用旧模型或旧评测环境的 rates，会把过时难度带进 GRPO。
+- `paper_reading`：正文读取和章节选择；
+- `paper_summary`：`style` 与预算 bucket 的选择；
+- `figure_extraction`：先下载，再抽出图表；
+- `figure_analysis`：抽图后选择 `figure_no` 和 `describe/axes/trend`；
+- 既有 `search`、`ref_form`、`state`、`constraint`、`long_chain` 等族的
+  参数和留出实例也重新安排。
 
-切分在**模板**层面进行：`search_AI_1d_3` 与 `search_AI_30d_25` 是同一模板换参数，
-按任务随机切会让它们分居两侧，测出来的「泛化」其实是记忆。
+v3 的 `rates_metadata.note` 明确写出新增族尚无实测成功率。缺 rate 的任务仍
+在 train 中用于任务集边界，但不会进入动态 `rl_train`。
 
-两个留出集都要看：只有 iid 提升可能是记住了模板，ood 也提升才更像基础能力变强。
+## 4. split、rates 和 `rl_train`
 
-`rl_train` 供 `rl/train_grpo.py --split rl_train` 使用——GRPO 的优势是组内相对的，
-成功率贴近 0 或 1 的任务每条采样奖励一致，方差为零、不产生梯度，放进训练集是空转。
+切分按 template key，而不是按单条 task 随机切：默认 key 是
+`(template or category, len(expected_tools))`。这样同一模板的参数变体不会
+一条进 train、另一条进 test。
 
-从 `AgenticArxiv/` 目录运行时，应显式指定：
+| 名称 | 语义 | 能否用于正式训练 |
+|---|---|---|
+| `train` | 训练语义来源；v3 有 51 条 | 可以用于 train-only SFT；GRPO 仍建议筛选 |
+| `dev` | 已检查的 pilot/开发任务；v3 有 8 条 | 不应进入正式 SFT 或被当盲测 |
+| `iid_test` | 同模板、不同参数；v3 有 18 条 | 留作参数泛化评测 |
+| `ood_test` | 留出的模板或链长；v3 有 4 条 | 留作形态泛化评测 |
+| `rl_train` | train 中有 rate 且 `0.2 <= rate <= 0.8` | 动态计算，不能手写成固定数组 |
+
+`rl_train` 的中间带规则来自 `splits.py`：成功率接近 0 或 1 时，同一 prompt
+的组内奖励容易零方差，GRPO 不产生有效优势。v3 当前 36 个有 rate 的任务中，
+有 6 个落在中间带；这只是当前冻结 Base run 的结果，不是 51 条 train 的
+完整实测覆盖。
 
 ```bash
---split ../data/splits/v2_62.json:train
---split ../data/splits/v2_62.json:dev
---split ../data/splits/v2_62.json:iid_test
---split ../data/splits/v2_62.json:ood_test
+# 从 AgenticArxiv/ 显式引用 v3 的 train
+python -m benchmark.run_benchmark \
+  --task-set expanded --offline \
+  --split ../data/splits/v3_81.json:train
+
+# GRPO 读取动态 rl_train 时同样带上版本文件
+python -m rl.train_grpo \
+  --task_set expanded \
+  --split ../data/splits/v3_81.json:rl_train \
+  --snapshot ../data/mock_arxiv_snapshot.json
 ```
 
-只写 `--split iid_test` 会继续读取历史默认文件 `v1.json`，这是为了让旧实验可复现，不能用于
-当前 62 条任务的正式对比。阶段间对比必须引用同一份显式切分文件。
+如果 split 没有 `rates`，读取 `rl_train` 会报错；如果 train 没有中间带任务，
+也会报错，而不是悄悄返回空列表。换模型、换快照、换 agent 或换 repeat 后，
+应重新测量并记录新的 rates metadata。
 
-历史 `v1.json` 固定保存原来的 59 条任务（train=42、iid=13、ood=4，以及由旧 rates 计算的
-rl_train=13）。新增关键词检索任务后不回写 v1，否则同一个版本名会在不同时间代表不同实验。
+## 5. SFT 使用边界
 
-正式 SFT 数据同样必须使用显式的 v2 train，不能把全部 expanded 任务交给生成器：
+expanded SFT 必须显式使用某一版本文件的 train：
 
 ```bash
-cd ..  # 从 AgenticArxiv/ 回到仓库根目录
+cd ..
 python scripts/generate_sft_data.py \
   --task_set expanded \
-  --split data/splits/v2_62.json:train \
+  --split data/splits/v3_81.json:train \
   --snapshot data/mock_arxiv_snapshot.json \
-  --output data/sft/sft_v0_train.jsonl
+  --output data/sft/sft_v3_train.jsonl
+cd AgenticArxiv
 ```
 
-生成器会拒绝未指定 split、裸 `train` 以及 dev/iid/ood，并在专家工具执行失败时终止，避免
-把测试题或失败轨迹写进监督数据。
+生成器会拒绝：
 
-## 退化策略基线
+- 未传 `--split`；
+- 只有 `train` 而没有 `PATH:train`；
+- 把 `dev`、`iid_test` 或 `ood_test` 作为 expanded SFT 来源；
+- split 中存在 expanded 任务集没有的 id。
+
+确定性专家还会在离线环境中执行工具，轨迹不通过严格成功校验就不会写出。
+这意味着“能生成文件”不等于“所有任务都生成了样本”；应读取 manifest 或
+日志中的行数、语义任务数和失败信息。
+
+## 6. 退化策略基线
 
 ```bash
-cd AgenticArXiv
-
-# 不调用 LLM、网络或真实工具；用扩展任务集检查评分器能否区分弱策略
 python -m benchmark.run_baselines --task-set expanded
 
-# 保存逐任务 JSON 和 Markdown 报告；random_tool 默认从 seed 起采样 20 次
-python -m benchmark.run_baselines --task-set expanded --seed 42 --random-samples 20 --output /tmp/agentic-arxiv-baselines
+python -m benchmark.run_baselines \
+  --task-set expanded \
+  --seed 42 \
+  --random-samples 20 \
+  --output ../data/agentic-arxiv-baselines
 ```
 
-该命令会并排评分四种确定性策略：
+当前基线不是四种而是五种：
 
 | 策略 | 用途 |
 |---|---|
-| `reference` | 回放任务声明的标准工具路径，作为评分上限 |
-| `always_finish` | 立即终止，检查“正常 FINISH”会不会被误读为完成 |
-| `always_search` | 无视任务、固定调用一次搜索 |
-| `random_tool` | 对每条任务以固定 seed 选择一次合法工具调用 |
+| `reference` | 任务声明的标准工具路径 |
+| `always_finish` | 检查立即 FINISH 是否被误读为完成 |
+| `always_search` | 检查无视任务、固定搜索是否刷分 |
+| `random_tool` | 检查随机合法动作的基线分数 |
+| `wrong_args` | 检查工具名正确但参数错误时的扣分 |
 
-报告单独显示 `finish_rate` 与 `exact_tool_path_rate`：前者只表示轨迹以 `FINISH` 结束，不是业务任务已完成。`random_tool` 汇总多个 seed 并报告标准差；没有参数标准答案的任务不参与平均参数分。报告还会列出每种退化策略中未完整匹配参考工具和参数、但仍获得高分的任务，便于直接定位奖励漏洞。
+默认需要 reference gap 和逐类别 gap 都至少达到 `0.3`；失败返回退出码 1。
+基线构造的是 synthetic trajectory，不执行工具，也不测量模型质量。
 
-默认健康门槛要求每种退化策略的平均奖励比 `reference` 至少低 `0.3`；不满足时命令返回非零状态，可直接接入 CI。可用 `--min-reference-gap` 调整门槛，或用 `--top` 调整每种策略展示的高分任务数。
+## 7. 轨迹、重评分和 badcase
 
-此外还有一道**逐类目**门槛 `--min-category-gap`（默认同为 `0.3`）。总体均值会把单个类目的漏洞摊平：`always_search` 曾经在 search 类目上距参考仅 `0.167`（无视任务、永远发同一个 cs.AI 查询，在「检索 cs.CL」任务上拿 `0.933`），而总体均值差有 `0.832`，总体闸照样 PASS。逐类目闸会剔除「策略恰好复现了参考解法」的那些行——infeasible 任务上 `always_finish` **就是**参考解法（正确行为是一次工具都不调），那不是漏洞。
-
-## 绘图
+### 保存 benchmark traces
 
 ```bash
-cd ..  # 回到仓库根目录（draw/ 与 data/ 位于根目录，不在 AgenticArxiv/ 内；已在根目录时可跳过）
+python -m benchmark.run_benchmark \
+  --task-set expanded --offline \
+  --split ../data/splits/v3_81.json:dev \
+  --save-traces ../data/bench_v3_dev/traces.jsonl
+```
 
-# 使用默认路径（读 data/raw_data.csv，输出到 draw/images/）
-python draw/plot.py
+输出每行包含 `task_id`、`agent_type`、`trial`、`session_id` 和 `history`。
+它不是 `rl/trajectory.py` 的 `Trajectory`：没有 `final_reward`、
+`reward_components` 或 `timestamp`。
 
-# 自定义路径
+### 用新规则重评分
+
+```bash
+python -m benchmark.rescore_traces \
+  --traces ../data/bench_v3_dev/traces.jsonl \
+  --summary ../data/bench_v3_dev/summary.json \
+  --output ../data/bench_v3_dev/rescored \
+  --snapshot ../data/mock_arxiv_snapshot.json \
+  --task-set expanded \
+  --split ../data/splits/v3_81.json:dev
+```
+
+重评分不加载模型，只读取已有 history 和 summary 的 timing/token 字段，并
+在选定 task pool 上重新调用 `extract_metrics()`。trace 中未知的任务会被跳过；
+不能从缺失的 trace 中恢复模型文本或工具调用。
+
+### 回放和捕获 badcase
+
+```bash
+cd ..
+python eval/badcase_replay.py replay \
+  --cases eval/eval_cases.jsonl --task-set expanded \
+  --training-step 100 --verbose
+
+python eval/badcase_replay.py capture \
+  --traces data/bench_v3_dev/traces.jsonl \
+  --cases eval/eval_cases.jsonl \
+  --source v3_dev --dry-run
+cd AgenticArxiv
+```
+
+`open` case 仍复现，`newly_fixed` 表示当前不再复现，`fixed` 再次出现则是
+regression。`training_step` 要固定，否则奖励课程会改变“是否复现”的条件。
+
+## 8. 代表性任务与类别
+
+不要在文档中把 81 条任务完整复制成第二份目录；完整定义在
+`tasks_expanded.py`，版本归属在 `v3_81.json`。下面只列出可解释边界的代表：
+
+| 类别 | 代表 id | 工具链 / 约束 | 关键检查 |
+|---|---|---|---|
+| `search` | `search_AI_30d_25` | 单次方向检索 | aspect、days、max_results |
+| `keyword_search` | `search_kw_llm` | 关键词检索 | query 规范化与快照 query hash |
+| `ref_form` | `ref_ctrl_id_download` | 同一论文的 id/ref/title 说法 | 解析出的 paper id |
+| `state` | `state_ref_last_active` | 依赖会话最近活动论文 | session state 是否同步 |
+| `optional` | `opt_threads` | 翻译可选 threads 等参数 | 可选字段是否原样传递 |
+| `composite` | `multi_cr5_cache1` | 多步搜索/下载/缓存 | 步骤顺序和多余调用 |
+| `long_chain` | `chain_ai5_read_then_summary` | 读内容再总结 | `max_iterations` 和前置状态 |
+| `constraint` | `constraint_search_only` | 只做目标动作，不额外下载 | 负向工具约束 |
+| `infeasible` | `infeasible_no_session` | 正确行为是无工具并解释阻塞 | terminal reason |
+| `paper_reading` | `read_cv5_method` | 搜索→下载→读章节 | `section` 是否正确 |
+| `paper_summary` | `summary_cv5_structured120` | 搜索→下载→总结 | style 与 120 budget |
+| `figure_extraction` | `figure_cv5_ref1` | 搜索→下载→抽图 | T4 count 和 ref |
+| `figure_analysis` | `analyze_cv5_ref1_desc` | 搜索→下载→抽图→分析 | figure_no 和 question |
+
+## 9. 输出文件
+
+`BenchmarkReport.save_all()` 通常写入：
+
+```text
+data/<output>/
+├─ raw_data.csv       # 每条明细，含 session_id 等字段
+├─ report.md          # Markdown 汇总
+├─ summary.json       # 汇总、details 和 errors
+└─ errors.csv         # 有异常时的会话记录
+```
+
+如果调用 `--save-traces`，另有：
+
+```text
+data/<output>/traces.jsonl
+```
+
+`draw/plot.py` 读取的是报告/CSV 数据，不会自动运行 benchmark：
+
+```bash
+cd ..
 python draw/plot.py --data data/raw_data.csv --output draw/images
 ```
 
-生成 5 张图表：
+## 10. 指标边界
 
-| 文件 | 内容 |
+### 性能字段
+
+| 字段 | 含义 |
 |---|---|
-| `time_breakdown.png` | 堆叠条形图：各 Agent 平均 LLM/Tool/Overhead 时间 |
-| `accuracy_comparison.png` | 分组条形图：任务完成率 + 工具调用准确率 |
-| `iteration_boxplot.png` | 箱线图：迭代次数分布 |
-| `per_task_time.png` | 分组条形图：每个任务在不同 Agent 下的耗时 |
-| `token_usage.png` | 条形图：平均 Token 用量 |
+| `total_time_ms` | 端到端时间 |
+| `total_llm_ms` | LLM 调用累计时间 |
+| `total_tool_ms` | 工具执行累计时间 |
+| `framework_overhead_ms` | `total - llm - tool` 的框架开销 |
+| `iteration_count` | ReAct 迭代次数 |
+| `prompt_tokens` / `completion_tokens` / `total_tokens` | token 用量 |
 
-## 输出文件
+### 准确性字段
 
-```
-data/
-  raw_data.csv      # 逐条明细（含 session_id 列），可用于论文绘图
-  report.md         # Markdown 对比表格
-  summary.json      # JSON 格式汇总 + 明细 + errors
-  errors.csv        # 异常会话记录（session_id + error），仅在有异常时生成
-
-draw/images/
-  time_breakdown.png
-  accuracy_comparison.png
-  iteration_boxplot.png
-  per_task_time.png
-  token_usage.png
-```
-
-## 测试任务
-
-| ID | 类别 | 任务描述 | 预期工具 |
-|---|---|---|---|
-| search_01 | search | 检索 cs.AI 论文 | get_recently_submitted_cs_papers |
-| search_02 | search | 检索 cs.LG 论文 | get_recently_submitted_cs_papers |
-| search_03 | search | 检索 cs.CL 论文 | get_recently_submitted_cs_papers |
-| search_04 | search | 检索全部计算机科学论文 | get_recently_submitted_cs_papers |
-| download_01 | download | 下载第 1 篇论文 PDF | download_arxiv_pdf |
-| translate_01 | translate | 翻译第 1 篇论文 | translate_arxiv_pdf |
-| cache_01 | cache | 查看缓存状态 | get_paper_cache_status |
-| composite_01 | composite | 搜索 + 下载（多步骤） | get_recently_submitted_cs_papers, download_arxiv_pdf |
-
-有依赖关系的任务（download_01 → search_01, translate_01 → download_01 等）会自动先执行依赖。
-
-## 指标体系
-
-### 性能指标
-
-| 指标 | 说明 |
+| 字段 | 含义和限制 |
 |---|---|
-| total_time_ms | 端到端总耗时 |
-| total_llm_ms | 累计 LLM 调用时间 |
-| total_tool_ms | 累计工具执行时间 |
-| framework_overhead_ms | 框架开销 (= total - llm - tool) |
-| iteration_count | ReAct 迭代次数 |
-| tokens | Token 消耗量 |
+| `task_completed` | 以 FINISH 结束；不单独证明业务完成 |
+| `termination_type` | `FINISH` / `FORCE_STOP` / `ERROR` 等 |
+| `tool_call_accurate` | 工具名序列严格相等，含顺序和多余调用 |
+| `arg_score` | 参数匹配度；没有 oracle 时保持中性并标记不适用 |
+| `ref_score` | 解析后的 paper id 匹配度，不只看 ref 写法 |
+| `false_finish` | FINISH 但少做了期望工具的情况 |
+| `parse_failures` | 动作解析失败次数 |
+| `tool_exec_failures` | 工具执行失败次数 |
+| `terminal_semantics_accurate` | blocked 任务是否解释了声明原因 |
 
-### 准确性指标
+“严格成功”需要正常结束、工具和参数正确、指代正确、无解析/执行失败，且
+blocked 任务的终止语义准确；不能只用 `task_completed=True` 统计成功率。
 
-| 指标 | 说明 |
-|---|---|
-| task_completed | 轨迹是否以 `FINISH` 正常结束；不验证业务终态 |
-| termination_type | 终止类型: FINISH / FORCE_STOP / ERROR / INCOMPLETE |
-| tool_call_accurate | 实际工具调用是否与预期工具序列完全相等（顺序严格、无多余/重复调用），只比工具名 |
-| arg_score | 参数级匹配度 `[0,1]`：逐步比对期望键的**取值**；未声明 `expected_tool_args` 时为 1.0 |
-| ref_score | 指代解析准确率 `[0,1]`：比对**解析出的 `paper_id`** 而非 `ref` 的写法；未声明 `expected_paper` 时为 1.0 |
-| false_finish | 以 `FINISH` 结束、但期望工具没做全。只抓「做少了」，绕路多调不算 |
-| parse_failures | LLM 响应解析失败次数 |
-| tool_exec_failures | 工具执行失败次数 |
+## 11. 维护原则
 
-## 模块结构
+新增任务或工具时同步核对：
 
-```
-benchmark/
-  __init__.py
-  task_spec.py        # TaskSpec/Step：expected_tools 与 expected_tool_args 同源派生
-  tasks.py           # 8 条冒烟任务 (BENCHMARK_TASKS)
-  tasks_expanded.py   # 62 条完整基准集 (--task-set expanded)
-  runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
-  metrics.py          # TaskMetrics：从 run() 结果提取指标
-  baselines.py        # 确定性退化策略与评分敏感性汇总
-  splits.py           # 模板层 train/iid/ood 切分与 load_split
-  badcases.py         # 坏例用例的判定与回放（CLI 在 eval/badcase_replay.py）
-  report.py           # BenchmarkReport：生成 Markdown/CSV/JSON 报告
-  run_benchmark.py    # CLI 入口
-  run_baselines.py    # 离线退化策略诊断 CLI
-```
+1. `task_spec.py` 是否仍由 `steps` 派生两个 oracle。
+2. split 是否记录版本、rates、pilot 和 held-out policy。
+3. `--tasks` choices 是否真的包含要写进命令的类别。
+4. snapshot-bound 任务是否在离线环境有完整记录。
+5. trace、Trajectory、manifest 三种 JSONL/JSON schema 是否没有被混称。
+6. 文档是否把“源码可解释”与“实际运行结果”分开。
