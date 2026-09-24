@@ -52,6 +52,17 @@ def _has_figure_answer(observation: str) -> bool:
     return False
 
 
+def _has_invalid_figure_answer(history: Sequence[Mapping[str, Any]]) -> bool:
+    """识别任一步缺少有效答案的图表分析，避免多步平均值掩盖失败。"""
+    for step in history:
+        action = _parse_action(step.get("action", ""))
+        if action and action.get("name") == "analyze_figure":
+            observation = str(step.get("observation", "") or "")
+            if not _has_figure_answer(observation):
+                return True
+    return False
+
+
 @dataclass(frozen=True)
 class RewardSchedule:
     """Curriculum weights at one training step."""
@@ -455,17 +466,18 @@ class RewardCalculator:
         result_quality: float,
         efficiency: float,
     ) -> float:
-        """Apply non-compensable failure caps after the legacy score."""
+        """在原有加权分数之后应用不可补偿的失败上限。"""
         capped = float(total)
         hard_invalid = (
             metrics.termination_type == "ERROR"
             or metrics.parse_failures > 0
             or metrics.tool_exec_failures > 0
             or result_quality <= -0.75
+            or _has_invalid_figure_answer(history)
         )
         if hard_invalid:
-            # A failed execution must remain distinguishable from a false
-            # FINISH and cannot be rescued by format/tool points.
+            # 执行失败或图表空答案不能靠格式分、工具分补偿；
+            # 严重失败也须与普通的虚假 FINISH 保持区分。
             capped = min(capped, -0.75)
         elif metrics.false_finish:
             capped = min(capped, -0.25)
@@ -478,8 +490,7 @@ class RewardCalculator:
 
         if efficiency <= -0.75:
             capped = min(capped, -0.25)
-        # ``history`` is intentionally accepted above so a future gate can
-        # inspect trajectory-level markers without changing this API.
+        # history 已用于逐步检查图表分析，避免平均分掩盖无效答案。
         return _clip(capped)
 
 

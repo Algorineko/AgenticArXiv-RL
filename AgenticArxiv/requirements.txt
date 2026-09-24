@@ -17,6 +17,8 @@ loguru
 pydantic>=2.0
 fire
 PyMuPDF>=1.24.0
+# T5 的 VLM 后端及其图像缩放测试需要 Pillow。
+Pillow
 
 # ===== 可选依赖（eval/demo 时需要，训练时不需要） =====
 # pdf2zh  # PDF 翻译（训练时用 mock）
