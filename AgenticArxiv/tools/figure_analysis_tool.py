@@ -154,6 +154,27 @@ def _extractive_answer(figure: Dict[str, Any], question: str) -> str:
     )
 
 
+def build_extractive_analysis_result(
+    paper_id: str, figure: Dict[str, Any], question: str
+) -> Dict[str, Any]:
+    """为在线调用与离线补录生成相同的观察结果。
+
+    抽取式后端仅使用图表元数据与 caption，无需图片文件。
+    因此已有 T4 快照不必重新下载 PDF 就能补录 T5。
+    """
+    canonical_question = normalize_question(question)
+    figure_no = validate_figure_no(figure.get("figure_no"))
+    return {
+        "paper_id": paper_id,
+        "figure_no": figure_no,
+        "page": figure.get("page"),
+        "question": canonical_question,
+        "answer": _extractive_answer(figure, canonical_question),
+        "backend": "extractive",
+        "image_path": figure["path"],
+    }
+
+
 def _load_figure(session_id: str, ref: Any, figure_no: int) -> Dict[str, Any]:
     """Return the extracted figure metadata for *figure_no* of the referenced paper.
 
@@ -293,9 +314,12 @@ def analyze_figure(
     if backend == "vlm":
         answer = _vlm_answer(figure, canonical_question)
     else:
-        answer = _extractive_answer(figure, canonical_question)
+        result = build_extractive_analysis_result(paper.id, figure, canonical_question)
 
     store.set_last_active_paper_id(session_id, paper.id)
+
+    if backend == "extractive":
+        return result
 
     return {
         "paper_id": paper.id,
