@@ -129,6 +129,30 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 **非补偿性失败**：解析失败、工具执行失败和未知结果最多得到负奖励；虚假 FINISH 不得靠格式分抵消。单步 GRPO 为了构造完整轨迹而自动补的 `FINISH` 会标记为 `forced_finish`，不会拿到完整终止奖励。
 
+#### T5 图表分析结果的判定
+
+`analyze_figure` 的 observation 可能是工具结果的 Python `repr`，也可能是 JSON。
+结果质量检查要求**完整解析**为对象，且 `paper_id` 与 `answer` 都是非空白字符串。
+仅出现字段名、缺少字段、值为其他类型或 observation 被截断，均不能证明已有答案。
+
+| observation 示例 | 单步 `result_quality` | 判定 |
+| --- | ---: | --- |
+| `{'paper_id': '2601.00004v1', 'answer': 'A rising trend.'}` | `+1` | Python `repr`，答案非空 |
+| `{"paper_id": "2601.00004v1", "answer": "The caption does not state this."}` | `+1` | JSON，诚实说明 caption 未提供信息 |
+| `{'paper_id': '2601.00004v1', 'answer': ''}` | `-1` | 空答案 |
+| `{"paper_id": "2601.00004v1", "answer": "   "}` | `-1` | 只有空白 |
+| `{'paper_id': '2601.00004v1'}` | `-1` | 缺少 `answer` |
+| `{'answer': 'A rising trend.'}` | `-1` | 缺少 `paper_id` |
+| `{'paper_id': '2601.00004v1', 'meta': {'answer': 'nested'}}` | `-1` | 答案只在嵌套字段中 |
+| `{'paper_id': '2601.00004v1', 'answer': 'cut off` | `-1` | 截断，无法确认完整答案 |
+
+`result_quality` 的课程权重为零，但仍参与安全闸门：只有一步 `analyze_figure`
+的任务若得到 `-1`，总奖励最多为 `-0.75`，不能靠格式分或工具序列分补成正分。
+多步任务会对各步骤结果质量取平均，多余工具调用另有负分；其中一步空答案
+不一定让平均值达到严重失败阈值。排查时应同时查看完整轨迹、分量和总分。
+该规则只检查**是否存在答案**，不判断 VLM 文本的事实正确性，也不改变
+`get_paper_content`、`summarize_paper` 等工具的评分语义。
+
 **关键**：所有奖励都是 **可验证的**（rule-based），无需人类标注 → 对应 RLVR（Reinforcement Learning with Verifiable Reward）框架。每条轨迹记录 `reward_components` 分量明细，便于审计与 reward-hacking 排查。
 
 ### Rollout 隔离
