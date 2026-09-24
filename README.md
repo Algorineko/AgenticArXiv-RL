@@ -146,12 +146,14 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | `{'paper_id': '2601.00004v1', 'meta': {'answer': 'nested'}}` | `-1` | 答案只在嵌套字段中 |
 | `{'paper_id': '2601.00004v1', 'answer': 'cut off` | `-1` | 截断，无法确认完整答案 |
 
-`result_quality` 的课程权重为零，但仍参与安全闸门：只有一步 `analyze_figure`
-的任务若得到 `-1`，总奖励最多为 `-0.75`，不能靠格式分或工具序列分补成正分。
-多步任务会对各步骤结果质量取平均，多余工具调用另有负分；其中一步空答案
-不一定让平均值达到严重失败阈值。排查时应同时查看完整轨迹、分量和总分。
+`result_quality` 的课程权重为零，但仍参与安全闸门：任一步 `analyze_figure`
+缺少有效答案，总奖励最多为 `-0.75`，不能靠格式分或工具序列分补成正分。
+多步任务仍对各步骤结果质量取平均；例如前三步为 `+1`、图表分析为 `-1`，
+平均值是 `0.5`，逐步安全检查仍会拦住这条轨迹。
+排查时应同时查看完整轨迹、分量和总分。
 该规则只检查**是否存在答案**，不判断 VLM 文本的事实正确性，也不改变
 `get_paper_content`、`summarize_paper` 等工具的评分语义。
+更多细节见[多粒度奖励文档](docs/multigranular_rl.md)。
 
 **关键**：所有奖励都是 **可验证的**（rule-based），无需人类标注 → 对应 RLVR（Reinforcement Learning with Verifiable Reward）框架。每条轨迹记录 `reward_components` 分量明细，便于审计与 reward-hacking 排查。
 
