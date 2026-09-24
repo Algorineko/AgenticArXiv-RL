@@ -402,9 +402,15 @@ AgenticArXiv-RL/
 │  ├─ build_sft_train_mix.py        # 合成可审计的训练混合集 + manifest
 │  └─ generate_dpo_data.py          # 用本地 SFT 模型采样构造偏好对
 ├─ docs/
-│  ├─ rl_building.md               # 完整改造计划
-│  ├─ multigranular_rl.md         # 多粒度奖励设计（五分量 + 课程学习）
-│  └─ metric_stats.md            # 指标统计方案
+│  ├─ README.md                    # 文档索引与维护边界
+│  ├─ data-formats.md              # TaskSpec / split / Trajectory / SFT 契约
+│  ├─ data-formats.en.md           # 数据契约英文版
+│  ├─ cli-reference.md             # CLI 参数与工作目录参考
+│  ├─ cli-reference.en.md          # CLI 英文版
+│  ├─ offline-replay.md            # 快照模式与排错指南
+│  ├─ multigranular_rl.md          # 当前奖励实现（分量、诊断、闸门）
+│  ├─ rl_building.md               # 历史改造设计稿（页首有现行实现导航）
+│  └─ metric_stats.md              # 历史指标方案（页首有现行字段对照）
 ├─ data/                             # 数据集（sft/ 与 dpo/ 为 gitignored，需自行生成）
 │  ├─ sft/                           # SFT 数据集（JSONL）
 │  ├─ dpo/                           # DPO 偏好对（JSONL）
@@ -573,6 +579,11 @@ fire
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) —— 阶段 1 SFT 产物，Qwen2.5-1.5B 全参微调（ModelScope）
 
 ### 官方文档
+- [文档索引](docs/README.md) —— 数据契约、CLI、离线回放与历史设计稿导航
+- [数据格式与文件契约](docs/data-formats.md)
+- [CLI 命令参考](docs/cli-reference.md)
+- [Benchmark v3 指南](AgenticArxiv/benchmark/readme.md)
+- [离线回放排错](docs/offline-replay.md)
 - [TRL 文档](https://huggingface.co/docs/trl/)
 - [SFTTrainer](https://huggingface.co/docs/trl/en/sft_trainer)
 - [DPOTrainer](https://huggingface.co/docs/trl/en/dpo_trainer)

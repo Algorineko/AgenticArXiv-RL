@@ -1,4 +1,28 @@
 # 指标统计
+
+> **文档状态：历史统计设计稿（保留背景，字段以当前源码为准）**
+>
+> 本文最初面向三种 Agent 工具调用模式的实验规划，保留了早期指标名称、
+> 数据库假设和实施步骤。当前 benchmark 已使用 `benchmark/metrics.py` 的
+> `TaskMetrics`、`benchmark/report.py` 的输出和 `run_benchmark.py` 的 traces。
+> 先看 `docs/data-formats.md` 与 `AgenticArxiv/benchmark/readme.md`。
+
+## 现行实现对照表
+
+| 设计主题 | 当前来源 | 状态 / 注意 |
+|---|---|---|
+| 任务完成和终止 | `benchmark/metrics.py::_get_termination_type` | 已实现；`FINISH` 不等于业务严格成功 |
+| 工具序列 | `TaskMetrics.tool_call_sequence`、`_check_tool_sequence` | 已实现；顺序、多余调用都会影响准确率 |
+| 参数准确率 | `argument_match_score()`、`arg_score` | 已实现；没有 oracle 时需看 `arg_applicable` |
+| 指代准确率 | `reference_resolution_score_by_step()`、`ref_score` | 已实现；比较解析出的 paper id |
+| reward 分解 | `AgenticArxiv/rl/reward.py` | 已实现；包含诊断项和安全闸门，见 `multigranular_rl.md` |
+| 轨迹保存 | `rl/trajectory.py` 与 benchmark `--save-traces` | 两种 JSONL schema 不同，不能混称 |
+| 报告文件 | `BenchmarkReport.save_all()` | 当前常见为 `summary.json`、`report.md`、`raw_data.csv` 和错误表 |
+| 三种 Agent 对比 | `benchmark/run_benchmark.py` | `regex` / `mcp` / `skill_cli` 仍是 CLI choices |
+
+历史表格中的字段若没有在上述实现中出现，只能作为设计讨论，不能直接写入
+新实验报告。特别是 `task_completed` 只说明轨迹以 `FINISH` 结束；严格成功
+还要检查工具、参数、指代、解析、执行和终止语义。
 毕设的实验部分，旨在验证工程部分实现的三种agent工具调用模式的指标，以对比表示其性能和健壮性，主要包括：
 - 统计上的时间，准确率等性能
 - 一些极端/边界case对agent/LLM的冲击（这部分在之后要分析，暂不考虑）

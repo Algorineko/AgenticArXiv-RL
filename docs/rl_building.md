@@ -1,5 +1,38 @@
 # AgenticArXiv-RL 改造计划
 
+> **文档状态：历史设计稿（保留作为背景，不是当前实现的 TODO 列表）**
+>
+> 本文记录早期从 Web 应用改造成离线 RL 环境时的目标、取舍和伪代码。
+> 其中的“待完成”、旧目录、旧字段和示例路径可能已经被后续实现替代。
+> 当前读者应先看 `docs/README.md`、`docs/data-formats.md` 和
+> `docs/cli-reference.md`，再把本文当作设计决策的时间线。
+
+## 现行实现导航
+
+| 历史设计项 | 当前实现 | 状态 / 阅读提示 |
+|---|---|---|
+| `trajectory` 数据结构 | `AgenticArxiv/rl/trajectory.py` | 已实现；以 dataclass 与 JSONL 字段为准 |
+| 任务 ground truth | `AgenticArxiv/benchmark/task_spec.py`、`tasks_expanded.py` | 已实现；`steps` 派生工具和参数 oracle |
+| train/iid/ood 切分 | `AgenticArxiv/benchmark/splits.py`、`data/splits/v3_81.json` | 已实现；`rl_train` 按 rates 动态计算 |
+| 离线环境 | `AgenticArxiv/rl/env.py`、`build_snapshot.py` | 已实现；区分 replay/record/auto |
+| verifiable reward | `AgenticArxiv/rl/reward.py` | 已实现；另有 result-quality/efficiency 诊断与安全闸门 |
+| benchmark metrics/report | `AgenticArxiv/benchmark/metrics.py`、`report.py` | 已实现；不要按本文早期字段猜测输出 |
+| SFT 数据 | `scripts/generate_sft_data.py` 及 augmentation/mix 脚本 | 已实现；manifest/hash/leakage 规则见数据手册 |
+| SFT / DPO / GRPO / OPD / PPO | `AgenticArxiv/rl/train_*.py` | 入口存在；模型和 GPU 实验仍需按 CLI 前提验证 |
+| “去掉所有旧模块” | `archive/` 与根目录旧资料 | 未作为本 PR 目标；保留历史文件不等于当前训练依赖 |
+
+### 如何使用本文的旧代码块
+
+旧代码块可以帮助理解为何需要某个接口，但不要复制其中的：
+
+1. `agent_steps`、数据库表或早期 Web 服务字段；
+2. “GRPO trainer 待完成”等已经被源码实现替代的状态；
+3. 不在当前 `argparse` 中的参数和默认路径；
+4. 没有对应 fixture、manifest 或实测记录的结果数字。
+
+如果本文与当前源码矛盾，源码、测试和当前实现文档优先；修正历史记录时
+应在本节补一条导航，而不是删除能够解释项目演化的原文。
+
 > **目标**：将 AgenticArXiv 重构为可训练的 Agentic RL 环境，支持 SFT/DPO/GRPO 渐进式训练  
 > **强制约束**：环境管理必须采用 `.venv`，不可用 conda
 
@@ -845,4 +878,3 @@ git remote -v | grep AgenticArXiv-RL
 - [ ] 跑通 GRPO 训练
 - [ ] 指标监控（wandb / tensorboard）
 - [ ] 超参调优、reward hacking 排查
-
