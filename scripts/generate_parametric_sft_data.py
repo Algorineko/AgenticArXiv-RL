@@ -44,8 +44,8 @@ def step(tool: str, **args: Any) -> Step:
     return Step(tool, args)
 
 
-def build_parametric_tasks() -> List[DerivedTask]:
-    """声明派生任务；文本和标准步骤在同一代码块中生成，避免标签漂移。"""
+def build_parametric_tasks(*, include_t5: bool = False) -> List[DerivedTask]:
+    """声明仅用于训练的派生任务，并保持 v2 默认数据集不变。"""
     out: List[DerivedTask] = []
 
     def add(
@@ -358,6 +358,41 @@ def build_parametric_tasks() -> List[DerivedTask]:
             parameters={"aspect": aspect, "ref": ref},
         )
 
+    if include_t5:
+        # 已发布的 v2 种子早于 T5，因此图表分析须显式启用。
+        # 保留父任务的论文和图号，只改变问题，避免引入未经验证的图片资源。
+        question_phrases = {
+            "describe": "描述第{figure_no}张图展示的内容",
+            "axes": "说明第{figure_no}张图的坐标轴信息",
+            "trend": "概括第{figure_no}张图呈现的趋势",
+        }
+        for parent in (
+            "analyze_cv5_ref1_desc",
+            "analyze_cv5_ref3_trend",
+            "analyze_ro5_ref2_axes",
+        ):
+            parent_spec = {item.id: item for item in EXPANDED_SPECS}[parent]
+            search_args = parent_spec.steps[0].args
+            analysis_args = parent_spec.steps[-1].args
+            aspect = search_args["aspect"]
+            ref = analysis_args["ref"]
+            figure_no = analysis_args["figure_no"]
+            for question, phrase in question_phrases.items():
+                if question == analysis_args["question"]:
+                    continue
+                derived_args = {**analysis_args, "question": question}
+                add(
+                    parent, f"q_{question}",
+                    f"检索最近7天{CN[aspect]}(cs.{aspect})论文5篇，"
+                    f"下载第{ref}篇并抽取图表，随后"
+                    f"{phrase.format(figure_no=figure_no)}",
+                    [*parent_spec.steps[:-1], Step("analyze_figure", derived_args)],
+                    parameters={
+                        "aspect": aspect, "ref": ref,
+                        "figure_no": figure_no, "question": question,
+                    },
+                )
+
     return out
 
 
@@ -444,24 +479,43 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="生成 train-only 参数化 SFT 专家数据")
     parser.add_argument("--split-file", default="data/splits/v2_62.json")
     parser.add_argument("--snapshot", default="data/mock_arxiv_snapshot.json")
-    parser.add_argument("--output", default="data/sft/sft_v2_parametric_seed.jsonl")
+    parser.add_argument("--output", default=None)
+    parser.add_argument(
+        "--include-t5", action="store_true",
+        help="加入 T5 图表分析派生任务；需要 v3_81 训练切分",
+    )
     args = parser.parse_args()
 
     split_path = Path(args.split_file)
     snapshot_path = Path(args.snapshot)
-    output_path = Path(args.output)
+    default_output = (
+        "data/sft/sft_v3_t5_parametric_seed.jsonl" if args.include_t5
+        else "data/sft/sft_v2_parametric_seed.jsonl"
+    )
+    output_path = Path(args.output or default_output)
     if not split_path.exists():
         raise SystemExit(f"切分文件不存在: {split_path}")
     if not snapshot_path.exists():
         raise SystemExit(f"离线快照不存在: {snapshot_path}")
     split_payload = json.loads(split_path.read_text(encoding="utf-8"))
+    if args.include_t5 and (
+        split_payload.get("version") != 3
+        or not {
+            "analyze_cv5_ref1_desc", "analyze_cv5_ref3_trend",
+            "analyze_ro5_ref2_axes",
+        } <= set(split_payload.get("split", {}).get("train", []))
+    ):
+        raise SystemExit("--include-t5 requires data/splits/v3_81.json:train")
 
-    derived = build_parametric_tasks()
+    derived = build_parametric_tasks(include_t5=args.include_t5)
     validate_derived_tasks(derived, split_payload)
     env = MockArxivEnv(snapshot_path=snapshot_path, mode="replay")
     tools_desc = format_tool_description(registry.list_tools())
     specs = [item.spec for item in derived]
-    source_split = f"{split_path.name}:train:parametric_v1"
+    source_split = (
+        f"{split_path.name}:train:parametric_v1_t5" if args.include_t5
+        else f"{split_path.name}:train:parametric_v1"
+    )
     rows = generate_deterministic_trajectories(
         specs, env, tools_desc, source_split=source_split
     )
@@ -520,6 +574,8 @@ def main() -> None:
         "task_manifest_sha256": canonical_hash(task_manifest),
         "tasks": task_manifest,
     }
+    if args.include_t5:
+        manifest["include_t5"] = True
     manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
