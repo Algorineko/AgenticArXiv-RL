@@ -17,6 +17,7 @@ loguru
 pydantic>=2.0
 fire
 PyMuPDF>=1.24.0
+Pillow>=10.0.0  # 图表分析的图像预处理与 VLM 路径
 
 # ===== 可选依赖（eval/demo 时需要，训练时不需要） =====
 # pdf2zh  # PDF 翻译（训练时用 mock）
