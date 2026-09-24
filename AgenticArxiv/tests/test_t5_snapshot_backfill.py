@@ -1,4 +1,4 @@
-"""T5 caption backfill and replay regressions; no PDF or model is needed."""
+"""T5 caption 补录和回放回归测试，无需 PDF 或模型。"""
 
 import json
 import os
