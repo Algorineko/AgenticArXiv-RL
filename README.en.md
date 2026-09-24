@@ -130,6 +130,8 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 **Non-compensable failures**: parse errors, tool execution failures, and false FINISH actions cannot be rescued by format points. Single-step GRPO rollouts mark framework-generated terminal steps as `forced_finish`, so they do not receive the full terminal bonus.
 
+**T5 figure-analysis result check**: an `analyze_figure` observation must parse completely as JSON or a Python literal, with non-blank string `paper_id` and `answer` fields. An empty, missing, non-string, or truncated answer receives `result_quality=-1`; a non-empty explanation that the caption lacks the requested information remains valid. For a single-tool task, `-1` activates the severe-failure gate and caps total reward at `-0.75`. Multi-tool tasks average result quality across steps, so one empty answer does not necessarily activate that gate. This rule checks for the presence of an answer, not the factual quality of VLM text, and leaves other tools' scoring unchanged.
+
 **Key point**: All rewards are **verifiable** (rule-based), requiring no human annotation — corresponding to the RLVR (Reinforcement Learning with Verifiable Reward) framework. Every trajectory records a `reward_components` breakdown for auditing and reward-hacking analysis.
 
 ### Rollout isolation

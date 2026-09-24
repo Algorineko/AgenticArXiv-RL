@@ -256,6 +256,8 @@ class MultiGranularRewardTest(unittest.TestCase):
             "{'answer': 'A rising trend.'}",
             "{'paper_id': '   ', 'answer': 'A rising trend.'}",
             "{'paper_id': '2601.00004v1', 'answer': None}",
+            "{'paper_id': '2601.00004v1', 'meta': {'answer': 'nested'}}",
+            "[{'paper_id': '2601.00004v1', 'answer': 'inside a list'}]",
             "{'paper_id': '2601.00004v1', 'answer': 'cut off",
         )
         for observation in invalid_observations:
