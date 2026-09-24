@@ -307,6 +307,79 @@ class MultiGranularRewardTest(unittest.TestCase):
         self.assertEqual(breakdown.result_quality, -1.0)
         self.assertLessEqual(breakdown.total, -0.75)
 
+    def test_empty_figure_answer_cannot_hide_in_a_four_tool_chain(self):
+        """前三步成功也不能掩盖最后一步的空答案。"""
+        tool_names = (
+            "get_recently_submitted_cs_papers",
+            "download_arxiv_pdf",
+            "extract_paper_figures",
+            "analyze_figure",
+        )
+        task = {
+            "id": "figure-chain",
+            "expected_tools": list(tool_names),
+            "expected_tool_args": [{} for _ in tool_names],
+        }
+
+        def score(answer):
+            observations = (
+                "成功获取 1 篇论文",
+                "{'paper_id': '2601.00004v1', 'status': 'READY'}",
+                "{'paper_id': '2601.00004v1', 'count': 1}",
+                repr({"paper_id": "2601.00004v1", "answer": answer}),
+            )
+            history = [
+                {
+                    "action": json.dumps({"name": name, "args": {}}),
+                    "observation": observation,
+                }
+                for name, observation in zip(tool_names, observations)
+            ]
+            history.append({"action": "FINISH", "observation": "任务完成"})
+            breakdown, _ = self.calculator.compute_reward_breakdown(
+                task, _result(history), training_step=30
+            )
+            return breakdown
+
+        valid = score("A rising trend.")
+        empty = score("   ")
+        self.assertEqual(valid.result_quality, 1.0)
+        self.assertEqual(empty.result_quality, 0.5)
+        self.assertGreater(valid.total, 0.0)
+        self.assertLessEqual(empty.total, -0.75)
+        for component in ("format", "tool", "argument", "process", "outcome"):
+            with self.subTest(component=component):
+                self.assertEqual(
+                    getattr(valid, component), getattr(empty, component)
+                )
+
+    def test_forced_finish_cannot_rescue_empty_figure_answer(self):
+        """框架自动补全的终止动作不能抵消无效工具结果。"""
+        task = {
+            "id": "figure-analysis",
+            "expected_tools": ["analyze_figure"],
+            "expected_tool_args": [{}],
+        }
+        result = {
+            "history": [
+                {
+                    "action": '{"name":"analyze_figure","args":{}}',
+                    "observation": "{'paper_id': '2601.00004v1', 'answer': ''}",
+                },
+                {
+                    "action": "FINISH",
+                    "observation": "任务完成",
+                    "forced_finish": True,
+                },
+            ],
+            "forced_finish": True,
+        }
+        breakdown, _ = self.calculator.compute_reward_breakdown(
+            task, result, training_step=30
+        )
+        self.assertEqual(breakdown.result_quality, -1.0)
+        self.assertLessEqual(breakdown.total, -0.75)
+
     def test_reading_tools_keep_their_existing_result_check(self):
         for tool_name, field in (
             ("get_paper_content", "content"),
