@@ -130,7 +130,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 **Non-compensable failures**: parse errors, tool execution failures, and false FINISH actions cannot be rescued by format points. Single-step GRPO rollouts mark framework-generated terminal steps as `forced_finish`, so they do not receive the full terminal bonus.
 
-**T5 figure-analysis result check**: an `analyze_figure` observation must parse completely as JSON or a Python literal, with non-blank string `paper_id` and `answer` fields. An empty, missing, non-string, or truncated answer receives `result_quality=-1`; a non-empty explanation that the caption lacks the requested information remains valid. For a single-tool task, `-1` activates the severe-failure gate and caps total reward at `-0.75`. Multi-tool tasks average result quality across steps, so one empty answer does not necessarily activate that gate. This rule checks for the presence of an answer, not the factual quality of VLM text, and leaves other tools' scoring unchanged.
+**T5 figure-analysis result check**: an `analyze_figure` observation must parse completely as JSON or a Python literal, with non-blank string `paper_id` and `answer` fields. An empty, missing, non-string, or truncated answer receives a step score of `-1`; a non-empty explanation that the caption lacks the requested information remains valid. Any figure-analysis step without such an answer activates the severe-failure gate and caps total reward at `-0.75`, including in multi-tool tasks where averaging could otherwise hide the failed step. This rule checks for the presence of an answer, not the factual quality of VLM text, and leaves other tools' scoring unchanged.
 
 **Key point**: All rewards are **verifiable** (rule-based), requiring no human annotation — corresponding to the RLVR (Reinforcement Learning with Verifiable Reward) framework. Every trajectory records a `reward_components` breakdown for auditing and reward-hacking analysis.
 
@@ -728,6 +728,7 @@ T1–T4 are implemented (see "🧰 Toolset Evolution Design"):
   - ⏳ **Snapshot gap**: local offline snapshots are not committed, and no T5 records are available here for verification. During the 2026-09-22 build, arXiv throttled this host to ~5KB/s (a 34MB paper delivered 492KB in 90s), so the full rebuild was not completed. With working network access or cached PDFs, run `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; replay fails on missing T5 records.
   - If a snapshot already contains T4 figure records, run `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json` to fill default `extractive` T5 results from captions without downloading PDFs again. VLM results still require VLM recording.
   - Backends: `extractive` by default (reuses the caption T4 already extracted — deterministic, no weights); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<local VLM dir>` switches to a local VLM (greedy decoding, answers recorded at snapshot-build time).
+  - VLM image loading and resizing use `Pillow`, now declared in `AgenticArxiv/requirements.txt`; extractive replay does not require VLM weights.
   - **Generate T5 expert data** (requires a snapshot with T5 records):
     ```bash
     python scripts/generate_parametric_sft_data.py \

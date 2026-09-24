@@ -146,12 +146,14 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | `{'paper_id': '2601.00004v1', 'meta': {'answer': 'nested'}}` | `-1` | 答案只在嵌套字段中 |
 | `{'paper_id': '2601.00004v1', 'answer': 'cut off` | `-1` | 截断，无法确认完整答案 |
 
-`result_quality` 的课程权重为零，但仍参与安全闸门：只有一步 `analyze_figure`
-的任务若得到 `-1`，总奖励最多为 `-0.75`，不能靠格式分或工具序列分补成正分。
-多步任务会对各步骤结果质量取平均，多余工具调用另有负分；其中一步空答案
-不一定让平均值达到严重失败阈值。排查时应同时查看完整轨迹、分量和总分。
+`result_quality` 的课程权重为零，但仍参与安全闸门：任一步 `analyze_figure`
+缺少有效答案，总奖励最多为 `-0.75`，不能靠格式分或工具序列分补成正分。
+多步任务仍对各步骤结果质量取平均；例如前三步为 `+1`、图表分析为 `-1`，
+平均值是 `0.5`，逐步安全检查仍会拦住这条轨迹。
+排查时应同时查看完整轨迹、分量和总分。
 该规则只检查**是否存在答案**，不判断 VLM 文本的事实正确性，也不改变
 `get_paper_content`、`summarize_paper` 等工具的评分语义。
+更多细节见[多粒度奖励文档](docs/multigranular_rl.md)。
 
 **关键**：所有奖励都是 **可验证的**（rule-based），无需人类标注 → 对应 RLVR（Reinforcement Learning with Verifiable Reward）框架。每条轨迹记录 `reward_components` 分量明细，便于审计与 reward-hacking 排查。
 
@@ -741,6 +743,7 @@ T1–T4 已实现（见「🧰 工具集演进设计」）：
   - ⏳ **快照缺口**：仓库不收录本地离线快照，当前没有可验证的 T5 记录。2026-09-22 构建时 arXiv 对本机限速到 ~5KB/s（34MB 的论文 90 秒只传了 492KB），因此没有完成重建。有可用网络或 PDF 缓存时运行 `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`；缺失 T5 记录时 replay 会报错。
   - 若已有包含 T4 图表记录的快照，可运行 `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json`，直接从 caption 补录默认 `extractive` 后端的 T5 结果，无需重新下载 PDF；VLM 结果仍需用 VLM 录制。
   - 后端：默认 `extractive`（只复用 T4 已抽出的 caption，确定性强、不需要权重）；`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<本地 VLM 目录>` 切本地 VLM（贪心解码，答案在构建快照时录制）。
+  - VLM 图像读取与缩放依赖 `Pillow`，已列入 `AgenticArxiv/requirements.txt`；抽取式回放不需要下载 VLM 权重。
   - **生成 T5 专家数据**（须先准备含 T5 记录的快照）：
     ```bash
     python scripts/generate_parametric_sft_data.py \

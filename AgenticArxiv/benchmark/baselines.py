@@ -30,9 +30,14 @@ _TOOL_ACTIONS = (
 )
 
 
-def _tool_step(name: str, args: Mapping[str, Any]) -> Dict[str, str]:
+def _tool_step(
+    name: str,
+    args: Mapping[str, Any],
+    *,
+    observation: str = "synthetic baseline action",
+) -> Dict[str, str]:
     action = json.dumps({"name": name, "args": dict(args)}, ensure_ascii=False)
-    return {"action": action, "observation": "synthetic baseline action"}
+    return {"action": action, "observation": observation}
 
 
 def _finish_step(thought: str = "任务已完成") -> Dict[str, str]:
@@ -72,7 +77,17 @@ class ReferencePolicy(BaselinePolicy):
         history = []
         for index, name in enumerate(expected_tools):
             args = expected_args[index] if index < len(expected_args) else {}
-            history.append(_tool_step(name, args or {}))
+            observation = "synthetic baseline action"
+            if name == "analyze_figure":
+                # 参考策略不调用真实工具，但必须满足图表结果的最小结构契约。
+                observation = json.dumps(
+                    {
+                        "paper_id": "baseline-paper",
+                        "answer": "基准轨迹的合成图表说明",
+                    },
+                    ensure_ascii=False,
+                )
+            history.append(_tool_step(name, args or {}, observation=observation))
         terminal_thought = (
             reference_terminal_thought(task)
             if task.get("expected_terminal_mode") == "blocked"
