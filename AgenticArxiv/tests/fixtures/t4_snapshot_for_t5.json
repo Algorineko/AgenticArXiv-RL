@@ -1,0 +1,24 @@
+{
+  "extract_paper_figures": {
+    "{\"paper_id\": \"2601.00004v1\"}": {
+      "args": {"ref": 1},
+      "result": {
+        "paper_id": "2601.00004v1",
+        "title": "Figures for Analysis",
+        "count": 1,
+        "output_dir": "not-on-this-machine",
+        "figures": [
+          {
+            "figure_no": 1,
+            "page": 2,
+            "path": "not-on-this-machine/fig_1.png",
+            "width": 200,
+            "height": 160,
+            "caption": "Figure 1: Accuracy versus latency. Accuracy increases with batch size."
+          }
+        ]
+      }
+    }
+  },
+  "unrelated_tool": {"kept": {"result": "unchanged"}}
+}
