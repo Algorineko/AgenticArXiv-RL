@@ -5,6 +5,7 @@ the rollout code, while exposing a component breakdown for logging and tests.
 It adapts LLM-TIR's format/correctness/process curriculum to ReAct trajectories.
 """
 
+import ast
 import json
 import math
 import re
@@ -32,6 +33,23 @@ _EMPTY_FIGURE_COUNT_RE = re.compile(r"['\"]count['\"]\s*:\s*0(?![\d.])")
 def _reports_zero_figures(observation: str) -> bool:
     """True when an ``extract_paper_figures`` payload says it found nothing."""
     return bool(_EMPTY_FIGURE_COUNT_RE.search(observation))
+
+
+def _has_figure_answer(observation: str) -> bool:
+    """仅在图表结果完整且论文标识、答案均非空时返回真。"""
+    for parse in (json.loads, ast.literal_eval):
+        try:
+            payload = parse(observation)
+        except (ValueError, SyntaxError, TypeError, RecursionError):
+            continue
+        return (
+            isinstance(payload, dict)
+            and isinstance(payload.get("paper_id"), str)
+            and bool(payload["paper_id"].strip())
+            and isinstance(payload.get("answer"), str)
+            and bool(payload["answer"].strip())
+        )
+    return False
 
 
 @dataclass(frozen=True)
@@ -375,7 +393,11 @@ class RewardCalculator:
                     marker in observation
                     for marker in ("READY", "成功", "已创建", "status", "pdf_ready")
                 )
-            elif tool_name in {"get_paper_content", "summarize_paper", "analyze_figure"}:
+            elif tool_name == "analyze_figure":
+                # 空答案和被截断的结果都不能作为已完成的图表分析。
+                scores.append(1.0 if _has_figure_answer(observation) else -1.0)
+                continue
+            elif tool_name in {"get_paper_content", "summarize_paper"}:
                 # The reading tools answer with the resolved paper and the
                 # extracted text.  Grounding is the point: a payload that names
                 # a paper but carries no text is not useful work, even though
