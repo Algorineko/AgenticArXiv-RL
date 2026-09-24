@@ -156,7 +156,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 > **已发布的权重**（Qwen2.5-1.5B 全参 SFT，2 epoch / 2628 条参数化专家轨迹，loss 0.079）：
 > [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT)
-> 注意该产物**只覆盖前 8 个工具**——`analyze_figure`（T5）是之后加入的，参数化 SFT 数据生成器还没有它的派生规则。
+> 注意该产物**只覆盖前 8 个工具**——`analyze_figure`（T5）是之后加入的。现在可以选择生成 T5 专家数据，但该已发布模型尚未用它训练。
 
 **数据格式**（`data/sft/sft_train.jsonl`）：
 ```json
@@ -713,10 +713,18 @@ T1–T4 已实现（见「🧰 工具集演进设计」）：
 - [x] **T2 论文阅读** `get_paper_content`：确定性 PDF → 文本与离线快照回放，全部解读类任务的前置件（关键路径）
 - [x] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策（默认确定性抽取式后端，`SUMMARY_BACKEND=local_model` 可切本地模型）
 - [x] **T4 图表抽取** `extract_paper_figures`：确定性抽出内嵌图表与 caption，离线快照回放
-- [ ] **T5 图表分析** `analyze_figure`（可选，多模态环境）：**工具、环境集成、任务模板与单测已完成**，只剩数据集这一环；VLM 只在 env 侧，策略仍是纯文本小模型。
-  - ⏳ **唯一缺口**：离线快照的 T5 条目尚未录制。2026-09-22 构建时 arXiv 对本机限速到 ~5KB/s（34MB 的论文 90 秒只传了 492KB），30 篇 PDF 重下不可行，因此没有跑完整的快照重建。网络恢复后执行 `python -m AgenticArXiv.rl.build_snapshot --skip-prefetch` 即可补齐；在那之前 T5 任务在 replay 模式下会因快照缺失而报错。
+- [ ] **T5 图表分析** `analyze_figure`（可选，多模态环境）：工具、环境集成、任务模板、单测和可选的参数化 SFT 派生规则已写好；仍需录制真实快照并生成数据。VLM 只在 env 侧，策略仍是纯文本小模型。
+  - ⏳ **快照缺口**：仓库不收录本地离线快照，当前没有可验证的 T5 记录。2026-09-22 构建时 arXiv 对本机限速到 ~5KB/s（34MB 的论文 90 秒只传了 492KB），因此没有完成重建。有可用网络或 PDF 缓存时运行 `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`；缺失 T5 记录时 replay 会报错。
   - 后端：默认 `extractive`（只复用 T4 已抽出的 caption，确定性强、不需要权重）；`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<本地 VLM 目录>` 切本地 VLM（贪心解码，答案在构建快照时录制）。
-  - 已知边界：**没有训练覆盖** —— 参数化 SFT 数据生成器还没有 `analyze_figure` 的派生规则，现有模型都没学过它。
+  - **生成 T5 专家数据**（须先准备含 T5 记录的快照）：
+    ```bash
+    python scripts/generate_parametric_sft_data.py \
+      --split-file data/splits/v3_81.json \
+      --snapshot data/mock_arxiv_snapshot.json \
+      --include-t5
+    ```
+    默认命令仍生成历史 v2 数据；T5 输出单独写入 `data/sft/sft_v3_t5_parametric_seed.jsonl`。
+  - 已知边界：T5 数据和模型都未在本仓库生成或训练；已发布模型尚未学过这个工具。
 
 ### P1 — 奖励课程调优
 

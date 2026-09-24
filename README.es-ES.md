@@ -159,7 +159,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 > **Pesos publicados** (SFT a parámetros completos sobre Qwen2.5-1.5B, 2 épocas con 2628 trayectorias expertas parametrizadas, loss 0.079):
 > [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT)
-> Ten en cuenta que este checkpoint cubre solo las 8 primeras herramientas: `analyze_figure` (T5) se añadió después y el generador de datos SFT parametrizados aún no tiene regla de derivación para ella.
+> Este checkpoint cubre solo las 8 primeras herramientas. `analyze_figure` (T5) se añadió después; ahora se pueden generar datos expertos de T5 de forma opcional, pero este modelo publicado no se entrenó con ellos.
 
 **Formato de datos** (`data/sft/sft_train.jsonl`):
 ```json
@@ -723,10 +723,18 @@ T1–T4 están implementados (ver «🧰 Diseño de Evolución del Conjunto de H
 - [x] **T2 Lectura de papers** `get_paper_content`: PDF → texto determinista con replay offline del snapshot, el prerrequisito de todas las tareas de interpretación (camino crítico)
 - [x] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable (backend extractivo determinista por defecto; `SUMMARY_BACKEND=local_model` cambia a un modelo local)
 - [x] **T4 Extracción de figuras** `extract_paper_figures`: extracción determinista de figuras incrustadas y captions, con replay offline del snapshot
-- [ ] **T5 Análisis de figuras** `analyze_figure` (opcional, entorno multimodal): **la herramienta, la integración en el entorno, las plantillas de tareas y los tests unitarios están hechos**; solo queda el paso de datos. El VLM vive solo en el lado del entorno y la política sigue siendo un modelo pequeño de solo texto.
-  - ⏳ **El único hueco**: el snapshot offline todavía no tiene entradas de `analyze_figure`. Durante la construcción del 2026-09-22 arXiv limitó este host a ~5KB/s (un paper de 34MB entregó 492KB en 90s), lo que hizo inviable volver a descargar 30 PDFs, así que no se ejecutó una reconstrucción completa del snapshot. Ejecuta `python -m AgenticArXiv.rl.build_snapshot --skip-prefetch` cuando la red se recupere; hasta entonces las tareas de T5 fallan en modo replay por la clave ausente.
+- [ ] **T5 Análisis de figuras** `analyze_figure` (opcional, entorno multimodal): ya están escritos la herramienta, la integración con el entorno, las plantillas, los tests y las reglas opcionales para derivar datos SFT parametrizados. Aún faltan un snapshot real y los datos generados. El VLM permanece en el entorno y la política sigue siendo de solo texto.
+  - ⏳ **Falta el snapshot**: los snapshots locales no se incluyen en el repositorio y aquí no hay entradas T5 para verificar. Durante la construcción del 2026-09-22 arXiv limitó este host a ~5KB/s (un paper de 34MB entregó 492KB en 90s), por lo que no se completó la reconstrucción. Con acceso de red o PDFs en caché, ejecuta `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; el replay falla si faltan entradas T5.
   - Backends: `extractive` por defecto (reutiliza el caption que T4 ya extrajo — determinista y sin pesos); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<dir del VLM local>` cambia a un VLM local (decodificación greedy, respuestas registradas al construir el snapshot).
-  - Límite conocido: **sin cobertura de entrenamiento** — el generador de datos SFT parametrizados aún no tiene regla de derivación para `analyze_figure`, así que ninguno de los modelos existentes lo ha aprendido.
+  - **Generar datos expertos T5** (requiere un snapshot con entradas T5):
+    ```bash
+    python scripts/generate_parametric_sft_data.py \
+      --split-file data/splits/v3_81.json \
+      --snapshot data/mock_arxiv_snapshot.json \
+      --include-t5
+    ```
+    El comando predeterminado conserva los datos históricos v2; la salida T5 va a `data/sft/sft_v3_t5_parametric_seed.jsonl`.
+  - Límite conocido: en este repositorio no se han generado datos T5 ni se ha entrenado un modelo con ellos; el modelo publicado aún no aprendió esta herramienta.
 
 ### P1 — Ajuste del currículo de recompensa
 

@@ -157,7 +157,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 > **Released weights** (Qwen2.5-1.5B full-parameter SFT, 2 epochs on 2628 parameterised expert trajectories, loss 0.079):
 > [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT)
-> Note that this checkpoint covers only the first 8 tools — `analyze_figure` (T5) was added later and the parameterised SFT data generator has no derivation rule for it yet.
+> This checkpoint covers only the first 8 tools. `analyze_figure` (T5) was added later; T5 expert data can now be generated optionally, but this released model was not trained on it.
 
 **Data format** (`data/sft/sft_train.jsonl`):
 ```json
@@ -722,10 +722,18 @@ T1–T4 are implemented (see "🧰 Toolset Evolution Design"):
 - [x] **T2 Paper reading** `get_paper_content`: deterministic PDF → text with offline snapshot replay, the prerequisite of all interpretation tasks (critical path)
 - [x] **T3 Paper summarization** `summarize_paper`: env-side summarization, turning "interpretation" into a trainable tool-invocation decision (deterministic extractive backend by default; `SUMMARY_BACKEND=local_model` switches to a local model)
 - [x] **T4 Figure extraction** `extract_paper_figures`: deterministic extraction of embedded figures + captions, with offline snapshot replay
-- [ ] **T5 Figure analysis** `analyze_figure` (optional, multimodal env): the **tool, environment integration, task templates and unit tests are done**; only the dataset step is left. The VLM lives only on the env side while the policy stays a text-only small model.
-  - ⏳ **The one gap**: the offline snapshot has no `analyze_figure` entries yet. During the 2026-09-22 build arXiv throttled this host to ~5KB/s (a 34MB paper delivered 492KB in 90s), which made re-downloading 30 PDFs impractical, so a full snapshot rebuild was not run. Run `python -m AgenticArXiv.rl.build_snapshot --skip-prefetch` once the network recovers; until then T5 tasks fail in replay mode on the missing snapshot key.
+- [ ] **T5 Figure analysis** `analyze_figure` (optional, multimodal env): the tool, environment integration, task templates, unit tests, and optional parameterised SFT derivation rules are written. A real snapshot and generated dataset are still needed. The VLM stays on the environment side; the policy remains text-only.
+  - ⏳ **Snapshot gap**: local offline snapshots are not committed, and no T5 records are available here for verification. During the 2026-09-22 build, arXiv throttled this host to ~5KB/s (a 34MB paper delivered 492KB in 90s), so the full rebuild was not completed. With working network access or cached PDFs, run `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; replay fails on missing T5 records.
   - Backends: `extractive` by default (reuses the caption T4 already extracted — deterministic, no weights); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<local VLM dir>` switches to a local VLM (greedy decoding, answers recorded at snapshot-build time).
-  - Known boundary: **no training coverage** — the parameterised SFT data generator has no derivation rule for `analyze_figure` yet, so none of the existing models has learned it.
+  - **Generate T5 expert data** (requires a snapshot with T5 records):
+    ```bash
+    python scripts/generate_parametric_sft_data.py \
+      --split-file data/splits/v3_81.json \
+      --snapshot data/mock_arxiv_snapshot.json \
+      --include-t5
+    ```
+    The default command still produces the historical v2 dataset; the T5 output goes to `data/sft/sft_v3_t5_parametric_seed.jsonl`.
+  - Known boundary: no T5 dataset or model has been generated or trained in this repository; the released model has not learned this tool.
 
 ### P1 — Reward curriculum tuning
 
