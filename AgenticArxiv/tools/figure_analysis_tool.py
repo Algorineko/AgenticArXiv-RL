@@ -157,11 +157,10 @@ def _extractive_answer(figure: Dict[str, Any], question: str) -> str:
 def build_extractive_analysis_result(
     paper_id: str, figure: Dict[str, Any], question: str
 ) -> Dict[str, Any]:
-    """Build the same observation for a live call and an offline backfill.
+    """为在线调用与离线补录生成相同的观察结果。
 
-    The extractive backend reads figure metadata and its caption only.  It does
-    not need the image file, which lets an existing T4 snapshot be upgraded
-    without downloading the PDF again.
+    抽取式后端仅使用图表元数据与 caption，无需图片文件。
+    因此已有 T4 快照不必重新下载 PDF 就能补录 T5。
     """
     canonical_question = normalize_question(question)
     figure_no = validate_figure_no(figure.get("figure_no"))

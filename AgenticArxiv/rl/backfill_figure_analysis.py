@@ -1,12 +1,12 @@
-"""Backfill extractive T5 observations from an existing T4 snapshot.
+"""使用已有 T4 快照补录抽取式 T5 图表分析结果。
 
-Usage from the repository root::
+在仓库根目录运行::
 
     python -m AgenticArxiv.rl.backfill_figure_analysis \
         --snapshot data/mock_arxiv_snapshot.json
 
-No arXiv request, PDF read, image read, or model inference is performed.  A
-VLM snapshot still needs to be recorded with the real VLM backend.
+本命令不请求 arXiv，不读取 PDF 或图片，也不进行模型推理。
+VLM 快照仍需使用真实 VLM 后端录制。
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class BackfillStats:
 
 
 def backfill_entries(snapshot: Mapping[str, Any]) -> Tuple[Dict[str, Any], BackfillStats]:
-    """Return an upgraded snapshot without changing the input mapping."""
+    """返回补录后的快照，不修改输入映射。"""
     if not isinstance(snapshot, dict):
         raise ValueError("Snapshot root must be a JSON object")
 
@@ -109,7 +109,7 @@ def backfill_entries(snapshot: Mapping[str, Any]) -> Tuple[Dict[str, Any], Backf
 
 
 def backfill_snapshot(path: Path) -> BackfillStats:
-    """Upgrade one snapshot atomically; leave it untouched on validation errors."""
+    """原子写入快照；校验失败时保持原文件不变。"""
     if analysis_backend() != "extractive":
         raise ValueError("Backfill supports FIGURE_ANALYSIS_BACKEND=extractive only")
 
