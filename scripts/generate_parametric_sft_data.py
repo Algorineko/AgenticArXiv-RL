@@ -45,7 +45,7 @@ def step(tool: str, **args: Any) -> Step:
 
 
 def build_parametric_tasks(*, include_t5: bool = False) -> List[DerivedTask]:
-    """Declare train-only variants while preserving the v2 default dataset."""
+    """声明仅用于训练的派生任务，并保持 v2 默认数据集不变。"""
     out: List[DerivedTask] = []
 
     def add(
@@ -359,9 +359,8 @@ def build_parametric_tasks(*, include_t5: bool = False) -> List[DerivedTask]:
         )
 
     if include_t5:
-        # T5 is opt-in because the released v2 seed predates this tool.  Keep
-        # each parent's known-good paper and figure number; vary only the
-        # question, so the variants need no unverified figure assets.
+        # 已发布的 v2 种子早于 T5，因此图表分析须显式启用。
+        # 保留父任务的论文和图号，只改变问题，避免引入未经验证的图片资源。
         question_phrases = {
             "describe": "描述第{figure_no}张图展示的内容",
             "axes": "说明第{figure_no}张图的坐标轴信息",
@@ -483,7 +482,7 @@ def main() -> None:
     parser.add_argument("--output", default=None)
     parser.add_argument(
         "--include-t5", action="store_true",
-        help="Add T5 figure-analysis variants; requires the v3_81 train split",
+        help="加入 T5 图表分析派生任务；需要 v3_81 训练切分",
     )
     args = parser.parse_args()
 
