@@ -1,6 +1,7 @@
 """Regression tests for the deterministic benchmark-score baselines."""
 
 from dataclasses import replace
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -36,6 +37,23 @@ class BaselineDiagnosticTest(unittest.TestCase):
         self.assertEqual(len(results), len(self.tasks))
         self.assertTrue(all(result.reward == 1.0 for result in results))
         self.assertTrue(all(result.exact_tool_path for result in results))
+
+    def test_reference_figure_analysis_has_a_valid_synthetic_answer(self):
+        """参考策略可使用合成观察值，但图表答案必须满足结果契约。"""
+        task = next(
+            item for item in self.tasks
+            if item["category"] == "figure_analysis"
+        )
+        reference = resolve_policies(["reference"])[0]
+        result = reference.build_result(task, seed=42)
+        figure_steps = [
+            step for step in result["history"]
+            if '"name": "analyze_figure"' in step["action"]
+        ]
+        self.assertEqual(len(figure_steps), 1)
+        observation = json.loads(figure_steps[0]["observation"])
+        self.assertTrue(observation["paper_id"].strip())
+        self.assertTrue(observation["answer"].strip())
 
     def test_always_finish_is_not_mistaken_for_the_reference(self):
         results = self._results(["reference", "always_finish"])

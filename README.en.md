@@ -728,6 +728,7 @@ T1–T4 are implemented (see "🧰 Toolset Evolution Design"):
   - ⏳ **Snapshot gap**: local offline snapshots are not committed, and no T5 records are available here for verification. During the 2026-09-22 build, arXiv throttled this host to ~5KB/s (a 34MB paper delivered 492KB in 90s), so the full rebuild was not completed. With working network access or cached PDFs, run `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; replay fails on missing T5 records.
   - If a snapshot already contains T4 figure records, run `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json` to fill default `extractive` T5 results from captions without downloading PDFs again. VLM results still require VLM recording.
   - Backends: `extractive` by default (reuses the caption T4 already extracted — deterministic, no weights); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<local VLM dir>` switches to a local VLM (greedy decoding, answers recorded at snapshot-build time).
+  - VLM image loading and resizing use `Pillow`, now declared in `AgenticArxiv/requirements.txt`; extractive replay does not require VLM weights.
   - **Generate T5 expert data** (requires a snapshot with T5 records):
     ```bash
     python scripts/generate_parametric_sft_data.py \
