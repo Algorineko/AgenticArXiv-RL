@@ -729,6 +729,7 @@ T1–T4 están implementados (ver «🧰 Diseño de Evolución del Conjunto de H
   - ⏳ **Falta el snapshot**: los snapshots locales no se incluyen en el repositorio y aquí no hay entradas T5 para verificar. Durante la construcción del 2026-09-22 arXiv limitó este host a ~5KB/s (un paper de 34MB entregó 492KB en 90s), por lo que no se completó la reconstrucción. Con acceso de red o PDFs en caché, ejecuta `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; el replay falla si faltan entradas T5.
   - Si ya existe un snapshot con registros T4 de figuras, ejecuta `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json` para completar los resultados T5 del backend `extractive` a partir de captions, sin volver a descargar los PDFs. Los resultados VLM siguen requiriendo su propia grabación.
   - Backends: `extractive` por defecto (reutiliza el caption que T4 ya extrajo — determinista y sin pesos); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<dir del VLM local>` cambia a un VLM local (decodificación greedy, respuestas registradas al construir el snapshot).
+  - La carga y el redimensionamiento de imágenes para VLM usan `Pillow`, declarado en `AgenticArxiv/requirements.txt`; la reproducción extractiva no requiere pesos del VLM.
   - **Generar datos expertos T5** (requiere un snapshot con entradas T5):
     ```bash
     python scripts/generate_parametric_sft_data.py \

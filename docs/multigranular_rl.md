@@ -121,3 +121,13 @@ Existing trajectory files load unchanged because the field has a default.
 
 回归用例位于 `AgenticArxiv/tests/test_multigranular_reward.py`，
 使用内存中的任务与轨迹；不需要 arXiv、PDF、图像、模型或 GPU。
+
+### 基准参考轨迹
+
+`benchmark.baselines.ReferencePolicy` 也不执行真实工具。
+它为普通工具保留确定性的合成 observation；
+对于 `analyze_figure`，参考策略需要提供包含非空
+`paper_id` 和 `answer` 的合成对象，才能代表一次有效图表分析。
+退化策略仍保留各自的合成轨迹，由同一奖励计算器评分。
+这样逐类目分差测试检验的是策略质量差异，而不是参考轨迹自身违反
+图表结果契约。该基准不声称生成了真实图像或 VLM 答案。
