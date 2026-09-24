@@ -715,6 +715,7 @@ T1–T4 已实现（见「🧰 工具集演进设计」）：
 - [x] **T4 图表抽取** `extract_paper_figures`：确定性抽出内嵌图表与 caption，离线快照回放
 - [ ] **T5 图表分析** `analyze_figure`（可选，多模态环境）：工具、环境集成、任务模板、单测和可选的参数化 SFT 派生规则已写好；仍需录制真实快照并生成数据。VLM 只在 env 侧，策略仍是纯文本小模型。
   - ⏳ **快照缺口**：仓库不收录本地离线快照，当前没有可验证的 T5 记录。2026-09-22 构建时 arXiv 对本机限速到 ~5KB/s（34MB 的论文 90 秒只传了 492KB），因此没有完成重建。有可用网络或 PDF 缓存时运行 `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`；缺失 T5 记录时 replay 会报错。
+  - 若已有包含 T4 图表记录的快照，可运行 `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json`，直接从 caption 补录默认 `extractive` 后端的 T5 结果，无需重新下载 PDF；VLM 结果仍需用 VLM 录制。
   - 后端：默认 `extractive`（只复用 T4 已抽出的 caption，确定性强、不需要权重）；`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<本地 VLM 目录>` 切本地 VLM（贪心解码，答案在构建快照时录制）。
   - **生成 T5 专家数据**（须先准备含 T5 记录的快照）：
     ```bash
