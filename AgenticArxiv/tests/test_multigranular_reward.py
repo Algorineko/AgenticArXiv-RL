@@ -243,6 +243,86 @@ class MultiGranularRewardTest(unittest.TestCase):
         self.assertEqual(breakdown.result_quality, 1.0)
         self.assertEqual(breakdown.efficiency, 1.0)
 
+    def test_analyze_figure_requires_a_nonempty_answer(self):
+        task = {
+            "id": "figure-analysis",
+            "expected_tools": ["analyze_figure"],
+            "expected_tool_args": [{}],
+        }
+        invalid_observations = (
+            "{'paper_id': '2601.00004v1', 'answer': ''}",
+            '{"paper_id": "2601.00004v1", "answer": "   "}',
+            "{'paper_id': '2601.00004v1'}",
+            "{'answer': 'A rising trend.'}",
+            "{'paper_id': '   ', 'answer': 'A rising trend.'}",
+            "{'paper_id': '2601.00004v1', 'answer': None}",
+            "{'paper_id': '2601.00004v1', 'meta': {'answer': 'nested'}}",
+            "[{'paper_id': '2601.00004v1', 'answer': 'inside a list'}]",
+            "{'paper_id': '2601.00004v1', 'answer': 'cut off",
+        )
+        for observation in invalid_observations:
+            with self.subTest(observation=observation):
+                breakdown, _ = self.calculator.compute_reward_breakdown(
+                    task,
+                    _result([
+                        {"action": '{"name":"analyze_figure","args":{}}',
+                         "observation": observation},
+                        {"action": "FINISH", "observation": "任务完成"},
+                    ]),
+                    training_step=30,
+                )
+                self.assertEqual(breakdown.result_quality, -1.0)
+
+        valid_observations = (
+            "{'paper_id': '2601.00004v1', 'answer': 'A rising trend.'}",
+            '{"paper_id": "2601.00004v1", '
+            '"answer": "The caption does not state this."}',
+        )
+        for observation in valid_observations:
+            with self.subTest(observation=observation):
+                breakdown, _ = self.calculator.compute_reward_breakdown(
+                    task,
+                    _result([
+                        {"action": '{"name":"analyze_figure","args":{}}',
+                         "observation": observation},
+                    ]),
+                )
+                self.assertEqual(breakdown.result_quality, 1.0)
+
+    def test_empty_figure_answer_triggers_severe_failure_gate(self):
+        task = {
+            "id": "figure-analysis",
+            "expected_tools": ["analyze_figure"],
+            "expected_tool_args": [{}],
+        }
+        breakdown, _ = self.calculator.compute_reward_breakdown(
+            task,
+            _result([
+                {"action": '{"name":"analyze_figure","args":{}}',
+                 "observation": "{'paper_id': '2601.00004v1', 'answer': ''}"},
+                {"action": "FINISH", "observation": "任务完成"},
+            ]),
+            training_step=30,
+        )
+        self.assertEqual(breakdown.result_quality, -1.0)
+        self.assertLessEqual(breakdown.total, -0.75)
+
+    def test_reading_tools_keep_their_existing_result_check(self):
+        for tool_name, field in (
+            ("get_paper_content", "content"),
+            ("summarize_paper", "summary"),
+        ):
+            with self.subTest(tool_name=tool_name):
+                breakdown, _ = self.calculator.compute_reward_breakdown(
+                    {"id": tool_name, "expected_tools": [tool_name]},
+                    _result([{
+                        "action": '{"name":"' + tool_name + '","args":{}}',
+                        "observation": "{'paper_id': '2601.00004v1', '"
+                                       + field + "': ''}",
+                    }]),
+                )
+                self.assertEqual(breakdown.result_quality, 1.0)
+
     def test_failed_observation_cannot_be_rescued_by_format_points(self):
         task = {
             "id": "grounded",
