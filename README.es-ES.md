@@ -231,6 +231,10 @@ python -m AgenticArxiv.rl.train_grpo
 
 **Salida**: Modelo en `./outputs/grpo/final`
 
+> **Pesos publicados** (GRPO online sobre el modelo SFT de la fase 1; el conjunto de entrenamiento son 33 tareas con señal, seleccionadas por un sondeo de política congelada entre las 51 tareas de entrenamiento, con repetición offline del snapshot):
+> [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO)
+> Evaluación offline (seed 45 / repeat 3), tasa de éxito estricta SFT → GRPO: rl_train 0.081 → 0.636, dev 0.000 → 0.375, iid_test 0.056 → 0.444, ood_test 0.000 → 0.500.
+
 **Ventajas**:
 - Sin necesidad de reward model (desventaja de DPO: no puede aprender online)
 - Sin necesidad de value model (desventaja de PPO: alto consumo de VRAM)
@@ -556,6 +560,7 @@ fire
 
 ### Pesos del modelo
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) — checkpoint de la fase 1 (SFT), ajuste a parámetros completos sobre Qwen2.5-1.5B (ModelScope)
+- [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) — checkpoint de la fase 3 (GRPO), entrenamiento online con verifiable reward sobre los pesos SFT (ModelScope)
 
 ### Documentación Oficial
 - [Documentación de TRL](https://huggingface.co/docs/trl/)

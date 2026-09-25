@@ -249,6 +249,10 @@ python -m AgenticArxiv.rl.train_grpo
 
 **产出**：`./outputs/grpo/final` 模型
 
+> **已发布的权重**（在阶段 1 SFT 模型上用 GRPO 在线训练；训练集是冻结策略探测从训练集 51 条任务中选出的 33 条信号任务，全程离线快照回放）：
+> [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO)
+> 离线评测（seed 45 / repeat 3）严格成功率 SFT → GRPO：rl_train 0.081 → 0.636，dev 0.000 → 0.375，iid_test 0.056 → 0.444，ood_test 0.000 → 0.500。
+
 **优势**：
 - 无需 reward model（DPO 的缺点：无法在线学习）
 - 无需 value model（PPO 的缺点：显存开销大）
@@ -573,6 +577,7 @@ fire
 
 ### 模型权重
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) —— 阶段 1 SFT 产物，Qwen2.5-1.5B 全参微调（ModelScope）
+- [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) —— 阶段 3 GRPO 产物，在 SFT 权重上用可验证奖励在线训练（ModelScope）
 
 ### 官方文档
 - [TRL 文档](https://huggingface.co/docs/trl/)
