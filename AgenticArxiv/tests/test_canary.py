@@ -77,6 +77,24 @@ class _FakeTokenizer:
         return "mock prompt"
 
 
+class _RecordingTokenizer(_FakeTokenizer):
+    """记录被 tokenize 的文本；带 chat_template 属性以触发模板渲染路径。"""
+
+    chat_template = "{{ messages }}"
+
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def __call__(self, text, return_tensors="pt", **kwargs):
+        self.calls.append(text)
+        return super().__call__(text, return_tensors=return_tensors, **kwargs)
+
+    @staticmethod
+    def apply_chat_template(messages, tokenize=False, add_generation_prompt=False):
+        return "CHAT:" + messages[0]["content"]
+
+
 class _FakeModel:
     """模拟模型：返回确定性的 token id 序列。"""
 
@@ -163,6 +181,22 @@ class CanaryEvaluatorTest(unittest.TestCase):
         self.assertTrue(reward_calc.compute_reward_breakdown.called)
         for call in reward_calc.compute_reward_breakdown.call_args_list:
             self.assertEqual(call.kwargs["training_step"], 37)
+
+    def test_prompt_is_rendered_through_chat_template_when_available(self):
+        tokenizer = _RecordingTokenizer()
+        evaluator = CanaryEvaluator(
+            model=self.model,
+            tokenizer=tokenizer,
+            canary_task_ids=["search_01"],
+            reward_calc=RewardCalculator(),
+            env=None,
+        )
+        evaluator.evaluate(step=0)
+        self.assertTrue(tokenizer.calls)
+        self.assertTrue(
+            all(call.startswith("CHAT:") for call in tokenizer.calls),
+            "有 chat_template 时必须渲染成与训练一致的对话格式",
+        )
 
 
 class CanaryCallbackTest(unittest.TestCase):

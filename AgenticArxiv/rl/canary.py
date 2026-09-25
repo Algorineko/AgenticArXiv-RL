@@ -91,6 +91,21 @@ class CanaryEvaluator:
         tools_desc = format_tool_description(registry.list_tools())
         return get_react_prompt(task=task["task"], tools_description=tools_desc, history="")
 
+    def _render_prompt(self, prompt: str) -> str:
+        """按训练口径渲染：prompt 作为 user 消息过聊天模板。
+
+        `build_prompt_dataset` 交给 TRL 用 chat template 渲染消息；canary 若直接
+        tokenize 裸字符串，模型看到的是训练时从未出现过的输入格式——生成不收敛、
+        被 `max_new_tokens` 截断，JSON 解析失败，分数被系统性压到失败地板。
+        """
+        if not getattr(self.tokenizer, "chat_template", None):
+            return prompt
+        return self.tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
     def evaluate(self, step: int = 0) -> CanaryResult:
         """运行一次 canary 评估。
 
@@ -110,7 +125,9 @@ class CanaryEvaluator:
         with torch.no_grad():
             for tid, task in self._tasks.items():
                 prompt = self._build_prompt(task)
-                inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
+                inputs = self.tokenizer(
+                    self._render_prompt(prompt), return_tensors="pt"
+                ).to(device)
                 prompt_len = inputs.input_ids.shape[1]
 
                 try:
