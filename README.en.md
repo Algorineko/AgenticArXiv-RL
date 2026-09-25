@@ -230,6 +230,10 @@ python -m AgenticArxiv.rl.train_grpo
 
 **Output**: `./outputs/grpo/final` model
 
+> **Released weights** (online GRPO on top of the stage-1 SFT model; the training set is 33 signal tasks selected from the 51 training tasks by a frozen-policy probe, fully offline snapshot replay):
+> [🤗 ModelScope · AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO)
+> Offline evaluation (seed 45 / repeat 3), strict success rate SFT → GRPO: rl_train 0.081 → 0.636, dev 0.000 → 0.375, iid_test 0.056 → 0.444, ood_test 0.000 → 0.500.
+
 **Advantages**:
 - No reward model required (DPO's drawback: unable to learn online)
 - No value model required (PPO's drawback: high VRAM overhead)
@@ -555,6 +559,7 @@ fire
 
 ### Model weights
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) — stage-1 SFT checkpoint, Qwen2.5-1.5B full-parameter fine-tune (ModelScope)
+- [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) — stage-3 GRPO checkpoint, online verifiable-reward training on the SFT weights (ModelScope)
 
 ### Official Documentation
 - [TRL Documentation](https://huggingface.co/docs/trl/)
