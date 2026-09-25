@@ -25,6 +25,7 @@ PINNED_PATH = SPLIT_DIR / "v1.json"
 PINNED_V2_PATH = SPLIT_DIR / "v2_62.json"
 PINNED_V3_PATH = SPLIT_DIR / "v3_81.json"
 GRPO_V5_PATH = SPLIT_DIR / "v5_grpo_train.json"
+GRPO_V6_PATH = SPLIT_DIR / "v6_grpo_train.json"
 
 PILOT_DEV_IDS = {
     "search_AI_1d_3",
@@ -478,6 +479,58 @@ class GrpoV5SplitArtifactTest(unittest.TestCase):
         self.assertEqual(
             load_split(f"{GRPO_V5_PATH}:rl_train"),
             self.v5["split"]["rl_train"],
+        )
+
+
+class GrpoV6SplitArtifactTest(unittest.TestCase):
+    """v6 冻结探测选出的 GRPO 切分：只消费 v3 train，汇总与审计自洽。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.v3 = json.loads(PINNED_V3_PATH.read_text(encoding="utf-8"))
+        cls.v6 = json.loads(GRPO_V6_PATH.read_text(encoding="utf-8"))
+
+    def test_train_tasks_are_only_from_v3_train(self):
+        selected = set(self.v6["split"]["rl_train"])
+        self.assertTrue(selected <= set(self.v3["split"]["train"]))
+        held_out = set(
+            self.v3["split"]["dev"]
+            + self.v3["split"]["iid_test"]
+            + self.v3["split"]["ood_test"]
+        )
+        self.assertFalse(selected & held_out)
+
+    def test_zero_variance_control_is_not_trained(self):
+        selected = set(self.v6["split"]["rl_train"])
+        controls = set(self.v6["split"]["ceiling_control"])
+        self.assertFalse(selected & controls)
+        for task_id in controls:
+            self.assertEqual(
+                self.v6["audit"][task_id]["informative_group_count"], 0
+            )
+
+    def test_summary_matches_selected_task_audit(self):
+        selected = self.v6["split"]["rl_train"]
+        informative = sum(
+            self.v6["audit"][task_id]["informative_group_count"]
+            for task_id in selected
+        )
+        groups = sum(
+            self.v6["audit"][task_id]["group_count"]
+            for task_id in selected
+        )
+        summary = self.v6["summary"]
+        self.assertEqual(summary["selected_task_count"], len(selected))
+        self.assertEqual(summary["informative_group_count"], informative)
+        self.assertEqual(summary["selected_prompt_group_count"], groups)
+        self.assertAlmostEqual(
+            summary["informative_group_fraction"], informative / groups
+        )
+
+    def test_explicit_split_loads_the_selected_tasks(self):
+        self.assertEqual(
+            load_split(f"{GRPO_V6_PATH}:rl_train"),
+            self.v6["split"]["rl_train"],
         )
 
 
