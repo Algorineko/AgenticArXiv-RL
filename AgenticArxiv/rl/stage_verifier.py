@@ -138,7 +138,7 @@ class StageVerifier:
                 failures=[f"模型加载失败: {e}"],
             )
 
-        prompts = self._sft_prompts(num_samples)
+        prompts = self._sft_prompts(num_samples, tokenizer)
         parse_rate = _check_parse_rate(model, tokenizer, prompts)
 
         thresholds = self.thresholds["sft"]
@@ -291,28 +291,31 @@ class StageVerifier:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _sft_prompts(num_samples: int) -> List[str]:
-        """构造 SFT 验证用的 chat prompt 列表。
+    def _sft_prompts(num_samples: int, tokenizer=None) -> List[str]:
+        """构造 SFT 验证用的 prompt 列表（与 canary 同口径）。
 
-        使用 benchmark 任务描述作为 user 消息，配上 system prompt。
+        使用与训练一致的 ReAct prompt（含工具描述），并在 tokenizer 带
+        chat_template 时按 user 消息渲染——此前用 "System:/User:/Assistant:"
+        伪格式裸文本 tokenize，模型在训练时从未见过这种输入，parse_rate 被
+        系统性压低到 6%（已发布 SFT 与新模型同为 1/16），验证失去区分度。
         """
         from benchmark.tasks import get_all_tasks
-
-        SYSTEM = (
-            "你是 arXiv 论文检索 Agent。"
-            "根据用户需求调用工具，以 JSON 格式返回动作："
-            '{"name": "工具名", "arguments": {...}}'
-        )
+        from rl.canary import CanaryEvaluator
 
         tasks = get_all_tasks()
         # 取前 num_samples 个任务，不够就循环
         selected = (tasks * (1 + num_samples // max(1, len(tasks))))[:num_samples]
+        prompts = [CanaryEvaluator._build_prompt(task) for task in selected]
 
-        prompts = []
-        for task in selected:
-            prompts.append(
-                f"System: {SYSTEM}\n\nUser: {task['task']}\n\nAssistant:"
-            )
+        if tokenizer is not None and getattr(tokenizer, "chat_template", None):
+            prompts = [
+                tokenizer.apply_chat_template(
+                    [{"role": "user", "content": prompt}],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+                for prompt in prompts
+            ]
         return prompts
 
 
