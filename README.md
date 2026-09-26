@@ -108,7 +108,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 7. `summarize_paper(ref, style, max_words)` — 对已下载论文做 env 侧摘要（tldr / structured / bullet）
 8. `extract_paper_figures(ref)` — 抽出已下载论文的图表文件与 caption
 
-> 「检索 → 下载 → 阅读 → 总结 → 抽图」这条解读闭环已经打通。图表**分析**（T5，需要 env 侧 VLM）仍是设计稿，见下文「🧰 工具集演进设计」。
+> 「检索 → 下载 → 阅读 → 总结 → 抽图」这条解读闭环已经打通，图表**分析**（T5，env 侧 VLM）也已落地——本项目后训练的 [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) 负责读图并录制快照，策略侧另有学会该工具链的 [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) 权重；设计细节见下文「🧰 工具集演进设计」。
 
 ### Verifiable Reward 组件
 
@@ -578,6 +578,8 @@ fire
 ### 模型权重
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) —— 阶段 1 SFT 产物，Qwen2.5-1.5B 全参微调（ModelScope）
 - [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) —— 阶段 3 GRPO 产物，在 SFT 权重上用可验证奖励在线训练（ModelScope）
+- [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) —— 阶段 1 SFT（T5 版），学会图表分析 `analyze_figure` 四步链（ModelScope）
+- [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) —— T5 的 env 侧图表分析 VLM，Qwen3-VL-4B 用 arXiv 图表 + caption 后训练（ModelScope）
 
 ### 官方文档
 - [TRL 文档](https://huggingface.co/docs/trl/)
@@ -685,8 +687,8 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 三个结论：
 
 1. **「检索」半环已打通**：既支持时间窗浏览，也支持关键词、篇名和作者查找；翻页仍未实现。
-2. **「分析解读」闭环已打通**：读内容 → 总结 → 抽图三步都是确定性工具，模型可以独立完成一篇论文的解读链。图表**语义分析**（T5）仍待实现，它需要 env 侧常驻一个 VLM。
-3. **动作空间不是越大越好**：策略是 1.5B 量级小模型，每加一个工具都放大工具选择与 JSON 格式的学习负担。新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」——下表 5 个候选里 T1/T2 是关键路径，T3 是主要增量，T4 已实现，T5 可选。
+2. **「分析解读」闭环已打通**：读内容 → 总结 → 抽图三步都是确定性工具，模型可以独立完成一篇论文的解读链。图表**语义分析**（T5）已落地：env 侧 VLM 由本项目后训练（FigureQA）并在构建快照时录制答案，策略学会「检索 → 下载 → 抽图 → 分析」四步链。
+3. **动作空间不是越大越好**：策略是 1.5B 量级小模型，每加一个工具都放大工具选择与 JSON 格式的学习负担。新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」——下表 5 个候选里 T1/T2 是关键路径，T3 是主要增量，T4 已实现，T5 已落地。
 
 ### 建议新增的工具（按依赖顺序）
 
@@ -696,7 +698,7 @@ PPO 更适合生产级大模型训练（7B+），本项目作为学习 demo 不�
 | **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
 | **T3** ✅ | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**生成摘要（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
 | **T4** ✅ | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 数量 ≥ 1」 |
-| **T5**（可选，多模态） | `analyze_figure(ref, figure_no, question=None)` | 图表分析：env 侧调本地 VLM（如 Qwen2.5-VL）读图回答 | 规则只判「调没调对、参数对不对」；VLM 回答质量不进奖励，避免把第三方模型的噪声写进策略梯度 |
+| **T5** ✅（已落地，多模态） | `analyze_figure(ref, figure_no, question=None)` | 图表分析：env 侧调本地 VLM（本项目后训练的 Qwen3-VL-4B FigureQA）读图回答 | 规则只判「调没调对、参数对不对」；VLM 回答质量不进奖励，避免把第三方模型的噪声写进策略梯度 |
 
 **T3 的摘要后端**：README 原本写的是「env 侧调本地摘要模型」。落地时默认采用**确定性抽取式后端**（按 section 取整句、按词数预算裁剪，不采样、不调模型），原因有三：它让同一条轨迹在任意时刻回放都逐字节一致；它不需要在 `build_snapshot` 之外再引入一个需要权重的前置条件；而奖励只看工具调用决策、不看摘要文字，模型后端对训练信号没有贡献。需要更自然语言的摘要时可用 `SUMMARY_BACKEND=local_model SUMMARY_MODEL_PATH=<本地模型目录>` 切到模型后端（贪心解码，仍然确定性），代价是快照构建阶段要加载权重。
 
@@ -744,20 +746,11 @@ T1–T4 已实现（见「🧰 工具集演进设计」）：
 - [x] **T2 论文阅读** `get_paper_content`：确定性 PDF → 文本与离线快照回放，全部解读类任务的前置件（关键路径）
 - [x] **T3 论文总结** `summarize_paper`：env 侧摘要，把「解读」变成可训练的工具调用决策（默认确定性抽取式后端，`SUMMARY_BACKEND=local_model` 可切本地模型）
 - [x] **T4 图表抽取** `extract_paper_figures`：确定性抽出内嵌图表与 caption，离线快照回放
-- [ ] **T5 图表分析** `analyze_figure`（可选，多模态环境）：工具、环境集成、任务模板、单测和可选的参数化 SFT 派生规则已写好；仍需录制真实快照并生成数据。VLM 只在 env 侧，策略仍是纯文本小模型。
-  - ⏳ **快照缺口**：仓库不收录本地离线快照，当前没有可验证的 T5 记录。2026-09-22 构建时 arXiv 对本机限速到 ~5KB/s（34MB 的论文 90 秒只传了 492KB），因此没有完成重建。有可用网络或 PDF 缓存时运行 `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`；缺失 T5 记录时 replay 会报错。
-  - 若已有包含 T4 图表记录的快照，可运行 `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json`，直接从 caption 补录默认 `extractive` 后端的 T5 结果，无需重新下载 PDF；VLM 结果仍需用 VLM 录制。
-  - 后端：默认 `extractive`（只复用 T4 已抽出的 caption，确定性强、不需要权重）；`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<本地 VLM 目录>` 切本地 VLM（贪心解码，答案在构建快照时录制）。
-  - VLM 图像读取与缩放依赖 `Pillow`，已列入 `AgenticArxiv/requirements.txt`；抽取式回放不需要下载 VLM 权重。
-  - **生成 T5 专家数据**（须先准备含 T5 记录的快照）：
-    ```bash
-    python scripts/generate_parametric_sft_data.py \
-      --split-file data/splits/v3_81.json \
-      --snapshot data/mock_arxiv_snapshot.json \
-      --include-t5
-    ```
-    默认命令仍生成历史 v2 数据；T5 输出单独写入 `data/sft/sft_v3_t5_parametric_seed.jsonl`。
-  - 已知边界：T5 数据和模型都未在本仓库生成或训练；已发布模型尚未学过这个工具。
+- [x] **T5 图表分析** `analyze_figure`（多模态环境，已落地并发布）：工具、环境集成、任务模板、单测与参数化 SFT 派生规则之外，已后训练 env 侧 VLM（[FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA)，Qwen3-VL-4B + caption 监督）、录制含 T5 的快照、生成 T5 专家数据并训练/发布学会该工具链的 [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5)。VLM 只在 env 侧，策略仍是纯文本小模型。
+  - 快照录制：`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录>` 运行 `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot ... --force --paper-id <arXiv id>`（`--paper-id` 可限定范围、`--force` 覆盖既有抽取式条目）；默认 `extractive` 后端不变。
+  - 数据：`data/sft/sft_v3_t5_parametric_seed.jsonl`（86 派生任务 / 249 行）与语言扩增版；T5 观察由 FigureQA VLM 录制。
+  - 评测（seed 45 / repeat 3 / 离线）：SFT-T5 在 T5 任务上 `analyze_cv5_ref3_trend` strict 3/3；两个 `describe` 任务与一个 `axes` 任务工具调用步骤正确但 `question` 枚举绑定错误（误传 `tldr`/`trend`）——枚举在未见「父任务问法 × 图」组合上的泛化缺口如实记录。
+  - 附带修复：SFT 阶段验证此前用伪聊天格式裸文本（`System:/User:/Assistant:`）算 parse_rate，对 chat 模板训练的模型系统性压低（已发布 SFT 与新模型同测均 1/16）；改为按 chat 模板渲染 ReAct prompt 后，同口径为 0.750 / 0.625。
 
 ### P1 — 奖励课程调优
 
