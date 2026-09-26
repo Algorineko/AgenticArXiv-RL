@@ -782,6 +782,39 @@ class StageVerifierTest(unittest.TestCase):
             self.assertTrue(data["passed"])
             self.assertEqual(data["metrics"]["parse_rate"], 0.8)
 
+    def test_sft_prompts_use_chat_template_when_available(self):
+        from rl.stage_verifier import StageVerifier
+
+        class _ChatTokenizer:
+            chat_template = "fake-template"
+
+            def __init__(self):
+                self.calls = []
+
+            def apply_chat_template(self, messages, tokenize=False, add_generation_prompt=False):
+                self.calls.append((messages, tokenize, add_generation_prompt))
+                return "CHAT:" + messages[0]["content"]
+
+        tokenizer = _ChatTokenizer()
+        prompts = StageVerifier._sft_prompts(3, tokenizer)
+        self.assertEqual(len(prompts), 3)
+        self.assertEqual(len(tokenizer.calls), 3)
+        for prompt, (messages, tokenize, add_generation_prompt) in zip(prompts, tokenizer.calls):
+            self.assertTrue(prompt.startswith("CHAT:"))
+            self.assertIn("你是一个AI研究助手", prompt)
+            self.assertEqual(messages[0]["role"], "user")
+            self.assertIs(tokenize, False)
+            self.assertIs(add_generation_prompt, True)
+
+    def test_sft_prompts_fall_back_to_react_prompt_without_template(self):
+        from rl.stage_verifier import StageVerifier
+
+        prompts = StageVerifier._sft_prompts(2, None)
+        self.assertEqual(len(prompts), 2)
+        for prompt in prompts:
+            self.assertIn("你是一个AI研究助手", prompt)
+            self.assertNotIn("System:", prompt)
+
 
 class TrainingTaskSetTest(unittest.TestCase):
     """GRPO 训到哪些任务上。
