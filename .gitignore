@@ -13,6 +13,7 @@ env/
 traces/
 outputs/
 data/sft/*.jsonl
+data/vlm/*.jsonl
 data/dpo/*.jsonl
 data/mock_arxiv_snapshot.json
 data/traces.jsonl

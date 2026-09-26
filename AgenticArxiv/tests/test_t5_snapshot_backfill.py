@@ -85,12 +85,92 @@ class T5SnapshotBackfillTest(unittest.TestCase):
                 backfill_snapshot(self.snapshot_path)
         self.assertEqual(self.snapshot_path.read_bytes(), before)
 
-    def test_missing_t4_data_and_vlm_mode_fail_clearly(self):
+    def test_missing_t4_data_fails_clearly(self):
         with self.assertRaisesRegex(ValueError, "extract_paper_figures"):
             backfill_entries({})
-        with mock.patch.dict(os.environ, {"FIGURE_ANALYSIS_BACKEND": "vlm"}):
-            with self.assertRaisesRegex(ValueError, "extractive only"):
-                backfill_snapshot(self.snapshot_path)
+
+    def test_vlm_mode_without_model_path_counts_failures_and_keeps_file(self):
+        before = self.snapshot_path.read_bytes()
+        with mock.patch.dict(
+            os.environ, {"FIGURE_ANALYSIS_BACKEND": "vlm", "VLM_MODEL_PATH": ""}
+        ):
+            stats = backfill_snapshot(self.snapshot_path)
+        self.assertEqual((stats.added, stats.overwritten, stats.failed), (0, 0, 3))
+        self.assertEqual(self.snapshot_path.read_bytes(), before)
+
+    def test_vlm_backend_records_vlm_answers(self):
+        with mock.patch(
+            "tools.figure_analysis_tool._vlm_answer",
+            return_value="A mocked VLM answer.",
+        ) as mocked:
+            stats = backfill_snapshot(self.snapshot_path, backend="vlm")
+
+        self.assertEqual(
+            (stats.figures, stats.added, stats.overwritten, stats.failed),
+            (1, 3, 0, 0),
+        )
+        self.assertEqual(mocked.call_count, 3)
+        payload = json.loads(self.snapshot_path.read_text(encoding="utf-8"))
+        self.assertEqual(len(payload["analyze_figure"]), len(FIGURE_QUESTIONS))
+        for entry in payload["analyze_figure"].values():
+            self.assertEqual(entry["result"]["backend"], "vlm")
+            self.assertEqual(entry["result"]["answer"], "A mocked VLM answer.")
+
+        store.set_last_papers("replay", [Paper(
+            id=PAPER_ID,
+            title="Figures for Analysis",
+            authors=["A. Tester"],
+            summary="A fixture paper.",
+            pdf_url=f"https://arxiv.org/pdf/{PAPER_ID}.pdf",
+        )])
+        env = MockArxivEnv(snapshot_path=self.snapshot_path, mode="replay")
+        observation = env.execute_tool("analyze_figure", {
+            "session_id": "replay", "ref": 1, "figure_no": 1, "question": "describe",
+        })
+        self.assertEqual(observation["backend"], "vlm")
+        self.assertEqual(env.stats["real_calls"], 0)
+        self.assertEqual(env.stats["hit"], 1)
+
+    def test_force_overwrites_existing_entries(self):
+        backfill_snapshot(self.snapshot_path, backend="extractive")
+        with mock.patch(
+            "tools.figure_analysis_tool._vlm_answer", return_value="New VLM answer."
+        ) as mocked:
+            stats = backfill_snapshot(self.snapshot_path, backend="vlm", force=True)
+
+        self.assertEqual(
+            (stats.added, stats.existing, stats.overwritten), (0, 0, 3)
+        )
+        self.assertEqual(mocked.call_count, 3)
+        payload = json.loads(self.snapshot_path.read_text(encoding="utf-8"))
+        for entry in payload["analyze_figure"].values():
+            self.assertEqual(entry["result"]["backend"], "vlm")
+            self.assertEqual(entry["result"]["answer"], "New VLM answer.")
+
+        with mock.patch("tools.figure_analysis_tool._vlm_answer") as rerun:
+            stats = backfill_snapshot(self.snapshot_path, backend="vlm")
+        self.assertEqual((stats.added, stats.existing), (0, 3))
+        self.assertEqual(rerun.call_count, 0)
+
+    def test_vlm_failure_keeps_existing_entry(self):
+        backfill_snapshot(self.snapshot_path, backend="extractive")
+        before = self.snapshot_path.read_bytes()
+        with mock.patch(
+            "tools.figure_analysis_tool._vlm_answer", side_effect=RuntimeError("boom")
+        ):
+            stats = backfill_snapshot(self.snapshot_path, backend="vlm", force=True)
+        self.assertEqual((stats.failed, stats.overwritten, stats.added), (3, 0, 0))
+        self.assertEqual(self.snapshot_path.read_bytes(), before)
+
+    def test_paper_id_filter_limits_scope_and_validates(self):
+        stats = backfill_snapshot(
+            self.snapshot_path, backend="extractive", paper_ids=[PAPER_ID]
+        )
+        self.assertEqual((stats.figures, stats.added), (1, 3))
+        with self.assertRaisesRegex(ValueError, "未匹配"):
+            backfill_snapshot(
+                self.snapshot_path, backend="extractive", paper_ids=["missing-paper"]
+            )
 
 
 if __name__ == "__main__":
