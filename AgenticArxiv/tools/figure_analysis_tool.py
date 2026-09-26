@@ -277,6 +277,28 @@ def _vlm_answer(figure: Dict[str, Any], question: str) -> str:
     return answer
 
 
+def build_vlm_analysis_result(
+    paper_id: str, figure: Dict[str, Any], question: str
+) -> Dict[str, Any]:
+    """用本地 VLM 生成一次图表分析结果（在线调用与快照录制共用）。
+
+    与抽取式后端返回同一 schema，仅 ``backend`` 与 ``answer`` 不同。
+    VLM 使用贪心解码，因此同一图片重放时答案逐字节一致。
+    """
+    canonical_question = normalize_question(question)
+    figure_no = validate_figure_no(figure.get("figure_no"))
+    answer = _vlm_answer(figure, canonical_question)
+    return {
+        "paper_id": paper_id,
+        "figure_no": figure_no,
+        "page": figure.get("page"),
+        "question": canonical_question,
+        "answer": answer,
+        "backend": "vlm",
+        "image_path": figure["path"],
+    }
+
+
 def analysis_backend() -> str:
     """Return the configured backend name, validated eagerly."""
     name = os.getenv("FIGURE_ANALYSIS_BACKEND", "extractive").strip().lower() or "extractive"
@@ -312,24 +334,12 @@ def analyze_figure(
 
     backend = analysis_backend()
     if backend == "vlm":
-        answer = _vlm_answer(figure, canonical_question)
+        result = build_vlm_analysis_result(paper.id, figure, canonical_question)
     else:
         result = build_extractive_analysis_result(paper.id, figure, canonical_question)
 
     store.set_last_active_paper_id(session_id, paper.id)
-
-    if backend == "extractive":
-        return result
-
-    return {
-        "paper_id": paper.id,
-        "figure_no": index,
-        "page": figure.get("page"),
-        "question": canonical_question,
-        "answer": answer,
-        "backend": backend,
-        "image_path": figure["path"],
-    }
+    return result
 
 
 FIGURE_ANALYSIS_TOOL_SCHEMA = {

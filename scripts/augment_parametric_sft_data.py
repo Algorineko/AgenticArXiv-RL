@@ -56,7 +56,11 @@ def validate_parametric_rows(
     # The seed records the split file it was generated from.  Rebuilding the
     # name from the version number used to assume the `*_62.json` filename and
     # so rejected any newer split; take the actual filename instead.
+    # ``--include-t5`` 的种子在生成端带 `_t5` 后缀（见 generate_parametric_sft_data），
+    # 这里按 manifest 的标志还原，否则 T5 种子会被误判为来源不符。
     expected_source = f"{split_name}:train:parametric_v1"
+    if manifest.get("include_t5"):
+        expected_source += "_t5"
     source_ids = {row.get("source_task_id") for row in rows}
     if source_ids != set(task_manifest):
         raise ValueError("seed 的 source_task_id 与 manifest 派生任务不一致")
@@ -168,8 +172,13 @@ def main() -> None:
         "thought_variants": 2,
         "unique_sample_fingerprints": len({row["sample_sha256"] for row in augmented}),
         "heldout_parent_overlap": 0,
-        "note": "1908 rows are 12 linguistic views of 159 decisions from 65 derived tasks.",
+        "note": (
+            f"{len(augmented)} rows are {len(TASK_WRAPPERS) * 2} linguistic views "
+            f"of {len(rows)} decisions from {derived_tasks} derived tasks."
+        ),
     }
+    if manifest.get("include_t5"):
+        out_manifest["include_t5"] = True
     out_manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     out_manifest_path.write_text(
         json.dumps(out_manifest, ensure_ascii=False, indent=2) + "\n",
