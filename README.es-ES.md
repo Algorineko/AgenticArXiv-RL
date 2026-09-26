@@ -111,7 +111,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 7. `summarize_paper(ref, style, max_words)` — Resumen del lado del entorno sobre un paper descargado (tldr / structured / bullet)
 8. `extract_paper_figures(ref)` — Extraer los archivos de figuras y sus captions de un paper descargado
 
-> El bucle de interpretación «buscar → descargar → leer → resumir → extraer figuras» ya está conectado. El **análisis** de figuras (T5, requiere un VLM del lado del entorno) sigue siendo una propuesta de diseño; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
+> El bucle de interpretación «buscar → descargar → leer → resumir → extraer figuras» ya está conectado, y el **análisis** de figuras (T5, VLM del lado del entorno) también ha llegado: el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto lee las figuras y graba el snapshot, y un checkpoint [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) ha aprendido la cadena de herramientas; ver «🧰 Diseño de Evolución del Conjunto de Herramientas» más abajo.
 
 ### Componentes de Verifiable Reward
 
@@ -561,6 +561,8 @@ fire
 ### Pesos del modelo
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) — checkpoint de la fase 1 (SFT), ajuste a parámetros completos sobre Qwen2.5-1.5B (ModelScope)
 - [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) — checkpoint de la fase 3 (GRPO), entrenamiento online con verifiable reward sobre los pesos SFT (ModelScope)
+- [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) — SFT de fase 1 (edición T5), aprendió la cadena de cuatro pasos de `analyze_figure` (ModelScope)
+- [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) — el VLM de análisis de figuras del lado del entorno para T5, Qwen3-VL-4B post-entrenado con figuras + captions de arXiv (ModelScope)
 
 ### Documentación Oficial
 - [Documentación de TRL](https://huggingface.co/docs/trl/)
@@ -669,8 +671,8 @@ Se complementan entre sí: SFT es el punto de partida de todas las rutas; OPD y 
 Tres conclusiones:
 
 1. **La mitad de recuperación del bucle está conectada**: ya funcionan la navegación por ventana temporal y la búsqueda por palabra clave/título/autor; la paginación sigue sin implementar.
-2. **El bucle de interpretación ya está conectado**: leer contenido → resumir → extraer figuras son tres herramientas deterministas, así que el modelo puede completar por sí solo una cadena de interpretación de un paper. El **análisis semántico** de figuras (T5) sigue pendiente: requiere un VLM residente en el lado del entorno.
-3. **Un espacio de acciones más grande no es automáticamente mejor**: la política es un modelo de ~1.5B, y cada herramienta nueva amplía la carga de aprendizaje de selección de herramientas y formato JSON. El criterio de admisión de una herramienta nueva es «habilita una nueva categoría de tareas», no «puede que sea útil» — de los 5 candidatos de la tabla, T1/T2 son el camino crítico, T3 es el incremento principal, T4 ya está implementado, T5 es opcional.
+2. **El bucle de interpretación ya está conectado**: leer contenido → resumir → extraer figuras son tres herramientas deterministas, así que el modelo puede completar por sí solo una cadena de interpretación de un paper. El **análisis semántico** de figuras (T5) ya está implementado: el VLM del lado del entorno se post-entrena en este proyecto (FigureQA) y registra las respuestas al construir el snapshot, y la política aprende la cadena de cuatro pasos «buscar → descargar → extraer figuras → analizar».
+3. **Un espacio de acciones más grande no es automáticamente mejor**: la política es un modelo de ~1.5B, y cada herramienta nueva amplía la carga de aprendizaje de selección de herramientas y formato JSON. El criterio de admisión de una herramienta nueva es «habilita una nueva categoría de tareas», no «puede que sea útil» — de los 5 candidatos de la tabla, T1/T2 son el camino crítico, T3 es el incremento principal, T4 ya está implementado, T5 ya está implementado.
 
 ### Herramientas nuevas propuestas (en orden de dependencia)
 
@@ -680,7 +682,7 @@ Tres conclusiones:
 | **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → texto plano (PyMuPDF); por defecto devuelve title/abstract, y por secciones (method / result / conclusion) a petición | Extracción de texto determinista, sin LLM; los resultados de extracción van pre-guardados en el snapshot. **Es el prerrequisito de todas las tareas de interpretación** |
 | **T3** ✅ | `summarize_paper(ref, style, max_words)` | Resumir un paper: el resumen se genera **en el lado del entorno** (con el texto de T2 como entrada) y devuelve el texto | Lo entrenable es «cuándo llamarlo, sobre qué ref, si style/longitud son correctos» — todo verificable por reglas; la calidad del resumen en sí **no entra en la recompensa** (ver abajo) |
 | **T4** ✅ | `extract_paper_figures(ref)` | Preparación de figuras/tablas: extrae imágenes de figuras + captions, devuelve rutas de archivos | Determinista; se verifica «ref correcto + cantidad ≥ 1» |
-| **T5** (opcional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Análisis de figuras: un VLM local del lado del entorno (p. ej. Qwen2.5-VL) lee la figura y responde | Las reglas solo juzgan «si se llamó bien y si los parámetros son correctos»; la calidad de la respuesta del VLM no entra en la recompensa, manteniendo el ruido de un modelo tercero fuera del gradiente de política |
+| **T5** ✅ (implementado, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Análisis de figuras: un VLM local del lado del entorno (el Qwen3-VL-4B FigureQA post-entrenado del proyecto) lee la figura y responde | Las reglas solo juzgan «si se llamó bien y si los parámetros son correctos»; la calidad de la respuesta del VLM no entra en la recompensa, manteniendo el ruido de un modelo tercero fuera del gradiente de política |
 
 **El backend de resumen de T3**: este README decía originalmente «un modelo resumidor local del lado del entorno». Al implementarlo se adoptó por defecto un **backend extractivo determinista** (frases enteras por sección, recortadas al presupuesto de palabras, sin muestreo y sin modelo), por tres razones: hace que una misma trayectoria se repita byte a byte en cualquier momento; evita añadir, fuera de `build_snapshot`, otro prerrequisito que necesite pesos; y como la recompensa solo mira la decisión de llamada a herramientas y no el texto del resumen, el backend con modelo no aporta nada a la señal de entrenamiento. Para resúmenes de lenguaje más natural se puede cambiar al backend con modelo con `SUMMARY_BACKEND=local_model SUMMARY_MODEL_PATH=<directorio del modelo local>` (decodificación greedy, también determinista), a cambio de cargar pesos durante la construcción del snapshot.
 
@@ -730,20 +732,11 @@ T1–T4 están implementados (ver «🧰 Diseño de Evolución del Conjunto de H
 - [x] **T2 Lectura de papers** `get_paper_content`: PDF → texto determinista con replay offline del snapshot, el prerrequisito de todas las tareas de interpretación (camino crítico)
 - [x] **T3 Resumen de papers** `summarize_paper`: resumen del lado del entorno, convirtiendo «interpretar» en una decisión de llamada a herramientas entrenable (backend extractivo determinista por defecto; `SUMMARY_BACKEND=local_model` cambia a un modelo local)
 - [x] **T4 Extracción de figuras** `extract_paper_figures`: extracción determinista de figuras incrustadas y captions, con replay offline del snapshot
-- [ ] **T5 Análisis de figuras** `analyze_figure` (opcional, entorno multimodal): ya están escritos la herramienta, la integración con el entorno, las plantillas, los tests y las reglas opcionales para derivar datos SFT parametrizados. Aún faltan un snapshot real y los datos generados. El VLM permanece en el entorno y la política sigue siendo de solo texto.
-  - ⏳ **Falta el snapshot**: los snapshots locales no se incluyen en el repositorio y aquí no hay entradas T5 para verificar. Durante la construcción del 2026-09-22 arXiv limitó este host a ~5KB/s (un paper de 34MB entregó 492KB en 90s), por lo que no se completó la reconstrucción. Con acceso de red o PDFs en caché, ejecuta `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; el replay falla si faltan entradas T5.
-  - Si ya existe un snapshot con registros T4 de figuras, ejecuta `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json` para completar los resultados T5 del backend `extractive` a partir de captions, sin volver a descargar los PDFs. Los resultados VLM siguen requiriendo su propia grabación.
-  - Backends: `extractive` por defecto (reutiliza el caption que T4 ya extrajo — determinista y sin pesos); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<dir del VLM local>` cambia a un VLM local (decodificación greedy, respuestas registradas al construir el snapshot).
-  - La carga y el redimensionamiento de imágenes para VLM usan `Pillow`, declarado en `AgenticArxiv/requirements.txt`; la reproducción extractiva no requiere pesos del VLM.
-  - **Generar datos expertos T5** (requiere un snapshot con entradas T5):
-    ```bash
-    python scripts/generate_parametric_sft_data.py \
-      --split-file data/splits/v3_81.json \
-      --snapshot data/mock_arxiv_snapshot.json \
-      --include-t5
-    ```
-    El comando predeterminado conserva los datos históricos v2; la salida T5 va a `data/sft/sft_v3_t5_parametric_seed.jsonl`.
-  - Límite conocido: en este repositorio no se han generado datos T5 ni se ha entrenado un modelo con ellos; el modelo publicado aún no aprendió esta herramienta.
+- [x] **T5 Análisis de figuras** `analyze_figure` (entorno multimodal, implementado y publicado): además de la herramienta, la integración con el entorno, las plantillas, los tests y las reglas de derivación SFT parametrizadas, se ha post-entrenado el VLM del entorno ([FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA), Qwen3-VL-4B con supervisión de captions), grabado un snapshot con entradas T5, generado los datos expertos T5 y entrenado/publicado un checkpoint que aprendió la cadena ([SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5)). El VLM permanece en el entorno y la política sigue siendo de solo texto.
+  - Grabación del snapshot: `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<dir de FigureQA>` con `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot ... --force --paper-id <id arXiv>` (`--paper-id` limita el alcance, `--force` sobrescribe entradas extractivas); el backend `extractive` por defecto no cambia.
+  - Datos: `data/sft/sft_v3_t5_parametric_seed.jsonl` (86 tareas derivadas / 249 filas) y su versión con aumento lingüístico; las observaciones T5 se graban con el VLM FigureQA.
+  - Evaluación (seed 45 / repeat 3 / offline): SFT-T5 supera `analyze_cv5_ref3_trend` 3/3; dos tareas `describe` y una `axes` llaman a la herramienta en el paso correcto pero enlazan mal el enum `question` (`tldr`/`trend`) — la brecha de generalización en combinaciones inéditas «fraseo del padre × figura» se reporta tal cual.
+  - Corrección lateral: la verificación de fase SFT calculaba parse_rate con un pseudo-formato de chat (`System:/User:/Assistant:` texto plano), que deprimía sistemáticamente a los modelos entrenados con chat template (el SFT publicado y el nuevo medían 1/16); renderizar el prompt ReAct con el chat template lleva el mismo protocolo a 0.750 / 0.625.
 
 ### P1 — Ajuste del currículo de recompensa
 

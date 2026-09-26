@@ -109,7 +109,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 7. `summarize_paper(ref, style, max_words)` — Env-side summary of a downloaded paper (tldr / structured / bullet)
 8. `extract_paper_figures(ref)` — Extract a downloaded paper's figure files and captions
 
-> The "search → download → read → summarize → extract figures" interpretation loop is now complete. Figure *analysis* (T5, which needs an env-side VLM) is still a design proposal; see "🧰 Toolset Evolution Design" below.
+> The "search → download → read → summarize → extract figures" interpretation loop is now complete, and figure *analysis* (T5, env-side VLM) has landed too — the project's post-trained [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) reads the figures and records the snapshot, and a [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) checkpoint has learned the tool chain; see "🧰 Toolset Evolution Design" below.
 
 ### Verifiable Reward Components
 
@@ -560,6 +560,8 @@ fire
 ### Model weights
 - [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) — stage-1 SFT checkpoint, Qwen2.5-1.5B full-parameter fine-tune (ModelScope)
 - [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) — stage-3 GRPO checkpoint, online verifiable-reward training on the SFT weights (ModelScope)
+- [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) — stage-1 SFT (T5 edition), learned the figure-analysis `analyze_figure` four-step chain (ModelScope)
+- [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) — the env-side figure-analysis VLM for T5, Qwen3-VL-4B post-trained on arXiv figures + captions (ModelScope)
 
 ### Official Documentation
 - [TRL Documentation](https://huggingface.co/docs/trl/)
@@ -668,8 +670,8 @@ They complement each other: SFT is the starting point of every route; OPD and GR
 Three conclusions:
 
 1. **The retrieval half-loop is connected**: both time-window browsing and keyword/title/author lookup are available; pagination remains unimplemented.
-2. **The interpretation loop is connected**: reading, summarizing, and figure extraction are all deterministic tools, so the model can carry a paper through the whole chain on its own. Figure *semantic* analysis (T5) remains unimplemented — it needs a VLM resident on the env side.
-3. **A bigger action space is not automatically better**: the policy is a ~1.5B model, and every added tool enlarges the tool-selection and JSON-format learning burden. The admission bar for a new tool is "it enables a new task category", not "it might be useful" — of the 5 candidates below, T1/T2 are the critical path, T3 is the main increment, T4 has landed, T5 is optional.
+2. **The interpretation loop is connected**: reading, summarizing, and figure extraction are all deterministic tools, so the model can carry a paper through the whole chain on its own. Figure *semantic* analysis (T5) has landed: the env-side VLM is post-trained in this project (FigureQA) and records answers at snapshot-build time, and the policy has learned the four-step "search → download → extract figures → analyse" chain.
+3. **A bigger action space is not automatically better**: the policy is a ~1.5B model, and every added tool enlarges the tool-selection and JSON-format learning burden. The admission bar for a new tool is "it enables a new task category", not "it might be useful" — of the 5 candidates below, T1/T2 are the critical path, T3 is the main increment, T4 has landed, T5 has landed.
 
 ### Proposed new tools (in dependency order)
 
@@ -679,7 +681,7 @@ Three conclusions:
 | **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → plain text (PyMuPDF); returns title/abstract by default, per section (method / result / conclusion) on demand | Deterministic text extraction, no LLM involved; extraction results pre-stored in the snapshot. **It is the prerequisite of every interpretation task** |
 | **T3** ✅ | `summarize_paper(ref, style, max_words)` | Summarize a paper: an **env-side** summary (input from T2's text) is returned | What is trainable is "when to call it, on which ref, whether style/length args are right" — all rule-checkable; summary quality itself is **not rewarded** (see below) |
 | **T4** ✅ | `extract_paper_figures(ref)` | Figure/table preparation: extract figure images + captions, return file paths | Deterministic; verify "correct ref + count ≥ 1" |
-| **T5** (optional, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Figure analysis: an env-side local VLM (e.g. Qwen2.5-VL) reads the figure and answers | Rules only judge "was it called correctly, are the args right"; VLM answer quality does not enter the reward, keeping third-party model noise out of the policy gradient |
+| **T5** ✅ (landed, multimodal) | `analyze_figure(ref, figure_no, question=None)` | Figure analysis: an env-side local VLM (the project's post-trained Qwen3-VL-4B FigureQA) reads the figure and answers | Rules only judge "was it called correctly, are the args right"; VLM answer quality does not enter the reward, keeping third-party model noise out of the policy gradient |
 
 **T3's summarization backend**: the original design called for "an env-side local summarizer model". The implementation defaults to a **deterministic extractive backend** instead (whole sentences selected per section, trimmed to the word budget, no sampling, no model) for three reasons: the same trajectory replays byte-identically at any later time; it does not add a second weights-dependent prerequisite on top of `build_snapshot`; and because the reward grades only the tool-call decision and never the summary text, a model backend contributes nothing to the training signal. When more natural-language output is wanted, `SUMMARY_BACKEND=local_model SUMMARY_MODEL_PATH=<local model dir>` switches to the model backend (greedy decoding, still deterministic) at the cost of loading weights during snapshot construction.
 
@@ -729,20 +731,11 @@ T1–T4 are implemented (see "🧰 Toolset Evolution Design"):
 - [x] **T2 Paper reading** `get_paper_content`: deterministic PDF → text with offline snapshot replay, the prerequisite of all interpretation tasks (critical path)
 - [x] **T3 Paper summarization** `summarize_paper`: env-side summarization, turning "interpretation" into a trainable tool-invocation decision (deterministic extractive backend by default; `SUMMARY_BACKEND=local_model` switches to a local model)
 - [x] **T4 Figure extraction** `extract_paper_figures`: deterministic extraction of embedded figures + captions, with offline snapshot replay
-- [ ] **T5 Figure analysis** `analyze_figure` (optional, multimodal env): the tool, environment integration, task templates, unit tests, and optional parameterised SFT derivation rules are written. A real snapshot and generated dataset are still needed. The VLM stays on the environment side; the policy remains text-only.
-  - ⏳ **Snapshot gap**: local offline snapshots are not committed, and no T5 records are available here for verification. During the 2026-09-22 build, arXiv throttled this host to ~5KB/s (a 34MB paper delivered 492KB in 90s), so the full rebuild was not completed. With working network access or cached PDFs, run `python -m AgenticArxiv.rl.build_snapshot --skip-prefetch`; replay fails on missing T5 records.
-  - If a snapshot already contains T4 figure records, run `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json` to fill default `extractive` T5 results from captions without downloading PDFs again. VLM results still require VLM recording.
-  - Backends: `extractive` by default (reuses the caption T4 already extracted — deterministic, no weights); `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<local VLM dir>` switches to a local VLM (greedy decoding, answers recorded at snapshot-build time).
-  - VLM image loading and resizing use `Pillow`, now declared in `AgenticArxiv/requirements.txt`; extractive replay does not require VLM weights.
-  - **Generate T5 expert data** (requires a snapshot with T5 records):
-    ```bash
-    python scripts/generate_parametric_sft_data.py \
-      --split-file data/splits/v3_81.json \
-      --snapshot data/mock_arxiv_snapshot.json \
-      --include-t5
-    ```
-    The default command still produces the historical v2 dataset; the T5 output goes to `data/sft/sft_v3_t5_parametric_seed.jsonl`.
-  - Known boundary: no T5 dataset or model has been generated or trained in this repository; the released model has not learned this tool.
+- [x] **T5 Figure analysis** `analyze_figure` (multimodal env, landed and released): beyond the tool, environment integration, task templates, unit tests and parameterised SFT derivation rules, the env-side VLM has been post-trained ([FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA), Qwen3-VL-4B with caption supervision), a snapshot with T5 records was recorded, T5 expert data was generated, and a checkpoint that learned the tool chain was trained and released ([SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5)). The VLM stays on the environment side; the policy remains text-only.
+  - Snapshot recording: `FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA dir>` with `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot ... --force --paper-id <arXiv id>` (`--paper-id` scopes the run, `--force` overwrites extractive entries); the default `extractive` backend is unchanged.
+  - Data: `data/sft/sft_v3_t5_parametric_seed.jsonl` (86 derived tasks / 249 rows) plus its linguistic-augmented version; T5 observations recorded with the FigureQA VLM.
+  - Evaluation (seed 45 / repeat 3 / offline): SFT-T5 passes `analyze_cv5_ref3_trend` 3/3; two `describe` tasks and one `axes` task call the tool at the right step but bind the wrong `question` enum (`tldr`/`trend`) — the enum-generalisation gap on unseen parent-phrasing × figure combinations is reported as-is.
+  - Side fix: the SFT stage gate previously computed parse_rate from a pseudo-chat format (`System:/User:/Assistant:` raw text), which systematically depressed scores for chat-template-trained models (the released SFT and the new one both measured 1/16); rendering the ReAct prompt through the chat template brings the same protocol to 0.750 / 0.625.
 
 ### P1 — Reward curriculum tuning
 
