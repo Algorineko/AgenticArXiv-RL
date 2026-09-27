@@ -250,16 +250,18 @@ python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
 
-# Opciones de la familia DAPO (los valores por defecto no cambian nada, así que los experimentos históricos siguen comparables)
+# Preset DAPO completo (incluye dynamic sampling; por ahora solo un proceso)
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --epsilon_high 0.2   # solo clip-higher
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dynamic_sampling \
+  --dynamic_sampling_std_threshold 0 --dynamic_sampling_max_resamples 32
 
 # Multi-GPU (DDP; lanzar accelerate con el intérprete que tiene las dependencias de entrenamiento)
 accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
   -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
 ```
 
-**Multi-GPU**: `configs/accelerate/` incluye una configuración DDP y otra FSDP. Los scripts de entrenamiento detectan el `LOCAL_RANK` que exporta `accelerate launch` y entonces dejan de anclar una sola GPU (anclarla ocultaría los dispositivos de los demás ranks); en ejecución mono-proceso siguen anclando, lo que evita que el Trainer caiga a `DataParallel` y provoque un segfault. El `device_map={"": 0}` de QLoRA es incompatible con el arranque multiproceso, así que esa combinación falla de forma explícita en lugar de entrenar en silencio con una sola tarjeta. FSDP necesita `torch>=2.6`.
+**Multi-GPU**: `configs/accelerate/` incluye una configuración DDP y otra FSDP. Los scripts de entrenamiento detectan el `LOCAL_RANK` que exporta `accelerate launch` y entonces dejan de anclar una sola GPU (anclarla ocultaría los dispositivos de los demás ranks); en ejecución mono-proceso siguen anclando, lo que evita que el Trainer caiga a `DataParallel` y provoque un segfault. El `device_map={"": 0}` de QLoRA es incompatible con el arranque multiproceso, así que esa combinación falla de forma explícita en lugar de entrenar en silencio con una sola tarjeta. FSDP necesita `torch>=2.6`. La primera implementación de dynamic sampling solo admite un proceso; un arranque distribuido falla de forma explícita. Se puede usar `--dapo --no-dynamic_sampling` para desactivarlo temporalmente.
 
 **Curvas de entrenamiento** (`rl/observability.py`): `--report_to` acepta `none` / `auto` / `tensorboard` / `wandb` (separados por comas), compartido por las cinco fases (SFT / DPO / GRPO / OPD / PPO). Además de las métricas que ya trae TRL, se registran:
 
@@ -771,8 +773,8 @@ T1–T4 están implementados (ver «🧰 Diseño de Evolución del Conjunto de H
 
 ### P3 — Largo plazo (evolución algorítmica)
 
-- [x] **Mejoras estilo DAPO (la parte que TRL ya soporta de forma nativa)**: los tres interruptores `--loss_type` (loss a nivel de token), `--epsilon_high` (clip-higher) y `--mask_truncated_completions` (filtro de overlong) ya están conectados en `train_grpo.py`, y hay un preset `--dapo` que los rellena de una vez (`loss_type=dapo`, `epsilon_high=0.28`, `mask_truncated_completions=True`, `beta=0`). Los valores por defecto no cambian nada, así que los experimentos históricos siguen siendo comparables.
-  - **dynamic sampling (remuestreo de grupos con varianza cero) no está implementado**: TRL 0.29 no expone ningún gancho de generación interceptable, y sobrescribir `_generate_and_score_completions` se desviaría entre versiones. La red actual es `RewardVarianceGuard` (aborta el entrenamiento si la varianza es cero de forma consecutiva) junto con la curva `frac_reward_zero_std`, que convierte el «giro en vacío silencioso» en una señal visible.
+- [x] **Mejoras estilo DAPO**: `--loss_type` (loss a nivel de token), `--epsilon_high` (clip-higher), `--mask_truncated_completions` (filtro de overlong) y `--dynamic_sampling` (filtrado y reposición de prompts con baja varianza) están conectados en `train_grpo.py`. El preset `--dapo` activa la combinación completa (`loss_type=dapo`, `epsilon_high=0.28`, `mask_truncated_completions=True`, `beta=0`, `dynamic_sampling=True`); sin opciones DAPO se conservan los valores históricos.
+  - Dynamic sampling combina el `rollout_func` público de TRL 0.29 con su canal de campos extra, sin sobrescribir el método privado `_generate_and_score_completions`. Los prompts rechazados se reemplazan desde un pool con semilla en vez de reintentarse; al agotar `--dynamic_sampling_max_resamples` se falla explícitamente y nunca se devuelve un batch parcial. La primera versión solo admite un proceso y rechaza DDP/FSDP antes de cargar el modelo.
 - [ ] **Framework de entrenamiento asíncrono**: migrar a verl `fully_async_policy` / AReaL para alojar SAO (abajo).
 
 ### 🔭 SAO: el algoritmo RL agéntico asíncrono de próxima generación
