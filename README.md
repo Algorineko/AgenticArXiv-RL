@@ -268,16 +268,18 @@ python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
 
-# DAPO 系选项（默认不改变任何值，历史实验仍然可比）
+# 完整 DAPO 预设（含 dynamic sampling；当前仅支持单进程）
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --epsilon_high 0.2   # 只开 clip-higher
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dynamic_sampling \
+  --dynamic_sampling_std_threshold 0 --dynamic_sampling_max_resamples 32
 
 # 多卡（DDP；须用装了训练依赖的那个解释器启动 accelerate）
 accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
   -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
 ```
 
-**多卡**：`configs/accelerate/` 提供 DDP 与 FSDP 两份配置。训练脚本会检测 `accelerate launch` 导出的 `LOCAL_RANK`，此时不再钉单卡（钉了反而会让其它 rank 看不到设备）；单进程下仍然钉住，避免 Trainer 退化成 `DataParallel` 而段错误。QLoRA 的 `device_map={"": 0}` 与多进程互斥，检测到就直接报错而不是静默按单卡训练。FSDP 需要 `torch>=2.6`。
+**多卡**：`configs/accelerate/` 提供 DDP 与 FSDP 两份配置。训练脚本会检测 `accelerate launch` 导出的 `LOCAL_RANK`，此时不再钉单卡（钉了反而会让其它 rank 看不到设备）；单进程下仍然钉住，避免 Trainer 退化成 `DataParallel` 而段错误。QLoRA 的 `device_map={"": 0}` 与多进程互斥，检测到就直接报错而不是静默按单卡训练。FSDP 需要 `torch>=2.6`。第一版 dynamic sampling 仅支持单进程；分布式启动会明确报错，使用 `--dapo --no-dynamic_sampling` 可暂时关闭它。
 
 **训练曲线**（`rl/observability.py`）：`--report_to` 取 `none` / `auto` / `tensorboard` / `wandb`（可逗号分隔），五个训练阶段（SFT / DPO / GRPO / OPD / PPO）共用。除 TRL 自带的 reward / kl / grad_norm / `frac_reward_zero_std` 外，额外记录：
 
@@ -785,8 +787,8 @@ T1–T4 已实现（见「🧰 工具集演进设计」）：
 
 ### P3 — 长期（算法演进）
 
-- [x] **DAPO 系改进（TRL 已原生支持的部分）**：`--loss_type`（token-level loss）、`--epsilon_high`（clip-higher）、`--mask_truncated_completions`（overlong filtering）三个开关已接到 `train_grpo.py`，并提供 `--dapo` 预设一次填齐（`loss_type=dapo`、`epsilon_high=0.28`、`mask_truncated_completions=True`、`beta=0`）。默认不改变任何值，历史实验仍然可比。
-  - **dynamic sampling（组内零方差重采样）未实现**：TRL 0.29 没有暴露可拦截的生成钩子，覆写 `_generate_and_score_completions` 会随版本漂移。当前的兜底是 `RewardVarianceGuard`（连续零方差即中止训练）加上 `frac_reward_zero_std` 曲线，先把「静默空转」变成可见信号。
+- [x] **DAPO 系改进**：`--loss_type`（token-level loss）、`--epsilon_high`（clip-higher）、`--mask_truncated_completions`（overlong filtering）和 `--dynamic_sampling`（组内低方差 prompt 过滤与补采）均已接到 `train_grpo.py`。`--dapo` 预设一次启用完整组合（`loss_type=dapo`、`epsilon_high=0.28`、`mask_truncated_completions=True`、`beta=0`、`dynamic_sampling=True`）；不传 DAPO 选项时仍保持历史默认行为。
+  - dynamic sampling 组合 TRL 0.29 的公开 `rollout_func` 与 extra-fields 通道实现，不覆写私有 `_generate_and_score_completions`。被拒绝的 prompt 不原地重试，而是从 seeded prompt pool 补入新 prompt；达到 `--dynamic_sampling_max_resamples` 仍未补满会明确失败，绝不返回残缺 batch。第一版限单进程，DDP/FSDP 启动会在加载模型前报错。
 - [ ] **异步训练框架**：迁移 verl `fully_async_policy` / AReaL 全异步架构，承接 SAO（见下）。
 
 ### 🔭 SAO：下一代异步 Agentic RL 算法

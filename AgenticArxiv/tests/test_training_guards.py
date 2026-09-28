@@ -27,6 +27,7 @@ from rl.train_grpo import (
     _build_reward_calculator,
     _load_tasks,
     resolve_dapo_options,
+    resolve_dynamic_sampling_option,
 )
 from rl.train_sft import (
     QLORA_TARGET_MODULES,
@@ -541,6 +542,22 @@ class DapoPresetTest(unittest.TestCase):
         for name in DAPO_PRESET:
             with self.subTest(field=name):
                 self.assertIn(name, fields)
+
+    def test_dapo_enables_dynamic_sampling_by_default(self):
+        self.assertFalse(
+            resolve_dynamic_sampling_option(dapo=False, dynamic_sampling=None)
+        )
+        self.assertTrue(
+            resolve_dynamic_sampling_option(dapo=True, dynamic_sampling=None)
+        )
+
+    def test_explicit_dynamic_sampling_override_beats_dapo(self):
+        self.assertFalse(
+            resolve_dynamic_sampling_option(dapo=True, dynamic_sampling=False)
+        )
+        self.assertTrue(
+            resolve_dynamic_sampling_option(dapo=False, dynamic_sampling=True)
+        )
 
 
 class StageVerificationDefaultTest(unittest.TestCase):
