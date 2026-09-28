@@ -249,16 +249,18 @@ python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --report_to tensorboard
 tensorboard --logdir outputs/grpo/logs
 
-# DAPO-family options (defaults change nothing, so historical runs stay comparable)
+# Full DAPO preset (including dynamic sampling; single-process only for now)
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
 python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --epsilon_high 0.2   # clip-higher only
+python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dynamic_sampling \
+  --dynamic_sampling_std_threshold 0 --dynamic_sampling_max_resamples 32
 
 # Multi-GPU (DDP; launch accelerate with the interpreter that has the training deps)
 accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
   -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
 ```
 
-**Multi-GPU**: `configs/accelerate/` ships both a DDP and an FSDP config. Training scripts detect the `LOCAL_RANK` that `accelerate launch` exports and stop pinning a single GPU (pinning would hide the other ranks' devices); single-process runs are still pinned, which keeps the Trainer from falling back to `DataParallel` and segfaulting. QLoRA's `device_map={"": 0}` is incompatible with multi-process launches, so that combination fails loudly instead of silently training on one card. FSDP requires `torch>=2.6`.
+**Multi-GPU**: `configs/accelerate/` ships both a DDP and an FSDP config. Training scripts detect the `LOCAL_RANK` that `accelerate launch` exports and stop pinning a single GPU (pinning would hide the other ranks' devices); single-process runs are still pinned, which keeps the Trainer from falling back to `DataParallel` and segfaulting. QLoRA's `device_map={"": 0}` is incompatible with multi-process launches, so that combination fails loudly instead of silently training on one card. FSDP requires `torch>=2.6`. The first dynamic-sampling implementation is single-process only; distributed launches fail explicitly. Use `--dapo --no-dynamic_sampling` to disable it temporarily.
 
 **Training curves** (`rl/observability.py`): `--report_to` accepts `none` / `auto` / `tensorboard` / `wandb` (comma-separated), shared by all five stages (SFT / DPO / GRPO / OPD / PPO). On top of TRL's built-in metrics it logs:
 
@@ -770,8 +772,8 @@ T1–T4 are implemented (see "🧰 Toolset Evolution Design"):
 
 ### P3 — Long term (algorithmic evolution)
 
-- [x] **DAPO-style improvements (the parts TRL already supports)**: `--loss_type` (token-level loss), `--epsilon_high` (clip-higher) and `--mask_truncated_completions` (overlong filtering) are wired into `train_grpo.py`, with a `--dapo` preset that fills all three at once (`loss_type=dapo`, `epsilon_high=0.28`, `mask_truncated_completions=True`, `beta=0`). Defaults change nothing, so historical experiments stay comparable.
-  - **Dynamic sampling (resampling zero-variance groups) is not implemented**: TRL 0.29 exposes no interceptable generation hook, and overriding `_generate_and_score_completions` would drift across versions. The current mitigation is `RewardVarianceGuard` (abort the run after consecutive zero-variance steps) plus the `frac_reward_zero_std` curve, which turns silent idling into a visible signal.
+- [x] **DAPO-style improvements**: `--loss_type` (token-level loss), `--epsilon_high` (clip-higher), `--mask_truncated_completions` (overlong filtering), and `--dynamic_sampling` (low-variance prompt filtering and refill) are wired into `train_grpo.py`. The `--dapo` preset enables the complete combination (`loss_type=dapo`, `epsilon_high=0.28`, `mask_truncated_completions=True`, `beta=0`, `dynamic_sampling=True`); runs that pass no DAPO option retain the historical defaults.
+  - Dynamic sampling composes TRL 0.29's public `rollout_func` and extra-fields channel without overriding private `_generate_and_score_completions`. Rejected prompts are replaced from a seeded prompt pool instead of being retried; exhausting `--dynamic_sampling_max_resamples` fails explicitly rather than returning a partial batch. The first implementation is single-process only and rejects DDP/FSDP before model loading.
 - [ ] **Async training framework**: migrate to verl `fully_async_policy` / AReaL to host SAO (below).
 
 ### 🔭 SAO: the next-generation async agentic RL algorithm

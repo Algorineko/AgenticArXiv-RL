@@ -56,6 +56,11 @@ from benchmark.splits import DEFAULT_SPLIT_PATH, load_split
 from benchmark.semantic_oracle import attach_expected_paper_ids
 from benchmark.tasks_expanded import get_expanded_tasks
 from rl.canary import CanaryEvaluator, CanaryCallback
+from rl.dynamic_sampling import (
+    DynamicSamplingDistributedError,
+    assert_dynamic_sampling_single_process,
+    make_dynamic_sampling_rollout_func,
+)
 from rl.grpo_reward import (
     SUPPORTED_TOOL_NAMES,
     build_prompt_dataset,
@@ -361,6 +366,16 @@ def resolve_dapo_options(
     )
 
 
+def resolve_dynamic_sampling_option(
+    *, dapo: bool, dynamic_sampling: Optional[bool]
+) -> bool:
+    """DAPO enables dynamic sampling unless the user explicitly overrides it."""
+
+    if dynamic_sampling is None:
+        return bool(dapo)
+    return bool(dynamic_sampling)
+
+
 def main(
     model: str = "outputs/dpo/final",
     output_dir: str = "outputs/grpo",
@@ -379,6 +394,9 @@ def main(
     epsilon_high: float = None,
     mask_truncated_completions: bool = None,
     dapo: bool = False,
+    dynamic_sampling: bool = None,
+    dynamic_sampling_std_threshold: float = 0.0,
+    dynamic_sampling_max_resamples: int = 32,
     seed: int = 42,
     snapshot: str = None,
     task_set: str = "default",
@@ -418,11 +436,29 @@ def main(
         beta=beta,
     )
     loss_type, epsilon_high, mask_truncated_completions, beta = dapo_options
+    dynamic_sampling = resolve_dynamic_sampling_option(
+        dapo=dapo, dynamic_sampling=dynamic_sampling
+    )
     if dapo:
         print(
             f"🧬 DAPO 预设: loss_type={loss_type}, epsilon_high={epsilon_high}, "
-            f"mask_truncated_completions={mask_truncated_completions}, beta={beta}"
+            f"mask_truncated_completions={mask_truncated_completions}, beta={beta}, "
+            f"dynamic_sampling={dynamic_sampling}"
         )
+    if not math.isfinite(dynamic_sampling_std_threshold) or dynamic_sampling_std_threshold < 0:
+        raise SystemExit("❌ dynamic_sampling_std_threshold 必须是有限的非负数")
+    if dynamic_sampling_max_resamples < 0:
+        raise SystemExit("❌ dynamic_sampling_max_resamples 不能为负数")
+    if dynamic_sampling and num_generations < 2:
+        raise SystemExit("❌ dynamic sampling 要求 num_generations 至少为 2")
+    if dynamic_sampling:
+        try:
+            # Fail before loading tokenizer/model when launched with torchrun or
+            # accelerate. The wrapper repeats this check against the actual
+            # Accelerator at rollout time as a second line of defence.
+            assert_dynamic_sampling_single_process()
+        except DynamicSamplingDistributedError as exc:
+            raise SystemExit(f"❌ {exc}") from exc
     if rollout_trace_max_samples < 0:
         raise SystemExit("❌ rollout_trace_max_samples 不能为负数")
     if save_steps < 0:
@@ -582,6 +618,30 @@ def main(
         tasks_by_id=tasks_by_id,
         prompt_task_ids=prompt_task_ids,
     )
+    if dynamic_sampling:
+        # Preview scoring has no tracker/auditor. Rejected candidates therefore
+        # leave no formal training record; TRL still calls the normal reward_fn
+        # exactly once for the accepted batch.
+        preview_reward_fn = make_grpo_reward_fn(
+            tasks_by_id,
+            env=None,
+            reward_calc=reward_calc,
+            tracker=None,
+            auditor=None,
+        )
+        rollout_func = make_dynamic_sampling_rollout_func(
+            rollout_func,
+            prompt_rows=rows,
+            preview_reward_func=preview_reward_fn,
+            reward_std_threshold=dynamic_sampling_std_threshold,
+            max_resample_attempts=dynamic_sampling_max_resamples,
+            seed=seed,
+        )
+        print(
+            "🎲 DAPO dynamic sampling: "
+            f"std>{dynamic_sampling_std_threshold}, "
+            f"max_resamples={dynamic_sampling_max_resamples}, seed={seed}"
+        )
 
     # GRPO 要求生成批量能被 num_generations 整除
     if batch_size % num_generations != 0:
@@ -622,10 +682,8 @@ def main(
     # token-level loss 走 loss_type。默认全部保持 TRL 现值，只有显式指定
     # （或用 --dapo 预设）才改变行为 —— 历史实验的可比性不能被默认值悄悄改掉。
     #
-    # 唯一没有实现的是 dynamic sampling（组内方差为 0 就重采样）。TRL 0.29
-    # 没有暴露可拦截的生成钩子，覆写 _generate_and_score_completions 会随
-    # 版本漂移；当前的兜底是 RewardVarianceGuard（连续零方差即中止）加上
-    # frac_reward_zero_std 曲线，先把「静默空转」变成可见信号。
+    # Dynamic sampling 走公开 rollout_func 的 extra-fields 通道，由包装器在
+    # 正式 reward 调用前完成无副作用预打分与补采，不覆写 TRL 私有方法。
     if loss_type is not None:
         cfg_kwargs["loss_type"] = loss_type
     if epsilon_high is not None:
@@ -758,6 +816,16 @@ def main(
         "train_loss": float(train_result.training_loss),
         "learning_rate": lr,
         "beta": beta,
+        "dapo": dapo,
+        "loss_type": loss_type,
+        "epsilon_high": epsilon_high,
+        "mask_truncated_completions": mask_truncated_completions,
+        "dynamic_sampling": {
+            "enabled": dynamic_sampling,
+            "reward_std_threshold": dynamic_sampling_std_threshold,
+            "max_resample_attempts": dynamic_sampling_max_resamples,
+            "single_process_only": True,
+        },
         "batch_size": batch_size,
         "gradient_accumulation_steps": grad_accum,
         "temperature": temperature,
@@ -882,8 +950,27 @@ if __name__ == "__main__":
     p.add_argument(
         "--dapo", action="store_true",
         help="DAPO 预设：loss_type=dapo、epsilon_high=0.28、"
-             "mask_truncated_completions=True、beta=0（DAPO 不用 KL 正则）。"
+             "mask_truncated_completions=True、beta=0、dynamic_sampling=True。"
              "显式给出的单项参数优先于该预设",
+    )
+    p.add_argument(
+        "--dynamic_sampling",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="按 prompt 过滤组内奖励标准差不足的 rollout，并用新 prompt 补满 batch。"
+             "默认仅随 --dapo 开启；当前只支持单进程",
+    )
+    p.add_argument(
+        "--dynamic_sampling_std_threshold",
+        type=float,
+        default=0.0,
+        help="接受 reward 组所需的最小样本标准差（严格大于该值）",
+    )
+    p.add_argument(
+        "--dynamic_sampling_max_resamples",
+        type=int,
+        default=32,
+        help="单个 generation batch 最多补采多少个新 prompt；耗尽时明确失败",
     )
     p.add_argument(
         "--seed", type=int, default=42,
