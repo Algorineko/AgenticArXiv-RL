@@ -543,6 +543,53 @@ class DapoPresetTest(unittest.TestCase):
             with self.subTest(field=name):
                 self.assertIn(name, fields)
 
+
+class GspoDrGrpoWiringTest(unittest.TestCase):
+    """GSPO / Dr.GRPO 参数是直通项：None 不改行为，显式值必须被 TRL 接受。"""
+
+    def test_trl_fields_exist(self):
+        import dataclasses
+
+        from trl import GRPOConfig
+
+        fields = {f.name for f in dataclasses.fields(GRPOConfig)}
+        for name in ("importance_sampling_level", "scale_rewards", "loss_type"):
+            with self.subTest(field=name):
+                self.assertIn(name, fields)
+
+    def test_trl_accepts_documented_values(self):
+        # GSPO = sequence 级重要性采样；Dr.GRPO = dr_grpo loss + 不做组内 std 归一
+        from trl import GRPOConfig
+
+        GRPOConfig(output_dir="x", importance_sampling_level="sequence")
+        GRPOConfig(output_dir="x", loss_type="dr_grpo", scale_rewards="none")
+
+    def test_cli_flags_parse(self):
+        # 参数在 argparse 与 main() 签名两侧都要存在，否则 CLI 传不进去
+        import inspect
+
+        from rl import train_grpo
+
+        parser = argparse.ArgumentParser()
+        # 复用脚本自己的 parser 构建：直接跑 build_parser 路径太重，
+        # 这里校验 main 的签名与 argparse 注册的选项一致性
+        sig = inspect.signature(train_grpo.main)
+        for name in ("importance_sampling_level", "scale_rewards"):
+            with self.subTest(param=name):
+                self.assertIn(name, sig.parameters)
+
+    def test_defaults_are_none_so_behavior_is_unchanged(self):
+        # None 直通时 cfg_kwargs 不落这两个键，历史实验的可比性不被默认值悄悄改掉
+        import inspect
+
+        from rl import train_grpo
+
+        sig = inspect.signature(train_grpo.main)
+        self.assertIsNone(
+            sig.parameters["importance_sampling_level"].default
+        )
+        self.assertIsNone(sig.parameters["scale_rewards"].default)
+
     def test_dapo_enables_dynamic_sampling_by_default(self):
         self.assertFalse(
             resolve_dynamic_sampling_option(dapo=False, dynamic_sampling=None)

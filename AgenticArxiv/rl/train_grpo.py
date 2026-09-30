@@ -51,10 +51,9 @@ from trl import GRPOConfig, GRPOTrainer
 # prompt 里的工具列表少了三个，而策略的动作空间缩小是**静默**的。
 from tools.bootstrap import require_all_tools
 
-from benchmark.tasks import get_all_tasks
-from benchmark.splits import DEFAULT_SPLIT_PATH, load_split
+from benchmark.splits import DEFAULT_SPLIT_PATH
+from benchmark.task_io import load_tasks
 from benchmark.semantic_oracle import attach_expected_paper_ids
-from benchmark.tasks_expanded import get_expanded_tasks
 from rl.canary import CanaryEvaluator, CanaryCallback
 from rl.dynamic_sampling import (
     DynamicSamplingDistributedError,
@@ -101,7 +100,7 @@ def _build_reward_calculator(curriculum_steps: int) -> RewardCalculator:
 
 
 def _load_tasks(task_set: str, split: Optional[str]):
-    """选择训练任务集。
+    """选择训练任务集（任务池与切分过滤见 benchmark.task_io.load_tasks）。
 
     默认仍是 benchmark/tasks.py 的 8 条冒烟任务 —— 换默认值会让此前所有
     训练曲线不可比，所以要用完整任务集必须显式 --task_set expanded。
@@ -111,31 +110,15 @@ def _load_tasks(task_set: str, split: Optional[str]):
     奖励一致，组内方差为零、优势为零、不产生任何梯度。把它们放进训练集
     是纯粹的空转，还会把 frac_reward_zero_std 顶到 1 触发方差守卫。
     """
-    pool = get_expanded_tasks() if task_set == "expanded" else get_all_tasks()
-    if not split:
-        if task_set != "expanded":
-            print(
-                f"⚠️  正在用 benchmark/tasks.py 的 {len(pool)} 条冒烟任务训练。"
-                "完整任务集用 --task_set expanded；\n"
-                "    只训练有梯度的那部分用 --task_set expanded "
-                f"--split rl_train（{DEFAULT_SPLIT_PATH.name}）"
-            )
-        return pool
-
-    wanted = set(load_split(split))
-    by_id = {t["id"]: t for t in pool}
-    chosen = [by_id[tid] for tid in sorted(wanted) if tid in by_id]
-    missing = wanted - set(by_id)
-    if missing:
-        # 切分按完整任务集划定，缺任务说明任务池选错了，
-        # 此时训练集会静默变小，训出来的东西与切分不对应。
-        raise SystemExit(
-            f"❌ 切分 '{split}' 里有 {len(missing)} 条任务不在当前任务集中，"
-            f"例如 {sorted(missing)[:3]}\n"
-            "   切分按 --task_set expanded 的完整任务集划定"
+    tasks = load_tasks(task_set, split)
+    if not split and task_set != "expanded":
+        print(
+            f"⚠️  正在用 benchmark/tasks.py 的 {len(tasks)} 条冒烟任务训练。"
+            "完整任务集用 --task_set expanded；\n"
+            "    只训练有梯度的那部分用 --task_set expanded "
+            f"--split rl_train（{DEFAULT_SPLIT_PATH.name}）"
         )
-    print(f"📑 使用切分 {split}（{len(chosen)} 条）")
-    return chosen
+    return tasks
 
 
 def _gold_completion_tokens(tokenizer, tasks) -> int:
@@ -393,6 +376,8 @@ def main(
     loss_type: str = None,
     epsilon_high: float = None,
     mask_truncated_completions: bool = None,
+    importance_sampling_level: str = None,
+    scale_rewards: str = None,
     dapo: bool = False,
     dynamic_sampling: bool = None,
     dynamic_sampling_std_threshold: float = 0.0,
@@ -690,6 +675,15 @@ def main(
         cfg_kwargs["epsilon_high"] = epsilon_high
     if mask_truncated_completions is not None:
         cfg_kwargs["mask_truncated_completions"] = mask_truncated_completions
+    # ---- GSPO / Dr.GRPO（Roadmap P1） ----
+    # 序列级重要性采样走 importance_sampling_level=sequence（GSPO）；
+    # Dr.GRPO 完整配方是 --loss_type dr_grpo --scale_rewards none（全局常数
+    # 归一替代组内 std 归一，去长度偏置）。与 --dapo 预设正交可组合。
+    # 同样遵守「默认不动、显式才改」，保证历史实验可比性。
+    if importance_sampling_level is not None:
+        cfg_kwargs["importance_sampling_level"] = importance_sampling_level
+    if scale_rewards is not None:
+        cfg_kwargs["scale_rewards"] = scale_rewards
     # GRPOConfig 的字段在 TRL 各版本间有增删，按实际安装版本过滤，
     # 避免因为一个参数名不存在就整个训练起不来
     valid = {f.name for f in dataclasses.fields(GRPOConfig)}
@@ -946,6 +940,20 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction, default=None,
         help="把撞上 max_completion_length 的截断轨迹从 loss 里剔除（DAPO overlong "
              "filtering）。默认不传，沿用 TRL 现值",
+    )
+    p.add_argument(
+        "--importance_sampling_level",
+        choices=["token", "sequence"], default=None,
+        help="重要性采样的粒度：token（默认）或 sequence（GSPO，Qwen3 提出的"
+             "序列级重要性采样——整条 completion 用一个比值，缓解长序列上"
+             "token 级比值的方差爆炸）。默认不传，沿用 TRL 现值",
+    )
+    p.add_argument(
+        "--scale_rewards",
+        choices=["group", "none", "batch"], default=None,
+        help="优势的归一化方式：group（组内 std 归一，默认）/ none（不归一，"
+             "Dr.GRPO 配方需配合 --loss_type dr_grpo 一起用）/ batch。"
+             "默认不传，沿用 TRL 现值",
     )
     p.add_argument(
         "--dapo", action="store_true",
