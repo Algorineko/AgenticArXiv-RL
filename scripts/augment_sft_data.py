@@ -25,6 +25,8 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 from benchmark.metrics import classify_blocked_terminal_semantics  # noqa: E402
 from benchmark.task_spec import reference_terminal_thought  # noqa: E402
 from benchmark.tasks_expanded import get_expanded_tasks  # noqa: E402
+# 共享实现；augment_parametric_sft_data / build_sft_train_mix 仍从本模块转导入这两个名字
+from utils.io_utils import read_jsonl, write_jsonl  # noqa: E402
 
 
 TASK_START = "当前任务："
@@ -207,21 +209,6 @@ def augment_validated_rows(
     if len(augmented) != expected:
         raise AssertionError(f"扩增数量错误: expected={expected}, actual={len(augmented)}")
     return augmented
-
-
-def read_jsonl(path: Path) -> List[Dict[str, Any]]:
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-
-def write_jsonl(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def sha256_file(path: Path) -> str:

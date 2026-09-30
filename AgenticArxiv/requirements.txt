@@ -8,6 +8,9 @@ transformers>=4.45.0
 trl>=0.28.0
 datasets>=2.14.0
 accelerate>=0.25.0
+# QLoRA 训练路径必需（rl/train_sft.py 的运行时校验按这些版本验证过）。
+peft>=0.17.1
+bitsandbytes>=0.45.5
 
 # ===== Agent 核心 =====
 arxiv

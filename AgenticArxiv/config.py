@@ -1,6 +1,7 @@
 # AgenticArxiv/config.py
 from dataclasses import dataclass
 import os
+from typing import Optional
 
 try:
     from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
@@ -23,9 +24,9 @@ class LLMModels:
 
 @dataclass(frozen=True)
 class Settings:
-    antigravity_base_url: str = os.getenv(
-        "LLM_BASE_URL", "https://antigravity.byssted.cn"
-    )
+    # LLM 端点是显式配置项：未设置 LLM_BASE_URL 时保持为空，
+    # 由使用方（utils/llm_client.get_env_llm_client）给出明确报错，而不是拼出残缺 URL。
+    antigravity_base_url: str = os.getenv("LLM_BASE_URL", "")
     antigravity_api_key: str = os.getenv("LLM_API_KEY", "no-token-here")
     models: LLMModels = LLMModels()
 
@@ -59,9 +60,21 @@ class Settings:
     pdf2zh_threads: int = int(os.getenv("PDF2ZH_THREADS", "4"))
 
     # --- MySQL ---
-    mysql_uri: str = os.getenv(
-        "MYSQL_URI", "mysql+pymysql://root:root@127.0.0.1:3306/agentic_arxiv"
-    )
+    # MySQL 属已归档 Web 栈的可选配置：未设置 MYSQL_URI 时保持为空，
+    # 取值方（models/db.py）在使用时会收到 mysql_uri 的明确报错；
+    # RL 训练路径不依赖 MySQL，不受影响。
+    _mysql_uri: Optional[str] = os.getenv("MYSQL_URI")
+
+    @property
+    def mysql_uri(self) -> Optional[str]:
+        """显式配置的 MySQL 连接串；未配置时报错提示如何设置。"""
+        if not self._mysql_uri:
+            raise RuntimeError(
+                "未配置 MySQL 连接：请设置环境变量 MYSQL_URI"
+                "（例：mysql+pymysql://user:pass@127.0.0.1:3306/agentic_arxiv）。"
+                "RL 训练路径不依赖 MySQL，可不配置。"
+            )
+        return self._mysql_uri
 
 
 settings = Settings()

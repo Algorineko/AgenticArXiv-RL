@@ -36,6 +36,7 @@ from benchmark.badcases import (  # noqa: E402
     load_cases,
     replay,
 )
+from benchmark.task_io import load_tasks  # noqa: E402
 
 DEFAULT_CASES = REPO_ROOT / "eval" / "eval_cases.jsonl"
 
@@ -47,21 +48,13 @@ _LABEL = {
 }
 
 
-def _load_tasks(task_set: str):
-    if task_set == "expanded":
-        from benchmark.tasks_expanded import get_expanded_tasks
-        return get_expanded_tasks()
-    from benchmark.tasks import get_all_tasks
-    return get_all_tasks()
-
-
 def cmd_replay(args) -> int:
     cases = load_cases(args.cases)
     if not cases:
         print(f"{args.cases} 里没有用例")
         return 0
 
-    outcomes = replay(cases, _load_tasks(args.task_set), training_step=args.training_step)
+    outcomes = replay(cases, load_tasks(args.task_set), training_step=args.training_step)
 
     width = max(len(o.case.case_id) for o in outcomes)
     print(f"回放 {len(outcomes)} 条用例（{args.cases}）\n")
@@ -105,7 +98,7 @@ def cmd_capture(args) -> int:
         print(f"{args.traces} 里没有轨迹")
         return 0
 
-    found = capture(samples, _load_tasks(args.task_set),
+    found = capture(samples, load_tasks(args.task_set),
                     source=args.source or Path(args.traces).name,
                     training_step=args.training_step)
     if not found:

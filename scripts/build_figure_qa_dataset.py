@@ -42,6 +42,7 @@ from tools.figure_analysis_tool import (  # noqa: E402
     _sentences,
     FIGURE_QUESTIONS,
 )
+from utils.io_utils import write_jsonl  # noqa: E402
 
 FIGURE_PREFIX_RE = re.compile(r"^(?:figure|fig\.?)\s*\d+\s*[:.\-]?\s*", re.IGNORECASE)
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -204,13 +205,6 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(dict(row), ensure_ascii=False) + "\n")
 
 
 def main() -> None:

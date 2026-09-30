@@ -40,11 +40,23 @@ python -m benchmark.run_benchmark --output /path/to/output
 # 指定 session 前缀（用于区分不同测试轮次，默认 bench_r<timestamp>）
 python -m benchmark.run_benchmark --prefix bench_r1
 
-# 当前 62 条任务的开发集（从 AgenticArxiv/ 目录运行）
+# 当前 81 条任务的开发集（从 AgenticArxiv/ 目录运行）
 python -m benchmark.run_benchmark \
   --task-set expanded \
   --offline \
   --split ../data/splits/v2_62.json:dev
+```
+
+已有 `traces.jsonl` 时可只重算指标，不重新加载模型；该命令只回放冻结快照中的标准答案，
+不会重新执行 Agent 轨迹或访问网络：
+
+```bash
+python -m benchmark.rescore_traces \
+  --traces ../artifacts/run/traces.jsonl \
+  --summary ../artifacts/run/summary.json \
+  --snapshot ../data/mock_arxiv_snapshot.json \
+  --task-set expanded --split train \
+  --output ../artifacts/run_semantic_rescore
 ```
 
 默认 8 个任务 x 3 种 Agent x 3 次重复 = 72 次运行。
@@ -70,7 +82,7 @@ Base/SFT/GRPO 阶段默认只跑 `--agents regex`；三种 Agent 的对比实验
 
 ### 训练/开发/留出集切分
 
-当前 62 条扩展任务使用 `../data/splits/v2_62.json`：
+扩展任务集现为 81 条、13 个类别；下表为历史 62 条切分 `../data/splits/v2_62.json` 的构成：
 
 | 名字 | 条数 | 是什么 |
 |---|---:|---|
@@ -104,7 +116,7 @@ iid/ood 的任务级结果做训练选择。沿用旧模型或旧评测环境的
 ```
 
 只写 `--split iid_test` 会继续读取历史默认文件 `v1.json`，这是为了让旧实验可复现，不能用于
-当前 62 条任务的正式对比。阶段间对比必须引用同一份显式切分文件。
+当前 81 条任务的正式对比。阶段间对比必须引用同一份显式切分文件。
 
 历史 `v1.json` 固定保存原来的 59 条任务（train=42、iid=13、ood=4，以及由旧 rates 计算的
 rl_train=13）。新增关键词检索任务后不回写 v1，否则同一个版本名会在不同时间代表不同实验。
@@ -225,7 +237,7 @@ draw/images/
 | termination_type | 终止类型: FINISH / FORCE_STOP / ERROR / INCOMPLETE |
 | tool_call_accurate | 实际工具调用是否与预期工具序列完全相等（顺序严格、无多余/重复调用），只比工具名 |
 | arg_score | 参数级匹配度 `[0,1]`：逐步比对期望键的**取值**；未声明 `expected_tool_args` 时为 1.0 |
-| ref_score | 指代解析准确率 `[0,1]`：比对**解析出的 `paper_id`** 而非 `ref` 的写法；未声明 `expected_paper` 时为 1.0 |
+| ref_score | 指代解析准确率 `[0,1]`：离线模式先由快照 oracle 为每个论文操作派生 `expected_paper_ids`，再逐步比对工具实际解析出的 `paper_id`；序号、ID、标题子串和 null 指代只要落到同一篇论文就等价 |
 | false_finish | 以 `FINISH` 结束、但期望工具没做全。只抓「做少了」，绕路多调不算 |
 | parse_failures | LLM 响应解析失败次数 |
 | tool_exec_failures | 工具执行失败次数 |
@@ -236,8 +248,9 @@ draw/images/
 benchmark/
   __init__.py
   task_spec.py        # TaskSpec/Step：expected_tools 与 expected_tool_args 同源派生
+  semantic_oracle.py  # 冻结快照中执行标准 steps，派生逐步 expected_paper_ids
   tasks.py           # 8 条冒烟任务 (BENCHMARK_TASKS)
-  tasks_expanded.py   # 62 条完整基准集 (--task-set expanded)
+  tasks_expanded.py   # 81 条完整基准集，13 个类别 (--task-set expanded)
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总

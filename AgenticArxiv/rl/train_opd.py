@@ -59,8 +59,7 @@ from rl import trl_compat  # noqa: F401
 
 from tools.bootstrap import require_all_tools
 
-from benchmark.tasks import get_all_tasks
-from benchmark.tasks_expanded import get_expanded_tasks
+from benchmark.task_io import load_tasks
 from rl.canary import CanaryCallback, CanaryEvaluator
 from rl.grpo_reward import build_prompt_dataset
 from rl.observability import describe_logging, resolve_report_to
@@ -143,13 +142,13 @@ def _load_tasks(task_set: str):
 
     默认仍是 benchmark/tasks.py 的冒烟任务；完整任务集显式 --task_set expanded。
     """
-    pool = get_expanded_tasks() if task_set == "expanded" else get_all_tasks()
+    tasks = load_tasks(task_set)
     if task_set != "expanded":
         print(
-            f"⚠️  正在用 benchmark/tasks.py 的 {len(pool)} 条冒烟任务训练。"
+            f"⚠️  正在用 benchmark/tasks.py 的 {len(tasks)} 条冒烟任务训练。"
             "完整任务集用 --task_set expanded。"
         )
-    return pool
+    return tasks
 
 
 def build_opd_dataset(tasks, tokenizer) -> tuple:
