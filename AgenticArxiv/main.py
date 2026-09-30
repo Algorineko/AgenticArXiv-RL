@@ -43,7 +43,6 @@ def main():
         log.info(f"最终结果: {final_obs}")
 
         print("任务完成！详细日志请查看 log.txt")
-        print("执行结果已保存到 result.json")
         print(f"论文数据已保存到 {os.path.abspath('./output/recent_cs_papers.txt')}")
 
     except Exception as e:

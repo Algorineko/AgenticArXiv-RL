@@ -246,12 +246,16 @@ class TransformersLLMClient:
 def get_env_llm_client() -> LLMClient:
     """
     从环境变量读取：
-    - LLM_BASE_URL   默认: https://antigravity.byssted.cn
+    - LLM_BASE_URL   必填（OpenAI 兼容服务根地址，不带 /v1/chat/completions 后缀）
     - LLM_API_KEY    必填
     - LLM_MAX_RETRIES  可选, 默认 3（0 表示不重试）
     - LLM_BACKOFF_S    可选, 首次重试等待秒数, 默认 1.0
     """
-    base_url = os.getenv("LLM_BASE_URL", "https://antigravity.byssted.cn")
+    base_url = os.getenv("LLM_BASE_URL")
+    if not base_url:
+        raise RuntimeError(
+            "Missing env: LLM_BASE_URL (请在 .env 或 shell 环境中设置为 OpenAI 兼容服务根地址)"
+        )
     api_key = os.getenv("LLM_API_KEY")
     if not api_key:
         raise RuntimeError("Missing env: LLM_API_KEY (请在 .env 或 shell 环境中设置)")

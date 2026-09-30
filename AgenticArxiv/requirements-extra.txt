@@ -1,5 +1,6 @@
 # ===== 可选依赖（仅 eval/demo 时需要） =====
 pdf2zh  # PDF 翻译（训练时用 mock）
+mcp  # mcp_protocol/（可选 MCP agent）的客户端/服务端依赖
 fastapi
 uvicorn[standard]
 sqlalchemy>=2.0

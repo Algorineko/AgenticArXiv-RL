@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from benchmark.task_spec import Step, TaskSpec  # noqa: E402
 from benchmark.tasks_expanded import EXPANDED_SPECS  # noqa: E402
+from utils.io_utils import write_jsonl  # noqa: E402
 
 
 CN = {
@@ -460,13 +461,6 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def write_jsonl(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def main() -> None:
