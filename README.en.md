@@ -187,6 +187,9 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 |------|------|------|
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) | Qwen2.5-1.5B | Stage 1 full-parameter SFT (first 8 tools) |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) | Qwen2.5-1.5B | Stage 3 GRPO (four-split evaluation above) |
+| [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-GSPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-GSPO) | Qwen2.5-1.5B | GRPO + sequence-level importance sampling (tied with the baseline on all four splits, see the paradigm comparison doc) |
+| [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DrGRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DrGRPO) | Qwen2.5-1.5B | Unbiased GRPO variant (rl_train 0.657 / dev 0.375 / iid 0.444 / ood 0.500, pass³) |
+| [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO) | Qwen2.5-1.5B | DAPO objective without dynamic sampling (rl_train 0.667 / dev 0.500 / iid 0.481 / ood 0.500, pass³; best of the three variants) |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) | Qwen2.5-1.5B | SFT + the `analyze_figure` four-step chain (rl_train 0.485 / dev 0.250 / iid 0.278 / ood 0.250, pass³) |
 | [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) | Qwen3-VL-4B | env-side figure-analysis VLM |
 
@@ -258,7 +261,11 @@ MIT License
 ### P1 — Next-Generation Agentic RL Algorithms
 
 - [x] **GSPO / Dr.GRPO wiring**: `--importance_sampling_level sequence` (sequence-level importance sampling, GSPO) and `--loss_type dr_grpo` (unbiased length normalization) are wired into `train_grpo.py`, orthogonal to and composable with the `--dapo` preset
-- [ ] **Train and compare the new methods**: run GSPO / Dr.GRPO / DAPO variants on the frozen splits and release new checkpoints (GRPO baseline: rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500)
+- [x] **Train and compare the new methods**: GSPO / Dr.GRPO / DAPO variants trained on the frozen splits and released (shared recipe aligned with the baseline, seed 42 / 60 steps; offline pass³, GRPO baseline: rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500):
+  - **GSPO** (sequence-level IS): 0.636 / 0.375 / 0.444 / 0.500 — identical to the baseline on every split (different weights, diverging reward curves, same converged behavior)
+  - **Dr.GRPO** (unbiased objective): 0.657 / 0.375 / 0.444 / 0.500 — slightly ahead on rl_train; best ood tool accuracy 0.67 / false-finish 0.33
+  - **DAPO** (clip-higher 0.28 + truncation masking + β=0; dynamic sampling infeasible on the 33-task pool, therefore off): **0.667 / 0.500 / 0.481 / 0.500** — best on rl_train / dev / iid
+  - Details and implementation notes in `docs/rl_paradigm_comparison.md`
 - [ ] **SAO-style asynchronous training**: port verl `fully_async_policy` / AReaL, starting with skip-observation masking and DIS two-sided clipping ([arXiv:2607.07508](https://arxiv.org/abs/2607.07508), official code not released)
 - [ ] **Cross-step credit assignment**: GiGPO / ARPO-style group-relative cross-step advantages, to ease the trajectory-level sparse signal on long-horizon chains (in-house research item)
 
