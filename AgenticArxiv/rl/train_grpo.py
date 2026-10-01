@@ -814,6 +814,8 @@ def main(
         "loss_type": loss_type,
         "epsilon_high": epsilon_high,
         "mask_truncated_completions": mask_truncated_completions,
+        "importance_sampling_level": importance_sampling_level,
+        "scale_rewards": scale_rewards,
         "dynamic_sampling": {
             "enabled": dynamic_sampling,
             "reward_std_threshold": dynamic_sampling_std_threshold,
