@@ -187,6 +187,9 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<directorio de FigureQA> \
 |------|------|------|
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) | Qwen2.5-1.5B | Fase 1: SFT a parámetros completos (primeras 8 herramientas) |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) | Qwen2.5-1.5B | Fase 3: GRPO (evaluación en las cuatro particiones, más arriba) |
+| [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-GSPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-GSPO) | Qwen2.5-1.5B | GRPO + muestreo de importancia a nivel de secuencia (empatado con la referencia en las cuatro particiones; ver el doc de comparación) |
+| [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DrGRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DrGRPO) | Qwen2.5-1.5B | Variante sin sesgo de GRPO (rl_train 0.657 / dev 0.375 / iid 0.444 / ood 0.500, pass³) |
+| [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO) | Qwen2.5-1.5B | Objetivo DAPO sin muestreo dinámico (rl_train 0.667 / dev 0.500 / iid 0.481 / ood 0.500, pass³; la mejor de las tres variantes) |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) | Qwen2.5-1.5B | SFT + cadena de cuatro pasos con `analyze_figure` (rl_train 0.485 / dev 0.250 / iid 0.278 / ood 0.250, pass³) |
 | [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) | Qwen3-VL-4B | VLM de análisis de figuras del lado del entorno |
 
@@ -258,7 +261,11 @@ Licencia MIT
 ### P1 — Algoritmos de RL Agentic de Nueva Generación
 
 - [x] **Integración de GSPO / Dr.GRPO**: `--importance_sampling_level sequence` (muestreo de importancia a nivel de secuencia, GSPO) y `--loss_type dr_grpo` (normalización por longitud sin sesgo) ya están conectados en `train_grpo.py`, y son ortogonales y combinables con el preset `--dapo`
-- [ ] **Entrenamiento y comparación con métodos nuevos**: correr ablations con las variantes GSPO / Dr.GRPO / DAPO sobre las particiones congeladas y publicar pesos nuevos (GRPO de referencia: rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500)
+- [x] **Entrenamiento y comparación con métodos nuevos**: las variantes GSPO / Dr.GRPO / DAPO fueron entrenadas sobre las particiones congeladas y publicadas (receta común alineada con la referencia, seed 42 / 60 pasos; pass³ fuera de línea, GRPO de referencia: rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500):
+  - **GSPO** (IS a nivel de secuencia): 0.636 / 0.375 / 0.444 / 0.500 — idéntico a la referencia en todas las particiones (pesos distintos, curvas de recompensa divergentes, mismo comportamiento convergido)
+  - **Dr.GRPO** (objetivo sin sesgo): 0.657 / 0.375 / 0.444 / 0.500 — ligeramente superior en rl_train; mejor precisión de herramientas en ood (0.67) y menor tasa de finalización falsa (0.33)
+  - **DAPO** (clip-higher 0.28 + máscara de truncamiento + β=0; el muestreo dinámico no es viable en el grupo de 33 tareas, por lo que se desactiva): **0.667 / 0.500 / 0.481 / 0.500** — el mejor en rl_train / dev / iid
+  - Detalles y notas de implementación en `docs/rl_paradigm_comparison.md`
 - [ ] **Entrenamiento asíncrono estilo SAO**: migrar a verl `fully_async_policy` / AReaL, introduciendo primero la máscara skip-observation y el recorte bilateral de DIS ([arXiv:2607.07508](https://arxiv.org/abs/2607.07508), código oficial sin publicar)
 - [ ] **Asignación de crédito entre pasos**: ventajas intragrupo que crucen pasos, al estilo GiGPO / ARPO, para aliviar la señal dispersa a nivel de trayectoria de las cadenas largas (línea de investigación propia)
 
