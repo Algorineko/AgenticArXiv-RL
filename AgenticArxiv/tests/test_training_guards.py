@@ -561,8 +561,13 @@ class GspoDrGrpoWiringTest(unittest.TestCase):
         # GSPO = sequence 级重要性采样；Dr.GRPO = dr_grpo loss + 不做组内 std 归一
         from trl import GRPOConfig
 
-        GRPOConfig(output_dir="x", importance_sampling_level="sequence")
-        GRPOConfig(output_dir="x", loss_type="dr_grpo", scale_rewards="none")
+        # TRL's GRPOConfig defaults bf16=True; on a CPU-only host (CI runners,
+        # most laptops) transformers' argument validation then raises
+        # "Your setup doesn't support bf16/gpu". The test only checks that TRL
+        # accepts the documented values, so pin it to CPU / no mixed precision.
+        cpu = {"use_cpu": True, "bf16": False, "fp16": False}
+        GRPOConfig(output_dir="x", importance_sampling_level="sequence", **cpu)
+        GRPOConfig(output_dir="x", loss_type="dr_grpo", scale_rewards="none", **cpu)
 
     def test_cli_flags_parse(self):
         # 参数在 argparse 与 main() 签名两侧都要存在，否则 CLI 传不进去
