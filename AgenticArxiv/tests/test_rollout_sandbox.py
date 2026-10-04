@@ -1,8 +1,10 @@
 """Rollout sandbox isolation tests (CPU-only, no network or model required)."""
 
+import gc
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from rl.sandbox import RolloutSandbox
 
@@ -88,6 +90,101 @@ class RolloutSandboxTest(unittest.TestCase):
         sandbox.reset()
         sandbox.reset()
         self.assertEqual(component.state, {"papers": [], "active": None})
+
+
+class RolloutSandboxLargeFilesTest(unittest.TestCase):
+    def test_reset_preserves_baseline_files_at_and_above_memory_limit(self):
+        for size in (2_000_000, 2_000_001):
+            with self.subTest(size=size), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                paper = root / "existing.pdf"
+                original = b"a" * size
+                paper.write_bytes(original)
+                sandbox = RolloutSandbox(file_roots=(root,))
+
+                sandbox.reset()
+
+                self.assertTrue(paper.exists())
+                self.assertEqual(paper.read_bytes(), original)
+                self.assertEqual(sandbox.describe()["tracked_files"], 1)
+
+    def test_reset_restores_modified_or_deleted_large_baseline_file(self):
+        for mutation in ("modify", "delete"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                paper = root / "nested" / "existing.pdf"
+                paper.parent.mkdir()
+                original = b"a" * 2_000_001
+                paper.write_bytes(original)
+                sandbox = RolloutSandbox(file_roots=(root,))
+
+                if mutation == "modify":
+                    paper.write_bytes(b"changed")
+                else:
+                    paper.unlink()
+                    paper.parent.rmdir()
+                sandbox.reset()
+
+                self.assertTrue(paper.exists())
+                self.assertEqual(paper.read_bytes(), original)
+
+    def test_repeated_reset_restores_baseline_and_removes_new_large_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paper = root / "existing.pdf"
+            original = b"a" * 2_000_001
+            paper.write_bytes(original)
+            small_file = root / "baseline.txt"
+            small_file.write_text("before", encoding="utf-8")
+            sandbox = RolloutSandbox(file_roots=(root,))
+
+            for trial in range(3):
+                with self.subTest(trial=trial):
+                    paper.write_bytes(b"changed")
+                    small_file.write_text("changed", encoding="utf-8")
+                    generated = root / f"generated-{trial}.pdf"
+                    generated.write_bytes(b"b" * 2_000_001)
+                    sandbox.reset()
+
+                    self.assertTrue(paper.exists())
+                    self.assertEqual(paper.read_bytes(), original)
+                    self.assertEqual(small_file.read_text(encoding="utf-8"), "before")
+                    self.assertFalse(generated.exists())
+
+    def test_large_file_backup_survives_when_temp_directory_is_inside_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paper = root / "existing.pdf"
+            original = b"a" * 2_000_001
+            paper.write_bytes(original)
+            with patch.object(tempfile, "tempdir", str(root)):
+                sandbox = RolloutSandbox(file_roots=(root,))
+                for trial in range(2):
+                    with self.subTest(trial=trial):
+                        paper.write_bytes(b"changed")
+                        sandbox.reset()
+
+                        self.assertTrue(paper.exists())
+                        self.assertEqual(paper.read_bytes(), original)
+                        self.assertEqual(sandbox.describe()["tracked_files"], 1)
+
+    def test_large_file_backups_are_cleaned_up_with_the_sandbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifacts = root / "artifacts"
+            artifacts.mkdir()
+            backup_storage = root / "temporary"
+            backup_storage.mkdir()
+            (artifacts / "existing.pdf").write_bytes(b"a" * 2_000_001)
+
+            with patch.object(tempfile, "tempdir", str(backup_storage)):
+                sandbox = RolloutSandbox(file_roots=(artifacts,))
+            self.assertTrue(list(backup_storage.iterdir()))
+
+            del sandbox
+            gc.collect()
+
+            self.assertEqual(list(backup_storage.iterdir()), [])
 
 
 if __name__ == "__main__":

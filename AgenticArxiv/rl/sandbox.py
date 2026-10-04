@@ -11,17 +11,26 @@ it before every independent trajectory.
 from __future__ import annotations
 
 import copy
+import shutil
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional
+from tempfile import TemporaryDirectory
+from typing import Any, Dict, Iterable, Mapping, Optional, Union
 
 
 @dataclass
 class _FileSnapshot:
-    """Files under explicitly supplied roots at sandbox creation time."""
+    """Baseline file contents as bytes or paths to temporary disk copies."""
 
     roots: tuple[Path, ...]
-    files: Dict[Path, bytes]
+    files: Dict[Path, Union[bytes, Path]]
+    backup_dir: Optional[TemporaryDirectory] = None
+
+    def __post_init__(self) -> None:
+        """Release temporary copies when the snapshot is no longer referenced."""
+        if self.backup_dir is not None:
+            weakref.finalize(self, self.backup_dir.cleanup)
 
 
 class RolloutSandbox:
@@ -30,7 +39,8 @@ class RolloutSandbox:
     Components can implement ``capture_state``/``restore_state``.  For small
     test doubles, a normal ``__dict__`` is supported as a fallback.  File roots
     are always explicit; reset only removes/restores files below those roots,
-    so it cannot affect unrelated workspace files.
+    so it cannot affect unrelated workspace files. Large baseline files use
+    temporary disk backups, released with the sandbox, instead of heap storage.
     """
 
     def __init__(
@@ -57,18 +67,29 @@ class RolloutSandbox:
     @staticmethod
     def _capture_files(roots: Iterable[Path]) -> _FileSnapshot:
         normalized = tuple(Path(root).resolve() for root in roots if root is not None)
-        files: Dict[Path, bytes] = {}
+        files: Dict[Path, Union[bytes, Path]] = {}
+        backup_dir: Optional[TemporaryDirectory] = None
         for root in normalized:
             if not root.exists():
                 continue
             for path in root.rglob("*"):
                 if path.is_file() and not path.is_symlink():
-                    # RL artifacts are small stubs in offline mode.  Refuse to
-                    # snapshot unexpectedly large files rather than keeping a
-                    # full model/PDF in every rollout's Python heap.
+                    resolved = path.resolve()
+                    if backup_dir is not None and resolved.is_relative_to(Path(backup_dir.name).resolve()):
+                        continue
+                    if resolved in files:
+                        continue
+                    # Keep small offline stubs in memory, but never omit a
+                    # baseline PDF: reset would mistake it for a new artifact.
                     if path.stat().st_size <= 2_000_000:
-                        files[path.resolve()] = path.read_bytes()
-        return _FileSnapshot(roots=normalized, files=files)
+                        files[resolved] = path.read_bytes()
+                    else:
+                        if backup_dir is None:
+                            backup_dir = TemporaryDirectory(prefix="aa-rl-sandbox-")
+                        backup = Path(backup_dir.name) / str(len(files))
+                        shutil.copyfile(path, backup)
+                        files[resolved] = backup
+        return _FileSnapshot(roots=normalized, files=files, backup_dir=backup_dir)
 
     @staticmethod
     def _restore_component(component: Any, state: Any) -> None:
@@ -84,15 +105,24 @@ class RolloutSandbox:
 
     def _restore_files(self) -> None:
         baseline = self._files.files
+        backup_root = (
+            Path(self._files.backup_dir.name).resolve()
+            if self._files.backup_dir is not None else None
+        )
         for root in self._files.roots:
             if not root.exists():
                 continue
             for path in sorted(root.rglob("*"), reverse=True):
+                if backup_root is not None and path.resolve().is_relative_to(backup_root):
+                    continue
                 if path.is_file() and not path.is_symlink() and path.resolve() not in baseline:
                     path.unlink()
         for path, content in baseline.items():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(content)
+            if isinstance(content, Path):
+                shutil.copyfile(content, path)
+            else:
+                path.write_bytes(content)
 
     def reset(self) -> None:
         """Restore every component and explicitly sandboxed artifact root."""
