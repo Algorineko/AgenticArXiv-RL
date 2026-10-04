@@ -92,7 +92,7 @@ class TestStepLatencyMetadata(unittest.TestCase):
         agent = ReActAgent(client, side_effect_mgr=NoOpSideEffectManager(), env=Environment())
         with tempfile.TemporaryDirectory() as output_dir:
             rollout_single_task("search_01", output_dir=output_dir, agent=agent, llm_client=client)
-            trajectory = json.loads(next(Path(output_dir).glob("*.jsonl")).read_text())
+            trajectory = json.loads(next(Path(output_dir).glob("*.jsonl")).read_text(encoding="utf-8"))
 
         steps = trajectory["steps"]
         self.assertEqual(len(steps), 2)

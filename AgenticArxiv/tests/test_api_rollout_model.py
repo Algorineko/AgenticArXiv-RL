@@ -41,7 +41,7 @@ class TestApiRolloutModel(unittest.TestCase):
         with tempfile.TemporaryDirectory() as output_dir:
             with patch("agents.base_agent.settings", configured), patch("utils.llm_client.requests.post", side_effect=post):
                 rollout_single_task("search_01", output_dir=output_dir, agent=agent, llm_client=client)
-            trajectory = json.loads(next(Path(output_dir).glob("*.jsonl")).read_text())
+            trajectory = json.loads(next(Path(output_dir).glob("*.jsonl")).read_text(encoding="utf-8"))
 
         self.assertEqual(trajectory["model"], model)
 
