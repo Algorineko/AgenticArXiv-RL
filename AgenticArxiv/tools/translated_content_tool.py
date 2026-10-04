@@ -20,6 +20,7 @@ the text is an observation, not a target.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Tuple, Union
 
 from models.store import store
@@ -92,6 +93,13 @@ def get_translated_content(
     if asset is None or asset.status != "READY" or not asset.output_mono_path:
         raise ValueError(
             "Translated PDF is not ready; call translate_arxiv_pdf first."
+        )
+    # The cache index can outlive the file (cleaned output dir, sandbox reset).
+    # translate_arxiv_pdf re-translates when the file is gone, so say that
+    # instead of surfacing a PDF parser error.
+    if not os.path.isfile(asset.output_mono_path):
+        raise ValueError(
+            "Translated PDF file is missing; call translate_arxiv_pdf again to regenerate it."
         )
 
     content, total_pages = _read_pdf_page(asset.output_mono_path, index)

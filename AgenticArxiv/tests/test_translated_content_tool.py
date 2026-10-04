@@ -91,6 +91,12 @@ class TranslatedContentToolTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "call translate_arxiv_pdf first"):
             get_translated_content(session_id="s", ref=1)
 
+    def test_missing_translated_file_asks_for_retranslation(self):
+        self.mono_path.unlink()
+
+        with self.assertRaisesRegex(ValueError, "file is missing; call translate_arxiv_pdf again"):
+            get_translated_content(session_id="s", ref=1)
+
     def test_rejects_invalid_pages(self):
         for page in (0, True):
             with self.subTest(page=page):
