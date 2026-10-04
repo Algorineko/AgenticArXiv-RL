@@ -23,6 +23,7 @@ PAPER_TOOLS = {
     "summarize_paper",
     "extract_paper_figures",
     "analyze_figure",
+    "get_translated_content",
 }
 
 

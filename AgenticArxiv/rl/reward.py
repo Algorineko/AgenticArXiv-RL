@@ -408,7 +408,11 @@ class RewardCalculator:
                 # 空答案和被截断的结果都不能作为已完成的图表分析。
                 scores.append(1.0 if _has_figure_answer(observation) else -1.0)
                 continue
-            elif tool_name in {"get_paper_content", "summarize_paper"}:
+            elif tool_name in {
+                "get_paper_content",
+                "summarize_paper",
+                "get_translated_content",
+            }:
                 # The reading tools answer with the resolved paper and the
                 # extracted text.  Grounding is the point: a payload that names
                 # a paper but carries no text is not useful work, even though
