@@ -201,11 +201,11 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 ## 🧪 任务集与评测
 
 - **冒烟集**（`benchmark/tasks.py`）：8 条（search / download / translate / cache / composite）
-- **扩展集**（`benchmark/tasks_expanded.py`）：81 条、十三类模板（search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / **figure_analysis**），`run_benchmark.py --task-set expanded` 启用。两套任务统一走 `TaskSpec`：`expected_tools` / `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表漂移。
+- **扩展集**（`benchmark/tasks_expanded.py`）：86 条、十四类模板（search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**），`run_benchmark.py --task-set expanded` 启用。两套任务统一走 `TaskSpec`：`expected_tools` / `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表漂移。
 - **切分**：按模板切 train / iid_test / ood_test（`benchmark/splits.py`，固化于 `data/splits/`）；`rl_train` 只取成功率中间带（两端组内方差为零、不产生梯度）。换模型后需重新测量 rates，不能沿用旧档位。
 - **评测口径**：`pass^k` 可靠性（tau-bench 口径）、`false_finish`（退化策略 `always_finish` 91.5% vs `reference` 0%）、`ref_score`（比 `paper_id` 而非 `ref` 写法）、代价按成功次数归一。
 - **区分度闸门**（`run_baselines.py`）：确定性退化策略逐类目卡门槛——「永远搜 cs.AI」在检索类 0.833→0.446，「本该不调工具却调了」+0.165→−0.235。
-- **坏例回放**（`eval/badcase_replay.py` + `eval/eval_cases.jsonl`，14 条）：失败轨迹冻成永久回归用例，回放只跑打分器，`pytest` 即闸门；`hack/*` 记录骗分形态并配阈值断言，兼作 reward hacking 案例库。
+- **坏例回放**（`eval/badcase_replay.py` + `eval/eval_cases.jsonl`，17 条）：失败轨迹冻成永久回归用例，回放只跑打分器，`pytest` 即闸门；`hack/*` 记录骗分形态并配阈值断言，兼作 reward hacking 案例库。
 
 ```bash
 python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_test --offline
