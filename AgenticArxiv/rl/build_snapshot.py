@@ -341,20 +341,25 @@ def _snapshot_paper_content(env: MockArxivEnv, max_ref: int = 0) -> tuple[int, i
 def _snapshot_translated_content(env: MockArxivEnv, max_ref: int) -> tuple[int, int]:
     """Translate the first ``max_ref`` papers of each pool and record every page.
 
-    Translation runs pdf2zh against an online translation service and takes
-    minutes per paper, so this stage is opt-in and bounded by ``max_ref``.  A
-    paper whose translated PDF already exists hits the tool's cache instead of
-    being translated again.  Every page is recorded so that any valid ``page``
-    replays offline.
+    The translation_reading tasks only reference the first paper of each pool,
+    so the default build records ``max_ref=1``; without these pages the tasks
+    surface as snapshot misses only once offline evaluation or training starts.
+    Translation runs pdf2zh against an online service and takes minutes per
+    paper; a paper whose translated PDF already exists hits the tool's cache.
+    Every page is recorded so that any valid ``page`` replays offline.
     """
+    if not max_ref:
+        print("  [WARN] 已关闭译文页录制（--translate-max-ref 0）：读译文任务（translation_reading）将无法离线回放")
+        return 0, 0
+    print(f"  翻译并录制译文页（每池前 {max_ref} 篇，需要 pdf2zh 与在线翻译服务）")
     session_id = "__snapshot_translated_content__"
     ok = fail = 0
     for item in _unique_snapshot_papers(env, max_ref=max_ref).values():
         clean = {k: v for k, v in item.items() if not str(k).startswith("_")}
         try:
             store.set_last_papers(session_id, [Paper(**clean)])
-            env.execute_tool("translate_arxiv_pdf", {"session_id": session_id, "ref": 1})
             args = {"session_id": session_id, "ref": 1}
+            env.execute_tool("translate_arxiv_pdf", args)
             first = env.execute_tool("get_translated_content", {**args, "page": 1})
             for page in range(2, int(first["total_pages"]) + 1):
                 # A page without extractable text stays a deterministic tool
@@ -367,6 +372,9 @@ def _snapshot_translated_content(env: MockArxivEnv, max_ref: int) -> tuple[int, 
         except Exception as exc:
             print(f"  [WARN] translation paper={item.get('id')} → {exc}")
             fail += 1
+    print(f"  translation: {ok} 成功 / {fail} 失败")
+    if fail:
+        print("  [WARN] 有论文未录到译文页：引用它们的读译文任务（translation_reading）将无法离线回放")
     return ok, fail
 
 
@@ -460,18 +468,7 @@ def build(
     content_ok, content_fail = _snapshot_paper_content(env, max_ref=content_max_ref)
     print(f"  content: {content_ok} 成功 / {content_fail} 失败")
 
-    # 读译文任务（translation_reading）只引用每池第 1 篇，所以默认录制每池第 1 篇的
-    # 译文页；缺了这部分，这些任务会在离线评测 / 训练开始时才以「快照缺失」暴露。
-    if translate_max_ref:
-        print(f"  翻译并录制译文页（每池前 {translate_max_ref} 篇，需要 pdf2zh 与在线翻译服务）")
-        translated_ok, translated_fail = _snapshot_translated_content(
-            env, max_ref=translate_max_ref
-        )
-        print(f"  translation: {translated_ok} 成功 / {translated_fail} 失败")
-        if translated_fail:
-            print("  [WARN] 有论文未录到译文页：引用它们的读译文任务（translation_reading）将无法离线回放")
-    else:
-        print("  [WARN] 已关闭译文页录制（--translate-max-ref 0）：读译文任务（translation_reading）将无法离线回放")
+    _snapshot_translated_content(env, max_ref=translate_max_ref)
 
     env.save_snapshot()
     total = sum(len(v) for v in env.snapshot.values())
