@@ -155,7 +155,11 @@
     "state_ref_last_active": 0.0,
     "state_ref_last_of_10": 1.0,
     "state_ref_ordinal_cn": 0.0,
-    "state_translate_active": 0.0
+    "state_translate_active": 0.0,
+    "trread_ai5_default": 0.0,
+    "trread_ai5_null_page3": 0.3333333333333333,
+    "trread_cl5_default": 0.0,
+    "trread_cv5_page2": 0.0
   },
   "rates_metadata": {
     "metric": "strict_success_rate",
@@ -170,7 +174,7 @@
     "artifact_sha256": null,
     "sample_count": null,
     "error_count": null,
-    "note": "rates 沿用 v3（覆盖 v2 的 36 条 train 任务）；T2/T3/T4/T5 新增族与读译文族（translation_reading）尚无实测成功率，待基准跑完后补录。缺 rate 的任务不会进入 rl_train（无法分档），但仍留在 train 里。"
+    "note": "rates 沿用 v3（覆盖 v2 的 36 条 train 任务），并补录读译文族 4 条 train 任务：同一协议（上述模型 / regex / transformers / 离线快照回放 / repeat 3 / seed 42）的另一次运行，session_prefix 为 qwen25_15b_base_v7_86，快照于 2026-10-05 用 build_snapshot --translate-max-ref 1 重建。T2/T3/T4/T5 新增族尚无实测成功率，待基准跑完后补录。缺 rate 的任务不会进入 rl_train（无法分档），但仍留在 train 里。"
   },
   "policy": {
     "pilot_role": "The eight inspected pilot tasks are development-only and must not be reported as held-out test results.",
@@ -178,6 +182,6 @@
     "iid_replacement": "search_CV_1d_1 replaces the inspected search_AI_1d_3 in IID test.",
     "rates": "Derived only from the frozen Base run over train. Held-out task-level rates are not used for training selection.",
     "new_families": "paper_reading / paper_summary / figure_extraction 各留参数变体在 iid_test；summary_lg5_tldr120 与训练集的 summary_ai5_tldr60 同风格不同预算，用于检验预算参数是否真的被传递。",
-    "translation_reading": "v7 只在 v3 基础上追加读译文族，v3 的 81 条分配不变。4 条进 train，trread_ro5_page2 进 iid_test（与 trread_cv5_page2 同模板不同池，检验页码参数是否真的被传递）。翻译在 setup 中完成，离线快照需用 build_snapshot --translate-max-ref 1 录制译文页。"
+    "translation_reading": "v7 只在 v3 基础上追加读译文族，v3 的 81 条分配不变。4 条进 train，trread_ro5_page2 进 iid_test（与 trread_cv5_page2 同模板不同池，检验页码参数是否真的被传递）。翻译在 setup 中完成，离线快照需录制每池第 1 篇的译文页（build_snapshot 默认 --translate-max-ref 1）。Base 实测：trread_ai5_null_page3 为 1/3，落在中间档进入 rl_train；其余 3 条为 0/3。"
   }
 }
