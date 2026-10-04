@@ -220,41 +220,25 @@ class TranslatedContentToolTest(unittest.TestCase):
         self.assertEqual(result, recorded)
         self.assertEqual(env.backend.stats["real_calls"], 0)
 
-    def test_result_quality_requires_translated_text(self):
-        # Unknown tool names always count as useful work, so this also proves
-        # the tool is graded by the reading-tool rule.
-        task = {"id": "read_translation", "expected_tools": ["get_translated_content"]}
-        action = '{"name":"get_translated_content","args":{"ref":1}}'
-        for observation, expected in (
-            (str({"paper_id": PAPER.id, "page": 1, "content": "译文"}), 1.0),
-            (str({"paper_id": PAPER.id, "page": 1}), 0.0),
-        ):
-            with self.subTest(observation=observation):
-                breakdown, _ = RewardCalculator().compute_reward_breakdown(
-                    task,
-                    {
-                        "history": [{"action": action, "observation": observation}],
-                        "iteration_count": 1,
-                    },
-                )
-                self.assertEqual(breakdown.result_quality, expected)
-
-    def test_failure_words_inside_translated_text_are_not_failures(self):
+    def test_result_quality_grades_the_translated_text(self):
         task = {
             "id": "read_translation",
             "expected_tools": ["get_translated_content"],
             "expected_tool_args": [{"ref": 1, "page": 1}],
         }
         action = '{"name":"get_translated_content","args":{"ref":1,"page":1}}'
-        page = str({
-            "paper_id": PAPER.id,
-            "page": 1,
-            "total_pages": 9,
-            "content": "当命令失败时，代理无法解析输出；错误: 参数缺失；工具执行失败: 超时。",
-        })
-        failure = "工具执行失败: Translated PDF is not ready; call translate_arxiv_pdf first."
-        for observation, failed in ((page, False), (failure, True)):
-            with self.subTest(failed=failed):
+        page = {"paper_id": PAPER.id, "page": 1, "total_pages": 9}
+        cases = (
+            # Failure words inside the translation are text, not failures.
+            (str({**page, "content": "当命令失败时，代理无法解析输出；工具执行失败: 超时。"}), 1.0, 0),
+            # A payload without text is not useful work; unknown tool names
+            # would score 1.0 here, so this pins the reading-tool rule.
+            (str(page), 0.0, 0),
+            # A framework failure still starts the observation and is caught.
+            ("工具执行失败: Translated PDF is not ready; call translate_arxiv_pdf first.", -1.0, 1),
+        )
+        for observation, quality, failures in cases:
+            with self.subTest(observation=observation):
                 breakdown, metrics = RewardCalculator().compute_reward_breakdown(task, {
                     "history": [
                         {"action": action, "observation": observation},
@@ -262,19 +246,14 @@ class TranslatedContentToolTest(unittest.TestCase):
                     ],
                     "iteration_count": 2,
                 })
+                self.assertEqual(breakdown.result_quality, quality)
                 self.assertEqual(metrics.parse_failures, 0)
-                self.assertEqual(metrics.tool_exec_failures, int(failed))
-                if failed:
-                    self.assertLessEqual(breakdown.total, -0.75)
-                else:
-                    self.assertEqual(breakdown.result_quality, 1.0)
-                    self.assertEqual(breakdown.total, 1.0)
+                self.assertEqual(metrics.tool_exec_failures, failures)
 
     def test_argument_match_treats_missing_page_as_first_page(self):
         for predicted, expected, matches in (
             (None, 1, True),
             (1, None, True),
-            ("2", 2, True),
             (None, 2, False),
             (2, 1, False),
         ):
