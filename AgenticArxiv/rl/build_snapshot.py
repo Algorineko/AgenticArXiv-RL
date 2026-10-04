@@ -382,7 +382,7 @@ def build(
     content_max_ref: int = 0,
     prefetch_budget: int = DEFAULT_PREFETCH_BUDGET_S,
     skip_prefetch: bool = False,
-    translate_max_ref: int = 0,
+    translate_max_ref: int = 1,
 ) -> None:
     # 快照要覆盖全部工具，否则回放时缺哪一类工具就少哪一类的记录，
     # 而缺的那部分会以「replay 模式下快照缺失」的形式在训练时才炸出来。
@@ -460,12 +460,18 @@ def build(
     content_ok, content_fail = _snapshot_paper_content(env, max_ref=content_max_ref)
     print(f"  content: {content_ok} 成功 / {content_fail} 失败")
 
+    # 读译文任务（translation_reading）只引用每池第 1 篇，所以默认录制每池第 1 篇的
+    # 译文页；缺了这部分，这些任务会在离线评测 / 训练开始时才以「快照缺失」暴露。
     if translate_max_ref:
         print(f"  翻译并录制译文页（每池前 {translate_max_ref} 篇，需要 pdf2zh 与在线翻译服务）")
         translated_ok, translated_fail = _snapshot_translated_content(
             env, max_ref=translate_max_ref
         )
         print(f"  translation: {translated_ok} 成功 / {translated_fail} 失败")
+        if translated_fail:
+            print("  [WARN] 有论文未录到译文页：引用它们的读译文任务（translation_reading）将无法离线回放")
+    else:
+        print("  [WARN] 已关闭译文页录制（--translate-max-ref 0）：读译文任务（translation_reading）将无法离线回放")
 
     env.save_snapshot()
     total = sum(len(v) for v in env.snapshot.values())
@@ -520,10 +526,10 @@ def main():
     parser.add_argument(
         "--translate-max-ref",
         type=int,
-        default=0,
+        default=1,
         help="为每个论文池的前 N 篇调用 pdf2zh 翻译，并录制全部译文页供 "
-             "get_translated_content 离线回放（0=关闭，默认）。翻译需要联网，"
-             "每篇要数分钟，只录任务会用到的 ref",
+             "get_translated_content 离线回放。默认 1：读译文任务只引用每池第 1 篇。"
+             "翻译需要 pdf2zh 与在线翻译服务，每篇要数分钟；0 表示关闭",
     )
     args = parser.parse_args()
 

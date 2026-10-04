@@ -50,6 +50,13 @@ class SnapshotPathTest(unittest.TestCase):
                 build_snapshot.main()
                 self.assertEqual(build.call_args.kwargs["snapshot_path"], path)
 
+    def test_translated_pages_are_recorded_by_default(self):
+        """读译文任务引用每池第 1 篇；默认快照不录它们，这些任务就无法离线回放。"""
+        with mock.patch.object(sys, "argv", ["build_snapshot"]), \
+             mock.patch.object(build_snapshot, "build") as build:
+            build_snapshot.main()
+        self.assertEqual(build.call_args.kwargs["translate_max_ref"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
