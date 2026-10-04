@@ -750,6 +750,75 @@ _FIGURE_ANALYSIS: List[TaskSpec] = [
 
 
 # ============================================================================
+# 读译文：把 translate_arxiv_pdf 产出的中文译文按页读进上下文
+# ============================================================================
+# 翻译放在 setup 而不是 steps：翻译是异步任务，prompt 要求调用后直接 FINISH，
+# 「同一轮里刚翻译完就读」本身不成立；读译文是之后另一轮的请求。
+# 只引用每个池的第 1 篇：快照只为每池前 N 篇录制译文页
+# （build_snapshot --translate-max-ref N），N=1 即可覆盖整族。
+# page 缺省即第 1 页（metrics._match_arg_value 按此归一化），默认页任务声明
+# page=1 时省略或显式传 1 都算对；其余任务考察页码是否真的传对。
+def _translated_setup(aspect: str) -> tuple:
+    return (
+        Step('get_recently_submitted_cs_papers', {'aspect': aspect, 'days': 7, 'max_results': 5}),
+        Step('download_arxiv_pdf', {'ref': 1}),
+        Step('translate_arxiv_pdf', {'ref': 1}),
+    )
+
+
+_TRANSLATION_READING: List[TaskSpec] = [
+    TaskSpec(
+        id='trread_ai5_default',
+        task='读一下第1篇论文的中文译文开头（标题与摘要）',
+        steps=(Step('get_translated_content', {'ref': 1, 'page': 1}),),
+        category='translation_reading',
+        difficulty='medium',
+        setup=_translated_setup('AI'),
+        requires_offline=True,
+        note='默认读第 1 页：省略 page 或传 1 都算对',
+    ),
+    TaskSpec(
+        id='trread_cv5_page2',
+        task='打开第1篇论文的中文译文，读第2页',
+        steps=(Step('get_translated_content', {'ref': 1, 'page': 2}),),
+        category='translation_reading',
+        difficulty='medium',
+        setup=_translated_setup('CV'),
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='trread_ai5_null_page3',
+        task='把刚才翻译好的那篇论文的译文第3页读给我',
+        steps=(Step('get_translated_content', {'ref': None, 'page': 3}),),
+        category='translation_reading',
+        difficulty='medium',
+        setup=_translated_setup('AI'),
+        requires_offline=True,
+        note='「刚才翻译好的那篇」应传 ref=null，由工具定位最近操作的论文',
+    ),
+    TaskSpec(
+        id='trread_cl5_default',
+        task='第1篇论文已经译成中文了，读出译文的标题和摘要',
+        steps=(Step('get_translated_content', {'ref': 1, 'page': 1}),),
+        category='translation_reading',
+        difficulty='medium',
+        setup=_translated_setup('CL'),
+        requires_offline=True,
+    ),
+    TaskSpec(
+        id='trread_ro5_page2',
+        task='读取第1篇论文中文译文的第2页',
+        steps=(Step('get_translated_content', {'ref': 1, 'page': 2}),),
+        category='translation_reading',
+        difficulty='medium',
+        setup=_translated_setup('RO'),
+        requires_offline=True,
+        note='与 trread_cv5_page2 成对：同模板、不同池，留作 iid 测试',
+    ),
+]
+
+
+# ============================================================================
 # 负向约束：完成可行任务，但不要执行用户明确排除的操作
 # ============================================================================
 # infeasible 覆盖的是「一次工具都不该调」；这一组覆盖更常见、也更难判定的情况：
@@ -992,7 +1061,7 @@ _LONG_CHAIN: List[TaskSpec] = [
 
 EXPANDED_SPECS: List[TaskSpec] = (
     _SEARCH + _KEYWORD_SEARCH + _OTHERS + _PAPER_READING + _PAPER_SUMMARY
-    + _FIGURE_EXTRACTION + _FIGURE_ANALYSIS
+    + _FIGURE_EXTRACTION + _FIGURE_ANALYSIS + _TRANSLATION_READING
     + _CONSTRAINTS + _INFEASIBLE + _LONG_CHAIN
 )
 

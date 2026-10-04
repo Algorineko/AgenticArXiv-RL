@@ -24,6 +24,7 @@ SPLIT_DIR = Path(__file__).resolve().parents[2] / "data" / "splits"
 PINNED_PATH = SPLIT_DIR / "v1.json"
 PINNED_V2_PATH = SPLIT_DIR / "v2_62.json"
 PINNED_V3_PATH = SPLIT_DIR / "v3_81.json"
+PINNED_V7_PATH = SPLIT_DIR / "v7_86.json"
 GRPO_V5_PATH = SPLIT_DIR / "v5_grpo_train.json"
 GRPO_V6_PATH = SPLIT_DIR / "v6_grpo_train.json"
 
@@ -298,29 +299,36 @@ class PinnedV2SplitTest(unittest.TestCase):
 
 
 class PinnedV3SplitTest(unittest.TestCase):
-    """v3 覆盖加入 T2/T3 解读族之后的全部任务。"""
+    """v3 是加入 T2–T5 解读族之后的 81 条任务切分。
+
+    与 v1/v2 一样，扩任务只能新增切分版本，不能改写 v3；覆盖全部当前任务的
+    是最新版本（见 PinnedV7SplitTest）。子类通过类属性复用这里的全部断言。
+    """
+
+    PATH = PINNED_V3_PATH
+    PREVIOUS_PATH = PINNED_V2_PATH
+    TRAINABLE_FAMILIES = ("paper_reading", "paper_summary")
 
     @classmethod
     def setUpClass(cls):
-        cls.pinned = json.loads(PINNED_V3_PATH.read_text(encoding="utf-8"))
+        cls.pinned = json.loads(cls.PATH.read_text(encoding="utf-8"))
         cls.split = cls.pinned["split"]
         cls.by_id = {t["id"]: t for t in EXPANDED_TASKS}
-        cls.ids = set(cls.by_id)
+        cls.ids = {tid for ids in cls.split.values() for tid in ids}
 
-    def test_covers_every_current_task_exactly_once(self):
+    def test_assigned_tasks_are_unique_and_still_exist(self):
         assigned = [tid for ids in self.split.values() for tid in ids]
         self.assertEqual(len(assigned), len(set(assigned)), "有任务被切到多份里")
-        self.assertEqual(set(assigned), self.ids)
+        self.assertTrue(self.ids <= set(self.by_id))
 
     def test_task_count_matches_the_declaration(self):
         self.assertEqual(self.pinned["task_count"], len(self.ids))
 
-    def test_v2_assignments_are_preserved(self):
-        """v3 只在 v2 基础上追加，不能把老任务挪到别的组里。"""
-        v2 = json.loads(PINNED_V2_PATH.read_text(encoding="utf-8"))
-        for group, ids in v2["split"].items():
+    def test_previous_assignments_are_preserved(self):
+        """新版本只在上一版基础上追加，不能把老任务挪到别的组里。"""
+        previous = json.loads(self.PREVIOUS_PATH.read_text(encoding="utf-8"))
+        for group, ids in previous["split"].items():
             with self.subTest(group=group):
-                self.assertEqual(self.split[group][:0], [])
                 self.assertTrue(set(ids) <= set(self.split[group]))
 
     def test_pilot_tasks_are_exactly_the_dev_split(self):
@@ -345,7 +353,7 @@ class PinnedV3SplitTest(unittest.TestCase):
 
     def test_reading_and_summary_families_are_trainable(self):
         """新增的解读族必须有训练实例，否则 P0 的能力永远学不到。"""
-        for family_name in ("paper_reading", "paper_summary"):
+        for family_name in self.TRAINABLE_FAMILIES:
             with self.subTest(family=family_name):
                 trained = [
                     tid for tid in self.split["train"]
@@ -359,15 +367,29 @@ class PinnedV3SplitTest(unittest.TestCase):
     def test_unmeasured_tasks_are_excluded_from_rl_train(self):
         """没有实测成功率的任务分不了档，不能进 RL 训练集。"""
         rates = self.pinned["rates"]
-        rl_train = set(load_split(f"{PINNED_V3_PATH}:rl_train"))
+        rl_train = set(load_split(f"{self.PATH}:rl_train"))
         self.assertTrue(rl_train <= set(rates))
         self.assertTrue(rl_train <= set(self.split["train"]))
         unmeasured = set(self.split["train"]) - set(rates)
         self.assertTrue(
             unmeasured,
-            "v3 应当记录新增族尚未测率；测完删掉这条断言并回填 rates",
+            f"{self.PATH.name} 应当记录新增族尚未测率；测完删掉这条断言并回填 rates",
         )
         self.assertFalse(rl_train & unmeasured)
+
+
+class PinnedV7SplitTest(PinnedV3SplitTest):
+    """v7 = v3 + 读译文族（translation_reading），是覆盖全部当前任务的最新切分。
+
+    版本号 4–6 已被 GRPO 训练切分占用，所以任务切分直接用 7。
+    """
+
+    PATH = PINNED_V7_PATH
+    PREVIOUS_PATH = PINNED_V3_PATH
+    TRAINABLE_FAMILIES = ("paper_reading", "paper_summary", "translation_reading")
+
+    def test_covers_every_current_task_exactly_once(self):
+        self.assertEqual(self.ids, set(self.by_id))
 
 
 class LoadSplitTest(unittest.TestCase):
