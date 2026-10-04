@@ -43,11 +43,13 @@ _RECENT_SEARCH_TOOL = "get_recently_submitted_cs_papers"
 _KEYWORD_SEARCH_TOOL = "search_arxiv_papers"
 _SEARCH_TOOLS = {_RECENT_SEARCH_TOOL, _KEYWORD_SEARCH_TOOL}
 _PAPER_CONTENT_TOOL = "get_paper_content"
+_TRANSLATED_CONTENT_TOOL = "get_translated_paper_content"
 _PAPER_SUMMARY_TOOL = "summarize_paper"
 _PAPER_FIGURES_TOOL = "extract_paper_figures"
 _FIGURE_ANALYSIS_TOOL = "analyze_figure"
 DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS) | {
     _PAPER_CONTENT_TOOL,
+    _TRANSLATED_CONTENT_TOOL,
     _PAPER_SUMMARY_TOOL,
     _PAPER_FIGURES_TOOL,
     _FIGURE_ANALYSIS_TOOL,
@@ -128,6 +130,13 @@ class MockArxivEnv:
         if tool_name == "download_arxiv_pdf" and self.offline_download:
             self.stats["offline_stubs"] += 1
             return self._offline_download(args)
+
+        if tool_name == "translate_arxiv_pdf" and self.offline_download:
+            self.stats["offline_stubs"] += 1
+            return self._offline_translate(args)
+
+        if tool_name == _TRANSLATED_CONTENT_TOOL:
+            return self._read_translated_content(args, resolved_paper_id)
 
         # 2) 非快照工具（纯本地，如缓存查询）→ 直接真实执行
         if tool_name not in self.snapshot_tools:
@@ -275,6 +284,57 @@ class MockArxivEnv:
                     pass
 
     # ---------- 搜索语义派生 ----------
+
+    def _read_translated_content(self, args: Dict[str, Any], resolved_paper_id: Optional[str]) -> Any:
+        from tools.paper_content_tool import _translated_chunk, _translated_document
+
+        session_id = args.get("session_id", "default")
+        ref = args.get("ref", 1)
+        if isinstance(ref, str) and not ref.strip():
+            raise ValueError("Paper reference cannot be blank.")
+        # The private multi-turn adapter checks its own store before passing a
+        # resolved ID. Ordinary Agent rollouts use the shared store instead.
+        key = self._paper_figures_key(args, resolved_paper_id)
+        paper_id = json.loads(key)["paper_id"]
+        if resolved_paper_id is None:
+            asset = store.get_translate_asset(paper_id)
+            if asset is None or asset.status != "READY":
+                raise ValueError("Translated PDF is not ready; complete translation first.")
+        entries = self.snapshot.get(_TRANSLATED_CONTENT_TOOL, {})
+        if self.mode == "record" or key not in entries:
+            self.stats["miss"] += 1
+            if self.mode == "replay":
+                raise KeyError(f"Translated text snapshot missing for paper {paper_id}")
+            self.stats["real_calls"] += 1
+            document = _translated_document(session_id, ref)
+            self._add_to_snapshot(_TRANSLATED_CONTENT_TOOL, key, args, document)
+        else:
+            self.stats["hit"] += 1
+            document = entries[key]["result"]
+        result = _translated_chunk(document, args.get("offset", 0), args.get("max_chars", 1000))
+        if resolved_paper_id is None:
+            store.set_last_active_paper_id(session_id, paper_id)
+        return result
+
+    @staticmethod
+    def _offline_translate(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mark a translation ready without running a subprocess or fabricating text."""
+        from models.schemas import TranslateAsset
+
+        session_id = args.get("session_id", "default")
+        ref = args.get("paper_id") or args.get("ref")
+        if isinstance(ref, str) and not ref.strip():
+            raise ValueError("Paper reference cannot be blank.")
+        paper = store.resolve_paper(session_id, ref)
+        if paper is None:
+            raise ValueError("Paper not found; search for the paper and check the ref.")
+        asset = store.get_translate_asset(paper.id)
+        if asset is None:
+            store.upsert_translate_asset(TranslateAsset(paper_id=paper.id, status="READY"))
+        else:
+            store.update_translate_asset(paper.id, status="READY")
+        store.set_last_active_paper_id(session_id, paper.id)
+        return {"paper_id": paper.id, "status": "READY", "offline": True}
 
     @staticmethod
     def _derive_search_result(args: Dict[str, Any], tool_data: Dict[str, Any]):

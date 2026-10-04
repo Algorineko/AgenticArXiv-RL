@@ -102,3 +102,77 @@ def test_unavailable_translation_fails_without_changing_reference(translated_sto
 def test_invalid_read_parameters_fail(translated_store, args):
     with pytest.raises(ValueError):
         reader.get_translated_paper_content(session_id="s", **args)
+
+
+def test_record_once_replays_any_chunk_without_pdf(translated_store, tmp_path):
+    from tools.bootstrap import register_all_tools
+    from rl.env import MockArxivEnv
+
+    register_all_tools()
+    backend, papers, paths = translated_store
+    snapshot = tmp_path / "snapshot.json"
+    recorder = MockArxivEnv(snapshot, mode="record")
+    expected = recorder.execute_tool("get_translated_paper_content", {"session_id": "s", "ref": 1})
+    recorder.save_snapshot()
+    assert len(recorder.snapshot["get_translated_paper_content"]) == 1
+    paths[0].unlink()
+    backend.reset()
+    backend.set_last_papers("s", papers)
+    replay = MockArxivEnv(snapshot, mode="replay")
+    with pytest.raises(ValueError, match="not ready"):
+        replay.execute_tool("get_translated_paper_content", {"session_id": "s", "ref": 1})
+    replay.execute_tool("translate_arxiv_pdf", {"session_id": "s", "ref": 1})
+    result = replay.execute_tool("get_translated_paper_content", {"session_id": "s", "ref": 1})
+    assert result == expected
+    continued = replay.execute_tool("get_translated_paper_content", {
+        "session_id": "s", "ref": 1, "offset": 20, "max_chars": 13})
+    assert continued["content"] == expected["content"][20:33]
+    assert replay.stats["real_calls"] == 0
+
+
+def test_multiturn_readiness_is_local_and_resettable(translated_store, tmp_path):
+    import json
+    from tools.bootstrap import register_all_tools
+    from rl.env import MockArxivEnv
+    from rl.multiturn_env import AgenticArxivMultiTurnEnv
+
+    register_all_tools()
+    _, papers, _ = translated_store
+    snapshot = tmp_path / "snapshot.json"
+    recorder = MockArxivEnv(snapshot, mode="record")
+    expected = recorder.execute_tool("get_translated_paper_content", {"session_id": "s", "ref": 1})
+    recorder.save_snapshot()
+    data = json.loads(snapshot.read_text(encoding="utf-8"))
+    data["get_recently_submitted_cs_papers"] = {
+        MockArxivEnv._make_key({"aspect": "AI", "max_results": 2}): {
+            "args": {"aspect": "AI"}, "result": [paper.model_dump() for paper in papers]}}
+    snapshot.write_text(json.dumps(data), encoding="utf-8")
+    first, second = AgenticArxivMultiTurnEnv(snapshot), AgenticArxivMultiTurnEnv(snapshot)
+    for environment in (first, second):
+        environment.reset()
+        environment.get_recently_submitted_cs_papers("AI", max_results=2)
+    with pytest.raises(ValueError, match="not ready"):
+        first.get_translated_paper_content(1)
+    first.translate_arxiv_pdf(1)
+    assert first.get_translated_paper_content(None) == expected
+    with pytest.raises(ValueError, match="not ready"):
+        second.get_translated_paper_content(1)
+    first.reset()
+    first.get_recently_submitted_cs_papers("AI", max_results=2)
+    with pytest.raises(ValueError, match="not ready"):
+        first.get_translated_paper_content(1)
+
+
+def test_backfill_preserves_old_entries_and_session_state(translated_store, tmp_path):
+    import json
+    from scripts.backfill_translated_content import backfill_translated_content
+
+    backend, papers, paths = translated_store
+    old = {"get_recently_submitted_cs_papers": {"existing": {"result": []}}}
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(json.dumps(old), encoding="utf-8")
+    assert backfill_translated_content(snapshot, {papers[0].id: paths[0]}) == 1
+    data = json.loads(snapshot.read_text(encoding="utf-8"))
+    assert data["get_recently_submitted_cs_papers"] == old["get_recently_submitted_cs_papers"]
+    assert len(data["get_translated_paper_content"]) == 1
+    assert backend.get_last_active_paper_id("s") == papers[1].id

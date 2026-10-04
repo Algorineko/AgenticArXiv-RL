@@ -187,6 +187,30 @@ class AgenticArxivMultiTurnEnv:
             },
         )
 
+    def get_translated_paper_content(
+        self, ref: str | int | None = 1, offset: int = 0, max_chars: int = 1000,
+    ) -> dict[str, Any]:
+        """Read completed translation text from the deterministic snapshot.
+
+        Args:
+            ref: One-based result index, arXiv ID, title fragment, or null.
+            offset: Character offset; continue with the previous next_offset.
+            max_chars: Maximum content characters, from 1 to 4000.
+        """
+        if isinstance(ref, str) and not ref.strip():
+            raise ValueError("Paper reference cannot be blank.")
+        paper = self.store.resolve_paper(self.session_id, ref)
+        if paper is None:
+            raise ValueError("Paper not found; search for the paper and check the ref.")
+        if paper.id not in self._translated:
+            raise ValueError("Translated PDF is not ready; complete translation first.")
+        result = self.backend.execute_tool("get_translated_paper_content", {
+            "session_id": self.session_id, "ref": ref, "offset": offset,
+            "max_chars": max_chars, "_resolved_paper_id": paper.id,
+        })
+        self.store.set_last_active_paper_id(self.session_id, paper.id)
+        return result
+
     def summarize_paper(
         self,
         ref: str | int | None = 1,

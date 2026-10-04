@@ -351,7 +351,7 @@ class BaseAgent(ABC):
                 return f"错误: 工具 '{tool_name}' 不存在。可用工具包括: {', '.join(available_tools)}"
 
             # 翻译工具异步 enqueue
-            if tool_name == "translate_arxiv_pdf":
+            if tool_name == "translate_arxiv_pdf" and self.env is None:
                 t = self.side_effects.enqueue_translate(
                     session_id=self.session_id,
                     ref=args.get("ref", None),
