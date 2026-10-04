@@ -41,7 +41,7 @@ TOOL_MODULES: Dict[str, Tuple[str, ...]] = {
         "search_arxiv_papers",
     ),
     "tools.pdf_download_tool": ("download_arxiv_pdf",),
-    "tools.paper_content_tool": ("get_paper_content",),
+    "tools.paper_content_tool": ("get_paper_content", "get_translated_paper_content"),
     "tools.paper_summary_tool": ("summarize_paper",),
     "tools.paper_figures_tool": ("extract_paper_figures",),
     "tools.figure_analysis_tool": ("analyze_figure",),

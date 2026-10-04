@@ -6,7 +6,9 @@ cached PDF so the same file always yields the same observation.
 
 from __future__ import annotations
 
+import hashlib
 import re
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from models.store import store
@@ -271,6 +273,68 @@ def get_paper_content(
     }
 
 
+def _translated_document(session_id: str, ref: Union[str, int, None]) -> Dict[str, Any]:
+    """Extract one completed mono PDF for both live reads and snapshot recording."""
+    if isinstance(ref, str) and not ref.strip():
+        raise ValueError("Paper reference cannot be blank.")
+    paper = store.resolve_paper(session_id, ref)
+    if paper is None:
+        raise ValueError("Paper not found; search for the paper and check the ref.")
+    asset = store.get_translate_asset(paper.id)
+    if asset is None or asset.status != "READY":
+        status = asset.status if asset else "NOT_TRANSLATED"
+        raise ValueError(f"Translated PDF is not ready ({status}); complete translation first.")
+    path = Path(asset.output_mono_path)
+    if not asset.output_mono_path or not path.is_file():
+        raise ValueError("Translated PDF file is missing.")
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(256 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "paper_id": paper.id,
+        "status": "READY",
+        "source": "translated",
+        "source_sha256": digest.hexdigest(),
+        "content": _pdf_to_text(str(path)),
+    }
+
+
+def _translated_chunk(document: Dict[str, Any], offset: int, max_chars: int) -> Dict[str, Any]:
+    """Slice normalized text with the same cursor contract in live and replay modes."""
+    if type(offset) is not int or offset < 0:
+        raise ValueError("offset must be a non-negative integer.")
+    if type(max_chars) is not int or not 1 <= max_chars <= 4000:
+        raise ValueError("max_chars must be an integer from 1 to 4000.")
+    text = document["content"]
+    if offset >= len(text):
+        raise ValueError("offset is past the end of the translated text.")
+    end = min(offset + max_chars, len(text))
+    return {
+        **document,
+        "content": text[offset:end],
+        "offset": offset,
+        "next_offset": end,
+        "has_more": end < len(text),
+    }
+
+
+def get_translated_paper_content(
+    session_id: str = "default",
+    ref: Union[str, int, None] = 1,
+    offset: int = 0,
+    max_chars: int = 1000,
+) -> Dict[str, Any]:
+    """Read completed translated text; use next_offset to continue without gaps.
+
+    Translation remains a separate operation. Pending or failed translations,
+    missing files, and PDFs without extractable text produce explicit errors.
+    """
+    result = _translated_chunk(_translated_document(session_id, ref), offset, max_chars)
+    store.set_last_active_paper_id(session_id, result["paper_id"])
+    return result
+
+
 PAPER_CONTENT_TOOL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -322,4 +386,24 @@ registry.register_tool(
     ),
     parameter_schema=PAPER_CONTENT_TOOL_SCHEMA,
     func=get_paper_content,
+)
+
+
+registry.register_tool(
+    name="get_translated_paper_content",
+    description=(
+        "Read text from a completed translated mono PDF. Requires a READY translation. "
+        "Returns content and next_offset; continue with next_offset while has_more is true."
+    ),
+    parameter_schema={
+        "type": "object",
+        "properties": {
+            "session_id": {"type": "string", "default": "default"},
+            "ref": PAPER_CONTENT_TOOL_SCHEMA["properties"]["ref"],
+            "offset": {"type": "integer", "minimum": 0, "default": 0},
+            "max_chars": {"type": "integer", "minimum": 1, "maximum": 4000, "default": 1000},
+        },
+        "required": [],
+    },
+    func=get_translated_paper_content,
 )
