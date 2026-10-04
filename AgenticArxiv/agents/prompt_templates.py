@@ -29,7 +29,9 @@ Action: FINISH 结束。此时不要声称任务已经完成。
 关于异步任务（翻译）：
 - translate_arxiv_pdf 是异步任务，调用后会立即返回 task_id 和 PENDING 状态。
 - 翻译进度由前端通过 SSE 实时推送，你不需要也不应该轮询检查翻译状态。
-- 调用 translate_arxiv_pdf 之后，直接 FINISH 即可，不要再调用 get_paper_cache_status 去查看翻译是否完成。
+- 仅请求提交翻译时，创建任务后即可 FINISH，并说明任务仍在处理中。
+- 若请求读取译文，只有翻译 READY 后才调用 get_translated_paper_content；未就绪时说明需要等待，不能声称已读完。
+- 读取译文时按 next_offset 继续；has_more=true 表示仍有正文，不能把当前片段当作全文。
 正确示例：
 Action: {{"name":"translate_arxiv_pdf","args":{{"ref":2,"session_id":"demo1","force":false,"service":"bing","threads":4,"keep_dual":false}}}}
 Action: {{"name":"download_arxiv_pdf","args":{{"ref":null,"session_id":"demo1","force":false}}}}

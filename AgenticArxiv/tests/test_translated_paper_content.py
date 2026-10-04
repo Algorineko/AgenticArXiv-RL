@@ -176,3 +176,123 @@ def test_backfill_preserves_old_entries_and_session_state(translated_store, tmp_
     assert data["get_recently_submitted_cs_papers"] == old["get_recently_submitted_cs_papers"]
     assert len(data["get_translated_paper_content"]) == 1
     assert backend.get_last_active_paper_id("s") == papers[1].id
+
+
+def test_budgeted_observation_retains_structure_and_visible_cursor(translated_store):
+    import json
+
+    assert hasattr(reader, "format_translated_observation"), "budgeted serializer is missing"
+    result = reader.get_translated_paper_content("s", 1, max_chars=4000)
+    text = reader.format_translated_observation(result, max_chars=330)
+    visible = json.loads(text)
+    assert len(text) <= 330
+    assert 0 < len(visible["content"]) < len(result["content"])
+    assert visible["next_offset"] == len(visible["content"])
+    assert visible["has_more"]
+    following = reader.get_translated_paper_content("s", 1, visible["next_offset"])
+    assert visible["content"] + following["content"] == result["content"]
+    with pytest.raises(ValueError, match="budget"):
+        reader.format_translated_observation(result, max_chars=10)
+
+
+@pytest.mark.parametrize("mutation", [{"content": ""}, {"source": "original"},
+                                     {"source_sha256": ""}, {"next_offset": -1}])
+def test_invalid_translated_result_fails_metrics_and_reward(translated_store, mutation):
+    import json
+    from benchmark.metrics import extract_metrics, is_strict_success
+    from rl.reward import RewardCalculator
+
+    payload = reader.get_translated_paper_content("s", 1)
+    task = {"id": "translated", "expected_tools": ["translate_arxiv_pdf", "get_translated_paper_content"],
+            "expected_tool_args": [{"ref": 1}, {"ref": 1}],
+            "expected_paper_ids": [payload["paper_id"], payload["paper_id"]]}
+    payload.update(mutation)
+    result = {"history": [
+        {"thought": "translate", "action": json.dumps({"name": "translate_arxiv_pdf", "args": {"ref": 1}}),
+         "observation": json.dumps({"paper_id": payload["paper_id"], "status": "READY"})},
+        {"thought": "read", "action": json.dumps({"name": "get_translated_paper_content", "args": {"ref": 1}}),
+         "observation": json.dumps(payload, ensure_ascii=False)},
+        {"thought": "done", "action": "FINISH", "observation": "任务完成"},
+    ]}
+    assert not is_strict_success(extract_metrics(task, result, "regex", 0))
+    reward, _ = RewardCalculator().compute_reward(task, result)
+    assert reward <= -0.75
+
+
+def test_grpo_delivers_complete_translation_and_masks_it(translated_store):
+    import json
+    from rl.grpo_reward import make_multiturn_rollout_func
+
+    payload = reader.get_translated_paper_content("s", 1, max_chars=4000)
+    action = 'Thought: read\nAction: {"name":"get_translated_paper_content","args":{"ref":1}}'
+
+    class Tokenizer:
+        def __call__(self, text, add_special_tokens=False):
+            return {"input_ids": [ord(character) for character in text]}
+
+        def decode(self, ids, skip_special_tokens=True):
+            return "".join(chr(token) for token in ids)
+
+    class Environment:
+        def reset(self):
+            pass
+
+        def get_translated_paper_content(self, ref):
+            return payload
+
+    class Trainer:
+        processing_class = Tokenizer()
+        max_completion_length = 650
+
+        def __init__(self):
+            self.inputs = []
+
+        def _generate_single_turn(self, prompts, images, fields):
+            self.inputs.append(prompts)
+            text = action if len(self.inputs) == 1 else "Thought: done\nAction: FINISH"
+            return [[ord(character) for character in text]], None, {}
+
+    trainer = Trainer()
+    output = make_multiturn_rollout_func(Environment, max_turns=2)(["task"], trainer)
+    observation = output["trajectory_results"][0]["history"][0]["observation"]
+    visible = json.loads(observation)
+    assert visible["next_offset"] == len(visible["content"])
+    assert "TRANSLATED_1" in visible["content"]
+    assert observation in trainer.processing_class.decode(trainer.inputs[1][0])
+    delivered = "".join(chr(token) for token, mask in zip(output["completion_ids"][0], output["env_mask"][0]) if mask == 0)
+    assert observation in delivered
+
+
+def test_opt_in_tasks_generate_grounded_expert_data(translated_store, tmp_path):
+    import json
+
+    module_path = Path(__file__).resolve().parents[1] / "benchmark" / "translated_tasks.py"
+    assert module_path.exists(), "opt-in translated task set is missing"
+    from benchmark.translated_tasks import get_translated_specs
+    from rl.env import MockArxivEnv
+    from scripts.generate_sft_data import generate_deterministic_trajectories
+    from tools.bootstrap import register_all_tools
+    from agents.prompt_templates import format_tool_description
+    from tools.tool_registry import registry
+
+    register_all_tools()
+    _, papers, _ = translated_store
+    snapshot = tmp_path / "snapshot.json"
+    recorder = MockArxivEnv(snapshot, mode="record")
+    recorder.execute_tool("get_translated_paper_content", {"session_id": "s", "ref": 1})
+    recorder.snapshot["get_recently_submitted_cs_papers"] = {
+        MockArxivEnv._make_key({"aspect": "AI", "max_results": 2}): {
+            "args": {"aspect": "AI", "max_results": 2},
+            "result": [paper.model_dump() for paper in papers]}}
+    recorder.save_snapshot()
+    specs = get_translated_specs(snapshot)
+    assert len(specs) == 6 and len({spec.id for spec in specs}) == 6
+    assert all(spec.requires_offline for spec in specs)
+    rows = generate_deterministic_trajectories(
+        specs, MockArxivEnv(snapshot, mode="replay"),
+        format_tool_description(registry.list_tools()), source_split="translated-test",
+        replay_translation=True,
+    )
+    assert rows
+    assert "TRANSLATED_1" in json.dumps(rows, ensure_ascii=False)
+    assert all(row["source_split"] == "translated-test" for row in rows)

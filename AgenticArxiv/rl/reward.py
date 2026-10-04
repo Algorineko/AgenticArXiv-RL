@@ -18,6 +18,7 @@ from benchmark.metrics import (
     classify_blocked_terminal_semantics,
     extract_metrics,
     lcs_length,
+    valid_translated_content,
 )
 
 
@@ -404,6 +405,9 @@ class RewardCalculator:
                     marker in observation
                     for marker in ("READY", "成功", "已创建", "status", "pdf_ready")
                 )
+            elif tool_name == "get_translated_paper_content":
+                scores.append(1.0 if valid_translated_content(observation) else -1.0)
+                continue
             elif tool_name == "analyze_figure":
                 # 空答案和被截断的结果都不能作为已完成的图表分析。
                 scores.append(1.0 if _has_figure_answer(observation) else -1.0)

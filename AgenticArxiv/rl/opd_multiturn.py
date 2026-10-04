@@ -249,7 +249,13 @@ def run_multiturn_opd_rollouts(
 
             try:
                 result = _dispatch_tool(environments[index], action)
-                observation = str(result)[:4000]
+                if action["name"] == "get_translated_paper_content":
+                    from tools.paper_content_tool import format_translated_observation
+                    observation = format_translated_observation(
+                        result, tokenizer=tokenizer, max_tokens=max_observation_tokens,
+                    )
+                else:
+                    observation = str(result)[:4000]
             except Exception as exc:  # noqa: BLE001
                 observation = f"{TOOL_ERROR_PREFIX}{exc}"
 

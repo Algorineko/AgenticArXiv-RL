@@ -113,7 +113,7 @@ def main():
         ),
     )
     parser.add_argument(
-        "--task-set", choices=["default", "expanded"], default="default",
+        "--task-set", choices=["default", "expanded", "translated"], default="default",
         help=(
             f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
             f"expanded=扩充后的 {len(get_expanded_tasks())} 条"
@@ -145,6 +145,11 @@ def main():
             if dropped:
                 print(f"提示：{len(dropped)} 条任务的标准答案绑定快照，"
                       f"未加 --offline 故跳过，例如 {dropped[:3]}")
+    elif args.task_set == "translated":
+        if not args.offline or not args.snapshot:
+            parser.error("--task-set translated requires --offline and an explicit --snapshot")
+        from benchmark.translated_tasks import get_translated_specs
+        pool = [spec.to_task() for spec in get_translated_specs(Path(args.snapshot))]
     else:
         pool = get_all_tasks()
 

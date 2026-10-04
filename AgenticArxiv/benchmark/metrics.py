@@ -1,6 +1,7 @@
 # AgenticArxiv/benchmark/metrics.py
 """从 Agent run() 结果中提取性能和准确性指标。"""
 
+import ast
 import json
 import re
 from dataclasses import dataclass, field, asdict
@@ -63,6 +64,32 @@ class TaskMetrics:
         d["tool_call_sequence"] = ",".join(d["tool_call_sequence"])
         d["expected_tools"] = ",".join(d["expected_tools"])
         return d
+
+
+def valid_translated_content(observation: Any) -> bool:
+    """Validate the delivered translated-reader payload for metrics and reward."""
+    payload = observation
+    if isinstance(observation, str):
+        payload = None
+        for parse in (json.loads, ast.literal_eval):
+            try:
+                payload = parse(observation)
+                break
+            except (ValueError, SyntaxError, TypeError, RecursionError):
+                pass
+    if not isinstance(payload, dict):
+        return False
+    content = payload.get("content")
+    offset, end = payload.get("offset"), payload.get("next_offset")
+    return (
+        isinstance(payload.get("paper_id"), str) and bool(payload["paper_id"].strip())
+        and payload.get("source") == "translated" and payload.get("status") == "READY"
+        and isinstance(payload.get("source_sha256"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", payload["source_sha256"]) is not None
+        and isinstance(content, str) and bool(content.strip())
+        and type(offset) is int and offset >= 0 and type(end) is int
+        and end == offset + len(content) and type(payload.get("has_more")) is bool
+    )
 
 
 def is_strict_success(metrics: TaskMetrics) -> bool:
@@ -641,6 +668,11 @@ def _count_tool_failures(history: List[Dict]) -> int:
         if action in NON_TOOL_ACTIONS:
             continue
         obs = step.get("observation", "")
-        if any(marker in obs for marker in error_markers):
+        parsed = _parse_tool_action(action)
+        invalid_translation = (
+            parsed and parsed.get("name") == "get_translated_paper_content"
+            and not valid_translated_content(obs)
+        )
+        if any(marker in obs for marker in error_markers) or invalid_translation:
             failures += 1
     return failures

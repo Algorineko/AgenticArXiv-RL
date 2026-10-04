@@ -7,6 +7,7 @@ cached PDF so the same file always yields the same observation.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
@@ -333,6 +334,38 @@ def get_translated_paper_content(
     result = _translated_chunk(_translated_document(session_id, ref), offset, max_chars)
     store.set_last_active_paper_id(session_id, result["paper_id"])
     return result
+
+
+def format_translated_observation(
+    result: Dict[str, Any], max_chars: Optional[int] = None,
+    tokenizer: Any = None, max_tokens: Optional[int] = None,
+    prefix: str = "", suffix: str = "",
+) -> str:
+    """Fit the content before serialization, preserving the visible continuation.
+
+    Token budgets include the surrounding Observation/Thought delimiters.
+    If even one content character cannot fit, fail rather than transmit a
+    broken payload or advance the cursor over text the policy never received.
+    """
+    content = result["content"]
+    low, high, best = 1, len(content), None
+    while low <= high:
+        length = (low + high) // 2
+        visible = {**result, "content": content[:length],
+                   "next_offset": result["offset"] + length,
+                   "has_more": result["has_more"] or length < len(content)}
+        text = json.dumps(visible, ensure_ascii=False, separators=(",", ":"))
+        wrapped = prefix + text + suffix
+        fits = max_chars is None or len(wrapped) <= max_chars
+        if fits and max_tokens is not None:
+            fits = len(tokenizer(wrapped, add_special_tokens=False)["input_ids"]) <= max_tokens
+        if fits:
+            best, low = text, length + 1
+        else:
+            high = length - 1
+    if best is None:
+        raise ValueError("Observation budget is too small for translated content.")
+    return best
 
 
 PAPER_CONTENT_TOOL_SCHEMA = {

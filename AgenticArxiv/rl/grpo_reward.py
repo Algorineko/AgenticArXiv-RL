@@ -54,6 +54,7 @@ SUPPORTED_TOOL_NAMES = {
     "translate_arxiv_pdf",
     "get_paper_cache_status",
     "get_paper_content",
+    "get_translated_paper_content",
     "summarize_paper",
     "extract_paper_figures",
     "analyze_figure",
@@ -270,7 +271,11 @@ def synthesize_trajectory(
             if isinstance(result, list):
                 observation = f"成功获取 {len(result)} 篇论文"
             else:
-                observation = str(result)[:500]
+                if action["name"] == "get_translated_paper_content":
+                    from tools.paper_content_tool import format_translated_observation
+                    observation = format_translated_observation(result, max_chars=500)
+                else:
+                    observation = str(result)[:500]
         except Exception as exc:                      # noqa: BLE001
             observation = f"{TOOL_ERROR_PREFIX}{exc}"
 
@@ -599,7 +604,15 @@ def make_multiturn_rollout_func(
                     result = _dispatch_environment_tool(
                         environments[index], action["name"], args
                     )
-                    observation = str(result)[:1000]
+                    if action["name"] == "get_translated_paper_content":
+                        from tools.paper_content_tool import format_translated_observation
+                        observation = format_translated_observation(
+                            result, max_chars=1000, tokenizer=tokenizer,
+                            max_tokens=max(0, trainer.max_completion_length - len(completion_ids[index]) - 64),
+                            prefix="\nObservation: ", suffix="\nThought:",
+                        )
+                    else:
+                        observation = str(result)[:1000]
                 except Exception as exc:  # noqa: BLE001
                     observation = f"{TOOL_ERROR_PREFIX}{exc}"
 

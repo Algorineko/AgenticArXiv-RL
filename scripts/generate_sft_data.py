@@ -135,6 +135,7 @@ def execute_expert_tool(
     tool_name: str,
     args: Dict[str, Any],
     session_id: str,
+    replay_translation: bool = False,
 ) -> Any:
     """按真实 Agent 的副作用语义执行专家动作。
 
@@ -148,7 +149,7 @@ def execute_expert_tool(
     if "session_id" in props:
         call_args["session_id"] = session_id
 
-    if tool_name == "translate_arxiv_pdf":
+    if tool_name == "translate_arxiv_pdf" and not replay_translation:
         # session_id 是框架状态，不应出现在模型要学习的 Action 参数里。
         call_args.pop("session_id", None)
         handle = side_effects.enqueue_translate(session_id=session_id, **call_args)
@@ -192,6 +193,7 @@ def generate_deterministic_trajectories(
     tools_description: str,
     *,
     source_split: str = "train",
+    replay_translation: bool = False,
 ) -> List[Dict[str, Any]]:
     """根据 TaskSpec 标准答案和 MockArxivEnv 确定性执行构建专家轨迹。"""
     sft_data = []
@@ -217,7 +219,8 @@ def generate_deterministic_trajectories(
                 setup_args = dict(setup_step.args or {})
                 try:
                     execute_expert_tool(
-                        env, side_effects, setup_step.tool, setup_args, session_id
+                        env, side_effects, setup_step.tool, setup_args, session_id,
+                        replay_translation=replay_translation,
                     )
                 except Exception as exc:
                     raise RuntimeError(
@@ -259,10 +262,14 @@ def generate_deterministic_trajectories(
 
                 try:
                     res = execute_expert_tool(
-                        env, side_effects, tool_name, args, session_id
+                        env, side_effects, tool_name, args, session_id,
+                        replay_translation=replay_translation,
                     )
                     if isinstance(res, list):
                         obs = f"成功获取 {len(res)} 篇论文"
+                    elif tool_name == "get_translated_paper_content":
+                        from tools.paper_content_tool import format_translated_observation
+                        obs = format_translated_observation(res, max_chars=500)
                     elif isinstance(res, dict):
                         obs = str(res)[:500]
                     else:
@@ -313,13 +320,13 @@ def generate_deterministic_trajectories(
     return sft_data
 
 
-def select_task_specs(task_set: str, split: Optional[str]) -> tuple[List[Any], str]:
+def select_task_specs(task_set: str, split: Optional[str], snapshot: Optional[Path] = None) -> tuple[List[Any], str]:
     """选择允许生成 SFT 的任务，并把防泄漏策略放在唯一入口。
 
     expanded 是正式实验任务集，必须显式使用某个版本文件的 train；裸 `train`
     会落到历史默认 v1，dev/iid/ood 则会污染评测，因此全部拒绝。
     """
-    if task_set != "expanded":
+    if task_set not in {"expanded", "translated"}:
         if split:
             raise SystemExit("--split 仅与 --task_set expanded 一起使用")
         return list(BENCHMARK_SPECS), "basic"
@@ -332,10 +339,17 @@ def select_task_specs(task_set: str, split: Optional[str]) -> tuple[List[Any], s
             "禁止使用全部 62 条、裸 train、dev、iid_test 或 ood_test"
         )
 
-    from benchmark.tasks_expanded import EXPANDED_SPECS
+    if task_set == "translated":
+        if snapshot is None:
+            raise SystemExit("Translated SFT data requires an explicit translated snapshot")
+        from benchmark.translated_tasks import get_translated_specs
+        source_specs = get_translated_specs(snapshot)
+    else:
+        from benchmark.tasks_expanded import EXPANDED_SPECS
+        source_specs = EXPANDED_SPECS
 
     wanted = set(load_split(split))
-    by_id = {spec.id: spec for spec in EXPANDED_SPECS}
+    by_id = {spec.id: spec for spec in source_specs}
     missing = wanted - set(by_id)
     if missing:
         raise SystemExit(f"切分中存在 expanded 任务集没有的 ID: {sorted(missing)}")
@@ -368,7 +382,7 @@ def generate_sft_dataset(
     tools_desc = format_tool_description(registry.list_tools())
     sft_data: List[Dict[str, Any]] = []
 
-    specs, source_split = select_task_specs(task_set, split)
+    specs, source_split = select_task_specs(task_set, split, snapshot_path)
 
     print(
         f"[TASKS] 加载任务集 ({task_set}, split={source_split}): "
@@ -378,7 +392,8 @@ def generate_sft_dataset(
     if not use_llm:
         print("[MODE] 使用确定性专家逻辑与离线环境生成标准化 SFT 演示...")
         sft_data = generate_deterministic_trajectories(
-            specs, env, tools_desc, source_split=source_split
+            specs, env, tools_desc, source_split=source_split,
+            replay_translation=task_set == "translated",
         )
     else:
         print("[MODE] 使用环境配置的 LLM 生成专家轨迹...")
@@ -438,7 +453,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", default=None, help="输出 JSONL 路径")
     parser.add_argument("--snapshot", default=None, help="离线快照文件路径")
     parser.add_argument("--use_llm", action="store_true", help="使用外部 LLM API 生成（默认使用确定性专家）")
-    parser.add_argument("--task_set", choices=["basic", "expanded"], default="basic", help="使用基础还是扩展任务集")
+    parser.add_argument("--task_set", choices=["basic", "expanded", "translated"], default="basic", help="选择任务集；translated 使用补录译文的快照")
     parser.add_argument(
         "--split",
         default=None,
