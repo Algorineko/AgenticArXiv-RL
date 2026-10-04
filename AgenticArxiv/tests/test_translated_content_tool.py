@@ -141,6 +141,22 @@ class TranslatedContentToolTest(unittest.TestCase):
             )
         self.assertEqual(replay_env.stats["miss"], 0)
 
+        # A page past the recorded translation's end is the live tool's range
+        # error, not a snapshot gap.
+        with self.assertRaisesRegex(ValueError, "between 1 and 2"):
+            replay_env.execute_tool(
+                "get_translated_content",
+                {"session_id": "other-session", "ref": 1, "page": 3},
+            )
+        self.assertEqual(replay_env.stats["miss"], 0)
+
+        # An in-range page that was simply not recorded is still a snapshot gap.
+        with self.assertRaisesRegex(KeyError, "快照缺失"):
+            replay_env.execute_tool(
+                "get_translated_content",
+                {"session_id": "other-session", "ref": 1, "page": 1},
+            )
+
     def test_multiturn_replay_returns_translated_text(self):
         paper_dict = PAPER.model_dump(mode="json")
         search_key = json.dumps(
