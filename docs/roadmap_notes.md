@@ -47,6 +47,30 @@
 
 验收口径沿用量化闸门：每轮自进化后四切分 strict pass^3 不回退、坏例库只增不减、生成数据经 manifest SHA256 冻结审计。
 
+### 实现状态：编排器（`rl/self_evolve.py`）
+
+闭环的 1~4、6 步是对 JSON 文件的纯函数，不加载模型、不联网、不 import torch；第 5 步「再训练」只是一条不透明命令。全部复用现有机制，不改奖励、工具与任务模板：
+
+| 步骤 | 实现 | 复用的现有组件 |
+|---|---|---|
+| 1 diagnose | 读取留出评测 `summary.json` 的 `details`，按模板族聚合 strict 成功率 / pass³ / 失败模式（`false_finish`、`wrong_tools`、`wrong_args`、`wrong_ref`、`parse_fail`、`tool_fail`…） | `benchmark/report.py` 的 details 口径、`benchmark/splits.py::template_key`、`is_strict_success` 同款判定 |
+| 2 mine | 把同一轮评测的 `traces.jsonl` 里的沉默失败固化为 **本轮** 坏例文件 `artifacts/self_evolve/round_N/eval_cases.open.jsonl`（`open`） | `benchmark.badcases.capture`（挑选规则与 `reproduces_when` 完全同库）；并入 `eval/eval_cases.jsonl` 与 `open→fixed` 仍是人工步，闭环从不改写主库 |
+| 3 select | 只在 **train 切分** 里挑弱族的父任务（最差族优先、族内按父任务自身 strict 率升序、确定性），且父任务必须已有参数化派生 | 参数化 seed manifest 的 `tasks` 血缘（derived → parent） |
+| 4 synthesize | 子进程调用 `scripts/generate_parametric_sft_data.py --only-parents id,id`（新增参数，未知 id 直接报错，manifest 记录 `only_parents`） | 既有派生 + 离线环境执行 + manifest |
+| 5 freeze | `artifacts/self_evolve/round_N/manifest.json`：每个输入/输出的 SHA256、git revision、选择结果；`lineage_sha256` 可审计 | 与 SFT manifest 同款哈希约定 |
+| 6 gate | 新旧四切分 strict pass³ 不回退：iid / ood 永远严格（容差 0），只有 dev（n=8，噪声大）可显式给 `--dev-tolerance`（如 0.125 = 一题）且记入 `gate_result.json`；坏例数只增不减；留出切分文件与冻结哈希逐字节一致。任一不满足则本轮拒绝、不晋升 | `report.py` 的 pass^k 定义（组合数口径，试验数 < k 的任务跳过） |
+
+```bash
+# 诊断（可单独跑）
+python -m AgenticArxiv.rl.self_evolve diagnose --eval dev=eval_results/<run>_dev8/summary.json   --eval iid_test=eval_results/<run>/summary.json --split data/splits/v3_81.json
+# 一轮：诊断 → 挖坏例 → 选父任务 → 定向派生 → 冻结 →（可选）再训练
+python -m AgenticArxiv.rl.self_evolve run --round 1 --eval dev=... --eval iid_test=... --traces traces.jsonl   --split data/splits/v3_81.json --snapshot data/mock_arxiv_snapshot.json   --parametric-manifest data/sft/sft_v2_parametric_seed.jsonl.manifest.json   --train-cmd "python -m AgenticArxiv.rl.train_sft --data artifacts/self_evolve/round_1/... --skip_data_manifest_check"
+# 闸门：新策略评测完成后
+python -m AgenticArxiv.rl.self_evolve gate --round-dir artifacts/self_evolve/round_1   --prev dev=... --prev iid_test=... --prev ood_test=... --new dev=... --new iid_test=... --new ood_test=...   --cases-before 14 --cases-after 17 --split data/splits/v3_81.json
+```
+
+刻意不做：LLM-as-judge、新奖励分量、新工具/模板、自动 `open→fixed`、训练循环改动。真实一轮（Qwen2.5-1.5B-SFT 起步 + 四切分对照）待跑，结果无论闸门通过与否都如实记录。
+
 ## 端侧多模态文档理解参照系
 
 P0（策略侧多模态化）的外部参照：SmolDocling-256M（IBM+HF，端到端文档转换，DocTags 结构化输出）、PaddleOCR 3.0（轻量工程基座）、MiniCPM5-2B（128K 上下文端侧稠密模型）、InternVL/Qwen-VL 1B-2B 档。共同结论：端侧文档 VLM 的可行规模在 0.25B–4B 之间，本项目 Qwen3-VL-4B（env 侧已验证）与 Qwen2.5-VL 2B 档是策略侧候选。

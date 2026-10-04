@@ -448,6 +448,24 @@ def validate_derived_tasks(
             raise ValueError(f"派生任务缺少参数记录: {item.spec.id}")
 
 
+def filter_derived_by_parents(
+    derived: Sequence[DerivedTask], parents: Iterable[str]
+) -> List[DerivedTask]:
+    """Keep only derivations whose parent is in ``parents`` (self-evolve targeting).
+
+    Unknown parents are an error rather than a silent no-op: a typo would
+    otherwise produce an empty but valid-looking dataset.
+    """
+    wanted = {str(p).strip() for p in parents if str(p).strip()}
+    if not wanted:
+        raise ValueError("--only-parents 需要至少一个 parent task id")
+    known = {item.parent_task_id for item in derived}
+    unknown = sorted(wanted - known)
+    if unknown:
+        raise ValueError(f"没有参数化派生的 parent: {unknown}")
+    return [item for item in derived if item.parent_task_id in wanted]
+
+
 def canonical_hash(value: Any) -> str:
     payload = json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -478,6 +496,10 @@ def main() -> None:
         "--include-t5", action="store_true",
         help="加入 T5 图表分析派生任务；需要 v3_81 训练切分",
     )
+    parser.add_argument(
+        "--only-parents", default=None, metavar="ID,ID,...",
+        help="只生成这些 train 父任务的派生数据（自进化闭环的定向补数据）；未知 id 直接报错",
+    )
     args = parser.parse_args()
 
     split_path = Path(args.split_file)
@@ -503,6 +525,10 @@ def main() -> None:
 
     derived = build_parametric_tasks(include_t5=args.include_t5)
     validate_derived_tasks(derived, split_payload)
+    only_parents = None
+    if args.only_parents:
+        only_parents = sorted({p.strip() for p in args.only_parents.split(",") if p.strip()})
+        derived = filter_derived_by_parents(derived, only_parents)
     env = MockArxivEnv(snapshot_path=snapshot_path, mode="replay")
     tools_desc = format_tool_description(registry.list_tools())
     specs = [item.spec for item in derived]
@@ -570,6 +596,8 @@ def main() -> None:
     }
     if args.include_t5:
         manifest["include_t5"] = True
+    if only_parents is not None:
+        manifest["only_parents"] = only_parents
     manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
