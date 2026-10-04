@@ -10,6 +10,7 @@ os.environ.setdefault("STORE_BACKEND", "memory")
 
 import pymupdf
 
+from benchmark.metrics import _match_arg_value
 from models.schemas import Paper, TranslateAsset
 from models.store import store, use_memory_store
 from rl.build_snapshot import _snapshot_translated_content
@@ -215,6 +216,17 @@ class TranslatedContentToolTest(unittest.TestCase):
                     },
                 )
                 self.assertEqual(breakdown.result_quality, expected)
+
+    def test_argument_match_treats_missing_page_as_first_page(self):
+        for predicted, expected, matches in (
+            (None, 1, True),
+            (1, None, True),
+            ("2", 2, True),
+            (None, 2, False),
+            (2, 1, False),
+        ):
+            with self.subTest(predicted=predicted, expected=expected):
+                self.assertEqual(_match_arg_value(predicted, expected, "page"), matches)
 
     def test_build_snapshot_records_every_translated_page(self):
         class RecordingEnv:

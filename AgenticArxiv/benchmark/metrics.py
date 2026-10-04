@@ -477,6 +477,12 @@ def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
 
 def _match_arg_value(predicted_val: Any, expected_val: Any, key: str = "") -> bool:
     """Robust equivalence check between predicted and expected tool arguments."""
+    if key == "page":
+        # page 缺省即第 1 页（与 get_translated_content 的 validate_page 同口径），
+        # 省略、显式传 null、传 1 三种写法等价；否则默认页任务无法同时认可这几种写法。
+        predicted_val = 1 if predicted_val is None else predicted_val
+        expected_val = 1 if expected_val is None else expected_val
+
     if expected_val is None:
         # None 表示缺省参数，省略不传或显式传 None 均算对
         return predicted_val is None
