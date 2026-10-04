@@ -217,6 +217,37 @@ class TranslatedContentToolTest(unittest.TestCase):
                 )
                 self.assertEqual(breakdown.result_quality, expected)
 
+    def test_failure_words_inside_translated_text_are_not_failures(self):
+        task = {
+            "id": "read_translation",
+            "expected_tools": ["get_translated_content"],
+            "expected_tool_args": [{"ref": 1, "page": 1}],
+        }
+        action = '{"name":"get_translated_content","args":{"ref":1,"page":1}}'
+        page = str({
+            "paper_id": PAPER.id,
+            "page": 1,
+            "total_pages": 9,
+            "content": "当命令失败时，代理无法解析输出；错误: 参数缺失；工具执行失败: 超时。",
+        })
+        failure = "工具执行失败: Translated PDF is not ready; call translate_arxiv_pdf first."
+        for observation, failed in ((page, False), (failure, True)):
+            with self.subTest(failed=failed):
+                breakdown, metrics = RewardCalculator().compute_reward_breakdown(task, {
+                    "history": [
+                        {"action": action, "observation": observation},
+                        {"action": "FINISH", "observation": "任务完成"},
+                    ],
+                    "iteration_count": 2,
+                })
+                self.assertEqual(metrics.parse_failures, 0)
+                self.assertEqual(metrics.tool_exec_failures, int(failed))
+                if failed:
+                    self.assertLessEqual(breakdown.total, -0.75)
+                else:
+                    self.assertEqual(breakdown.result_quality, 1.0)
+                    self.assertEqual(breakdown.total, 1.0)
+
     def test_argument_match_treats_missing_page_as_first_page(self):
         for predicted, expected, matches in (
             (None, 1, True),
