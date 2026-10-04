@@ -4,16 +4,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from benchmark.metrics import extract_metrics
-from benchmark.report import BenchmarkReport
-from benchmark.semantic_oracle import attach_expected_paper_ids
-from benchmark.splits import load_split
-from benchmark.tasks import get_all_tasks
-from benchmark.tasks_expanded import get_expanded_tasks
-from tools.bootstrap import require_all_tools
+# Same shim as run_benchmark.py / run_baselines.py: make `python -m
+# AgenticArxiv.benchmark.rescore_traces` work from the repository root (the
+# README's default working directory) as well as `python -m
+# benchmark.rescore_traces` from inside AgenticArxiv/.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from benchmark.metrics import extract_metrics  # noqa: E402
+from benchmark.report import BenchmarkReport  # noqa: E402
+from benchmark.semantic_oracle import attach_expected_paper_ids  # noqa: E402
+from benchmark.splits import load_split  # noqa: E402
+from benchmark.tasks import get_all_tasks  # noqa: E402
+from benchmark.tasks_expanded import get_expanded_tasks  # noqa: E402
+from tools.bootstrap import require_all_tools  # noqa: E402
 
 
 def _key(row: Dict[str, Any]) -> Tuple[str, str, int]:
