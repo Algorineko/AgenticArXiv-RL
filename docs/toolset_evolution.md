@@ -16,7 +16,7 @@
 | `summarize_paper` | 按 style/budget 生成摘要 | 需要先下载 PDF；默认走确定性抽取式后端，`local_model` 后端为可选 |
 | `extract_paper_figures` | 抽出内嵌图表图片 + caption，返回文件路径 | 需要先下载 PDF；纯向量图（无内嵌位图）会返回 `count: 0` |
 | `analyze_figure`（T5，多模态） | env 侧调本地 VLM 读图回答 | VLM 只在 env 侧；策略仍是纯文本小模型 |
-| `get_translated_content` | 按页读取译文（翻译后的中文 PDF） | 需要先完成翻译；按页而非按章节寻址（中文标题随翻译服务漂移），确定性抽取，不评估翻译质量；离线回放需用 `build_snapshot --translate-max-ref N` 录制译文页 |
+| `get_translated_content` | 按页读取译文（翻译后的中文 PDF） | 需要先完成翻译；按页而非按章节寻址（中文标题随翻译服务漂移），确定性抽取，不评估翻译质量；`build_snapshot` 默认录制每池第 1 篇的译文页（`--translate-max-ref N` 可调，0 关闭） |
 
 三个结论：
 
@@ -86,6 +86,6 @@ T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读
 - **切分**：新增 `data/splits/v7_86.json`（v3 的 81 条分配原样保留，4 条进 train、`trread_ro5_page2` 进 iid_test；版本号 4–6 已被 GRPO 训练切分占用）
 - **区分度**：`run_baselines.py` 逐类目闸门通过；读译文类目最弱的 wrong_args 均值 0.455，对参考 1.0 的分差约 0.545（门槛 0.3）
 - **坏例**：新增 3 条 `hack/translated-*`（读原文冒充 −0.25、读错页 0.575、重复翻译 −0.25），用例库现共 17 条
-- **快照**：译文页默认不录，需 `python -m rl.build_snapshot --translate-max-ref 1`（要 pdf2zh 与在线翻译服务）
+- **快照**：`build_snapshot` 默认录制每池第 1 篇的译文页（`--translate-max-ref 1`，要 pdf2zh 与在线翻译服务），默认快照即可回放全部读译文任务；`--translate-max-ref 0` 关闭或有论文录制失败时构建会告警
 - **实测**（经代理真实重建快照，每池前 5 篇正文 + 每池第 1 篇译文，9/9 翻译成功，1331 条记录）：5 条新任务的金标准轨迹全部离线回放成功，译文页未命中任何失败标记；读译文 train 任务的专家轨迹（`generate_sft_data.py` 生成）严格成功
 - **如实记录**：同一份新快照下，两条原有任务 `read_cv5_method`、`analyze_ro5_ref2_axes` 的金标准轨迹无法回放——快照按滚动时间窗检索，重建后对应论文变成了没有 method 章节 / 不足 2 张图的新论文。读译文任务只依赖「每池第 1 篇有 2 页以上文字」，不受这类内容漂移影响
