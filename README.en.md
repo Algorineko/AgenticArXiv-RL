@@ -276,7 +276,7 @@ MIT License
 
 ### P3 — Bounded RSI (restricted self-evolution)
 
-- [ ] **Self-evolving data loop**: held-out evaluation exposes weaknesses → the bad-case library grows automatically → parametric derivation of targeted data → retrain → freeze a new held-out set (reuses the existing evaluation/data/training pipelines; all prerequisites are in place). Acceptance: the four-split pass³ must not regress across rounds, and the bad-case library only grows (the four-step loop of [arXiv:2609.11873](https://arxiv.org/abs/2609.11873))
+- [ ] **Self-evolving data loop**: held-out evaluation exposes weaknesses → the bad-case library grows automatically → parametric derivation of targeted data → retrain → freeze a new held-out set (reuses the existing evaluation/data/training pipelines; all prerequisites are in place). Acceptance: the four-split pass³ must not regress across rounds, and the bad-case library only grows (the four-step loop of [arXiv:2609.11873](https://arxiv.org/abs/2609.11873)). **Orchestrator landed** (`AgenticArxiv/rl/self_evolve.py`: diagnose → mine → select → synthesize → freeze → gate, pure JSON, no model needed; `generate_parametric_sft_data.py --only-parents` for targeted data); a real training round with the four-split comparison is still pending (see [docs/roadmap_notes.md](docs/roadmap_notes.md))
 
 ### ⛔ Environment Blockers
 
