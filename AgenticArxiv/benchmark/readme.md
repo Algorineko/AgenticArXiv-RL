@@ -40,7 +40,7 @@ python -m benchmark.run_benchmark --output /path/to/output
 # 指定 session 前缀（用于区分不同测试轮次，默认 bench_r<timestamp>）
 python -m benchmark.run_benchmark --prefix bench_r1
 
-# 当前 81 条任务的开发集（从 AgenticArxiv/ 目录运行）
+# 当前 86 条任务的开发集（从 AgenticArxiv/ 目录运行）
 python -m benchmark.run_benchmark \
   --task-set expanded \
   --offline \
@@ -82,7 +82,7 @@ Base/SFT/GRPO 阶段默认只跑 `--agents regex`；三种 Agent 的对比实验
 
 ### 训练/开发/留出集切分
 
-扩展任务集现为 81 条、13 个类别；下表为历史 62 条切分 `../data/splits/v2_62.json` 的构成：
+扩展任务集现为 86 条、14 个类别（最新切分为 `../data/splits/v7_86.json`）；下表为历史 62 条切分 `../data/splits/v2_62.json` 的构成：
 
 | 名字 | 条数 | 是什么 |
 |---|---:|---|
@@ -116,7 +116,7 @@ iid/ood 的任务级结果做训练选择。沿用旧模型或旧评测环境的
 ```
 
 只写 `--split iid_test` 会继续读取历史默认文件 `v1.json`，这是为了让旧实验可复现，不能用于
-当前 81 条任务的正式对比。阶段间对比必须引用同一份显式切分文件。
+当前 86 条任务的正式对比。阶段间对比必须引用同一份显式切分文件。
 
 历史 `v1.json` 固定保存原来的 59 条任务（train=42、iid=13、ood=4，以及由旧 rates 计算的
 rl_train=13）。新增关键词检索任务后不回写 v1，否则同一个版本名会在不同时间代表不同实验。
@@ -250,7 +250,7 @@ benchmark/
   task_spec.py        # TaskSpec/Step：expected_tools 与 expected_tool_args 同源派生
   semantic_oracle.py  # 冻结快照中执行标准 steps，派生逐步 expected_paper_ids
   tasks.py           # 8 条冒烟任务 (BENCHMARK_TASKS)
-  tasks_expanded.py   # 81 条完整基准集，13 个类别 (--task-set expanded)
+  tasks_expanded.py   # 86 条完整基准集，14 个类别 (--task-set expanded)
   runner.py           # BenchmarkRunner：驱动 Agent 执行测试集
   metrics.py          # TaskMetrics：从 run() 结果提取指标
   baselines.py        # 确定性退化策略与评分敏感性汇总

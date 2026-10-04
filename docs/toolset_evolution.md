@@ -44,6 +44,7 @@
 - `long_chain` 的 `chain_ai5_read_then_summary`：读 → 总结串成 4 步链（T2+T3）
 - `figure_extraction`：检索 → 下载 → 抽图（T4），4 条
 - `analyze_figure`（T5）：检索 → 下载 → 抽图 → 图表分析，仅多模态环境启用
+- `translation_reading`（读译文）：setup 已完成检索 → 下载 → 翻译，steps 只有按页读译文，5 条
 
 ## 训练与评测侧的连带设计
 
@@ -76,3 +77,15 @@ T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读
 - **快照录制**：`FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录>` 运行 `python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot ... --force --paper-id <arXiv id>`（`--paper-id` 可限定范围、`--force` 覆盖既有抽取式条目）；默认 `extractive` 后端不变
 - **策略侧 SFT-T5**：[SFT-T5 权重](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5)（`data/sft/sft_v3_t5_parametric_seed.jsonl`，86 派生任务 / 249 行 + 语言扩增）。评测（seed 45 / repeat 3 / 离线）：`analyze_cv5_ref3_trend` strict 3/3；两个 `describe` 任务与一个 `axes` 任务工具调用步骤正确但 `question` 枚举绑定错误（误传 `tldr`/`trend`）——枚举在未见「父任务问法 × 图」组合上的泛化缺口如实记录
 - **附带修复**：SFT 阶段验证此前用伪聊天格式裸文本（`System:/User:/Assistant:`）算 parse_rate，对 chat 模板训练的模型系统性压低（已发布 SFT 与新模型同测均 1/16）；改为按 chat 模板渲染 ReAct prompt 后，同口径为 0.750 / 0.625
+
+## 读译文落地记录（2026-10）
+
+`get_translated_content(ref, page=1)` 按页确定性读取 pdf2zh 译文（不翻译、不调 LLM；中文标题随翻译服务漂移，所以按页而非按章节寻址），按落地清单补齐：
+
+- **任务模板**：新增 `translation_reading`（5 条），扩展集 81 → 86 条（十四类模板）。翻译放在 setup（翻译是异步任务，prompt 要求调用后直接 FINISH），steps 只有读译文；只引用每池第 1 篇。`page` 缺省即第 1 页（`metrics._match_arg_value` 归一化），默认页任务省略或显式传 1 都算对
+- **切分**：新增 `data/splits/v7_86.json`（v3 的 81 条分配原样保留，4 条进 train、`trread_ro5_page2` 进 iid_test；版本号 4–6 已被 GRPO 训练切分占用）
+- **区分度**：`run_baselines.py` 逐类目闸门通过；读译文类目最弱的 wrong_args 均值 0.455，对参考 1.0 的分差约 0.545（门槛 0.3）
+- **坏例**：新增 3 条 `hack/translated-*`（读原文冒充 −0.25、读错页 0.575、重复翻译 −0.25），用例库现共 17 条
+- **快照**：译文页默认不录，需 `python -m rl.build_snapshot --translate-max-ref 1`（要 pdf2zh 与在线翻译服务）
+- **实测**（经代理真实重建快照，每池前 5 篇正文 + 每池第 1 篇译文，9/9 翻译成功，1331 条记录）：5 条新任务的金标准轨迹全部离线回放成功，译文页未命中任何失败标记；读译文 train 任务的专家轨迹（`generate_sft_data.py` 生成）严格成功
+- **如实记录**：同一份新快照下，两条原有任务 `read_cv5_method`、`analyze_ro5_ref2_axes` 的金标准轨迹无法回放——快照按滚动时间窗检索，重建后对应论文变成了没有 method 章节 / 不足 2 张图的新论文。读译文任务只依赖「每池第 1 篇有 2 页以上文字」，不受这类内容漂移影响
