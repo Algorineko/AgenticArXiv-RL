@@ -114,7 +114,7 @@ Existing trajectory files load unchanged because the field has a default.
 
 ### 与其他工具的边界
 
-- `get_paper_content` 和 `summarize_paper` 保留原有字段检查。
+- `get_paper_content`、`summarize_paper` 和 `get_translated_content` 使用同一套读类字段检查（`paper_id` 加正文字段）。
 - 搜索、下载、缓存状态、翻译和图表抽取沿用各自的观察结果规则。
 - 图表分析的 `figure_no`、`question` 等参数仍由参数分量检查。
 - 格式不完整的 observation 保守记为无效图表分析，不抛出解析异常。

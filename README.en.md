@@ -58,11 +58,11 @@ Batch rollouts: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/tra
 | Dimension | Definition |
 |------|------|
 | **State** | Task description + conversation history + tool results |
-| **Action** | 9 tools (see below) + FINISH |
+| **Action** | 10 tools (see below) + FINISH |
 | **Reward** | Five-component multi-granular verifiable reward (format / tool / argument / process / outcome) |
 | **Transition** | `execute_tool(action) → observation` (`MockArxivEnv` replays offline snapshots — deterministic and reproducible) |
 
-### Action Space (9 Tools)
+### Action Space (10 Tools)
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — browse by subfield + time window
 2. `search_arxiv_papers(query, max_results, days=None)` — keyword/title/author search
@@ -73,6 +73,7 @@ Batch rollouts: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/tra
 7. `summarize_paper(ref, style, max_words)` — env-side summary (tldr / structured / bullet)
 8. `extract_paper_figures(ref)` — extract figure files and captions
 9. `analyze_figure(ref, figure_no, question=None)` — figure analysis: the env calls a local VLM to read the figure (multimodal environment enabled)
+10. `get_translated_content(ref, session_id, page=1)` — read the translation one page at a time (the translated Chinese PDF, deterministic extraction; page 1 usually holds the title and abstract)
 
 > The full "search → download → read → summarize → extract figures → analyze figures" interpretation loop is now wired end to end: figure analysis is performed env-side by the project's post-trained [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA), which also records the snapshots, and on the policy side the [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) checkpoint has learned that four-step chain.
 > **Admission rule**: a bigger action space is not automatically a better one — a new tool is admitted only if it "unlocks a new class of tasks", not merely because it "might be useful". See [Toolset Evolution Design](docs/toolset_evolution.md) for the full design decision chain.
@@ -256,7 +257,7 @@ MIT License
 
 - [ ] **Multimodality on the policy side**: move the VLM from the env side into the policy (observations carry figures), reusing the TRL vision-language path already validated in `train_vlm_figure_qa.py`; candidate bases Qwen3-VL-4B / Qwen2.5-VL-2B (on-device tier)
 - [ ] **End-to-end reading chain**: retrieval → download → translation → summarization → figure analysis closed-loop within a single model, optimized for on-device inference (quantization + 2-4B scale)
-- [ ] **Translated text into the context**: `translate_arxiv_pdf` currently only produces files and the translated text never enters the model's context — add a verifiable "read the translation" tool
+- [x] **Translated text into the context**: added `get_translated_content`, which reads the pdf2zh translation page by page, deterministically; it replays from offline snapshots (recorded with `build_snapshot --translate-max-ref N`) and is graded by the reading-tool result-quality rule
 
 ### P1 — Next-Generation Agentic RL Algorithms
 

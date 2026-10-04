@@ -58,11 +58,11 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 | Dimensión | Definición |
 |------|------|
 | **State** | Descripción de la tarea + historial de diálogo + resultados de las herramientas |
-| **Action** | 9 herramientas (véase abajo) + FINISH |
+| **Action** | 10 herramientas (véase abajo) + FINISH |
 | **Reward** | Recompensa verificable multigranular de cinco componentes (format / tool / argument / process / outcome) |
 | **Transition** | `execute_tool(action) → observation` (replay offline de snapshots con `MockArxivEnv`, determinista y reproducible) |
 
-### Espacio de Acciones (9 herramientas)
+### Espacio de Acciones (10 herramientas)
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — Navegación por subárea + ventana temporal
 2. `search_arxiv_papers(query, max_results, days=None)` — Búsqueda por palabra clave/título/autor
@@ -73,6 +73,7 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 7. `summarize_paper(ref, style, max_words)` — Resumen del lado del entorno (tldr / structured / bullet)
 8. `extract_paper_figures(ref)` — Extracción de los archivos de figuras y sus captions
 9. `analyze_figure(ref, figure_no, question=None)` — Análisis de figuras: el entorno llama a un VLM local para leer la imagen (requiere el entorno multimodal)
+10. `get_translated_content(ref, session_id, page=1)` — Lectura de la traducción página a página (el PDF traducido al chino, extracción determinista; la página 1 suele contener el título y el abstract)
 
 > El bucle de interpretación «búsqueda → descarga → lectura → resumen → extracción de figuras → análisis de figuras» está completamente cerrado: el análisis de figuras lo realiza del lado del entorno el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto, que graba las respuestas en el snapshot, y del lado de la política existen los pesos [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5), que aprendieron esa cadena de cuatro pasos.
 > **Criterio de admisión**: un espacio de acciones más grande no es automáticamente mejor — el estándar para añadir una herramienta es «habilita una nueva categoría de tareas», no «puede que sea útil». La cadena de decisiones de diseño está en [Diseño de Evolución del Conjunto de Herramientas](docs/toolset_evolution.md).
@@ -256,7 +257,7 @@ Licencia MIT
 
 - [ ] **Multimodalidad del lado de la política**: pasar el VLM del entorno a la política (la observation transporta las figuras), reutilizando la ruta visual-lingüística de TRL ya validada en `train_vlm_figure_qa.py`; bases candidatas Qwen3-VL-4B / Qwen2.5-VL-2B (gama on-device)
 - [ ] **Cadena de lectura de extremo a extremo**: búsqueda → descarga → traducción → resumen → análisis de figuras, cerrada dentro de un único modelo y optimizada para la inferencia en el dispositivo (cuantización + escala 2-4B)
-- [ ] **El texto traducido, en el contexto**: `translate_arxiv_pdf` hoy solo produce un archivo y el texto traducido no entra en el contexto del modelo — falta una herramienta verificable de «lectura de la traducción»
+- [x] **El texto traducido, en el contexto**: nueva herramienta `get_translated_content`, que lee la traducción de pdf2zh página a página de forma determinista; se reproduce desde snapshots offline (grabados con `build_snapshot --translate-max-ref N`) y se evalúa con la regla de calidad de resultado de las herramientas de lectura
 
 ### P1 — Algoritmos de RL Agentic de Nueva Generación
 
