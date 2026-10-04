@@ -1,4 +1,4 @@
-# Jev guided routing：
+# Jev guided routing
 
 AgenticArXiv 原本让 Qwen2.5-1.5B-GRPO 在一次生成里同时决定两件事：调用哪个工具，
 以及参数怎么写。对小模型来说，这两个问题会互相干扰。它可能理解了用户想找论文，
