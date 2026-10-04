@@ -296,3 +296,20 @@ def test_opt_in_tasks_generate_grounded_expert_data(translated_store, tmp_path):
     assert rows
     assert "TRANSLATED_1" in json.dumps(rows, ensure_ascii=False)
     assert all(row["source_split"] == "translated-test" for row in rows)
+
+
+def test_omitted_default_offset_is_a_valid_benchmark_action(translated_store):
+    import json
+    from benchmark.metrics import extract_metrics, is_strict_success
+
+    payload = reader.get_translated_paper_content("s", 1, max_chars=128)
+    task = {"id": "default-offset", "expected_tools": ["get_translated_paper_content"],
+            "expected_tool_args": [{"ref": 1, "offset": 0, "max_chars": 128}],
+            "expected_paper_ids": [payload["paper_id"]]}
+    result = {"history": [
+        {"thought": "read", "action": json.dumps({"name": "get_translated_paper_content",
+                                                   "args": {"ref": 1, "max_chars": 128}}),
+         "observation": json.dumps(payload, ensure_ascii=False)},
+        {"thought": "done", "action": "FINISH", "observation": "任务完成"},
+    ]}
+    assert is_strict_success(extract_metrics(task, result, "regex", 0))

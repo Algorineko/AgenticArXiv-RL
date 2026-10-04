@@ -627,6 +627,7 @@ def argument_match_score(
             scores.append(1.0 if not predicted else 0.0)
             continue
         matched = 0
+        defaults = {"offset": 0, "max_chars": 1000} if name == "get_translated_paper_content" else {}
         for key, value in expected.items():
             semantic_paper = (
                 key == "ref"
@@ -640,7 +641,7 @@ def argument_match_score(
                     resolved, str(expected_paper_ids[index])
                 ))
             else:
-                matched += int(_match_arg_value(predicted.get(key), value, key))
+                matched += int(_match_arg_value(predicted.get(key, defaults.get(key)), value, key))
         scores.append(matched / len(keys))
     return sum(scores) / len(scores) if scores else 1.0
 
