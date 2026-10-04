@@ -8,7 +8,11 @@ import math
 from collections import defaultdict
 from typing import List, Dict, Any, Optional
 
-from benchmark.metrics import TaskMetrics, is_strict_success
+from benchmark.metrics import (
+    JEV_INPUT_PRICE_PER_MILLION_USD,
+    TaskMetrics,
+    is_strict_success,
+)
 
 
 class BenchmarkReport:
@@ -36,6 +40,7 @@ class BenchmarkReport:
                 "avg_total_ms": _avg(items, "total_time_ms"),
                 "avg_llm_ms": _avg(items, "total_llm_ms"),
                 "avg_tool_ms": _avg(items, "total_tool_ms"),
+                "avg_router_ms": _avg(items, "total_router_ms"),
                 "avg_overhead_ms": _avg(items, "framework_overhead_ms"),
                 "avg_iterations": _avg(items, "iteration_count"),
                 "avg_tokens": _avg(items, "total_tokens"),
@@ -59,6 +64,7 @@ class BenchmarkReport:
                 ),
                 "avg_parse_failures": _avg(items, "parse_failures"),
                 "avg_tool_failures": _avg(items, "tool_exec_failures"),
+                **_router_summary(items),
             }
         return summary
 
@@ -187,9 +193,25 @@ class BenchmarkReport:
                 "total_ms": m.total_time_ms,
                 "llm_ms": m.total_llm_ms,
                 "tool_ms": m.total_tool_ms,
+                "router_ms": m.total_router_ms,
                 "overhead_ms": m.framework_overhead_ms,
                 "iterations": m.iteration_count,
                 "tokens": m.total_tokens,
+                "router_mode": m.router_mode,
+                "router_decisions": m.router_decision_count,
+                "router_accepted": m.router_accepted_count,
+                "router_used": m.router_used_count,
+                "router_fallbacks": m.router_fallback_count,
+                "router_first_selected": m.router_first_selected_tool,
+                "router_first_accurate": m.router_first_accurate,
+                "router_first_applicable": m.router_first_applicable,
+                "router_mean_confidence": m.router_mean_confidence,
+                "router_input_tokens": m.router_input_tokens,
+                "router_output_tokens": m.router_output_tokens,
+                "router_estimated_cost_usd": m.router_estimated_cost_usd,
+                "router_fallback_reasons": json.dumps(
+                    m.router_fallback_reasons, ensure_ascii=False, sort_keys=True
+                ),
                 "completed": m.task_completed,
                 "termination": m.termination_type,
                 "tool_accurate": m.tool_call_accurate,
@@ -235,6 +257,7 @@ class BenchmarkReport:
             ("总耗时(ms)", "avg_total_ms"),
             ("LLM 时间(ms)", "avg_llm_ms"),
             ("工具时间(ms)", "avg_tool_ms"),
+            ("路由时间(ms)", "avg_router_ms"),
             ("框架开销(ms)", "avg_overhead_ms"),
             ("迭代次数", "avg_iterations"),
             ("Token 用量", "avg_tokens"),
@@ -244,6 +267,50 @@ class BenchmarkReport:
             lines.append(f"| {label} | " + " | ".join(vals) + " |")
 
         lines.append("")
+
+        if any(summary[a].get("router_decisions", 0) for a in agents):
+            lines.append("### 外部工具路由")
+            lines.append("")
+            lines.append(header)
+            lines.append(sep)
+            router_rows = [
+                ("路由请求数", "router_decisions", "count"),
+                ("接受率", "router_acceptance_rate", "rate"),
+                ("实际采用率", "router_use_rate", "rate"),
+                ("回退率", "router_fallback_rate", "rate"),
+                ("首步路由准确率", "router_first_accuracy", "rate"),
+                ("平均 confidence", "router_mean_confidence", "number"),
+                ("平均每次路由耗时(ms)", "router_ms_per_decision", "number"),
+                ("路由输入 token", "router_input_tokens", "count"),
+                ("路由输出 token", "router_output_tokens", "count"),
+                ("估算路由费用(USD)", "router_estimated_cost_usd", "usd"),
+                ("回退原因", "router_fallback_reasons", "text"),
+            ]
+            for label, key, kind in router_rows:
+                values = []
+                for agent in agents:
+                    value = summary[agent].get(key)
+                    if value is None:
+                        values.append("n/a")
+                    elif kind == "rate":
+                        values.append(f"{value:.1%}")
+                    elif kind == "usd":
+                        values.append(f"${value:.6f}")
+                    elif kind == "text":
+                        values.append(
+                            ", ".join(f"{k}={v}" for k, v in value.items())
+                            if value else "none"
+                        )
+                    else:
+                        values.append(_fmt(value))
+                lines.append(f"| {label} | " + " | ".join(values) + " |")
+            lines.append("")
+            lines.append(
+                "> 路由费用按固定实验单价估算："
+                f"${JEV_INPUT_PRICE_PER_MILLION_USD}/百万输入 token；"
+                "原始 token 数保留在 JSON/CSV 中，可按实际账单重算。"
+            )
+            lines.append("")
 
         # 可靠性对比表
         rel = self.reliability_by_agent()
@@ -384,6 +451,10 @@ class BenchmarkReport:
             "model": self.model,
             "sample_count": len(self.metrics),
             "error_count": len(self.errors),
+            "routing_cost_assumption": {
+                "input_usd_per_million": JEV_INPUT_PRICE_PER_MILLION_USD,
+                "note": "Pinned experiment estimate; reprice from raw router tokens.",
+            },
             "summary_by_agent": self.summary_by_agent(),
             "summary_by_task": self.summary_by_task(),
             "details": self.detail_table(),
@@ -475,6 +546,49 @@ def _median(values: List[float]) -> Optional[float]:
     if len(ordered) % 2:
         return float(ordered[mid])
     return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _router_summary(items: List[TaskMetrics]) -> Dict[str, Any]:
+    """Aggregate router observability without hiding fallbacks in averages."""
+    decisions = sum(m.router_decision_count for m in items)
+    accepted = sum(m.router_accepted_count for m in items)
+    used = sum(m.router_used_count for m in items)
+    first_rows = [m for m in items if m.router_first_applicable]
+    confidence_count = sum(m.router_confidence_count for m in items)
+    fallback_reasons: Dict[str, int] = defaultdict(int)
+    for metric in items:
+        for reason, count in metric.router_fallback_reasons.items():
+            fallback_reasons[str(reason)] += int(count)
+    return {
+        "router_modes": sorted({m.router_mode for m in items}),
+        "router_decisions": decisions,
+        "router_accepted": accepted,
+        "router_used": used,
+        "router_fallbacks": decisions - used,
+        "router_acceptance_rate": accepted / decisions if decisions else None,
+        "router_use_rate": used / decisions if decisions else None,
+        "router_fallback_rate": (decisions - used) / decisions if decisions else None,
+        "router_first_accuracy": (
+            sum(m.router_first_accurate for m in first_rows) / len(first_rows)
+            if first_rows else None
+        ),
+        "router_mean_confidence": (
+            sum(
+                m.router_mean_confidence * m.router_confidence_count
+                for m in items
+            ) / confidence_count
+            if confidence_count else None
+        ),
+        "router_ms_per_decision": (
+            sum(m.total_router_ms for m in items) / decisions if decisions else None
+        ),
+        "router_input_tokens": sum(m.router_input_tokens for m in items),
+        "router_output_tokens": sum(m.router_output_tokens for m in items),
+        "router_estimated_cost_usd": sum(
+            m.router_estimated_cost_usd for m in items
+        ),
+        "router_fallback_reasons": dict(sorted(fallback_reasons.items())),
+    }
 
 
 def _avg(items: List[TaskMetrics], attr: str) -> float:

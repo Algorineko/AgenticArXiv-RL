@@ -1,0 +1,162 @@
+{
+  "experiment": "jev-project-interface-smoke-v1",
+  "scope": "Deterministic end-to-end interface proof. Provider responses are contract replays; live provider quality is reported separately.",
+  "snapshot": "AgenticArxiv/tests/fixtures/jev_integration_snapshot.json",
+  "task_id": "search_AI_1d_3",
+  "checks": {
+    "policy_strict_success": true,
+    "jev_strict_success": true,
+    "same_exact_tool_sequence": true,
+    "policy_sees_all_tools": true,
+    "jev_restricts_qwen_to_selected_schema": true,
+    "jev_reconsiders_after_observation": true,
+    "jev_decisions_were_used": true,
+    "policy_has_no_external_decisions": true
+  },
+  "policy": {
+    "qwen_calls": 2,
+    "tool_sequence": [
+      "get_recently_submitted_cs_papers"
+    ],
+    "strict_success": true,
+    "routing": {
+      "mode": "policy",
+      "decisions": []
+    }
+  },
+  "jev": {
+    "qwen_calls": 1,
+    "tool_sequence": [
+      "get_recently_submitted_cs_papers"
+    ],
+    "strict_success": true,
+    "routing": {
+      "mode": "jev",
+      "decisions": [
+        {
+          "selected_tool": "get_recently_submitted_cs_papers",
+          "confidence": 0.95,
+          "accepted": true,
+          "source": "jev",
+          "reason": null,
+          "latency_ms": 0.02,
+          "probabilities": {
+            "get_recently_submitted_cs_papers": 0.95
+          },
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2
+          },
+          "iteration": 0,
+          "used": true
+        },
+        {
+          "selected_tool": "FINISH",
+          "confidence": 0.98,
+          "accepted": true,
+          "source": "jev",
+          "reason": null,
+          "latency_ms": 0.02,
+          "probabilities": {
+            "FINISH": 0.98
+          },
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2
+          },
+          "iteration": 1,
+          "used": true
+        }
+      ]
+    }
+  },
+  "benchmark_summary": {
+    "policy": {
+      "count": 1,
+      "avg_total_ms": 301.0,
+      "avg_llm_ms": 0.0,
+      "avg_tool_ms": 0.0,
+      "avg_router_ms": 0.0,
+      "avg_overhead_ms": 301.0,
+      "avg_iterations": 2.0,
+      "avg_tokens": 30.0,
+      "completion_rate": 1.0,
+      "strict_success_rate": 1.0,
+      "tool_accuracy": 1.0,
+      "arg_accuracy": 1.0,
+      "ref_accuracy": null,
+      "terminal_semantics_accuracy": null,
+      "false_finish_rate": 0.0,
+      "false_finish_of_completed": 0.0,
+      "avg_parse_failures": 0.0,
+      "avg_tool_failures": 0.0,
+      "router_modes": [
+        "policy"
+      ],
+      "router_decisions": 0,
+      "router_accepted": 0,
+      "router_used": 0,
+      "router_fallbacks": 0,
+      "router_acceptance_rate": null,
+      "router_use_rate": null,
+      "router_fallback_rate": null,
+      "router_first_accuracy": null,
+      "router_mean_confidence": null,
+      "router_ms_per_decision": null,
+      "router_input_tokens": 0,
+      "router_output_tokens": 0,
+      "router_estimated_cost_usd": 0.0,
+      "router_fallback_reasons": {}
+    },
+    "jev": {
+      "count": 1,
+      "avg_total_ms": 1.0,
+      "avg_llm_ms": 0.0,
+      "avg_tool_ms": 0.0,
+      "avg_router_ms": 0.0,
+      "avg_overhead_ms": 1.0,
+      "avg_iterations": 2.0,
+      "avg_tokens": 15.0,
+      "completion_rate": 1.0,
+      "strict_success_rate": 1.0,
+      "tool_accuracy": 1.0,
+      "arg_accuracy": 1.0,
+      "ref_accuracy": null,
+      "terminal_semantics_accuracy": null,
+      "false_finish_rate": 0.0,
+      "false_finish_of_completed": 0.0,
+      "avg_parse_failures": 0.0,
+      "avg_tool_failures": 0.0,
+      "router_modes": [
+        "jev"
+      ],
+      "router_decisions": 2,
+      "router_accepted": 2,
+      "router_used": 2,
+      "router_fallbacks": 0,
+      "router_acceptance_rate": 1.0,
+      "router_use_rate": 1.0,
+      "router_fallback_rate": 0.0,
+      "router_first_accuracy": 1.0,
+      "router_mean_confidence": 0.965,
+      "router_ms_per_decision": 0.0,
+      "router_input_tokens": 40,
+      "router_output_tokens": 4,
+      "router_estimated_cost_usd": 1.6800000000000002e-06,
+      "router_fallback_reasons": {}
+    }
+  },
+  "timing_scope": "Timing in this deterministic contract replay is not performance evidence; use the live pilot for provider latency.",
+  "live_routing_pilot": {
+    "status": "completed",
+    "source": "artifacts/jev_route_expanded_all.json",
+    "model": "jev-latest",
+    "tasks": 81,
+    "correct": 70,
+    "accuracy": 0.8641975308641975,
+    "mean_confidence": 0.9016049382716049,
+    "mean_latency_ms": 1218.5970370370371,
+    "estimated_cost_usd": 0.003329382
+  },
+  "conclusion": "The policy and Jev paths are switch-compatible at the project boundary. Both complete the same task with the same exact tool sequence; the Jev path constrains Qwen to the selected schema and passes decisions through the normal environment and benchmark."
+}

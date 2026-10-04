@@ -24,6 +24,20 @@
 
 **非目标**：生产级 arXiv 应用、Web UI、实时翻译服务（原 Web 应用已从本仓库移除，见原版 [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv)）。
 
+### 可选 Jev 工具路由实验
+
+普通 ReAct 推理支持默认关闭的 Jev next-tool router：Jev 选择下一步工具，guided 模式
+用确定性解析器处理显式参数，含糊参数仍交给策略模型，环境继续执行工具。默认
+`TOOL_ROUTER=policy` 完全保留原行为；显式设为 `jev` 后，低置信度、API 故障或参数
+验证失败都会回退原策略路径。该功能不接入 GRPO 训练。配置、baseline、81 条
+routing-only pilot、限制与复现方式见
+[JEV_ROUTER.md](JEV_ROUTER.md)，可复制的开关/API 配置见
+[jev_config.example.env](jev_config.example.env)。另有无需 GPU/网络的 project-interface
+smoke，验证 policy/Jev 两条路径可经过同一 ReAct、环境和 benchmark 接口互换。真实
+GRPO Qwen 的 mixed 10-task、repeat=3 小样本中，guided Jev 将 strict success 从 40%
+提高到 60%，本地 Qwen token 减少 74.01%，总延迟增加 36.96%。该结果是小样本结构
+验证，不代表完整 81 题总体胜率。
+
 ---
 
 ## 🚀 快速开始

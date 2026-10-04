@@ -1,0 +1,87 @@
+{
+  "experiment": {
+    "name": "jev_e2e_pilot_10",
+    "date": "2026-10-04",
+    "checkpoint": "Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO",
+    "router_model": "jev-latest",
+    "task_set": "expanded",
+    "task_ids": [
+      "constraint_search_no_file",
+      "infeasible_unsupported_action",
+      "multi_cv3_dl1",
+      "opt_force_dl",
+      "ref_ctrl_id_download",
+      "search_AI_1d_3",
+      "search_kw_agentic_rl",
+      "state_dl_then_cache",
+      "ref_stress_learning_state",
+      "infeasible_zero_index"
+    ],
+    "repeat": 3,
+    "seed": 42,
+    "offline_environment": true,
+    "snapshot": "smoke_arxiv_snapshot.json",
+    "jev_min_confidence": 0.8,
+    "samples_per_arm": 30
+  },
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+    "gpu_memory_mib": 32760,
+    "driver": "595.71.05",
+    "python": "3.12.3",
+    "torch": "2.8.0+cu128",
+    "transformers": "5.16.1",
+    "trl": "0.29.1",
+    "peft": "0.21.0"
+  },
+  "policy": {
+    "valid_samples": 30,
+    "errors": 0,
+    "strict_success_rate": 0.4,
+    "tool_accuracy": 0.6,
+    "argument_accuracy": 0.5,
+    "reference_accuracy": 0.6,
+    "false_finish_rate": 0.4,
+    "mean_total_ms": 3374.9,
+    "mean_qwen_tokens": 3863.9
+  },
+  "jev": {
+    "valid_samples": 30,
+    "errors": 0,
+    "strict_success_rate": 0.4,
+    "tool_accuracy": 0.6,
+    "argument_accuracy": 0.5,
+    "reference_accuracy": 0.6,
+    "false_finish_rate": 0.4,
+    "mean_total_ms": 7236.1,
+    "mean_qwen_tokens": 2723.2,
+    "router_decisions": 57,
+    "router_accepted": 35,
+    "router_used": 26,
+    "router_fallbacks": 31,
+    "router_acceptance_rate": 0.6140350877192983,
+    "router_use_rate": 0.45614035087719296,
+    "router_fallback_rate": 0.543859649122807,
+    "router_first_accuracy": 0.7,
+    "router_mean_confidence": 0.7940350877192982,
+    "router_mean_ms_per_decision": 1919.5438596491229,
+    "router_input_tokens": 64709,
+    "router_output_tokens": 7544,
+    "router_estimated_cost_usd": 0.002717778,
+    "router_fallback_reasons": {
+      "low_confidence": 22,
+      "policy_router_disagreement": 9
+    }
+  },
+  "delta": {
+    "strict_success_percentage_points": 0.0,
+    "tool_accuracy_percentage_points": 0.0,
+    "qwen_tokens_percent": -29.52250213514843,
+    "total_latency_percent": 114.4093158315802
+  },
+  "interpretation": {
+    "supported": "The optional Jev path executes end to end, preserves aggregate task quality in this preselected pilot, and reduces local Qwen tokens.",
+    "not_supported": "This pilot does not show an end-to-end success-rate improvement over the policy baseline.",
+    "tradeoff": "The Qwen-token reduction comes with external-router latency, API tokens, cost, and availability dependence."
+  }
+}

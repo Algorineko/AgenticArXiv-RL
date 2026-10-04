@@ -1,0 +1,52 @@
+{
+  "get_recently_submitted_cs_papers": {
+    "{\"aspect\": \"AI\", \"days\": 1, \"max_results\": 3}": {
+      "args": {
+        "aspect": "AI",
+        "days": 1,
+        "max_results": 3
+      },
+      "result": [
+        {
+          "id": "2609.90001v1",
+          "title": "Deterministic Agent Routing Study",
+          "authors": ["Test Author A"],
+          "summary": "A frozen fixture for offline router integration tests.",
+          "published": "2026-09-24 12:00:00",
+          "updated": "2026-09-24 12:00:00",
+          "pdf_url": "https://arxiv.org/pdf/2609.90001v1",
+          "primary_category": "cs.AI",
+          "categories": ["cs.AI"],
+          "comment": null,
+          "links": ["https://arxiv.org/abs/2609.90001v1"]
+        },
+        {
+          "id": "2609.90002v1",
+          "title": "Typed Decisions for Tool-Using Agents",
+          "authors": ["Test Author B"],
+          "summary": "A second deterministic fixture paper.",
+          "published": "2026-09-24 11:00:00",
+          "updated": "2026-09-24 11:00:00",
+          "pdf_url": "https://arxiv.org/pdf/2609.90002v1",
+          "primary_category": "cs.AI",
+          "categories": ["cs.AI"],
+          "comment": null,
+          "links": ["https://arxiv.org/abs/2609.90002v1"]
+        },
+        {
+          "id": "2609.90003v1",
+          "title": "Reliable Fallbacks in Agentic Systems",
+          "authors": ["Test Author C"],
+          "summary": "A third deterministic fixture paper.",
+          "published": "2026-09-24 10:00:00",
+          "updated": "2026-09-24 10:00:00",
+          "pdf_url": "https://arxiv.org/pdf/2609.90003v1",
+          "primary_category": "cs.AI",
+          "categories": ["cs.AI"],
+          "comment": null,
+          "links": ["https://arxiv.org/abs/2609.90003v1"]
+        }
+      ]
+    }
+  }
+}
