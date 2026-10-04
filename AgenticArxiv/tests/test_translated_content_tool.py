@@ -15,6 +15,7 @@ from models.store import store, use_memory_store
 from rl.env import MockArxivEnv
 from rl.grpo_reward import _dispatch_environment_tool
 from rl.multiturn_env import AgenticArxivMultiTurnEnv
+from rl.reward import RewardCalculator
 from tools.tool_registry import registry
 from tools.translated_content_tool import get_translated_content
 
@@ -194,6 +195,25 @@ class TranslatedContentToolTest(unittest.TestCase):
 
         self.assertEqual(result, recorded)
         self.assertEqual(env.backend.stats["real_calls"], 0)
+
+    def test_result_quality_requires_translated_text(self):
+        # Unknown tool names always count as useful work, so this also proves
+        # the tool is graded by the reading-tool rule.
+        task = {"id": "read_translation", "expected_tools": ["get_translated_content"]}
+        action = '{"name":"get_translated_content","args":{"ref":1}}'
+        for observation, expected in (
+            (str({"paper_id": PAPER.id, "page": 1, "content": "译文"}), 1.0),
+            (str({"paper_id": PAPER.id, "page": 1}), 0.0),
+        ):
+            with self.subTest(observation=observation):
+                breakdown, _ = RewardCalculator().compute_reward_breakdown(
+                    task,
+                    {
+                        "history": [{"action": action, "observation": observation}],
+                        "iteration_count": 1,
+                    },
+                )
+                self.assertEqual(breakdown.result_quality, expected)
 
 
 if __name__ == "__main__":
