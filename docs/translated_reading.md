@@ -37,3 +37,13 @@ python scripts/generate_sft_data.py --task_set translated --snapshot data/mock_a
 ```
 
 Only an explicit `PATH:train` split is accepted. Expert actions are executed against the snapshot; invalid or ungrounded results cannot produce accepted SFT rows. GRPO/OPD budget the new result before serialization, preserve a complete observation and the visible continuation, and keep environment tokens out of policy loss. Metrics and reward share one result validator for paper identity, translated provenance, nonempty text, and cursor consistency.
+
+## Verification on 2026-10-04
+
+- `python -X utf8 -m pytest AgenticArxiv/tests/ -q -ra`: **753 passed, 4 skipped, 567 subtests passed**. The skips are the three pre-existing manual network/API smoke cases and one audit case needing the default offline snapshot. TRL emits its existing experimental GKD warning. On Windows, use UTF-8 mode: the unmodified suite's default-encoding file reads otherwise fail in three cases under GBK.
+- CI fatal-error flake8 checks (`E9,F63,F7,F82`) passed for the application and changed scripts.
+- The translated expert-data CLI executed a frozen synthetic fixture task and produced two validated SFT rows. This verifies data plumbing; no model training was performed.
+- Owner checkpoint `Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO` loaded locally as BF16 on an RTX 4060 Laptop 8 GB. Load time was 13.30 seconds; peak CUDA allocated memory during inference was 3.56 GiB.
+- Two zero-shot cases were tried once each: cached translated first-fragment reading, and translate-then-read. **Strict success: 0/2.** The model selected old tools and supplied `max_results` to translation instead of calling the new reader. These are recorded model failures, not evidence that the policy learned the new action. Fine-tuning and translation-quality evaluation remain future work.
+
+Reproduce the small model check with `python -X utf8 scripts/eval_translated_reading.py --model /path/to/owner-grpo-checkpoint --output /path/to/smoke-output`. The script creates its own Chinese PDF fixture, snapshot, and artifact paths; `model-smoke.json` preserves actions, tool results, every delivered model context, timings, and memory statistics. A completed evaluation can report failed cases; inspect `strict_success` rather than treating exit status as policy success.

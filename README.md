@@ -58,11 +58,11 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | 维度 | 定义 |
 |------|------|
 | **State** | 任务描述 + 对话历史 + 工具结果 |
-| **Action** | 9 个工具（见下）+ FINISH |
+| **Action** | 10 个工具（见下）+ FINISH |
 | **Reward** | 五分量多粒度可验证奖励（format / tool / argument / process / outcome） |
 | **Transition** | `execute_tool(action) → observation`（`MockArxivEnv` 离线快照回放，确定性可复现） |
 
-### 动作空间（9 个工具）
+### 动作空间（10 个工具）
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — 按子领域+时间窗浏览
 2. `search_arxiv_papers(query, max_results, days=None)` — 关键词/标题/作者检索
@@ -73,6 +73,7 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 7. `summarize_paper(ref, style, max_words)` — env 侧摘要（tldr / structured / bullet）
 8. `extract_paper_figures(ref)` — 抽出图表文件与 caption
 9. `analyze_figure(ref, figure_no, question=None)` — 图表分析：env 侧调本地 VLM 读图（多模态环境启用）
+10. `get_translated_paper_content(ref, offset=0, max_chars=1000)` — 读取已完成译文，返回正文片段与续读位置（[使用与离线补录](docs/translated_reading.md)）
 
 > 「检索 → 下载 → 阅读 → 总结 → 抽图 → 识图」解读闭环已全部打通：识图由本项目后训练的 [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) 在 env 侧完成并录制快照，策略侧有学会该四步链的 [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) 权重。
 > **准入原则**：动作空间不是越大越好——新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」。设计决策链见 [工具集演进设计](docs/toolset_evolution.md)。
@@ -256,7 +257,7 @@ MIT License
 
 - [ ] **策略侧多模态化**：把 VLM 从 env 侧移进策略侧（observation 携带图表），复用 `train_vlm_figure_qa.py` 已验证的 TRL 视觉语言路径；候选基座 Qwen3-VL-4B / Qwen2.5-VL-2B（端侧档）
 - [ ] **端到端阅读链**：检索 → 下载 → 翻译 → 总结 → 识图在单模型内闭环，面向端侧推理（量化 + 2-4B 量级）优化
-- [ ] **翻译正文入上下文**：`translate_arxiv_pdf` 目前只产出文件，翻译文本不进模型上下文——补一个可验证的「读译文」工具
+- [x] **翻译正文入上下文**：`get_translated_paper_content` 读取 READY 单语译文，支持有界续读、离线快照与可验证结果；已发布策略未针对新动作微调（见 [使用与验证边界](docs/translated_reading.md)）
 
 ### P1 — 新一代 Agentic RL 算法
 
