@@ -72,7 +72,9 @@ _KEYWORD_SEARCH_PARAMS = [
 
 _KEYWORD_SEARCH = family(
     task_id=lambda p: f"search_kw_{p['id']}",
-    text=lambda p: f"按关键词检索 arXiv：{p['query']}，最多返回 5 篇论文",
+    # Keep the observable request aligned with the scored 30-day argument.
+    # Previously ``days=30`` existed only in the hidden expected args.
+    text=lambda p: f"按关键词检索 arXiv：{p['query']}，最近 30 天，最多返回 5 篇论文",
     steps=lambda p: [Step("search_arxiv_papers", {"query": p["query"], "max_results": 5, "days": 30})],
     params=_KEYWORD_SEARCH_PARAMS,
     category="keyword_search",

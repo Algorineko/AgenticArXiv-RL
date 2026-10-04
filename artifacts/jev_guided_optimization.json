@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "experiment_date": "2026-10-04",
+  "claim_boundary": "Targeted mechanism proof plus a mixed 10-task pilot; not an 81-task population estimate.",
+  "model": "Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO",
+  "router": "jev-latest",
+  "router_argument_mode": "guided",
+  "controls": {
+    "seed": 42,
+    "repeat": 3,
+    "environment": "MockArxivEnv replay",
+    "same_qwen_checkpoint": true,
+    "same_snapshot": true
+  },
+  "architecture": [
+    "Jev typed next-tool decision",
+    "deterministic extraction for explicit observable arguments",
+    "tool schema and reference legality validation",
+    "Qwen fallback for ambiguous or low-confidence cases"
+  ],
+  "benefit_slice": {
+    "selection": "Preselected from earlier routing/Qwen traces where Jev was high-confidence correct and Qwen usually failed; mechanism proof only.",
+    "task_ids": [
+      "ref_ctrl_id_download",
+      "search_kw_agentic_rl",
+      "ref_ctrl_null_cache",
+      "search_kw_rag",
+      "state_cache_two",
+      "state_ref_cache_active"
+    ],
+    "policy": {
+      "trajectories": 18,
+      "strict_success_rate": 0.0,
+      "tool_accuracy": 0.0,
+      "arg_accuracy": 0.08333333333333333,
+      "ref_accuracy": 0.125,
+      "avg_qwen_tokens": 3348.7,
+      "avg_total_ms": 2852.1
+    },
+    "guided_jev": {
+      "trajectories": 18,
+      "strict_success_rate": 1.0,
+      "tool_accuracy": 1.0,
+      "arg_accuracy": 1.0,
+      "ref_accuracy": 1.0,
+      "avg_qwen_tokens": 0.0,
+      "avg_total_ms": 3137.1,
+      "router_decisions": 39,
+      "router_used": 39,
+      "router_fallbacks": 0,
+      "router_estimated_cost_usd": 0.002395134
+    }
+  },
+  "mixed_10": {
+    "task_ids": [
+      "constraint_search_no_file",
+      "infeasible_unsupported_action",
+      "multi_cv3_dl1",
+      "opt_force_dl",
+      "ref_ctrl_id_download",
+      "search_AI_1d_3",
+      "search_kw_agentic_rl",
+      "state_dl_then_cache",
+      "ref_stress_learning_state",
+      "infeasible_zero_index"
+    ],
+    "policy": {
+      "trajectories": 30,
+      "errors": 0,
+      "strict_success_rate": 0.4,
+      "tool_accuracy": 0.6,
+      "arg_accuracy": 0.5,
+      "ref_accuracy": 0.6,
+      "false_finish_rate": 0.4,
+      "avg_qwen_tokens": 3864.7,
+      "avg_total_ms": 3447.0
+    },
+    "guided_jev": {
+      "trajectories": 30,
+      "errors": 0,
+      "strict_success_rate": 0.6,
+      "tool_accuracy": 0.8,
+      "arg_accuracy": 0.7,
+      "ref_accuracy": 0.8,
+      "false_finish_rate": 0.2,
+      "avg_qwen_tokens": 1004.5,
+      "avg_total_ms": 4720.9,
+      "router_decisions": 60,
+      "router_accepted": 45,
+      "router_used": 42,
+      "router_fallbacks": 18,
+      "router_first_accuracy": 0.8,
+      "router_estimated_cost_usd": 0.00366912,
+      "fallback_reasons": {
+        "low_confidence": 15,
+        "deterministic_invalid_arguments": 3
+      }
+    },
+    "delta": {
+      "strict_success_percentage_points": 20.0,
+      "tool_accuracy_percentage_points": 20.0,
+      "arg_accuracy_percentage_points": 20.0,
+      "false_finish_percentage_points": -20.0,
+      "qwen_token_percent": -74.01,
+      "total_latency_percent": 36.96
+    }
+  },
+  "tests": {
+    "focused": "23 passed",
+    "local_python_3_10": "722 passed, 7 skipped",
+    "remote_python_3_12": "725 passed, 4 skipped, 562 subtests passed"
+  }
+}

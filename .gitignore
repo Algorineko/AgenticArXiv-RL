@@ -28,7 +28,9 @@ eval/results/
 
 # 环境配置
 .env
+.env.local
 *.log
+.pytest-tmp-*/
 
 # IDE
 .vscode/
