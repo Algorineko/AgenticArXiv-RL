@@ -8,7 +8,7 @@ AgenticArXiv 原本让 Qwen2.5-1.5B-GRPO 在一次生成里同时决定两件事
 这个实验把封闭集合里的工具选择交给 Jev，把明确可验证的参数交给代码，只让 Qwen
 处理剩余歧义。它不是替换 Agent，而是给小模型加一个轻量、可关闭、可审计的决策前层。
 
-## 先看结果
+## 实验结果
 
 使用同一 Qwen checkpoint、同一离线 snapshot、seed=42，在预先固定的 10 个混合任务上
 各重复 3 次。两组各得到 30 条有效轨迹，没有运行异常。
@@ -23,16 +23,14 @@ AgenticArXiv 原本让 Qwen2.5-1.5B-GRPO 在一次生成里同时决定两件事
 | 平均 Qwen token | 3864.7 | **1004.5** | **-74.01%** |
 | 平均总延迟 | **3447.0 ms** | 4720.9 ms | +36.96% |
 
-换成任务数看更直观：policy 在 10 个任务中稳定完成 4 个，guided Jev 完成 6 个；
-原本成功的任务没有退化。代价也很明确：外部路由增加约 1.27 秒平均延迟，本轮 Jev
-请求估算成本为 USD 0.003669。
+policy 在 10 个任务中稳定完成 4 个，guided Jev 完成 6 个；
+原本成功的任务没有退化。外部路由增加约 1.27 秒平均延迟，本轮 Jev
+token成本为 USD 0.003669。
 
-这不是全量 81 题的最终胜率，但已经回答了最实际的问题：在不重训 Qwen、不更换环境
-的前提下，Jev guided routing 能让现有 1.5B Agent 在一部分任务上从失败变成成功。
+也就是说在不重训 Qwen、不更换环境的前提下，Jev guided routing 能让现有 1.5B Agent 在一部分任务上从失败变成成功。
 
 ## Jev 具体补上了什么
 
-### 1. 关键词检索：从 0/3 到 3/3
 
 任务要求按 `all:agentic reinforcement learning` 检索最近 30 天的 5 篇论文。
 
@@ -73,7 +71,7 @@ download_arxiv_pdf(ref="2608.14528v1")
 三次下载均成功，strict success 从 0/3 变为 3/3。这里的收益不只来自“选对下载工具”，
 也来自把清晰的标识符交给确定性代码，而不是让小模型重新解释一遍。
 
-### 3. `infeasible_zero_index`：展示安全兜底，而不是虚构胜率
+### 3. `infeasible_zero_index`：
 
 这个任务要求下载“第 0 篇论文”。项目的候选论文索引从 1 开始，所以正确行为是解释
 参数非法并结束，不能真的调用下载工具。
@@ -123,7 +121,7 @@ task + state + available tools
              environment
 ```
 
-这套分工有三个好处：
+分工理由：
 
 - Jev 只做它擅长的离散决策，不负责自由生成 ID、查询字符串或整数；
 - 明确出现在请求里的参数不会经过一次不必要的语言模型“转述”；
@@ -159,12 +157,10 @@ rollout。答案是可以。前面的 mixed 10-task 结果则用来检查这种�
 | 明确参数 | Qwen | 确定性解析器 |
 | 含糊参数 | Qwen | 同一 Qwen |
 
-完整工具序列必须与任务定义完全一致，不能多调或漏调；参数由 `expected_tool_args` 判定，
-论文引用还要落到冻结 snapshot 中的正确 paper ID。`strict_success` 同时要求正常结束、
-工具与参数正确、没有解析或执行错误，以及不可执行任务给出正确的终止理由。
+参数由 `expected_tool_args` 判定，`strict_success` 同时要求正常结束。
 
-路由器看不到 `expected_tools`、reward 或任何答案字段。每次决定、confidence、是否采用、
-回退原因、延迟和 token 都写入 trace，因此“Jev 真正控制了动作”和“API 失败后 Qwen
+实验设计中路由器看不到 `expected_tools`、reward 或任何答案字段。每次决定、confidence、是否采用、
+回退原因、延迟和 token 都写入 trace，故而“Jev 真正控制了动作”和“API 失败后 Qwen
 完成任务”可以被区分开。
 
 ## 更大范围的路由探测
@@ -203,7 +199,6 @@ ROUTER_ARGUMENT_MODE=guided
 TYPESAFE_API_KEY=your-key
 JEV_MIN_CONFIDENCE=0.80
 ```
-
 配置模板见 `jev_config.example.env`。真实 key 放在被 `.gitignore` 排除的 `.env.local`。
 `ROUTER_ARGUMENT_MODE=legacy` 只用于复现实验，不是推荐设置。
 
@@ -218,8 +213,6 @@ JEV_MIN_CONFIDENCE=0.80
 
 ## 失败尝试与保留的限制
 
-这项工作不是第一次就得到最终结果：
-
 1. routing-only probe 证明 Jev 有分类信号，但不能证明端到端收益；
 2. legacy A/B 只降低 Qwen token，没有提高 strict success；
 3. 两版 prompt-only 参数生成尝试仍被 1.5B 模型的分布偏移抵消；
@@ -229,43 +222,3 @@ JEV_MIN_CONFIDENCE=0.80
 仍是弱项。要声称整体 benchmark 提升，还需要在预先注册的 81 题或独立 holdout 上完成
 同样的端到端 A/B。
 
-## 复现与证据
-
-API 单题检查：
-
-```bash
-python scripts/jev_route_smoke.py --transport curl --limit 1 --fresh \
-  --output artifacts/jev_api_check.json
-```
-
-无需网络/GPU的项目接线 smoke：
-
-```bash
-python scripts/jev_project_integration_smoke.py
-```
-
-离线测试：
-
-```bash
-python -m pytest \
-  AgenticArxiv/tests/test_routed_arguments.py \
-  AgenticArxiv/tests/test_tool_routing.py \
-  AgenticArxiv/tests/test_jev_route_smoke.py \
-  AgenticArxiv/tests/test_jev_project_integration_smoke.py \
-  AgenticArxiv/tests/test_benchmark_routing_metrics.py -q
-```
-
-当前上游 `main` 上的验证结果：定向测试 28 passed；全量测试 751 passed、7 skipped。
-
-主要产物：
-
-- `artifacts/jev_guided_optimization.json`：guided 实验的任务、控制变量与聚合指标；
-- `artifacts/jev_e2e_pilot_10.json`：早期 legacy 端到端 A/B；
-- `artifacts/jev_route_expanded_all.json`：81 条 routing-only 逐题结果；
-- `artifacts/jev_project_integration_smoke.json`：无需在线 API 的接口接线证明；
-- `scripts/jev_route_smoke.py`：在线路由实验与断点恢复；
-- `scripts/jev_project_integration_smoke.py`：完整项目路径的离线回放。
-
-核心代码位于 `AgenticArxiv/routing/`，Agent 接入点在
-`AgenticArxiv/agents/base_agent.py`，benchmark 的审计与聚合位于
-`AgenticArxiv/benchmark/metrics.py` 和 `report.py`。
