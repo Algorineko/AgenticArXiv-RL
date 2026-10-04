@@ -12,6 +12,7 @@ import pymupdf
 
 from models.schemas import Paper, TranslateAsset
 from models.store import store, use_memory_store
+from rl.build_snapshot import _snapshot_translated_content
 from rl.env import MockArxivEnv
 from rl.grpo_reward import _dispatch_environment_tool
 from rl.multiturn_env import AgenticArxivMultiTurnEnv
@@ -214,6 +215,32 @@ class TranslatedContentToolTest(unittest.TestCase):
                     },
                 )
                 self.assertEqual(breakdown.result_quality, expected)
+
+    def test_build_snapshot_records_every_translated_page(self):
+        class RecordingEnv:
+            snapshot = {
+                "search_arxiv_papers": {
+                    "pool": {"result": [PAPER.model_dump(mode="json")]}
+                }
+            }
+            calls = []
+
+            def execute_tool(self, name, args):
+                self.calls.append((name, args.get("page")))
+                return {"total_pages": 3} if name == "get_translated_content" else {}
+
+        env = RecordingEnv()
+
+        self.assertEqual(_snapshot_translated_content(env, max_ref=1), (1, 0))
+        self.assertEqual(
+            env.calls,
+            [
+                ("translate_arxiv_pdf", None),
+                ("get_translated_content", 1),
+                ("get_translated_content", 2),
+                ("get_translated_content", 3),
+            ],
+        )
 
 
 if __name__ == "__main__":
