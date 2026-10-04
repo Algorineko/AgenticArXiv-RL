@@ -191,6 +191,11 @@ class MockArxivEnv:
                 self.stats["fallback"] += 1
                 return fallback
 
+        if self.mode == "replay" and tool_name == _TRANSLATED_CONTENT_TOOL:
+            out_of_range = self._translated_page_out_of_range(key, tool_data)
+            if out_of_range is not None:
+                raise out_of_range
+
         self.stats["miss"] += 1
         if self.mode == "replay":
             raise KeyError(
@@ -633,6 +638,27 @@ class MockArxivEnv:
             sort_keys=True,
             ensure_ascii=False,
         )
+
+    @staticmethod
+    def _translated_page_out_of_range(
+        key: str, tool_data: Dict[str, Any]
+    ) -> Optional[ValueError]:
+        """A page past a recorded translation's end is the live tool's range error.
+
+        Every recorded page carries ``total_pages``, so this is certain no matter
+        how much of the paper was recorded; it must not read as a snapshot gap.
+        """
+        wanted = json.loads(key)
+        for recorded_key, entry in tool_data.items():
+            if json.loads(recorded_key).get("paper_id") != wanted["paper_id"]:
+                continue
+            total = int((entry.get("result") or {}).get("total_pages") or 0)
+            if wanted["page"] > total > 0:
+                return ValueError(
+                    f"page must be between 1 and {total}; got {wanted['page']}"
+                )
+            return None
+        return None
 
     def _add_to_snapshot(
         self, tool_name: str, key: str, args: Dict[str, Any], result: Any
