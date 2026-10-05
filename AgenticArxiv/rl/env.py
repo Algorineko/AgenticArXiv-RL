@@ -46,11 +46,13 @@ _PAPER_CONTENT_TOOL = "get_paper_content"
 _PAPER_SUMMARY_TOOL = "summarize_paper"
 _PAPER_FIGURES_TOOL = "extract_paper_figures"
 _FIGURE_ANALYSIS_TOOL = "analyze_figure"
+_TRANSLATED_CONTENT_TOOL = "get_translated_content"
 DEFAULT_SNAPSHOT_TOOLS: Set[str] = set(_SEARCH_TOOLS) | {
     _PAPER_CONTENT_TOOL,
     _PAPER_SUMMARY_TOOL,
     _PAPER_FIGURES_TOOL,
     _FIGURE_ANALYSIS_TOOL,
+    _TRANSLATED_CONTENT_TOOL,
 }
 
 
@@ -146,6 +148,8 @@ class MockArxivEnv:
             key = self._paper_figures_key(args, resolved_paper_id=resolved_paper_id)
         elif tool_name == _FIGURE_ANALYSIS_TOOL:
             key = self._figure_analysis_key(args, resolved_paper_id=resolved_paper_id)
+        elif tool_name == _TRANSLATED_CONTENT_TOOL:
+            key = self._translated_content_key(args, resolved_paper_id=resolved_paper_id)
         tool_data = self.snapshot.get(tool_name, {})
 
         # record 模式必须每次都真打，否则派生逻辑会"帮倒忙"：
@@ -186,6 +190,11 @@ class MockArxivEnv:
                 # set_last_papers，其行为不受此影响。）
                 self.stats["fallback"] += 1
                 return fallback
+
+        if self.mode == "replay" and tool_name == _TRANSLATED_CONTENT_TOOL:
+            out_of_range = self._translated_page_out_of_range(key, tool_data)
+            if out_of_range is not None:
+                raise out_of_range
 
         self.stats["miss"] += 1
         if self.mode == "replay":
@@ -601,6 +610,55 @@ class MockArxivEnv:
             sort_keys=True,
             ensure_ascii=False,
         )
+
+    @staticmethod
+    def _translated_content_key(
+        args: Dict[str, Any], resolved_paper_id: Optional[str] = None
+    ) -> str:
+        """Key translation reads by (resolved paper, page).
+
+        ``page`` is validated before the lookup, in the same order as the live
+        tool, so a malformed page is a deterministic tool error rather than a
+        snapshot miss.
+        """
+        from tools.translated_content_tool import validate_page
+
+        page = validate_page((args or {}).get("page", 1))
+        session_id = str((args or {}).get("session_id") or "default")
+        ref = (args or {}).get("ref", 1)
+        if resolved_paper_id:
+            paper_id = str(resolved_paper_id)
+        else:
+            paper = store.resolve_paper(session_id, ref)
+            if paper is None:
+                raise ValueError("Paper not found; search for the paper and check the ref.")
+            paper_id = paper.id
+        return json.dumps(
+            {"paper_id": paper_id, "page": page},
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _translated_page_out_of_range(
+        key: str, tool_data: Dict[str, Any]
+    ) -> Optional[ValueError]:
+        """A page past a recorded translation's end is the live tool's range error.
+
+        Every recorded page carries ``total_pages``, so this is certain no matter
+        how much of the paper was recorded; it must not read as a snapshot gap.
+        """
+        wanted = json.loads(key)
+        for recorded_key, entry in tool_data.items():
+            if json.loads(recorded_key).get("paper_id") != wanted["paper_id"]:
+                continue
+            total = int((entry.get("result") or {}).get("total_pages") or 0)
+            if wanted["page"] > total > 0:
+                return ValueError(
+                    f"page must be between 1 and {total}; got {wanted['page']}"
+                )
+            return None
+        return None
 
     def _add_to_snapshot(
         self, tool_name: str, key: str, args: Dict[str, Any], result: Any

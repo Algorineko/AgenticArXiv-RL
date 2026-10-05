@@ -338,6 +338,46 @@ def _snapshot_paper_content(env: MockArxivEnv, max_ref: int = 0) -> tuple[int, i
     return ok, fail
 
 
+def _snapshot_translated_content(env: MockArxivEnv, max_ref: int) -> tuple[int, int]:
+    """Translate the first ``max_ref`` papers of each pool and record every page.
+
+    The translation_reading tasks only reference the first paper of each pool,
+    so the default build records ``max_ref=1``; without these pages the tasks
+    surface as snapshot misses only once offline evaluation or training starts.
+    Translation runs pdf2zh against an online service and takes minutes per
+    paper; a paper whose translated PDF already exists hits the tool's cache.
+    Every page is recorded so that any valid ``page`` replays offline.
+    """
+    if not max_ref:
+        print("  [WARN] 已关闭译文页录制（--translate-max-ref 0）：读译文任务（translation_reading）将无法离线回放")
+        return 0, 0
+    print(f"  翻译并录制译文页（每池前 {max_ref} 篇，需要 pdf2zh 与在线翻译服务）")
+    session_id = "__snapshot_translated_content__"
+    ok = fail = 0
+    for item in _unique_snapshot_papers(env, max_ref=max_ref).values():
+        clean = {k: v for k, v in item.items() if not str(k).startswith("_")}
+        try:
+            store.set_last_papers(session_id, [Paper(**clean)])
+            args = {"session_id": session_id, "ref": 1}
+            env.execute_tool("translate_arxiv_pdf", args)
+            first = env.execute_tool("get_translated_content", {**args, "page": 1})
+            for page in range(2, int(first["total_pages"]) + 1):
+                # A page without extractable text stays a deterministic tool
+                # error at rollout time, so it is simply not recorded.
+                try:
+                    env.execute_tool("get_translated_content", {**args, "page": page})
+                except (ValueError, RuntimeError):
+                    pass
+            ok += 1
+        except Exception as exc:
+            print(f"  [WARN] translation paper={item.get('id')} → {exc}")
+            fail += 1
+    print(f"  translation: {ok} 成功 / {fail} 失败")
+    if fail:
+        print("  [WARN] 有论文未录到译文页：引用它们的读译文任务（translation_reading）将无法离线回放")
+    return ok, fail
+
+
 def build(
     snapshot_path: str = DEFAULT_SNAPSHOT,
     aspects=None,
@@ -350,6 +390,7 @@ def build(
     content_max_ref: int = 0,
     prefetch_budget: int = DEFAULT_PREFETCH_BUDGET_S,
     skip_prefetch: bool = False,
+    translate_max_ref: int = 1,
 ) -> None:
     # 快照要覆盖全部工具，否则回放时缺哪一类工具就少哪一类的记录，
     # 而缺的那部分会以「replay 模式下快照缺失」的形式在训练时才炸出来。
@@ -427,6 +468,8 @@ def build(
     content_ok, content_fail = _snapshot_paper_content(env, max_ref=content_max_ref)
     print(f"  content: {content_ok} 成功 / {content_fail} 失败")
 
+    _snapshot_translated_content(env, max_ref=translate_max_ref)
+
     env.save_snapshot()
     total = sum(len(v) for v in env.snapshot.values())
     print(f"\n完成：{ok} 个 aspect 成功、{fail} 个失败，共 {total} 条快照记录")
@@ -477,6 +520,14 @@ def main():
              "所以检索类任务看到的论文数量不变。网络到 arXiv 慢或抖动时，"
              "把范围压到任务真正会用到的 ref 上可以省掉绝大部分下载",
     )
+    parser.add_argument(
+        "--translate-max-ref",
+        type=int,
+        default=1,
+        help="为每个论文池的前 N 篇调用 pdf2zh 翻译，并录制全部译文页供 "
+             "get_translated_content 离线回放。默认 1：读译文任务只引用每池第 1 篇。"
+             "翻译需要 pdf2zh 与在线翻译服务，每篇要数分钟；0 表示关闭",
+    )
     args = parser.parse_args()
 
     build(
@@ -491,6 +542,7 @@ def main():
         content_max_ref=args.content_max_ref,
         prefetch_budget=args.prefetch_budget,
         skip_prefetch=args.skip_prefetch,
+        translate_max_ref=args.translate_max_ref,
     )
 
 
