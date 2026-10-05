@@ -46,6 +46,31 @@ def get_react_prompt(task: str, tools_description: str, history: str = "") -> st
     )
 
 
+def get_routed_argument_prompt(
+    task: str,
+    selected_tool: str,
+    tool_description: str,
+    history: str = "",
+) -> str:
+    """在训练分布内的 ReAct 模板中固定路由器已经选择的工具。
+
+    小型 GRPO checkpoint 对全新的“参数生成器”模板容易直接输出 FINISH。
+    保留原模板，只把不可更改的工具决定放进任务块，可最大程度减少 prompt 漂移。
+    """
+    constrained_task = (
+        f"[系统路由决定] 外部路由器已经做出不可更改的工具决定：{selected_tool}。\n"
+        f"本轮必须调用 {selected_tool}，你只负责生成该工具的 args；"
+        "不能改用其他工具，也不能在本轮输出 FINISH。\n"
+        "参数必须符合下方唯一工具 schema；明确 ID、ref 序号或 null 必须原样保留。\n"
+        f"[原始用户任务] {task}"
+    )
+    return get_react_prompt(
+        task=constrained_task,
+        tools_description=tool_description,
+        history=history,
+    )
+
+
 def build_visible_setup_context(task: Mapping[str, Any]) -> str:
     """把任务开始前的 ``setup`` 转成模型可见的会话状态。
 

@@ -57,6 +57,8 @@ class BaseAgent(ABC):
         env: Optional[Any] = None,
         max_iterations: int = 5,
         llm_extra: Optional[Dict[str, Any]] = None,
+        tool_router: Optional[Any] = None,
+        router_argument_mode: str = "legacy",
     ):
         """
         Args:
@@ -71,12 +73,24 @@ class BaseAgent(ABC):
                     {"chat_template_kwargs": {"enable_thinking": False}}
                 思维链会让生成 token 数翻倍，而 token 用量是 benchmark 的
                 核心对比指标之一，混入后三种范式之间的差异会被淹没。
+            tool_router: 可选的推理时工具路由器。None 保持原始策略模型路由。
+                外部路由失败、低置信度或与参数模型输出不一致时自动退回原路径。
+            router_argument_mode: ``legacy`` 沿用“单工具版普通 ReAct prompt”；
+                ``guided`` 使用固定工具的参数生成 prompt，并在执行前按该工具 schema
+                校验参数。两种模式都只影响已接受的外部路由决定。
         """
         self.llm_client = llm_client
         self.side_effects = side_effect_mgr or LocalSideEffectManager()
         self.env = env
         self.max_iterations = max_iterations
         self.llm_extra = dict(llm_extra or {})
+        self.tool_router = tool_router
+        argument_mode = str(router_argument_mode).strip().lower()
+        if argument_mode not in {"legacy", "guided"}:
+            raise ValueError(
+                "router_argument_mode must be 'legacy' or 'guided'"
+            )
+        self.router_argument_mode = argument_mode
         self.session_id = "default"
 
     # ---------- 子类必须实现 ----------
@@ -115,6 +129,21 @@ class BaseAgent(ABC):
             )
         return "\n\n".join(parts)
 
+    def build_routed_messages(
+        self,
+        task: str,
+        selected_tool: str,
+        tool_description: str,
+        history_text: str,
+    ) -> Tuple[List[Dict], Dict[str, Any]]:
+        """Build a fixed-tool argument prompt.
+
+        Subclasses can make the router decision explicit instead of asking the
+        policy to choose a tool again.  The compatibility implementation keeps
+        the historical single-tool prompt.
+        """
+        return self.build_messages(task, tool_description, history_text)
+
     # ---------- 通用执行循环 ----------
 
     def run(
@@ -147,7 +176,7 @@ class BaseAgent(ABC):
             log.warning(f"Failed to log user message: {e}")
 
         tools = self.discover_tools()
-        tools_description = self.format_tools_for_prompt(tools)
+        policy_tools_description = self.format_tools_for_prompt(tools)
 
         # Benchmark/GRPO 会显式传入同一份、由 TaskSpec.setup 派生的可见状态。
         # 此时不要再从 side-effects 追加另一种格式的论文列表，否则评测 prompt
@@ -161,6 +190,7 @@ class BaseAgent(ABC):
         history: List[Dict[str, str]] = []
         step_timings: List[Dict[str, int]] = []
         token_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        routing_decisions: List[Dict[str, Any]] = []
 
         for iteration in range(self.max_iterations):
             log.info(f"第 {iteration + 1} 次迭代")
@@ -172,45 +202,222 @@ class BaseAgent(ABC):
                     f"{history_text}\n\n{generated_history}"
                     if history_text else generated_history
                 )
-            messages, extra = self.build_messages(enriched_task, tools_description, history_text)
-            extra = self._merge_llm_extra(extra)
-
             llm_ms = 0
             tool_ms = 0
+            router_ms = 0
             thought = ""
             action_dict = None
             observation = ""
+            routed_tool: Optional[str] = None
+            routed_tool_spec: Optional[Dict[str, Any]] = None
+            deterministic_action: Optional[Dict[str, Any]] = None
+            route_record: Optional[Dict[str, Any]] = None
+
+            # The default path performs no external routing and remains byte-for-byte
+            # equivalent at the prompt level.  Jev is consulted only when explicitly
+            # configured on this agent.
+            iteration_tools = tools
+            if self.tool_router is not None:
+                route_started = time.time()
+                try:
+                    decision = self.tool_router.route(
+                        task=enriched_task,
+                        history=history_text,
+                        tools=tools,
+                    )
+                    router_ms = int((time.time() - route_started) * 1000)
+                    route_record = (
+                        decision.to_dict()
+                        if hasattr(decision, "to_dict")
+                        else dict(vars(decision))
+                    )
+                    route_record.update({"iteration": iteration, "used": False})
+                    routing_decisions.append(route_record)
+                    if decision.accepted and decision.selected_tool == "FINISH":
+                        route_record["used"] = True
+                        thought = f"{decision.source} router selected FINISH"
+                        observation = "任务完成"
+                        history.append(
+                            {"thought": thought, "action": "FINISH", "observation": observation}
+                        )
+                        step_timings.append(
+                            {"router_ms": router_ms, "llm_ms": 0, "tool_ms": 0}
+                        )
+                        self._log_step(
+                            msg_id, iteration, thought, "FINISH", "{}",
+                            observation, 0, 0, session_id,
+                        )
+                        break
+                    if decision.accepted and decision.selected_tool:
+                        selected = [
+                            tool for tool in tools
+                            if tool.get("name") == decision.selected_tool
+                        ]
+                        if selected:
+                            routed_tool = decision.selected_tool
+                            routed_tool_spec = selected[0]
+                            iteration_tools = selected
+                            route_record["argument_mode"] = self.router_argument_mode
+                        else:
+                            route_record["fallback_reason"] = "router_selected_unknown_tool"
+                except Exception as exc:
+                    router_ms = int((time.time() - route_started) * 1000)
+                    route_record = {
+                        "iteration": iteration,
+                        "source": getattr(self.tool_router, "name", "external"),
+                        "accepted": False,
+                        "used": False,
+                        "reason": f"router_error:{type(exc).__name__}",
+                    }
+                    routing_decisions.append(route_record)
+                    log.warning(f"外部工具路由失败，回退策略模型: {exc}")
+
+            tools_description = self.format_tools_for_prompt(iteration_tools)
+
+            if routed_tool and self.router_argument_mode == "guided":
+                from routing.arguments import resolve_routed_arguments
+
+                resolution = resolve_routed_arguments(
+                    tool_name=routed_tool,
+                    task=enriched_task,
+                    history=history_text,
+                )
+                assert route_record is not None
+                route_record["argument_resolution"] = resolution.status
+                route_record["argument_resolution_reason"] = resolution.reason
+                if resolution.status == "resolved":
+                    candidate = {"name": routed_tool, "args": dict(resolution.args)}
+                    valid, validation_reason = self._validate_routed_action(
+                        candidate,
+                        routed_tool_spec or {},
+                    )
+                    if valid:
+                        deterministic_action = candidate
+                        route_record["argument_source"] = "deterministic"
+                    else:
+                        route_record["argument_resolution"] = "defer"
+                        route_record["argument_resolution_reason"] = (
+                            f"schema_validation:{validation_reason}"
+                        )
+                elif resolution.status == "complete":
+                    route_record["fallback_reason"] = "deterministic_task_complete"
+                    thought = "显式参数已全部执行，任务完成"
+                    observation = "任务完成"
+                    history.append(
+                        {"thought": thought, "action": "FINISH", "observation": observation}
+                    )
+                    step_timings.append(
+                        {"router_ms": router_ms, "llm_ms": 0, "tool_ms": 0}
+                    )
+                    self._log_step(
+                        msg_id, iteration, thought, "FINISH", "{}",
+                        observation, 0, 0, session_id,
+                    )
+                    break
+                elif resolution.status == "blocked":
+                    route_record["fallback_reason"] = "deterministic_invalid_arguments"
+                    thought = "无法执行：论文索引 ref=0 非法，论文序号必须从 1 开始"
+                    observation = "任务因非法论文索引而终止，未调用任何工具"
+                    history.append(
+                        {"thought": thought, "action": "FINISH", "observation": observation}
+                    )
+                    step_timings.append(
+                        {"router_ms": router_ms, "llm_ms": 0, "tool_ms": 0}
+                    )
+                    self._log_step(
+                        msg_id, iteration, thought, "FINISH", "{}",
+                        observation, 0, 0, session_id,
+                    )
+                    break
 
             try:
-                t0 = time.time()
-                # temperature 优先由调用方（如 DPO 数据生成）通过 llm_extra 指定，
-                # 否则回退到默认 0.1。硬编码 0.1 会让 llm_extra 里的 temperature
-                # 被静默忽略，导致多次 rollout 近乎确定、DPO 无法产生偏好分歧。
-                eff_temperature = float(extra.pop("temperature", 0.1))
-                response = self.llm_client.chat_completions(
-                    model=agent_model,
-                    messages=messages,
-                    temperature=eff_temperature,
-                    max_tokens=1000,
-                    stream=False,
-                    extra=extra or None,
-                )
-                llm_ms = int((time.time() - t0) * 1000)
+                if deterministic_action is not None:
+                    thought = f"使用已验证的显式参数调用 {routed_tool}"
+                    action_dict = deterministic_action
+                    call_ms = 0
+                    usage = {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0,
+                    }
+                elif routed_tool and self.router_argument_mode == "guided":
+                    thought, action_dict, call_ms, usage = self._request_routed_action(
+                        agent_model=agent_model,
+                        task=enriched_task,
+                        selected_tool=routed_tool,
+                        tool_description=tools_description,
+                        history_text=history_text,
+                    )
+                else:
+                    thought, action_dict, call_ms, usage = self._request_policy_action(
+                        agent_model=agent_model,
+                        task=enriched_task,
+                        tools_description=tools_description,
+                        history_text=history_text,
+                    )
+                llm_ms += call_ms
+                for key in token_usage:
+                    token_usage[key] += usage[key]
 
-                # 累计 token 用量
-                usage = response.get("usage") or {}
-                token_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
-                token_usage["completion_tokens"] += usage.get("completion_tokens", 0)
-                token_usage["total_tokens"] += usage.get("total_tokens", 0)
+                if routed_tool and self.router_argument_mode == "guided":
+                    assert route_record is not None
+                    valid, validation_reason = self._validate_routed_action(
+                        action_dict,
+                        routed_tool_spec or {},
+                    )
+                    if valid:
+                        model_tool = action_dict.get("name")
+                        if model_tool != routed_tool:
+                            route_record["model_selected_tool"] = model_tool
+                            route_record["tool_name_repaired"] = True
+                        action_dict = {
+                            "name": routed_tool,
+                            "args": dict(action_dict.get("args") or {}),
+                        }
+                        route_record["used"] = True
+                    else:
+                        route_record["fallback_reason"] = (
+                            "routed_argument_validation_failed"
+                        )
+                        route_record["argument_validation_error"] = validation_reason
+                        thought, action_dict, retry_ms, retry_usage = self._request_policy_action(
+                            agent_model=agent_model,
+                            task=enriched_task,
+                            tools_description=policy_tools_description,
+                            history_text=history_text,
+                        )
+                        llm_ms += retry_ms
+                        for key in token_usage:
+                            token_usage[key] += retry_usage[key]
+                # Legacy external-router semantics: a selected tool merely narrows
+                # the ordinary policy prompt.  Preserve this mode for controlled
+                # ablations and backwards compatibility.
+                elif routed_tool and (
+                    action_dict is None or action_dict.get("name") != routed_tool
+                ):
+                    assert route_record is not None
+                    route_record["fallback_reason"] = "policy_router_disagreement"
+                    thought, action_dict, retry_ms, retry_usage = self._request_policy_action(
+                        agent_model=agent_model,
+                        task=enriched_task,
+                        tools_description=policy_tools_description,
+                        history_text=history_text,
+                    )
+                    llm_ms += retry_ms
+                    for key in token_usage:
+                        token_usage[key] += retry_usage[key]
+                elif routed_tool and route_record is not None:
+                    route_record["used"] = True
 
-                thought, action_dict = self.parse_response(response)
                 log.info(f"Thought: {thought}")
 
                 if action_dict is None:
                     log.info("任务完成")
                     observation = "任务完成"
                     history.append({"thought": thought, "action": "FINISH", "observation": observation})
-                    step_timings.append({"llm_ms": llm_ms, "tool_ms": 0})
+                    step_timings.append(
+                        {"router_ms": router_ms, "llm_ms": llm_ms, "tool_ms": 0}
+                    )
                     self._log_step(msg_id, iteration, thought, "FINISH", "{}", observation, llm_ms, 0, session_id)
                     break
 
@@ -220,7 +427,9 @@ class BaseAgent(ABC):
                 tool_ms = int((time.time() - t1) * 1000)
                 log.info(f"Observation: {observation[:200]}...")
 
-                step_timings.append({"llm_ms": llm_ms, "tool_ms": tool_ms})
+                step_timings.append(
+                    {"router_ms": router_ms, "llm_ms": llm_ms, "tool_ms": tool_ms}
+                )
 
                 action_str = json.dumps(action_dict, ensure_ascii=False)
                 history.append({"thought": thought, "action": action_str, "observation": observation})
@@ -234,7 +443,7 @@ class BaseAgent(ABC):
                 if iteration == self.max_iterations - 1:
                     log.warning("达到最大迭代次数，强制结束")
                     history.append({"thought": "达到最大迭代次数", "action": "FORCE_STOP", "observation": "迭代限制"})
-                    step_timings.append({"llm_ms": 0, "tool_ms": 0})
+                    step_timings.append({"router_ms": 0, "llm_ms": 0, "tool_ms": 0})
                     self._log_step(msg_id, iteration + 1, "达到最大迭代次数", "FORCE_STOP", "", "迭代限制", 0, 0, session_id)
                     break
 
@@ -242,7 +451,9 @@ class BaseAgent(ABC):
                 error_msg = f"LLM调用失败: {str(e)}"
                 log.error(error_msg)
                 history.append({"thought": "LLM调用失败", "action": "ERROR", "observation": error_msg})
-                step_timings.append({"llm_ms": llm_ms, "tool_ms": 0})
+                step_timings.append(
+                    {"router_ms": router_ms, "llm_ms": llm_ms, "tool_ms": 0}
+                )
                 self._log_step(msg_id, iteration, "LLM调用失败", "ERROR", "", error_msg, llm_ms, 0, session_id)
                 break
 
@@ -264,6 +475,7 @@ class BaseAgent(ABC):
             log.warning(f"Failed to log assistant reply: {e}")
 
         total_time_ms = int((time.time() - run_start) * 1000)
+        total_router_ms = sum(s.get("router_ms", 0) for s in step_timings)
         total_llm_ms = sum(s["llm_ms"] for s in step_timings)
         total_tool_ms = sum(s["tool_ms"] for s in step_timings)
 
@@ -275,19 +487,156 @@ class BaseAgent(ABC):
             "total_time_ms": total_time_ms,
             "iteration_count": len(history),
             "agent_type": self.agent_type,
+            "routing": {
+                "mode": getattr(self.tool_router, "name", "policy"),
+                "decisions": routing_decisions,
+            },
             "timing": {
+                "total_router_ms": total_router_ms,
                 "total_llm_ms": total_llm_ms,
                 "total_tool_ms": total_tool_ms,
-                "framework_overhead_ms": total_time_ms - total_llm_ms - total_tool_ms,
+                "framework_overhead_ms": (
+                    total_time_ms - total_router_ms - total_llm_ms - total_tool_ms
+                ),
                 "steps": step_timings,
             },
             "token_usage": token_usage,
         }
-        log.info(f"任务执行完成，共 {len(history)} 步, 总耗时 {total_time_ms}ms (LLM {total_llm_ms}ms + Tool {total_tool_ms}ms)")
+        log.info(
+            f"任务执行完成，共 {len(history)} 步, 总耗时 {total_time_ms}ms "
+            f"(Router {total_router_ms}ms + LLM {total_llm_ms}ms + Tool {total_tool_ms}ms)"
+        )
         log.info("-" * 80)
         return result
 
     # ---------- LLM 请求参数 ----------
+
+    def _request_policy_action(
+        self,
+        *,
+        agent_model: str,
+        task: str,
+        tools_description: str,
+        history_text: str,
+    ) -> Tuple[str, Optional[Dict[str, Any]], int, Dict[str, int]]:
+        """Generate and parse one policy action, preserving the original API path."""
+        messages, extra = self.build_messages(task, tools_description, history_text)
+        extra = self._merge_llm_extra(extra)
+        eff_temperature = float(extra.pop("temperature", 0.1))
+        started = time.time()
+        response = self.llm_client.chat_completions(
+            model=agent_model,
+            messages=messages,
+            temperature=eff_temperature,
+            max_tokens=1000,
+            stream=False,
+            extra=extra or None,
+        )
+        elapsed_ms = int((time.time() - started) * 1000)
+        raw_usage = response.get("usage") or {}
+        usage = {
+            "prompt_tokens": int(raw_usage.get("prompt_tokens", 0)),
+            "completion_tokens": int(raw_usage.get("completion_tokens", 0)),
+            "total_tokens": int(raw_usage.get("total_tokens", 0)),
+        }
+        thought, action = self.parse_response(response)
+        return thought, action, elapsed_ms, usage
+
+    def _request_routed_action(
+        self,
+        *,
+        agent_model: str,
+        task: str,
+        selected_tool: str,
+        tool_description: str,
+        history_text: str,
+    ) -> Tuple[str, Optional[Dict[str, Any]], int, Dict[str, int]]:
+        """Generate arguments for an already selected tool and parse one action."""
+        messages, extra = self.build_routed_messages(
+            task, selected_tool, tool_description, history_text
+        )
+        extra = self._merge_llm_extra(extra)
+        eff_temperature = float(extra.pop("temperature", 0.1))
+        started = time.time()
+        response = self.llm_client.chat_completions(
+            model=agent_model,
+            messages=messages,
+            temperature=eff_temperature,
+            max_tokens=400,
+            stream=False,
+            extra=extra or None,
+        )
+        elapsed_ms = int((time.time() - started) * 1000)
+        raw_usage = response.get("usage") or {}
+        usage = {
+            "prompt_tokens": int(raw_usage.get("prompt_tokens", 0)),
+            "completion_tokens": int(raw_usage.get("completion_tokens", 0)),
+            "total_tokens": int(raw_usage.get("total_tokens", 0)),
+        }
+        thought, action = self.parse_response(response)
+        return thought, action, elapsed_ms, usage
+
+    @classmethod
+    def _validate_routed_action(
+        cls,
+        action: Optional[Dict[str, Any]],
+        tool: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """Validate routed arguments without adding a JSON-schema dependency."""
+        if not isinstance(action, dict):
+            return False, "missing_action"
+        args = action.get("args", {})
+        if not isinstance(args, dict):
+            return False, "args_not_object"
+        schema = tool.get("parameters") or {}
+        properties = schema.get("properties") or {}
+        required = schema.get("required") or []
+        unknown = sorted(set(args) - set(properties)) if properties else []
+        if unknown:
+            return False, f"unknown_args:{','.join(unknown)}"
+        for name in required:
+            if name not in args or args[name] is None or args[name] == "":
+                return False, f"missing_required:{name}"
+        for name, value in args.items():
+            spec = properties.get(name) or {}
+            if not cls._value_matches_schema(value, spec):
+                return False, f"invalid_value:{name}"
+        return True, "ok"
+
+    @classmethod
+    def _value_matches_schema(cls, value: Any, spec: Dict[str, Any]) -> bool:
+        variants = spec.get("anyOf")
+        if isinstance(variants, list):
+            return any(cls._value_matches_schema(value, item) for item in variants)
+        expected = spec.get("type")
+        if isinstance(expected, list):
+            return any(
+                cls._value_matches_schema(value, {**spec, "type": item})
+                for item in expected
+            )
+        type_checks = {
+            "null": lambda item: item is None,
+            "boolean": lambda item: isinstance(item, bool),
+            "integer": lambda item: isinstance(item, int) and not isinstance(item, bool),
+            "number": lambda item: (
+                isinstance(item, (int, float)) and not isinstance(item, bool)
+            ),
+            "string": lambda item: isinstance(item, str),
+            "object": lambda item: isinstance(item, dict),
+            "array": lambda item: isinstance(item, list),
+        }
+        if expected in type_checks and not type_checks[expected](value):
+            return False
+        if "enum" in spec and value not in spec["enum"]:
+            return False
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if "minimum" in spec and value < spec["minimum"]:
+                return False
+            if "maximum" in spec and value > spec["maximum"]:
+                return False
+        if isinstance(value, str) and len(value) < int(spec.get("minLength", 0)):
+            return False
+        return True
 
     def _merge_llm_extra(self, extra: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """合并 stop 序列与 llm_extra；build_messages 返回的 extra 优先级最高。"""
