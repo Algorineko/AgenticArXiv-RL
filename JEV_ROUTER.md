@@ -184,6 +184,13 @@ rollout。答案是可以。前面的 mixed 10-task 结果则用来检查这种�
 
 ## 开关与失败处理
 
+首步路由实验 `scripts/jev_route_smoke.py` 默认使用冻结的 `data/splits/v3_81.json`。
+`--split all` 与 train/dev/iid_test/ood_test 都从同一份切分文件选题，避免新增任务族
+静默改变这组 81 题实验的范围。`--limit` 在按切分文件筛选之后生效。
+评测新版 86 题集合时，显式指定 `--split-file data/splits/v7_86.json`；dry-run 预览
+与结果配置会记录所选文件，非默认切分的自动输出文件名也会带上切分文件名后缀。
+上文的 81 题首步 probe 结果仍属于原冻结集合，不与新版任务混算。
+
 默认不启用外部路由：
 
 ```env
