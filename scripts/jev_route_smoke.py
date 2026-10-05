@@ -627,26 +627,39 @@ def _evaluate(
     )
 
 
-def _select_tasks(task_set: str, split: str, limit: int) -> List[Dict[str, Any]]:
+def _select_tasks(
+    task_set: str,
+    split: str,
+    limit: int,
+    *,
+    split_path: Path | None = None,
+) -> List[Dict[str, Any]]:
+    """Select expanded tasks from one frozen manifest, including for ``all``."""
     if task_set == "legacy":
         if split != "all":
             raise ValueError("--split is only supported with --task-set expanded")
         tasks = get_all_tasks()
     else:
         tasks = get_expanded_tasks()
-        if split != "all":
-            payload = json.loads(SPLIT_PATH.read_text(encoding="utf-8"))
-            groups = payload.get("split") or {}
-            if split not in groups:
-                raise ValueError(
-                    f"unknown split {split!r}; choose from all, "
-                    f"{', '.join(sorted(groups))}"
-                )
-            by_id = {str(task["id"]): task for task in tasks}
-            missing = [task_id for task_id in groups[split] if task_id not in by_id]
-            if missing:
-                raise ValueError(f"split contains unknown task ids: {missing}")
-            tasks = [by_id[task_id] for task_id in groups[split]]
+        payload = json.loads((split_path or SPLIT_PATH).read_text(encoding="utf-8"))
+        groups = payload.get("split") or {}
+        if split != "all" and split not in groups:
+            raise ValueError(
+                f"unknown split {split!r}; choose from all, "
+                f"{', '.join(sorted(groups))}"
+            )
+        by_id = {str(task["id"]): task for task in tasks}
+        selected_ids = (
+            {task_id for ids in groups.values() for task_id in ids}
+            if split == "all" else groups[split]
+        )
+        missing = sorted(task_id for task_id in selected_ids if task_id not in by_id)
+        if missing:
+            raise ValueError(f"split contains unknown task ids: {missing}")
+        tasks = (
+            [task for task in tasks if str(task["id"]) in selected_ids]
+            if split == "all" else [by_id[task_id] for task_id in selected_ids]
+        )
     return tasks[:limit] if limit > 0 else tasks
 
 
@@ -659,6 +672,12 @@ def main() -> None:
         "--split",
         default="all",
         help="expanded split: all, train, dev, iid_test, or ood_test",
+    )
+    parser.add_argument(
+        "--split-file",
+        type=Path,
+        default=SPLIT_PATH,
+        help="frozen expanded-task manifest (default: data/splits/v3_81.json)",
     )
     parser.add_argument(
         "--limit", type=int, default=0, help="0 evaluates the complete selection"
@@ -697,7 +716,9 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        tasks = _select_tasks(args.task_set, args.split, args.limit)
+        tasks = _select_tasks(
+            args.task_set, args.split, args.limit, split_path=args.split_file,
+        )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     requested_ids = set(args.task_ids or [])
@@ -729,6 +750,7 @@ def main() -> None:
         preview = {
             "task_set": args.task_set,
             "split": args.split,
+            "split_file": str(args.split_file.resolve()) if args.task_set == "expanded" else None,
             "task_count": len(tasks),
             "tool_count": len(criteria),
             "snapshot": str(snapshot_path) if snapshot_path else None,
@@ -751,6 +773,8 @@ def main() -> None:
         output = Path(args.output)
     else:
         suffix = "_targeted" if requested_ids else ""
+        if args.task_set == "expanded" and args.split_file.resolve() != SPLIT_PATH.resolve():
+            suffix += f"_{args.split_file.stem}"
         output = (
             REPO_ROOT
             / "artifacts"
@@ -760,6 +784,7 @@ def main() -> None:
         "experiment_version": EXPERIMENT_VERSION,
         "task_set": args.task_set,
         "split": args.split,
+        "split_file": str(args.split_file.resolve()) if args.task_set == "expanded" else None,
         "limit": args.limit,
         "model": MODEL,
         "router_scope": "next_tool_only",
