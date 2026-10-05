@@ -64,18 +64,38 @@ def main() -> None:
                 unknown.add(str(trace.get("task_id")))
                 continue
             detail = old_details.get(_key(trace), {})
+            trace_timing = trace.get("timing") or {}
+            trace_usage = trace.get("token_usage") or {}
             result = {
                 "history": trace.get("history") or [],
-                "total_time_ms": detail.get("total_ms", 0),
-                "iteration_count": detail.get(
-                    "iterations", len(trace.get("history") or [])
+                "total_time_ms": trace.get(
+                    "total_time_ms", detail.get("total_ms", 0)
+                ),
+                "iteration_count": trace.get(
+                    "iteration_count",
+                    detail.get("iterations", len(trace.get("history") or [])),
                 ),
                 "timing": {
-                    "total_llm_ms": detail.get("llm_ms", 0),
-                    "total_tool_ms": detail.get("tool_ms", 0),
-                    "framework_overhead_ms": detail.get("overhead_ms", 0),
+                    "total_router_ms": trace_timing.get(
+                        "total_router_ms", detail.get("router_ms", 0)
+                    ),
+                    "total_llm_ms": trace_timing.get(
+                        "total_llm_ms", detail.get("llm_ms", 0)
+                    ),
+                    "total_tool_ms": trace_timing.get(
+                        "total_tool_ms", detail.get("tool_ms", 0)
+                    ),
+                    "framework_overhead_ms": trace_timing.get(
+                        "framework_overhead_ms", detail.get("overhead_ms", 0)
+                    ),
                 },
-                "token_usage": {"total_tokens": detail.get("tokens", 0)},
+                "token_usage": trace_usage or {
+                    "total_tokens": detail.get("tokens", 0)
+                },
+                "routing": trace.get("routing") or {
+                    "mode": detail.get("router_mode", "policy"),
+                    "decisions": [],
+                },
             }
             metrics.append(extract_metrics(
                 task,

@@ -12,15 +12,36 @@ from tools.tool_registry import registry
 from tools.bootstrap import missing_tools, register_all_tools, registered_tool_count
 from agents.base_agent import BaseAgent, is_terminal_action
 from agents.prompt_templates import get_react_prompt, format_tool_description
+from agents.prompt_templates import get_routed_argument_prompt
 from utils.logger import log
+
+
+_ROUTER_FROM_ENV = object()
 
 
 class ReActAgent(BaseAgent):
     """方案 A: ReAct + 正则解析 Agent"""
 
-    def __init__(self, llm_client: LLMClient, side_effect_mgr=None, env=None, max_iterations: int = 5, llm_extra=None):
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        side_effect_mgr=None,
+        env=None,
+        max_iterations: int = 5,
+        llm_extra=None,
+        tool_router=_ROUTER_FROM_ENV,
+        router_argument_mode=None,
+    ):
+        if tool_router is _ROUTER_FROM_ENV:
+            from routing.factory import build_tool_router_from_env
+
+            tool_router = build_tool_router_from_env()
+        if router_argument_mode is None:
+            router_argument_mode = os.getenv("ROUTER_ARGUMENT_MODE", "guided")
         super().__init__(llm_client, side_effect_mgr=side_effect_mgr, env=env,
-                         max_iterations=max_iterations, llm_extra=llm_extra)
+                         max_iterations=max_iterations, llm_extra=llm_extra,
+                         tool_router=tool_router,
+                         router_argument_mode=router_argument_mode)
         # 逐个模块独立导入：四个 import 曾共用一个 try，缺任何一个第三方依赖
         # 就会让四个工具**全部**注册不上，而 registry 为空时模型不会报错，
         # 它会编工具名。详见 tools/bootstrap.py。
@@ -42,6 +63,21 @@ class ReActAgent(BaseAgent):
         prompt = get_react_prompt(
             task=task,
             tools_description=tools_description,
+            history=history_text,
+        )
+        return [{"role": "user", "content": prompt}], {}
+
+    def build_routed_messages(
+        self,
+        task: str,
+        selected_tool: str,
+        tool_description: str,
+        history_text: str,
+    ) -> Tuple[List[Dict], Dict[str, Any]]:
+        prompt = get_routed_argument_prompt(
+            task=task,
+            selected_tool=selected_tool,
+            tool_description=tool_description,
             history=history_text,
         )
         return [{"role": "user", "content": prompt}], {}

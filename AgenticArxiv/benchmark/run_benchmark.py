@@ -32,6 +32,26 @@ from benchmark.report import BenchmarkReport
 from config import settings
 
 
+def _trace_record(result) -> dict:
+    """Keep enough raw data to reproduce both task and router metrics."""
+    raw = result.raw_result or {}
+    return {
+        "task_id": result.task_id,
+        "agent_type": result.agent_type,
+        "trial": result.trial,
+        "session_id": result.session_id,
+        "history": raw.get("history") or [],
+        "final_observation": raw.get("final_observation", ""),
+        "total_time_ms": raw.get("total_time_ms", 0),
+        "iteration_count": raw.get(
+            "iteration_count", len(raw.get("history") or [])
+        ),
+        "timing": raw.get("timing") or {},
+        "token_usage": raw.get("token_usage") or {},
+        "routing": raw.get("routing") or {"mode": "policy", "decisions": []},
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="AgenticArxiv Benchmark — 三种 Agent 模式对比测试")
     parser.add_argument(
@@ -224,13 +244,9 @@ def main():
                 history = (r.raw_result or {}).get("history")
                 if not history:
                     continue
-                handle.write(json.dumps({
-                    "task_id": r.task_id,
-                    "agent_type": r.agent_type,
-                    "trial": r.trial,
-                    "session_id": r.session_id,
-                    "history": history,
-                }, ensure_ascii=False) + "\n")
+                handle.write(json.dumps(
+                    _trace_record(r), ensure_ascii=False
+                ) + "\n")
                 written += 1
         print(f"轨迹已写出: {traces_path}（{written} 条）")
 
