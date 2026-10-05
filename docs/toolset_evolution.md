@@ -10,12 +10,13 @@
 | `get_recently_submitted_cs_papers` | 子领域 + 时间窗检索 | 只认 `cat:cs.*` + 提交日期，无翻页；摘要截断 200 字符 |
 | `search_arxiv_papers` | 关键词/篇名/作者检索 | 无翻页；离线模式对快照外查询返回显式标记的确定性降级结果 |
 | `download_arxiv_pdf` | 下载 PDF | — |
-| `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，翻译后的正文不进入模型上下文；依赖可选 extra |
+| `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，译文由 `get_translated_content` 按页读入上下文；依赖可选 extra |
 | `get_paper_cache_status` | 查缓存 | — |
 | `get_paper_content` | 读取摘要或 method/result/conclusion 章节 | 需要先下载 PDF；确定性抽取，不调用 LLM |
 | `summarize_paper` | 按 style/budget 生成摘要 | 需要先下载 PDF；默认走确定性抽取式后端，`local_model` 后端为可选 |
 | `extract_paper_figures` | 抽出内嵌图表图片 + caption，返回文件路径 | 需要先下载 PDF；纯向量图（无内嵌位图）会返回 `count: 0` |
 | `analyze_figure`（T5，多模态） | env 侧调本地 VLM 读图回答 | VLM 只在 env 侧；策略仍是纯文本小模型 |
+| `get_translated_content` | 按页读取译文（翻译后的中文 PDF） | 需要先完成翻译；按页而非按章节寻址（中文标题随翻译服务漂移），确定性抽取，不评估翻译质量；`build_snapshot` 默认录制每池第 1 篇的译文页（`--translate-max-ref N` 可调，0 关闭） |
 
 三个结论：
 
@@ -43,6 +44,7 @@
 - `long_chain` 的 `chain_ai5_read_then_summary`：读 → 总结串成 4 步链（T2+T3）
 - `figure_extraction`：检索 → 下载 → 抽图（T4），4 条
 - `analyze_figure`（T5）：检索 → 下载 → 抽图 → 图表分析，仅多模态环境启用
+- `translation_reading`（读译文）：setup 已完成检索 → 下载 → 翻译，steps 只有按页读译文，5 条
 
 ## 训练与评测侧的连带设计
 

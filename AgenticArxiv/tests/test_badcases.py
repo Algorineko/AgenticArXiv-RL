@@ -186,7 +186,8 @@ class CaseFileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "c.jsonl"
             path.write_text("// 说明\n\n"
-                            + json.dumps(case(case_id="x").to_dict(), ensure_ascii=False) + "\n")
+                            + json.dumps(case(case_id="x").to_dict(), ensure_ascii=False) + "\n",
+                            encoding="utf-8")
             self.assertEqual(len(load_cases(path)), 1)
 
     def test_a_malformed_line_names_its_line_number(self):

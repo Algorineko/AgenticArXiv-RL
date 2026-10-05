@@ -58,11 +58,11 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 | Dimensión | Definición |
 |------|------|
 | **State** | Descripción de la tarea + historial de diálogo + resultados de las herramientas |
-| **Action** | 9 herramientas (véase abajo) + FINISH |
+| **Action** | 10 herramientas (véase abajo) + FINISH |
 | **Reward** | Recompensa verificable multigranular de cinco componentes (format / tool / argument / process / outcome) |
 | **Transition** | `execute_tool(action) → observation` (replay offline de snapshots con `MockArxivEnv`, determinista y reproducible) |
 
-### Espacio de Acciones (9 herramientas)
+### Espacio de Acciones (10 herramientas)
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — Navegación por subárea + ventana temporal
 2. `search_arxiv_papers(query, max_results, days=None)` — Búsqueda por palabra clave/título/autor
@@ -73,6 +73,7 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 7. `summarize_paper(ref, style, max_words)` — Resumen del lado del entorno (tldr / structured / bullet)
 8. `extract_paper_figures(ref)` — Extracción de los archivos de figuras y sus captions
 9. `analyze_figure(ref, figure_no, question=None)` — Análisis de figuras: el entorno llama a un VLM local para leer la imagen (requiere el entorno multimodal)
+10. `get_translated_content(ref, session_id, page=1)` — Lectura de la traducción página a página (el PDF traducido al chino, extracción determinista; la página 1 suele contener el título y el abstract)
 
 > El bucle de interpretación «búsqueda → descarga → lectura → resumen → extracción de figuras → análisis de figuras» está completamente cerrado: el análisis de figuras lo realiza del lado del entorno el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto, que graba las respuestas en el snapshot, y del lado de la política existen los pesos [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5), que aprendieron esa cadena de cuatro pasos.
 > **Criterio de admisión**: un espacio de acciones más grande no es automáticamente mejor — el estándar para añadir una herramienta es «habilita una nueva categoría de tareas», no «puede que sea útil». La cadena de decisiones de diseño está en [Diseño de Evolución del Conjunto de Herramientas](docs/toolset_evolution.md).
@@ -200,11 +201,11 @@ Todos se alojan en ModelScope (`Algorineko/AgenticArXiv-RL-*`); las model cards 
 ## 🧪 Conjunto de Tareas y Evaluación
 
 - **Conjunto de humo** (`benchmark/tasks.py`): 8 tareas (search / download / translate / cache / composite)
-- **Conjunto ampliado** (`benchmark/tasks_expanded.py`): 81 tareas y trece familias de plantillas (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / **figure_analysis**); se activa con `run_benchmark.py --task-set expanded`. Ambos conjuntos pasan por el mismo `TaskSpec`: `expected_tools` / `expected_tool_args` se derivan de una única fuente `steps`, de modo que nunca hay dos listas escritas a mano que diverjan.
+- **Conjunto ampliado** (`benchmark/tasks_expanded.py`): 86 tareas y catorce familias de plantillas (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**); se activa con `run_benchmark.py --task-set expanded`. Ambos conjuntos pasan por el mismo `TaskSpec`: `expected_tools` / `expected_tool_args` se derivan de una única fuente `steps`, de modo que nunca hay dos listas escritas a mano que diverjan.
 - **Particiones**: train / iid_test / ood_test por plantilla (`benchmark/splits.py`, fijadas en `data/splits/`); `rl_train` toma solo la banda intermedia de la tasa de éxito (en los extremos la varianza intragrupo es cero y no se produce gradiente). Tras cambiar de modelo hay que volver a medir las rates: los umbrales antiguos no se pueden reutilizar.
 - **Criterios de evaluación**: fiabilidad `pass^k` (convención tau-bench), `false_finish` (la política degradada `always_finish` alcanza un 91.5% frente al 0% de `reference`), `ref_score` (compara el `paper_id` y no la forma literal del `ref`), coste normalizado por número de aciertos.
 - **Puertas de discriminación** (`run_baselines.py`): políticas degradadas deterministas con umbral por categoría — «buscar siempre cs.AI» baja de 0.833 a 0.446 en la categoría de búsqueda, y «llamar a herramientas cuando no tocaba» pasa de +0.165 a −0.235.
-- **Replay de casos malos** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`, 14 casos): cada trayectoria fallida se congela como caso de regresión permanente; el replay ejecuta solo el evaluador y el propio `pytest` hace de puerta. `hack/*` documenta formas de engañar la puntuación con aserciones de umbral y sirve además de biblioteca de casos de reward hacking.
+- **Replay de casos malos** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`, 17 casos): cada trayectoria fallida se congela como caso de regresión permanente; el replay ejecuta solo el evaluador y el propio `pytest` hace de puerta. `hack/*` documenta formas de engañar la puntuación con aserciones de umbral y sirve además de biblioteca de casos de reward hacking.
 
 ```bash
 python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_test --offline
@@ -256,7 +257,7 @@ Licencia MIT
 
 - [ ] **Multimodalidad del lado de la política**: pasar el VLM del entorno a la política (la observation transporta las figuras), reutilizando la ruta visual-lingüística de TRL ya validada en `train_vlm_figure_qa.py`; bases candidatas Qwen3-VL-4B / Qwen2.5-VL-2B (gama on-device)
 - [ ] **Cadena de lectura de extremo a extremo**: búsqueda → descarga → traducción → resumen → análisis de figuras, cerrada dentro de un único modelo y optimizada para la inferencia en el dispositivo (cuantización + escala 2-4B)
-- [ ] **El texto traducido, en el contexto**: `translate_arxiv_pdf` hoy solo produce un archivo y el texto traducido no entra en el contexto del modelo — falta una herramienta verificable de «lectura de la traducción»
+- [x] **El texto traducido, en el contexto**: nueva herramienta `get_translated_content`, que lee la traducción de pdf2zh página a página de forma determinista; se reproduce desde snapshots offline (grabados con `build_snapshot --translate-max-ref N`) y se evalúa con la regla de calidad de resultado de las herramientas de lectura
 
 ### P1 — Algoritmos de RL Agentic de Nueva Generación
 

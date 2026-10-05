@@ -281,6 +281,34 @@ class AgenticArxivMultiTurnEnv:
             },
         )
 
+    def get_translated_content(
+        self, ref: str | int | None = 1, page: int = 1
+    ) -> dict[str, Any]:
+        """Read one page of a paper's translation through the snapshot backend.
+
+        Args:
+            ref: One-based result index, arXiv id, or title fragment.
+            page: 1-based page of the translated PDF.
+
+        Returns:
+            The page text plus the paper it came from and its page count.
+        """
+        paper = self.store.resolve_paper(self.session_id, ref)
+        if paper is None:
+            raise ValueError(
+                "Paper not found; search for the paper and check the ref."
+            )
+
+        return self.backend.execute_tool(
+            "get_translated_content",
+            {
+                "session_id": self.session_id,
+                "ref": ref,
+                "page": page,
+                "_resolved_paper_id": paper.id,
+            },
+        )
+
     def translate_arxiv_pdf(
         self,
         ref: str | int | None = None,

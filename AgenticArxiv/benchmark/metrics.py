@@ -587,6 +587,12 @@ def _check_tool_sequence(actual: List[str], expected: List[str]) -> bool:
 
 def _match_arg_value(predicted_val: Any, expected_val: Any, key: str = "") -> bool:
     """Robust equivalence check between predicted and expected tool arguments."""
+    if key == "page":
+        # page 缺省即第 1 页（与 get_translated_content 的 validate_page 同口径），
+        # 省略、显式传 null、传 1 三种写法等价；否则默认页任务无法同时认可这几种写法。
+        predicted_val = 1 if predicted_val is None else predicted_val
+        expected_val = 1 if expected_val is None else expected_val
+
     if expected_val is None:
         # None 表示缺省参数，省略不传或显式传 None 均算对
         return predicted_val is None
@@ -728,6 +734,21 @@ def argument_match_score(
     return sum(scores) / len(scores) if scores else 1.0
 
 
+#: 读译文的 observation 带着整页中文译文。框架写入的失败信息总在 observation 开头
+#: （「工具执行失败: …」「无法解析 Action」），所以对这个工具只认前缀——否则译文正文
+#: 里恰好出现「无法解析」「命令失败」这类字样，正确的读取会被判成失败。
+_PREFIX_ONLY_FAILURE_TOOLS = frozenset({"get_translated_content"})
+
+
+def observation_reports(observation: Any, markers: Sequence[str], action: Any = "") -> bool:
+    """observation 是否带有任一失败标记；读译文只看开头，其余工具沿用子串匹配。"""
+    text = str(observation or "")
+    parsed = _parse_tool_action(action)
+    if parsed and parsed.get("name") in _PREFIX_ONLY_FAILURE_TOOLS:
+        return text.lstrip().startswith(tuple(markers))
+    return any(marker in text for marker in markers)
+
+
 def _count_parse_failures(history: List[Dict]) -> int:
     """统计解析失败次数（thought 存在但 action 为终止且非正常 FINISH）"""
     failures = 0
@@ -737,7 +758,7 @@ def _count_parse_failures(history: List[Dict]) -> int:
         if action == "FINISH" and i < len(history) - 1:
             failures += 1
         # observation 包含"无法解析"
-        if "无法解析" in step.get("observation", ""):
+        if observation_reports(step.get("observation", ""), ("无法解析",), action):
             failures += 1
     return failures
 
@@ -750,7 +771,6 @@ def _count_tool_failures(history: List[Dict]) -> int:
         action = step.get("action", "")
         if action in NON_TOOL_ACTIONS:
             continue
-        obs = step.get("observation", "")
-        if any(marker in obs for marker in error_markers):
+        if observation_reports(step.get("observation", ""), error_markers, action):
             failures += 1
     return failures

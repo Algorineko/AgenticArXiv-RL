@@ -18,6 +18,7 @@ from benchmark.metrics import (
     classify_blocked_terminal_semantics,
     extract_metrics,
     lcs_length,
+    observation_reports,
 )
 
 
@@ -280,7 +281,7 @@ class RewardCalculator:
             observation = str(step.get("observation", ""))
             if action in TERMINAL_ACTIONS or _parse_action(action):
                 good_steps += 1.0
-            if step.get("parse_failed") or "无法解析" in observation:
+            if step.get("parse_failed") or observation_reports(observation, ("无法解析",), action):
                 good_steps -= 1.0
         failures = metrics.parse_failures + metrics.tool_exec_failures
         extras = max(0, len(metrics.tool_call_sequence) - len(metrics.expected_tools))
@@ -372,12 +373,10 @@ class RewardCalculator:
             observation = str(step.get("observation", "") or "")
             action = _parse_action(step.get("action", "")) or {}
             tool_name = str(action.get("name", ""))
-            if (
-                step.get("parse_failed")
-                or "工具执行失败" in observation
-                or "无法解析" in observation
-                or "offline_fallback" in observation
-                or "回退结果" in observation
+            if step.get("parse_failed") or observation_reports(
+                observation,
+                ("工具执行失败", "无法解析", "offline_fallback", "回退结果"),
+                step.get("action", ""),
             ):
                 scores.append(-1.0)
                 continue
@@ -408,7 +407,11 @@ class RewardCalculator:
                 # 空答案和被截断的结果都不能作为已完成的图表分析。
                 scores.append(1.0 if _has_figure_answer(observation) else -1.0)
                 continue
-            elif tool_name in {"get_paper_content", "summarize_paper"}:
+            elif tool_name in {
+                "get_paper_content",
+                "summarize_paper",
+                "get_translated_content",
+            }:
                 # The reading tools answer with the resolved paper and the
                 # extracted text.  Grounding is the point: a payload that names
                 # a paper but carries no text is not useful work, even though

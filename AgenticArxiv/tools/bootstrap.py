@@ -47,6 +47,8 @@ TOOL_MODULES: Dict[str, Tuple[str, ...]] = {
     "tools.figure_analysis_tool": ("analyze_figure",),
     "tools.pdf_translate_tool": ("translate_arxiv_pdf",),
     "tools.cache_status_tool": ("get_paper_cache_status",),
+    # 排在最后：注册顺序就是 prompt 里的工具顺序，追加在末尾不改变既有工具的位置。
+    "tools.translated_content_tool": ("get_translated_content",),
 }
 
 
