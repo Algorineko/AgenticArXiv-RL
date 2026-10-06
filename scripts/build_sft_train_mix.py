@@ -91,18 +91,18 @@ def main() -> None:
     if output_path.resolve() in {original_path.resolve(), parametric_path.resolve()}:
         raise SystemExit("output 不能覆盖任何输入")
 
+    # 行数以各来源自己的 manifest 为准（它们已按 SHA256 冻结），而不是写死某一代数据的
+    # 1020 / 1908：v4 / v5 的派生数据行数已经不同，写死会让 README 的 SFT 数据管线跑不通。
+    original_rows = read_jsonl(original_path)
+    parametric_rows = read_jsonl(parametric_path)
     original_manifest = validate_source_manifest(
         original_path, original_manifest_path,
-        expected_kind="original_train_linguistic", expected_rows=1020,
+        expected_kind="original_train_linguistic", expected_rows=len(original_rows),
     )
     parametric_manifest = validate_source_manifest(
         parametric_path, parametric_manifest_path,
-        expected_kind="parametric_v1_linguistic", expected_rows=1908,
+        expected_kind="parametric_v1_linguistic", expected_rows=len(parametric_rows),
     )
-    original_rows = read_jsonl(original_path)
-    parametric_rows = read_jsonl(parametric_path)
-    if len(original_rows) != 1020 or len(parametric_rows) != 1908:
-        raise ValueError("JSONL 实际行数与冻结方案不一致")
 
     mixed = build_mix(original_rows, parametric_rows, seed=args.seed)
     write_jsonl(output_path, mixed)
@@ -141,8 +141,10 @@ def main() -> None:
             },
         ],
         "policy": (
-            "All rows are kept because the two sources are balanced per semantic task "
-            "(28.33 vs 29.35 rows/task); file order is deterministically shuffled."
+            "All rows are kept; per-semantic-task density of the two sources is "
+            f"{len(original_rows) / len(original_tasks):.2f} vs "
+            f"{len(parametric_rows) / len(parametric_tasks):.2f} rows/task; "
+            "file order is deterministically shuffled."
         ),
     }
     manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
