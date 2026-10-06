@@ -1,11 +1,13 @@
 """Offline tests for the optional inference-time tool router framework."""
 
+import json
 import os
 import sys
 from pathlib import Path
 from unittest import mock
 
 import requests
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("STORE_BACKEND", "memory")
@@ -296,6 +298,145 @@ def test_guided_router_uses_deterministic_explicit_args_without_qwen_call():
     route = result["routing"]["decisions"][0]
     assert route["used"] is True
     assert route["argument_source"] == "deterministic"
+
+
+@pytest.mark.parametrize(
+    ("task", "reference"),
+    [
+        ("下载 2608.14528v1 这篇论文，然后总结它", "2608.14528v1"),
+        ("下载第1篇论文，然后总结它", 1),
+        ("下载刚才那篇论文，然后总结它", None),
+    ],
+)
+def test_exhausted_guided_route_preserves_remaining_task(
+    task: str, reference: str | int | None,
+) -> None:
+    """Finishing one tool's references must not drop a later summary step."""
+    router = _Router(
+        [
+            RouteDecision(
+                selected_tool="download_arxiv_pdf", accepted=True, source="jev",
+            ),
+            RouteDecision(
+                selected_tool="download_arxiv_pdf", accepted=True, source="jev",
+            ),
+            RouteDecision(
+                selected_tool="FINISH", accepted=True, source="jev",
+            ),
+        ]
+    )
+    summary_action = {"name": "summarize_paper", "args": {"ref": reference}}
+    client = _TextClient(
+        ["Thought: 继续总结论文\nAction: " + json.dumps(summary_action)]
+    )
+    environment = _Environment()
+    agent = ReActAgent(
+        client,
+        side_effect_mgr=LocalSideEffectManager(),
+        env=environment,
+        max_iterations=4,
+        tool_router=router,
+        router_argument_mode="guided",
+    )
+
+    result = agent.run(task)
+
+    assert [name for name, _ in environment.calls] == [
+        "download_arxiv_pdf", "summarize_paper",
+    ]
+    assert environment.calls[1][1]["ref"] == reference
+    assert len(client.calls) == 1
+    prompt = client.calls[0]["messages"][0]["content"]
+    assert "summarize_paper" in prompt
+    assert "search_arxiv_papers" in prompt
+    assert "已经做出不可更改的工具决定" not in prompt
+    assert "Observation:" in prompt
+    fallback = result["routing"]["decisions"][1]
+    assert fallback["used"] is False
+    assert fallback["fallback_reason"] == "deterministic_references_exhausted"
+    assert result["token_usage"]["total_tokens"] == 10
+    assert result["history"][-1]["action"] == "FINISH"
+
+
+def test_exhausted_guided_route_allows_policy_recovery_after_tool_failure() -> None:
+    """A recorded failed download must leave the full policy able to retry."""
+    router = _Router(
+        [
+            RouteDecision(
+                selected_tool="download_arxiv_pdf", accepted=True, source="jev",
+            ),
+            RouteDecision(
+                selected_tool="download_arxiv_pdf", accepted=True, source="jev",
+            ),
+            RouteDecision(
+                selected_tool="FINISH", accepted=True, source="jev",
+            ),
+        ]
+    )
+    client = _TextClient(
+        [
+            'Thought: 重试下载\nAction: {"name":"download_arxiv_pdf",'
+            '"args":{"ref":"2608.14528v1","force":true}}'
+        ]
+    )
+    environment = _Environment()
+    agent = ReActAgent(
+        client,
+        side_effect_mgr=LocalSideEffectManager(),
+        env=environment,
+        max_iterations=4,
+        tool_router=router,
+        router_argument_mode="guided",
+    )
+    with mock.patch.object(
+        environment,
+        "execute_tool",
+        side_effect=[
+            RuntimeError("temporary download failure"),
+            {"paper_id": "2608.14528v1", "status": "READY"},
+        ],
+    ) as execute:
+        result = agent.run("下载 2608.14528v1 这篇论文")
+
+    assert execute.call_count == 2
+    assert execute.call_args_list[1].args[0] == "download_arxiv_pdf"
+    assert execute.call_args_list[1].args[1]["force"] is True
+    assert "temporary download failure" in result["history"][0]["observation"]
+    assert len(client.calls) == 1
+    assert "temporary download failure" in client.calls[0]["messages"][0]["content"]
+    assert result["history"][-1]["action"] == "FINISH"
+
+
+def test_exhausted_guided_route_can_finish_after_full_policy_check() -> None:
+    """A truly completed request can still FINISH through the original policy."""
+    router = _Router(
+        [
+            RouteDecision(
+                selected_tool="download_arxiv_pdf", accepted=True, source="jev",
+            ),
+            RouteDecision(
+                selected_tool="download_arxiv_pdf", accepted=True, source="jev",
+            ),
+        ]
+    )
+    client = _TextClient(["Thought: 下载已完成\nAction: FINISH"])
+    environment = _Environment()
+    agent = ReActAgent(
+        client,
+        side_effect_mgr=LocalSideEffectManager(),
+        env=environment,
+        max_iterations=3,
+        tool_router=router,
+        router_argument_mode="guided",
+    )
+
+    result = agent.run("下载 2608.14528v1 这篇论文")
+
+    assert len(environment.calls) == 1
+    assert len(client.calls) == 1
+    assert result["history"][-1]["action"] == "FINISH"
+    assert result["routing"]["decisions"][1]["used"] is False
+    assert result["token_usage"]["total_tokens"] == 10
 
 
 def test_guided_router_blocks_non_positive_reference_without_tool_or_qwen_call():
