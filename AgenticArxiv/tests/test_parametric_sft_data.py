@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from generate_parametric_sft_data import (  # noqa: E402
+    DEFAULT_SPLIT_FILE,
     build_parametric_tasks,
     tool_names,
     validate_derived_tasks,
@@ -26,6 +27,12 @@ class ParametricSftTaskTest(unittest.TestCase):
         cls.payload = json.loads(SPLIT_PATH.read_text(encoding="utf-8"))
         cls.derived = build_parametric_tasks()
         cls.by_id = {spec.id: spec for spec in EXPANDED_SPECS}
+
+    def test_cli_default_split_accepts_the_full_derivation_list(self):
+        # README 的 `python scripts/generate_parametric_sft_data.py` 不带参数；默认切分
+        # 必须包含每个派生父任务，否则文档命令直接报 "父任务不属于 train"。
+        default_payload = json.loads((REPO_ROOT / DEFAULT_SPLIT_FILE).read_text(encoding="utf-8"))
+        validate_derived_tasks(self.derived, default_payload)
 
     def test_expected_count_and_unique_ids(self):
         self.assertEqual(len(self.derived), 80)
