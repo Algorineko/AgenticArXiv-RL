@@ -502,9 +502,9 @@ def compute_step_reward(step_dict: Dict[str, Any], metrics: TaskMetrics) -> floa
     action = step_dict.get("action", "")
     observation = str(step_dict.get("observation", ""))
     reward = 0.1 if action in TERMINAL_ACTIONS or _parse_action(action) else -0.2
-    if step_dict.get("parse_failed") or "无法解析" in observation:
+    if step_dict.get("parse_failed") or observation_reports(observation, ("无法解析",), action):
         reward -= 0.2
-    if any(marker in observation for marker in ("错误:", "工具执行失败:", "Error")):
+    if observation_reports(observation, ("错误:", "工具执行失败:", "Error"), action):
         reward -= 0.3
     return _clip(reward)
 
