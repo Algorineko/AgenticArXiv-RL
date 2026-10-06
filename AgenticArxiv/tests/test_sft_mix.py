@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """参数化语言扩增审计与最终数据混合测试。"""
 
+import json
 import sys
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -10,8 +12,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from augment_parametric_sft_data import validate_parametric_rows  # noqa: E402
-from augment_sft_data import canonical_hash  # noqa: E402
-from build_sft_train_mix import build_mix  # noqa: E402
+from augment_sft_data import canonical_hash, sha256_file  # noqa: E402
+from build_sft_train_mix import build_mix, validate_source_manifest  # noqa: E402
 
 
 SPLIT_NAME = "v2_62.json"
@@ -136,6 +138,46 @@ class MixTest(unittest.TestCase):
         duplicate = self._mix_row("same")
         with self.assertRaisesRegex(ValueError, "重复"):
             build_mix([duplicate], [deepcopy(duplicate)], seed=42)
+
+
+class SourceManifestValidationTest(unittest.TestCase):
+    """来源行数以各自 manifest 为准，不再写死某一代数据的 1020 / 1908。"""
+
+    def _source(self, directory: Path, rows: int, *, kind: str, manifest_rows=None):
+        path = directory / "source.jsonl"
+        path.write_text("".join(json.dumps({"i": i}) + "\n" for i in range(rows)), encoding="utf-8")
+        manifest_path = path.with_suffix(path.suffix + ".manifest.json")
+        manifest = {
+            "augmentation_kind" if kind == "original_train_linguistic" else "kind": (
+                "linguistic_semantics_preserving" if kind == "original_train_linguistic" else kind
+            ),
+            "output_sha256": sha256_file(path),
+            "output_rows": rows if manifest_rows is None else manifest_rows,
+        }
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        return path, manifest_path
+
+    def test_any_row_count_passes_when_file_and_manifest_agree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for rows in (3, 1020, 2628):
+                with self.subTest(rows=rows):
+                    path, manifest_path = self._source(Path(tmp), rows, kind="parametric_v1_linguistic")
+                    manifest = validate_source_manifest(
+                        path, manifest_path, expected_kind="parametric_v1_linguistic", expected_rows=rows
+                    )
+                    self.assertEqual(manifest["output_rows"], rows)
+
+    def test_manifest_row_count_mismatch_is_still_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, manifest_path = self._source(Path(tmp), 5, kind="parametric_v1_linguistic", manifest_rows=4)
+            with self.assertRaisesRegex(ValueError, "行数"):
+                validate_source_manifest(path, manifest_path, expected_kind="parametric_v1_linguistic", expected_rows=5)
+
+    def test_wrong_kind_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, manifest_path = self._source(Path(tmp), 2, kind="original_train_linguistic")
+            with self.assertRaisesRegex(ValueError, "kind"):
+                validate_source_manifest(path, manifest_path, expected_kind="parametric_v1_linguistic", expected_rows=2)
 
 
 if __name__ == "__main__":

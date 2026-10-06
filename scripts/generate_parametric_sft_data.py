@@ -34,6 +34,11 @@ CN = {
 }
 
 
+#: 派生清单里的每个父任务都必须是该切分的 train 成员；v2_62 不含 paper_reading /
+#: paper_summary / figure_extraction 的父任务，所以默认跟随 v3_81。
+DEFAULT_SPLIT_FILE = "data/splits/v3_81.json"
+
+
 @dataclass(frozen=True)
 class DerivedTask:
     spec: TaskSpec
@@ -471,7 +476,10 @@ def main() -> None:
     from tools.tool_registry import registry
 
     parser = argparse.ArgumentParser(description="生成 train-only 参数化 SFT 专家数据")
-    parser.add_argument("--split-file", default="data/splits/v2_62.json")
+    parser.add_argument(
+        "--split-file", default=DEFAULT_SPLIT_FILE,
+        help="版本化切分；派生清单的父任务必须全部落在该切分的 train 里（paper_reading 等父任务只在 v3 起的 train 中）",
+    )
     parser.add_argument("--snapshot", default="data/mock_arxiv_snapshot.json")
     parser.add_argument("--output", default=None)
     parser.add_argument(
