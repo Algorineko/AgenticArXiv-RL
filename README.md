@@ -290,7 +290,7 @@ MIT License
 
 ### P3 — RSI 受限自进化（bounded RSI）
 
-- [ ] **自进化数据闭环**：留出评测暴露弱点 → 坏例库自动扩容 → 参数化派生针对性数据 → 再训练 → 冻结新留出集（复用现有评测/数据/训练管线，前置件已齐）；验收：每轮四切分 pass³ 不回退、坏例库只增不减（[arXiv:2609.11873](https://arxiv.org/abs/2609.11873) 四步循环）
+- [ ] **自进化数据闭环**：留出评测暴露弱点 → 坏例库自动扩容 → 参数化派生针对性数据 → 再训练 → 冻结新留出集（复用现有评测/数据/训练管线，前置件已齐）；验收：每轮四切分 pass³ 不回退、坏例库只增不减（[arXiv:2609.11873](https://arxiv.org/abs/2609.11873) 四步循环）。**编排器已落地**（`AgenticArxiv/rl/self_evolve.py`：diagnose → mine → select → synthesize → freeze → gate，纯 JSON、无需模型；`generate_parametric_sft_data.py --only-parents` 定向补数据），真实一轮训练与四切分对照待跑（见 [docs/roadmap_notes.md](docs/roadmap_notes.md)）
 
 ### ⛔ 环境阻塞项
 
