@@ -734,14 +734,16 @@ def argument_match_score(
     return sum(scores) / len(scores) if scores else 1.0
 
 
-#: 读译文的 observation 带着整页中文译文。框架写入的失败信息总在 observation 开头
-#: （「工具执行失败: …」「无法解析 Action」），所以对这个工具只认前缀——否则译文正文
-#: 里恰好出现「无法解析」「命令失败」这类字样，正确的读取会被判成失败。
-_PREFIX_ONLY_FAILURE_TOOLS = frozenset({"get_translated_content"})
+#: Reading-tool observations include paper text, summaries or translated pages.
+#: Framework failures begin with a marker (e.g. ``工具执行失败:``), while quoted
+#: content can contain the same words without indicating a failed tool call.
+_PREFIX_ONLY_FAILURE_TOOLS = frozenset({
+    "get_paper_content", "summarize_paper", "get_translated_content",
+})
 
 
 def observation_reports(observation: Any, markers: Sequence[str], action: Any = "") -> bool:
-    """observation 是否带有任一失败标记；读译文只看开头，其余工具沿用子串匹配。"""
+    """Check failure markers, using prefixes for observations containing paper text."""
     text = str(observation or "")
     parsed = _parse_tool_action(action)
     if parsed and parsed.get("name") in _PREFIX_ONLY_FAILURE_TOOLS:

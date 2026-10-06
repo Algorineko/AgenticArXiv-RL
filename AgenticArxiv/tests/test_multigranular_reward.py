@@ -6,7 +6,7 @@ from types import ModuleType
 from unittest.mock import Mock, patch
 
 from benchmark.tasks import BENCHMARK_TASKS, get_task_by_id
-from rl.reward import RewardCalculator, compute_group_relative_advantages
+from rl.reward import RewardCalculator, compute_group_relative_advantages, compute_step_reward
 
 
 def _result(history):
@@ -395,6 +395,41 @@ class MultiGranularRewardTest(unittest.TestCase):
                     }]),
                 )
                 self.assertEqual(breakdown.result_quality, 1.0)
+
+    def test_reading_content_error_words_are_not_tool_failures(self):
+        for tool_name, field in (
+            ("get_paper_content", "content"),
+            ("summarize_paper", "summary"),
+        ):
+            with self.subTest(tool_name=tool_name):
+                action = json.dumps({"name": tool_name, "args": {}})
+                observation = repr({
+                    "paper_id": "2601.00004v1",
+                    field: "The paper discusses Error handling and 工具执行失败: cases that 无法解析.",
+                })
+                step = {"action": action, "observation": observation}
+                breakdown, metrics = self.calculator.compute_reward_breakdown(
+                    {"id": tool_name, "expected_tools": [tool_name]},
+                    _result([step, {"action": "FINISH", "observation": "任务完成"}]),
+                    training_step=30,
+                )
+                self.assertEqual(metrics.parse_failures, 0)
+                self.assertEqual(metrics.tool_exec_failures, 0)
+                self.assertEqual(breakdown.result_quality, 1.0)
+                self.assertGreater(breakdown.total, 0.0)
+                self.assertAlmostEqual(compute_step_reward(step, metrics), 0.1)
+
+    def test_reading_tool_error_prefix_still_counts_as_failure(self):
+        action = json.dumps({"name": "get_paper_content", "args": {}})
+        step = {"action": action, "observation": "工具执行失败: PDF is missing"}
+        breakdown, metrics = self.calculator.compute_reward_breakdown(
+            {"id": "read", "expected_tools": ["get_paper_content"]},
+            _result([step, {"action": "FINISH", "observation": "任务完成"}]),
+            training_step=30,
+        )
+        self.assertEqual(metrics.tool_exec_failures, 1)
+        self.assertLessEqual(breakdown.total, -0.75)
+        self.assertAlmostEqual(compute_step_reward(step, metrics), -0.2)
 
     def test_failed_observation_cannot_be_rescued_by_format_points(self):
         task = {
