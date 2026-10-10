@@ -41,6 +41,19 @@ TASK_WRAPPERS = (
     "请按任务中的参数和约束执行：\n{task}",
 )
 
+# 自进化闭环的定向补数据用一组与基础集不相交的措辞框架：同一批专家决策换一套说法，
+# 产出的样本指纹与基础混合集不同，才能真正给弱项族加权而不是生成重复行。
+TARGETED_TASK_WRAPPERS = (
+    "以下是本次要处理的任务，请逐步完成：\n{task}",
+    "请根据下面的描述决定下一步动作：\n{task}",
+    "收到一条新的用户请求，请按要求执行：\n{task}",
+    "请在当前会话状态下处理这项工作：\n{task}",
+    "任务说明如下，请严格按参数操作：\n{task}",
+    "请阅读任务并给出合适的工具调用：\n{task}",
+)
+
+WRAPPER_SETS = {"base": TASK_WRAPPERS, "targeted": TARGETED_TASK_WRAPPERS}
+
 
 def canonical_hash(value: Any) -> str:
     encoded = json.dumps(
@@ -139,8 +152,17 @@ def augment_rows(
 
 def augment_validated_rows(
     seed_rows: Iterable[Dict[str, Any]],
+    *,
+    wrapper_set: str = "base",
 ) -> List[Dict[str, Any]]:
-    """扩增已由调用方完成来源审计的数据；不在此放宽任何来源规则。"""
+    """扩增已由调用方完成来源审计的数据；不在此放宽任何来源规则。
+
+    ``wrapper_set`` 选择措辞框架：``base`` 是默认数据集用的六种；``targeted`` 是
+    自进化闭环定向补数据用的另外六种，与前者不相交，因而不会和基础混合集撞指纹。
+    """
+    if wrapper_set not in WRAPPER_SETS:
+        raise ValueError(f"未知的 wrapper_set: {wrapper_set!r}，可选 {sorted(WRAPPER_SETS)}")
+    wrappers = WRAPPER_SETS[wrapper_set]
     seed_rows = list(seed_rows)
     if not seed_rows:
         raise ValueError("待扩增数据为空")
@@ -175,7 +197,7 @@ def augment_validated_rows(
                         f"task={contract_id}, semantic={semantic}, thought={thought!r}"
                     )
 
-        for task_variant, wrapper in enumerate(TASK_WRAPPERS):
+        for task_variant, wrapper in enumerate(wrappers):
             varied_task = wrapper.format(task=original_task)
             varied_prompt = replace_prompt_task(prompt, varied_task)
             for thought_variant, thought in enumerate(thoughts):
@@ -199,13 +221,14 @@ def augment_validated_rows(
                     "sample_sha256": fingerprint,
                     "augmentation": {
                         "kind": "linguistic_semantics_preserving",
+                        "wrapper_set": wrapper_set,
                         "task_variant": task_variant,
                         "thought_variant": thought_variant,
                     },
                 })
                 augmented.append(row)
 
-    expected = len(seed_rows) * len(TASK_WRAPPERS) * 2
+    expected = len(seed_rows) * len(wrappers) * 2
     if len(augmented) != expected:
         raise AssertionError(f"扩增数量错误: expected={expected}, actual={len(augmented)}")
     return augmented

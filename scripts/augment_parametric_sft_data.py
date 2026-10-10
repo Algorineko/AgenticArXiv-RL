@@ -16,7 +16,7 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from augment_sft_data import (  # noqa: E402
-    TASK_WRAPPERS,
+    WRAPPER_SETS,
     augment_validated_rows,
     canonical_hash,
     read_jsonl,
@@ -120,8 +120,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="语言扩增参数化 SFT 专家 seed")
     parser.add_argument("--input", default="data/sft/sft_v2_parametric_seed.jsonl")
     parser.add_argument("--manifest", default=None)
-    parser.add_argument("--split-file", default="data/splits/v2_62.json")
+    parser.add_argument("--split-file", default="data/splits/v3_81.json")
     parser.add_argument("--output", default="data/sft/sft_v2_parametric_linguistic.jsonl")
+    parser.add_argument(
+        "--wrapper-set", choices=sorted(WRAPPER_SETS), default="base",
+        help="措辞框架：base=默认数据集；targeted=自进化闭环定向补数据（与 base 不相交，不与基础混合集撞指纹）",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -146,7 +150,7 @@ def main() -> None:
         rows, split_payload, manifest, split_name=split_path.name,
         input_path=input_path,
     )
-    augmented = augment_validated_rows(validated)
+    augmented = augment_validated_rows(validated, wrapper_set=args.wrapper_set)
     for row in augmented:
         row["dataset_stage"] = "parametric_v1_linguistic"
     write_jsonl(output_path, augmented)
@@ -168,12 +172,13 @@ def main() -> None:
         "output_rows": len(augmented),
         "derived_tasks": derived_tasks,
         "parent_train_tasks": parent_tasks,
-        "task_variants": len(TASK_WRAPPERS),
+        "wrapper_set": args.wrapper_set,
+        "task_variants": len(WRAPPER_SETS[args.wrapper_set]),
         "thought_variants": 2,
         "unique_sample_fingerprints": len({row["sample_sha256"] for row in augmented}),
         "heldout_parent_overlap": 0,
         "note": (
-            f"{len(augmented)} rows are {len(TASK_WRAPPERS) * 2} linguistic views "
+            f"{len(augmented)} rows are {len(WRAPPER_SETS[args.wrapper_set]) * 2} linguistic views "
             f"of {len(rows)} decisions from {derived_tasks} derived tasks."
         ),
     }
