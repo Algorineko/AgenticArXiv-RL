@@ -343,5 +343,53 @@ class CliTest(unittest.TestCase):
         self.assertIn("diagnose", proc.stdout)
 
 
+class RoundMixTest(unittest.TestCase):
+    @staticmethod
+    def _row(label, task="t1"):
+        messages = [{"role": "user", "content": label}, {"role": "assistant", "content": "Thought: x\nAction: FINISH"}]
+        return {"source_task_id": task, "messages": messages, "sample_sha256": se.canonical_hash(messages)}
+
+    def test_mix_tags_sources_drops_targeted_duplicates_and_is_deterministic(self):
+        base = [self._row("b1"), self._row("b2", "t2")]
+        targeted = [self._row("x1", "t3"), self._row("b1")]  # second one duplicates a base row
+        mixed, dropped = se.build_round_mix(base, targeted, seed=7)
+        self.assertEqual(dropped, 1)
+        self.assertEqual(len(mixed), 3)
+        self.assertEqual({r["mixture_source"] for r in mixed}, {se.BASE_SOURCE, se.TARGETED_SOURCE})
+        self.assertEqual(mixed, se.build_round_mix(base, targeted, seed=7)[0])
+        self.assertNotEqual([r["sample_sha256"] for r in mixed], [r["sample_sha256"] for r in base + targeted[:1]])
+
+    def test_mix_rejects_bad_fingerprints_empty_inputs_and_base_duplicates(self):
+        good, bad = self._row("ok"), self._row("tampered")
+        bad["sample_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "sample_sha256"):
+            se.build_round_mix([good], [bad], seed=1)
+        with self.assertRaises(ValueError):
+            se.build_round_mix([], [good], seed=1)
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            se.build_round_mix([good, dict(good)], [self._row("t")], seed=1)
+
+    def test_write_round_mix_manifest_satisfies_the_sft_audit_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            base, targeted, out = tmp / "base.jsonl", tmp / "targeted.jsonl", tmp / "round" / "mix.jsonl"
+            se.write_jsonl(base, [self._row("b1"), self._row("b2", "t2")])
+            se.write_jsonl(targeted, [self._row("x1", "t3")])
+            manifest = se.write_round_mix(base, targeted, out, round_id=3, seed=5)
+            rows = se.read_jsonl(out)
+            # the same checks rl/train_sft.py::_verify_data_manifest applies before training
+            self.assertEqual(manifest["kind"], "qlora_sft_train_mix")
+            self.assertEqual(manifest["output_sha256"], se.sha256_file(out))
+            self.assertEqual(manifest["output_rows"], len(rows))
+            self.assertEqual(manifest["unique_sample_fingerprints"], len(rows))
+            self.assertEqual(manifest["semantic_task_instances"], 3)
+            self.assertEqual(manifest["self_evolve_round"], 3)
+            self.assertEqual(manifest["source_counts"], {se.BASE_SOURCE: 2, se.TARGETED_SOURCE: 1})
+            self.assertEqual([s["rows"] for s in manifest["sources"]], [2, 1])
+            self.assertTrue((out.with_suffix(out.suffix + ".manifest.json")).exists())
+            with self.assertRaisesRegex(ValueError, "overwrite"):
+                se.write_round_mix(base, targeted, base, round_id=3)
+
+
 if __name__ == "__main__":
     unittest.main()
