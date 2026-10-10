@@ -432,6 +432,112 @@ def count_cases(path: Path) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# mix: base train mix + targeted rows -> one audited training file
+# --------------------------------------------------------------------------- #
+
+BASE_SOURCE = "base_train_mix"
+TARGETED_SOURCE = "self_evolve_targeted"
+
+
+def read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def write_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with Path(path).open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def build_round_mix(
+    base_rows: Sequence[Mapping[str, Any]],
+    targeted_rows: Sequence[Mapping[str, Any]],
+    *,
+    seed: int,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Append the round's targeted rows to the base mix, keeping the base contract.
+
+    Every row must carry a ``sample_sha256`` matching its ``messages`` (the SFT
+    audit relies on it); a targeted row whose fingerprint already exists in the
+    base is dropped rather than duplicated, and the count of dropped rows is
+    returned. Rows are tagged with ``mixture_source`` and shuffled with a fixed
+    seed so the file is reproducible.
+    """
+    import random
+
+    if not base_rows or not targeted_rows:
+        raise ValueError("both the base mix and the targeted rows must be non-empty")
+    mixed: List[Dict[str, Any]] = []
+    seen: set = set()
+    dropped = 0
+    for source, rows in ((BASE_SOURCE, base_rows), (TARGETED_SOURCE, targeted_rows)):
+        for index, original in enumerate(rows):
+            row = dict(original)
+            fingerprint = canonical_hash(row.get("messages"))
+            if row.get("sample_sha256") != fingerprint:
+                raise ValueError(f"{source} row {index}: sample_sha256 does not match messages")
+            if fingerprint in seen:
+                if source == BASE_SOURCE:
+                    raise ValueError(f"base mix contains duplicate messages: {fingerprint}")
+                dropped += 1
+                continue
+            seen.add(fingerprint)
+            row["mixture_source"] = source
+            mixed.append(row)
+    random.Random(seed).shuffle(mixed)
+    return mixed, dropped
+
+
+def write_round_mix(
+    base_path: Path,
+    targeted_path: Path,
+    output_path: Path,
+    *,
+    round_id: int,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Write ``output_path`` plus the ``qlora_sft_train_mix`` manifest train_sft audits."""
+    base_path, targeted_path, output_path = Path(base_path), Path(targeted_path), Path(output_path)
+    if output_path.resolve() in {base_path.resolve(), targeted_path.resolve()}:
+        raise ValueError("output must not overwrite an input")
+    base_rows, targeted_rows = read_jsonl(base_path), read_jsonl(targeted_path)
+    mixed, dropped = build_round_mix(base_rows, targeted_rows, seed=seed)
+    write_jsonl(output_path, mixed)
+
+    def source_entry(path: Path, rows: int) -> Dict[str, Any]:
+        entry: Dict[str, Any] = {"path": str(path).replace("\\", "/"), "sha256": sha256_file(path), "rows": rows}
+        manifest_path = path.with_suffix(path.suffix + ".manifest.json")
+        if manifest_path.exists():
+            entry["manifest_sha256"] = sha256_file(manifest_path)
+        return entry
+
+    counts: Dict[str, int] = {}
+    for row in mixed:
+        counts[row["mixture_source"]] = counts.get(row["mixture_source"], 0) + 1
+    manifest = {
+        "version": 1,
+        "kind": "qlora_sft_train_mix",
+        "self_evolve_round": round_id,
+        "shuffle_seed": seed,
+        "output": str(output_path).replace("\\", "/"),
+        "output_sha256": sha256_file(output_path),
+        "output_rows": len(mixed),
+        "unique_sample_fingerprints": len({row["sample_sha256"] for row in mixed}),
+        "semantic_task_instances": len({row.get("source_task_id") for row in mixed}),
+        "source_counts": dict(sorted(counts.items())),
+        "targeted_rows_dropped_as_duplicates": dropped,
+        "sources": [source_entry(base_path, len(base_rows)), source_entry(targeted_path, len(targeted_rows))],
+        "policy": (
+            "The base mix is kept whole; the round's targeted rows are appended, deduplicated "
+            "against the base by sample_sha256, and the file order is deterministically shuffled."
+        ),
+    }
+    dump_json(output_path.with_suffix(output_path.suffix + ".manifest.json"), manifest)
+    return manifest
+
+
+# --------------------------------------------------------------------------- #
 # freeze
 # --------------------------------------------------------------------------- #
 
@@ -692,12 +798,29 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mix(args: argparse.Namespace) -> int:
+    manifest = write_round_mix(Path(args.base), Path(args.targeted), Path(args.output),
+                               round_id=args.round, seed=args.seed)
+    print(f"mixed {manifest['output_rows']} rows ({manifest['source_counts']}, "
+          f"{manifest['targeted_rows_dropped_as_duplicates']} targeted duplicates dropped) -> {args.output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="self_evolve",
-        description="Bounded self-evolution loop: diagnose -> mine -> select -> synthesize -> freeze -> gate",
+        description="Bounded self-evolution loop: diagnose -> mine -> select -> synthesize -> mix -> freeze -> gate",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("mix", help="append the round's targeted rows to the base train mix, with an audited manifest")
+    p.add_argument("--base", required=True, help="base train mix jsonl (kind qlora_sft_train_mix)")
+    p.add_argument("--targeted", required=True,
+                   help="the round's targeted rows, e.g. the linguistic augmentation of targeted_parametric_seed.jsonl")
+    p.add_argument("--output", required=True)
+    p.add_argument("--round", type=int, required=True)
+    p.add_argument("--seed", type=int, default=42)
+    p.set_defaults(func=cmd_mix)
 
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--task-set", choices=["default", "expanded"], default="expanded")
