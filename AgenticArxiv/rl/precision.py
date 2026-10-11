@@ -11,6 +11,31 @@ bf16 权重，所以这条路在任何 bf16 显卡上都走不通。
 """
 
 
+def cuda_supports_bf16() -> bool:
+    """Whether the current CUDA device runs bf16 matmuls natively.
+
+    Since torch 2.3 ``torch.cuda.is_bf16_supported()`` defaults to
+    ``including_emulation=True`` and answers True on every CUDA device,
+    because bf16 *storage* can be emulated.  Training needs bf16 *compute*,
+    which only exists from Ampere (compute capability 8.0) on; a T4 / V100 /
+    P100 passes the default check and then fails inside the first matmul::
+
+        RuntimeError: gemm input type at::BFloat16 and output type float is
+        only supported for CUDA devices with compute capability 8.0 or higher
+
+    Ask for the native answer, and fall back to the plain call on torch
+    versions that predate the keyword (they did not emulate either).
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return False
+    try:
+        return bool(torch.cuda.is_bf16_supported(including_emulation=False))
+    except TypeError:  # torch < 2.3: no emulation, no keyword
+        return bool(torch.cuda.is_bf16_supported())
+
+
 def precision_flags() -> dict:
     """训练器的精度参数：CUDA 上优先 bf16，退回 fp16；CPU / Apple MPS 不开混合精度。"""
     import torch
@@ -19,7 +44,7 @@ def precision_flags() -> dict:
         # Transformers 5.x requires CPU training to be selected explicitly;
         # an empty dict can otherwise leave the default bf16 path enabled.
         return {"use_cpu": True}
-    if torch.cuda.is_bf16_supported():
+    if cuda_supports_bf16():
         return {"bf16": True}
     return {"fp16": True}
 
