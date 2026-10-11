@@ -11,6 +11,31 @@ bf16 权重，所以这条路在任何 bf16 显卡上都走不通。
 """
 
 
+def cuda_supports_bf16() -> bool:
+    """Whether the current CUDA device runs bf16 matmuls natively.
+
+    Since torch 2.3 ``torch.cuda.is_bf16_supported()`` defaults to
+    ``including_emulation=True`` and answers True on every CUDA device,
+    because bf16 *storage* can be emulated.  Training needs bf16 *compute*,
+    which only exists from Ampere (compute capability 8.0) on; a T4 / V100 /
+    P100 passes the default check and then fails inside the first matmul::
+
+        RuntimeError: gemm input type at::BFloat16 and output type float is
+        only supported for CUDA devices with compute capability 8.0 or higher
+
+    Ask for the native answer, and fall back to the plain call on torch
+    versions that predate the keyword (they did not emulate either).
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return False
+    try:
+        return bool(torch.cuda.is_bf16_supported(including_emulation=False))
+    except TypeError:  # torch < 2.3: no emulation, no keyword
+        return bool(torch.cuda.is_bf16_supported())
+
+
 def precision_flags() -> dict:
     """训练器的精度参数：CUDA 上优先 bf16，退回 fp16；CPU / Apple MPS 不开混合精度。"""
     import torch
@@ -19,9 +44,51 @@ def precision_flags() -> dict:
         # Transformers 5.x requires CPU training to be selected explicitly;
         # an empty dict can otherwise leave the default bf16 path enabled.
         return {"use_cpu": True}
-    if torch.cuda.is_bf16_supported():
+    if cuda_supports_bf16():
         return {"bf16": True}
     return {"fp16": True}
+
+
+def trainable_model_dtype():
+    """Weight dtype for a full-precision (non-quantized) model that will be trained.
+
+    Mirrors :func:`precision_flags`: a bf16 trainer gets bf16 weights; the fp16
+    fallback and CPU / MPS get fp32 weights.  ``from_pretrained`` without an
+    explicit dtype loads the checkpoint in its stored dtype on Transformers 5,
+    and current base models (Qwen2.5 and friends) ship as bf16.  That implicit
+    default breaks on every GPU where ``precision_flags`` falls back to fp16:
+    pre-Ampere cards (T4 / V100 / P100, compute capability < 8.0) cannot run
+    bf16 matmuls at all::
+
+        RuntimeError: gemm input type at::BFloat16 and output type float is
+        only supported for CUDA devices with compute capability 8.0 or higher
+
+    and fp16's GradScaler would reject bf16 gradients even where the matmul
+    works (see the module docstring).  Mixed precision keeps fp32 master
+    weights and autocasts to fp16 per op, so fp32 is the dtype that matches
+    the trainer there.
+    """
+    import torch
+
+    if precision_flags().get("bf16"):
+        return torch.bfloat16
+    return torch.float32
+
+
+def trainable_model_load_kwargs(loader=None) -> dict:
+    """``from_pretrained`` keyword for :func:`trainable_model_dtype`.
+
+    Transformers renamed ``torch_dtype`` to ``dtype`` (the old name still
+    works but warns on 5.x); pick whichever the installed loader accepts.
+    """
+    import inspect
+
+    if loader is None:
+        from transformers import AutoModelForCausalLM
+
+        loader = AutoModelForCausalLM.from_pretrained
+    name = "dtype" if "dtype" in inspect.signature(loader).parameters else "torch_dtype"
+    return {name: trainable_model_dtype()}
 
 
 def is_distributed_launch() -> bool:

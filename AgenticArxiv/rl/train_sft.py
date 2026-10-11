@@ -100,7 +100,11 @@ def _qlora_runtime_guard() -> None:
 
     if not torch.cuda.is_available():
         raise SystemExit("❌ QLoRA 需要 CUDA；当前 torch.cuda.is_available()=False")
-    if not torch.cuda.is_bf16_supported():
+    from rl.precision import cuda_supports_bf16
+
+    # torch>=2.3 的 is_bf16_supported() 默认连“模拟”也算支持，T4 也返回 True，
+    # 然后在第一次 matmul 才崩；这里要的是原生 bf16 计算（见 rl/precision.py）。
+    if not cuda_supports_bf16():
         raise SystemExit("❌ 当前GPU不支持BF16；本项目冻结的4090配置要求BF16计算")
     required = {"transformers": "4.57.6", "trl": "0.29.1", "peft": "0.17.1", "bitsandbytes": "0.45.5"}
     installed = {}
@@ -379,7 +383,17 @@ def main(
         policy = get_peft_model(policy, peft_config)
     else:
         print("⚠️  --no-qlora：将加载完整模型；该运行不属于本项目冻结的4090方案")
-        policy = AutoModelForCausalLM.from_pretrained(resolved_model)
+        # 权重精度跟随 _precision_flags：bf16 训练器配 bf16 权重，fp16 回退
+        # （T4 / V100 等 pre-Ampere 卡）和 CPU 配 fp32 权重。不显式指定时
+        # Transformers 5 按 checkpoint 原始精度加载，Qwen2.5 是 bf16，在不支持
+        # bf16 的卡上第一步 matmul 就崩（见 rl/precision.py）。
+        from rl.precision import trainable_model_load_kwargs
+
+        policy = AutoModelForCausalLM.from_pretrained(
+            resolved_model,
+            local_files_only=Path(model).exists(),
+            **trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained),
+        )
         if optim == "paged_adamw_8bit":
             optim = "adamw_torch_fused"
 

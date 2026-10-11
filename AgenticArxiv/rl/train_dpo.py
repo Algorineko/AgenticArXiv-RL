@@ -72,8 +72,13 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-    ref_model = AutoModelForCausalLM.from_pretrained(model_name)  # reference model
+    # 权重精度跟随 _precision_flags（bf16 卡 bf16，fp16 回退 / CPU 用 fp32），
+    # 否则 Transformers 5 按 checkpoint 的 bf16 加载，pre-Ampere 卡直接崩。
+    from rl.precision import trainable_model_load_kwargs
+
+    load_kwargs = trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained)
+    model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
+    ref_model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)  # reference model
 
     # 2. 加载 DPO 数据集
     print(f"📚 加载 DPO 数据集: {train_data_path}")
