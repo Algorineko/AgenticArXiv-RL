@@ -343,6 +343,28 @@ class CliTest(unittest.TestCase):
         self.assertIn("diagnose", proc.stdout)
 
 
+class SingleAgentSummaryTest(unittest.TestCase):
+    """A summary written for several agents must not be pooled into one pass^k."""
+
+    @staticmethod
+    def _row(task, agent, ok=True):
+        return {"task_id": task, "agent_type": agent, "trial": 0, "completed": ok, "tool_accurate": ok,
+                "arg_score": 1.0 if ok else 0.0, "ref_score": None, "ref_applicable": False,
+                "parse_fail": 0, "tool_fail": 0}
+
+    def test_mixed_agents_are_rejected(self):
+        summary = {"details": [self._row("t1", "regex"), self._row("t1", "mcp", ok=False)]}
+        with self.assertRaisesRegex(ValueError, "mixes 2 agents"):
+            se.trials_by_task(summary)
+
+    def test_single_agent_groups_by_task(self):
+        summary = {"details": [self._row("t1", "regex"), self._row("t1", "regex"), self._row("t2", "regex")]}
+        grouped = se.trials_by_task(summary)
+        self.assertEqual({k: len(v) for k, v in grouped.items()}, {"t1": 2, "t2": 1})
+        # rows without an agent_type (older summaries) still group
+        self.assertEqual(len(se.trials_by_task({"details": [{"task_id": "t9"}]})), 1)
+
+
 class RoundMixTest(unittest.TestCase):
     @staticmethod
     def _row(label, task="t1"):
