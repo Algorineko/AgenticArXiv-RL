@@ -16,6 +16,7 @@ from benchmark.tasks import get_all_tasks
 from benchmark.tasks_expanded import get_expanded_tasks
 from rl.precision import (
     assert_quantization_is_single_process,
+    cuda_supports_bf16,
     is_distributed_launch,
     pin_single_gpu,
     precision_flags,
@@ -442,6 +443,40 @@ class PrecisionFlagsTest(unittest.TestCase):
         from rl.train_sft import _precision_flags as sft
         self.assertEqual(sft(), dpo())
         self.assertEqual(dpo(), grpo())
+
+
+class CudaSupportsBf16Test(unittest.TestCase):
+    """torch>=2.3 的 is_bf16_supported() 默认把模拟也算上，T4 也返回 True；
+    训练要的是原生 bf16 计算，必须以 including_emulation=False 询问。"""
+
+    def test_asks_for_native_support_only(self):
+        import torch
+        from unittest.mock import patch
+
+        def strict(including_emulation=True):
+            return including_emulation  # emulated: True, native: False (a T4)
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", side_effect=strict):
+            self.assertFalse(cuda_supports_bf16())
+            self.assertEqual(precision_flags(), {"fp16": True})
+
+    def test_falls_back_to_plain_call_on_old_torch(self):
+        import torch
+        from unittest.mock import patch
+
+        def old_torch():  # no keyword before 2.3
+            return True
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", side_effect=old_torch):
+            self.assertTrue(cuda_supports_bf16())
+
+    def test_false_without_cuda(self):
+        import torch
+        from unittest.mock import patch
+        with patch.object(torch.cuda, "is_available", return_value=False):
+            self.assertFalse(cuda_supports_bf16())
 
 
 class TrainableModelDtypeTest(unittest.TestCase):
