@@ -170,8 +170,23 @@ def pass_at_k(successes: int, trials: int, k: int) -> Optional[float]:
 
 
 def trials_by_task(summary: Mapping[str, Any]) -> Dict[str, List[Mapping[str, Any]]]:
+    """Group ``details`` rows by task id.
+
+    A summary must come from a single agent. ``run_benchmark`` runs regex, mcp
+    and skill_cli by default and writes all of them into one ``details`` list;
+    grouping that by task id would pool nine trials of three different agents
+    into one pass^k, which silently mixes an agent that cannot even start (no
+    ``mcp`` package) into the policy's score. Evaluate with ``--agents <one>``.
+    """
+    rows = list(summary.get("details") or [])
+    agents = sorted({str(row.get("agent_type")) for row in rows if row.get("agent_type") is not None})
+    if len(agents) > 1:
+        raise ValueError(
+            f"summary mixes {len(agents)} agents {agents}; pass^k is per policy, "
+            "re-run run_benchmark with --agents <one agent>"
+        )
     out: Dict[str, List[Mapping[str, Any]]] = defaultdict(list)
-    for row in summary.get("details") or []:
+    for row in rows:
         out[str(row["task_id"])].append(row)
     return dict(out)
 
