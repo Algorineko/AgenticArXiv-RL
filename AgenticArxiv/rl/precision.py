@@ -24,6 +24,48 @@ def precision_flags() -> dict:
     return {"fp16": True}
 
 
+def trainable_model_dtype():
+    """Weight dtype for a full-precision (non-quantized) model that will be trained.
+
+    Mirrors :func:`precision_flags`: a bf16 trainer gets bf16 weights; the fp16
+    fallback and CPU / MPS get fp32 weights.  ``from_pretrained`` without an
+    explicit dtype loads the checkpoint in its stored dtype on Transformers 5,
+    and current base models (Qwen2.5 and friends) ship as bf16.  That implicit
+    default breaks on every GPU where ``precision_flags`` falls back to fp16:
+    pre-Ampere cards (T4 / V100 / P100, compute capability < 8.0) cannot run
+    bf16 matmuls at all::
+
+        RuntimeError: gemm input type at::BFloat16 and output type float is
+        only supported for CUDA devices with compute capability 8.0 or higher
+
+    and fp16's GradScaler would reject bf16 gradients even where the matmul
+    works (see the module docstring).  Mixed precision keeps fp32 master
+    weights and autocasts to fp16 per op, so fp32 is the dtype that matches
+    the trainer there.
+    """
+    import torch
+
+    if precision_flags().get("bf16"):
+        return torch.bfloat16
+    return torch.float32
+
+
+def trainable_model_load_kwargs(loader=None) -> dict:
+    """``from_pretrained`` keyword for :func:`trainable_model_dtype`.
+
+    Transformers renamed ``torch_dtype`` to ``dtype`` (the old name still
+    works but warns on 5.x); pick whichever the installed loader accepts.
+    """
+    import inspect
+
+    if loader is None:
+        from transformers import AutoModelForCausalLM
+
+        loader = AutoModelForCausalLM.from_pretrained
+    name = "dtype" if "dtype" in inspect.signature(loader).parameters else "torch_dtype"
+    return {name: trainable_model_dtype()}
+
+
 def is_distributed_launch() -> bool:
     """True when this process belongs to an ``accelerate launch`` / torchrun run.
 

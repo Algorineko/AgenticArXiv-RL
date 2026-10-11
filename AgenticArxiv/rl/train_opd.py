@@ -32,7 +32,6 @@ D_KL(π_student ‖ π_teacher)（mode-seeking：学生分布收敛到教师在�
 
 import argparse
 import dataclasses
-import inspect
 import os
 import sys
 from pathlib import Path
@@ -48,7 +47,6 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 os.environ.setdefault("STORE_BACKEND", "memory")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-import torch
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -83,6 +81,9 @@ def _precision_flags():
     """见 rl/precision.py：CUDA 上优先 bf16，退回 fp16；CPU / MPS 不开混合精度。"""
     from rl.precision import precision_flags
     return precision_flags()
+
+
+from rl.precision import trainable_model_load_kwargs  # noqa: E402
 
 
 def _resolve_model_path(model: str) -> str:
@@ -189,11 +190,9 @@ def _teacher_load_kwargs() -> dict:
     bf16 权重省显存；fp16 / CPU / MPS 场景退回 fp32 —— fp16 权重推理
     容易溢出，教师省这点显存不值得冒这个险。
     """
-    if not _precision_flags().get("bf16"):
-        return {}
-    loader = AutoModelForCausalLM.from_pretrained
-    name = "dtype" if "dtype" in inspect.signature(loader).parameters else "torch_dtype"
-    return {name: torch.bfloat16}
+    # 显式给出 fp32：不传 dtype 时 Transformers 5 按 checkpoint 原始精度
+    # （Qwen2.5 为 bf16）加载，而不是 fp32，pre-Ampere 卡上推理同样会崩。
+    return trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained)
 
 
 def _gold_action_tokens(tokenizer, tasks) -> int:
@@ -271,7 +270,9 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(student_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    student = AutoModelForCausalLM.from_pretrained(student_path)
+    student = AutoModelForCausalLM.from_pretrained(
+        student_path, **trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained)
+    )
 
     print(f"🎓 加载教师模型: {teacher_path}")
     teacher_tokenizer = AutoTokenizer.from_pretrained(teacher_path)
