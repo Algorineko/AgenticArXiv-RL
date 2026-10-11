@@ -16,9 +16,12 @@ from benchmark.tasks import get_all_tasks
 from benchmark.tasks_expanded import get_expanded_tasks
 from rl.precision import (
     assert_quantization_is_single_process,
+    cuda_supports_bf16,
     is_distributed_launch,
     pin_single_gpu,
     precision_flags,
+    trainable_model_dtype,
+    trainable_model_load_kwargs,
 )
 from rl.train_grpo import (
     DAPO_PRESET,
@@ -430,6 +433,7 @@ class PrecisionFlagsTest(unittest.TestCase):
         # 同时置位会让 GradScaler 介入 bf16 梯度，正是崩溃的来源
         self.assertNotIn("fp16", self._flags(cuda=True, bf16=True))
 
+
     def test_falls_back_to_fp16_without_bf16(self):
         self.assertEqual(self._flags(cuda=True, bf16=False), {"fp16": True})
 
@@ -440,6 +444,83 @@ class PrecisionFlagsTest(unittest.TestCase):
         self.assertEqual(sft(), dpo())
         self.assertEqual(dpo(), grpo())
 
+
+class CudaSupportsBf16Test(unittest.TestCase):
+    """torch>=2.3 的 is_bf16_supported() 默认把模拟也算上，T4 也返回 True；
+    训练要的是原生 bf16 计算，必须以 including_emulation=False 询问。"""
+
+    def test_asks_for_native_support_only(self):
+        import torch
+        from unittest.mock import patch
+
+        def strict(including_emulation=True):
+            return including_emulation  # emulated: True, native: False (a T4)
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", side_effect=strict):
+            self.assertFalse(cuda_supports_bf16())
+            self.assertEqual(precision_flags(), {"fp16": True})
+
+    def test_falls_back_to_plain_call_on_old_torch(self):
+        import torch
+        from unittest.mock import patch
+
+        def old_torch():  # no keyword before 2.3
+            return True
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", side_effect=old_torch):
+            self.assertTrue(cuda_supports_bf16())
+
+    def test_false_without_cuda(self):
+        import torch
+        from unittest.mock import patch
+        with patch.object(torch.cuda, "is_available", return_value=False):
+            self.assertFalse(cuda_supports_bf16())
+
+
+class TrainableModelDtypeTest(unittest.TestCase):
+    """全精度训练路径的权重精度必须跟随 precision_flags。
+
+    不显式传 dtype 时 Transformers 5 按 checkpoint 原始精度（Qwen2.5 为 bf16）
+    加载；在 precision_flags 回退到 fp16 的 pre-Ampere 卡（T4 / V100）上，
+    第一步 matmul 就报 "gemm input type at::BFloat16 ... only supported for
+    CUDA devices with compute capability 8.0 or higher"。
+    """
+
+    def _dtype(self, cuda, bf16):
+        import torch
+        from unittest.mock import patch
+        with patch.object(torch.cuda, "is_available", return_value=cuda), \
+             patch.object(torch.cuda, "is_bf16_supported", return_value=bf16):
+            return trainable_model_dtype()
+
+    def test_bf16_trainer_gets_bf16_weights(self):
+        import torch
+        self.assertIs(self._dtype(cuda=True, bf16=True), torch.bfloat16)
+
+    def test_fp16_fallback_gets_fp32_master_weights(self):
+        import torch
+        self.assertIs(self._dtype(cuda=True, bf16=False), torch.float32)
+
+    def test_cpu_gets_fp32_weights(self):
+        import torch
+        self.assertIs(self._dtype(cuda=False, bf16=False), torch.float32)
+
+    def test_load_kwargs_follow_the_loader_signature(self):
+        import torch
+        from unittest.mock import patch
+
+        def new_loader(name, *, dtype=None):
+            return None
+
+        def old_loader(name, *, torch_dtype=None):
+            return None
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", return_value=False):
+            self.assertEqual(trainable_model_load_kwargs(new_loader), {"dtype": torch.float32})
+            self.assertEqual(trainable_model_load_kwargs(old_loader), {"torch_dtype": torch.float32})
 
 class DistributedLaunchGuardTest(unittest.TestCase):
     """多卡启动下不能再钉单卡，QLoRA 也不能静默按单卡跑。"""

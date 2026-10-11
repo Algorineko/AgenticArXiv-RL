@@ -157,15 +157,20 @@ class BuildOpdDatasetTest(unittest.TestCase):
 
 
 class TeacherLoadKwargsTest(unittest.TestCase):
+    def _kwargs(self, cuda, bf16):
+        with patch.object(torch.cuda, "is_available", return_value=cuda),              patch.object(torch.cuda, "is_bf16_supported", return_value=bf16):
+            return opd._teacher_load_kwargs()
+
     def test_bf16_on_cuda_precision(self):
-        with patch.object(opd, "_precision_flags", return_value={"bf16": True}):
-            kwargs = opd._teacher_load_kwargs()
+        kwargs = self._kwargs(cuda=True, bf16=True)
         self.assertEqual(list(kwargs.values()), [torch.bfloat16])
         self.assertIn(next(iter(kwargs)), ("dtype", "torch_dtype"))
 
     def test_fp32_elsewhere(self):
-        with patch.object(opd, "_precision_flags", return_value={}):
-            self.assertEqual(opd._teacher_load_kwargs(), {})
+        # 必须显式传 fp32：不传 dtype 时 Transformers 5 按 checkpoint 的 bf16 加载
+        for cuda, bf16 in ((True, False), (False, False)):
+            with self.subTest(cuda=cuda):
+                self.assertEqual(list(self._kwargs(cuda, bf16).values()), [torch.float32])
 
 
 class GoldActionTokensTest(unittest.TestCase):
