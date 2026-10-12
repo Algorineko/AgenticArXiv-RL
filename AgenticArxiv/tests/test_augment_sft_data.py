@@ -140,5 +140,43 @@ class LeakageGuardTest(unittest.TestCase):
             augment_rows([row], payload)
 
 
+class WrapperSetTest(unittest.TestCase):
+    """定向补数据的措辞框架必须与基础集不相交，否则自进化闭环只会生成重复行。"""
+
+    @staticmethod
+    def _parent():
+        return {
+            "source_task_id": "search_AI_1d_3",
+            "messages": [
+                {"role": "user", "content": _prompt("查最近一天 AI 论文")},
+                {"role": "assistant", "content": (
+                    "Thought: 需要先检索\nAction: "
+                    '{"name": "get_recently_submitted_cs_papers", "args": {"aspect": "AI", "days": 1, "max_results": 3}}'
+                )},
+            ],
+        }
+
+    def test_targeted_set_is_disjoint_from_base_and_tagged(self):
+        from augment_sft_data import WRAPPER_SETS
+
+        base = augment_validated_rows([self._parent()])
+        targeted = augment_validated_rows([self._parent()], wrapper_set="targeted")
+        self.assertEqual(len(base), 12)
+        self.assertEqual(len(targeted), 12)
+        self.assertTrue({r["sample_sha256"] for r in base}.isdisjoint({r["sample_sha256"] for r in targeted}))
+        self.assertEqual({r["augmentation"]["wrapper_set"] for r in base}, {"base"})
+        self.assertEqual({r["augmentation"]["wrapper_set"] for r in targeted}, {"targeted"})
+        self.assertTrue(set(WRAPPER_SETS["base"]).isdisjoint(WRAPPER_SETS["targeted"]))
+        # same decisions, different phrasing: the assistant turns are identical across the two sets
+        self.assertEqual(
+            sorted(r["messages"][1]["content"] for r in base),
+            sorted(r["messages"][1]["content"] for r in targeted),
+        )
+
+    def test_unknown_wrapper_set_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "wrapper_set"):
+            augment_validated_rows([self._parent()], wrapper_set="nope")
+
+
 if __name__ == "__main__":
     unittest.main()
