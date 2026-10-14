@@ -1,5 +1,7 @@
 """Bounded self-evolution loop: pure-JSON components, no model, no torch."""
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -42,6 +44,19 @@ def summary(*rows):
 
 
 class TrialVerdictTest(unittest.TestCase):
+    def test_invalid_k_is_rejected_even_without_trials(self):
+        for k in (0, -1, 1.5, True, "3", None):
+            calls = (
+                lambda: se.pass_at_k(0, 0, k),
+                lambda: se.pass_k_by_task(summary(), k),
+                lambda: se.pass_k(summary(), k),
+                lambda: se.diagnose([], [], [], k=k),
+                lambda: se.gate({}, {}, cases_before=0, cases_after=0, k=k),
+            )
+            for call in calls:
+                with self.subTest(k=k, call=call), self.assertRaisesRegex(ValueError, "positive integer"):
+                    call()
+
     def test_strict_success_mirrors_metrics_predicate(self):
         self.assertTrue(se.strict_success(trial("t")))
         for bad in (
@@ -223,6 +238,17 @@ class MineBadcasesTest(unittest.TestCase):
 
 
 class FreezeAndGateTest(unittest.TestCase):
+    def test_zero_k_cannot_hide_a_complete_regression(self):
+        prev = self._eval(True, True, True)
+        new = {split: summary(*[trial("t1", ok=False) for _ in range(3)],
+                              *[trial("t2", ok=False) for _ in range(3)])
+               for split in se.GATE_SPLITS}
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            se.gate(prev, new, cases_before=1, cases_after=1, k=0)
+        for k in (1, 2, 3):
+            with self.subTest(k=k):
+                self.assertFalse(se.gate(prev, new, cases_before=1, cases_after=1, k=k).passed)
+
     def test_freeze_round_pins_every_file_and_is_reproducible(self):
         with tempfile.TemporaryDirectory() as tmp:
             a = Path(tmp) / "a.json"
@@ -299,6 +325,35 @@ class FreezeAndGateTest(unittest.TestCase):
 
 
 class CliTest(unittest.TestCase):
+    def test_positive_k_and_default_are_preserved(self):
+        parser = se.build_parser()
+        command = ["diagnose", "--eval", "dev=unused.json", "--split", "unused.json"]
+        self.assertEqual(parser.parse_args(command).k, se.PASS_K)
+        for k in (1, 2, 3, 4):
+            with self.subTest(k=k):
+                self.assertEqual(parser.parse_args([*command, "--k", str(k)]).k, k)
+
+    def test_invalid_k_is_rejected_before_reading_inputs_or_writing_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "artifacts"
+            commands = (
+                ["diagnose", "--eval", "dev=missing.json", "--split", "missing.json",
+                 "--output", str(output / "report.json")],
+                ["run", "--round", "1", "--eval", "dev=missing.json", "--split", "missing.json",
+                 "--artifacts-dir", str(output)],
+                ["gate", "--prev", "dev=missing.json", "--new", "dev=missing.json",
+                 "--cases-before", "0", "--cases-after", "0", "--round-dir", str(output)],
+            )
+            for command in commands:
+                for k in ("0", "-1", "1.5", "abc"):
+                    stderr = io.StringIO()
+                    with self.subTest(command=command[0], k=k):
+                        with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit) as exc:
+                            se.main([*command, "--k", k])
+                        self.assertEqual(exc.exception.code, 2)
+                        self.assertIn("k must be a positive integer", stderr.getvalue())
+                        self.assertFalse(output.exists())
+
     def test_split_assignment_parsing(self):
         self.assertEqual(se.parse_split_assignments(["dev=a.json", "iid_test= b.json"]),
                          {"dev": Path("a.json"), "iid_test": Path("b.json")})
