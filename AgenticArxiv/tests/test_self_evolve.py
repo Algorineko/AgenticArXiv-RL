@@ -223,6 +223,47 @@ class MineBadcasesTest(unittest.TestCase):
 
 
 class FreezeAndGateTest(unittest.TestCase):
+    def test_gate_rejects_changed_task_coverage(self):
+        prev = self._eval(False, True, True)
+        replacements = {
+            "removed": summary(*[trial("t2") for _ in range(3)]),
+            "added": summary(*prev["dev"]["details"], *[trial("t3") for _ in range(3)]),
+            "replaced": summary(*[trial("t2") for _ in range(3)], *[trial("t3") for _ in range(3)]),
+        }
+        for label, changed in replacements.items():
+            with self.subTest(label=label):
+                result = se.gate(prev, {**prev, "dev": changed}, cases_before=1, cases_after=1,
+                                 dev_tolerance=1.0)
+                self.assertFalse(result.passed)
+                check = next(c for c in result.checks if c.name == "pass^3:dev")
+                self.assertEqual(check.detail["error"], "task coverage differs")
+                self.assertEqual(check.detail["missing_tasks"], ["t1"] if label != "added" else [])
+                self.assertEqual(check.detail["extra_tasks"], ["t3"] if label != "removed" else [])
+
+    def test_gate_rejects_partial_trial_coverage_on_either_side(self):
+        complete = self._eval(True, True, True)
+        short = summary(*[trial("t1") for _ in range(2)], *[trial("t2") for _ in range(3)])
+        for side in ("previous", "new"):
+            with self.subTest(side=side):
+                incomplete = {**complete, "iid_test": short}
+                prev, new = (incomplete, complete) if side == "previous" else (complete, incomplete)
+                result = se.gate(prev, new, cases_before=0, cases_after=0)
+                self.assertFalse(result.passed)
+                check = next(c for c in result.checks if c.name == "pass^3:iid_test")
+                self.assertIn("fewer than 3", check.detail["error"])
+                self.assertEqual(check.detail[f"{side}_short_tasks"], {"t1": 2})
+
+    def test_gate_coverage_is_order_independent_and_allows_extra_trials(self):
+        prev = self._eval(True, True, True)
+        new = {split: summary(*reversed(s["details"]), trial("t1")) for split, s in prev.items()}
+        self.assertTrue(se.gate(prev, new, cases_before=0, cases_after=0).passed)
+
+    def test_gate_rejects_empty_evaluations(self):
+        complete = self._eval(True, True, True)
+        empty = {split: summary() for split in se.GATE_SPLITS}
+        for prev, new in ((complete, empty), (empty, complete), (empty, empty)):
+            self.assertFalse(se.gate(prev, new, cases_before=0, cases_after=0).passed)
+
     def test_freeze_round_pins_every_file_and_is_reproducible(self):
         with tempfile.TemporaryDirectory() as tmp:
             a = Path(tmp) / "a.json"
@@ -299,6 +340,29 @@ class FreezeAndGateTest(unittest.TestCase):
 
 
 class CliTest(unittest.TestCase):
+    def test_gate_cli_records_coverage_rejection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prev_path, new_path = root / "prev.json", root / "new.json"
+            se.dump_json(prev_path, summary(*[trial("failed", ok=False) for _ in range(3)],
+                                           *[trial("easy") for _ in range(3)]))
+            se.dump_json(new_path, summary(*[trial("easy") for _ in range(3)]))
+            split_path = root / "split.json"
+            se.dump_json(split_path, {"split": {}})
+            round_dir = root / "round"
+            se.freeze_round(round_dir, {"split": split_path}, round_id=1)
+            args = ["gate", "--round-dir", str(round_dir), "--split", str(split_path),
+                    "--cases-before", "1", "--cases-after", "1"]
+            for split in se.GATE_SPLITS:
+                args.extend(["--prev", f"{split}={prev_path}", "--new", f"{split}={new_path}"])
+            self.assertEqual(se.main(args), 1)
+            result = se.load_json(round_dir / se.GATE_FILE_NAME)
+            self.assertFalse(result["passed"])
+            failed = [c for c in result["checks"] if not c["passed"]]
+            self.assertEqual(len(failed), len(se.GATE_SPLITS))
+            for check in failed:
+                self.assertEqual(check["detail"]["missing_tasks"], ["failed"])
+
     def test_split_assignment_parsing(self):
         self.assertEqual(se.parse_split_assignments(["dev=a.json", "iid_test= b.json"]),
                          {"dev": Path("a.json"), "iid_test": Path("b.json")})
