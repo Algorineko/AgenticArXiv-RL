@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -329,11 +330,71 @@ class CliTest(unittest.TestCase):
             manifest = json.loads((round_dir / se.MANIFEST_FILE_NAME).read_text("utf-8"))
             self.assertEqual(report["families"][0]["strict_rate"], 0.0)
             self.assertEqual(selection["parents"], [parent])
-            self.assertEqual(set(manifest["files"]), {"eval:dev", "split", "snapshot"})
+            self.assertEqual(set(manifest["files"]),
+                             {"eval:dev", "split", "snapshot", "parametric_manifest",
+                              "weakness_report", "selection"})
+            for entry in manifest["files"].values():
+                self.assertEqual(entry["sha256"], se.sha256_file(Path(entry["path"])))
+                self.assertEqual(entry["bytes"], Path(entry["path"]).stat().st_size)
             self.assertEqual(manifest["files"]["split"]["sha256"], se.sha256_file(SPLIT_PATH))
             self.assertEqual(manifest["meta"]["selection"]["parents"], [parent])
             self.assertNotIn("targeted_seed", manifest["files"])
         del tasks, split
+
+    def test_run_freezes_optional_traces_and_synthesis_outputs(self):
+        derived = se.derived_parent_map(se.load_json(PARAMETRIC_MANIFEST))
+        parent = sorted(set(derived.values()))[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dev, snapshot, traces = root / "dev.json", root / "snapshot.json", root / "traces.jsonl"
+            se.dump_json(dev, summary(*[trial(parent, ok=False) for _ in range(3)]))
+            se.dump_json(snapshot, {})
+            se.write_jsonl(traces, [])
+            parametric = root / "parametric.manifest.json"
+            parametric.write_bytes(PARAMETRIC_MANIFEST.read_bytes())
+            args = ["run", "--round", "1", "--eval", f"dev={dev}", "--split", str(SPLIT_PATH),
+                    "--snapshot", str(snapshot), "--parametric-manifest", str(parametric),
+                    "--artifacts-dir", str(root / "art"), "--traces", str(traces)]
+            real_run = se.subprocess.run
+
+            def synthesize(command, **kwargs):
+                if "--only-parents" in command:
+                    out = Path(command[command.index("--output") + 1])
+                    se.write_jsonl(out, [{"source_task_id": parent}])
+                    se.dump_json(out.with_suffix(out.suffix + ".manifest.json"), {"tasks": []})
+                    return subprocess.CompletedProcess(command, 0)
+                return real_run(command, **kwargs)
+
+            with patch.object(se.subprocess, "run", side_effect=synthesize):
+                self.assertEqual(se.main(args), 0)
+            round_dir = root / "art" / "round_1"
+            manifest = se.load_json(round_dir / se.MANIFEST_FILE_NAME)
+            expected_roles = {"eval:dev", "split", "snapshot", "parametric_manifest", "weakness_report",
+                              "selection", "traces", "badcases", "targeted_seed", "targeted_seed_manifest"}
+            self.assertEqual(set(manifest["files"]), expected_roles)
+            for entry in manifest["files"].values():
+                self.assertEqual(entry["sha256"], se.sha256_file(Path(entry["path"])))
+            first_lineage = manifest["lineage_sha256"]
+            with patch.object(se.subprocess, "run", side_effect=synthesize):
+                self.assertEqual(se.main(args), 0)
+            self.assertEqual(se.load_json(round_dir / se.MANIFEST_FILE_NAME)["lineage_sha256"], first_lineage)
+            # Whitespace changes preserve the parsed traces but must change frozen byte lineage.
+            traces.write_text("\n", encoding="utf-8")
+            with patch.object(se.subprocess, "run", side_effect=synthesize):
+                self.assertEqual(se.main(args), 0)
+            changed = se.load_json(round_dir / se.MANIFEST_FILE_NAME)
+            self.assertNotEqual(changed["lineage_sha256"], first_lineage)
+            self.assertEqual(changed["files"]["traces"]["sha256"], se.sha256_file(traces))
+            parametric.write_bytes(parametric.read_bytes() + b"\n")
+            with patch.object(se.subprocess, "run", side_effect=synthesize):
+                self.assertEqual(se.main(args), 0)
+            changed_input = se.load_json(round_dir / se.MANIFEST_FILE_NAME)
+            self.assertNotEqual(changed_input["lineage_sha256"], changed["lineage_sha256"])
+            self.assertEqual(changed_input["files"]["parametric_manifest"]["sha256"], se.sha256_file(parametric))
+            self.assertEqual(se.main([*args, "--no-synthesize"]), 0)
+            no_synthesis = se.load_json(round_dir / se.MANIFEST_FILE_NAME)
+            self.assertEqual(set(no_synthesis["files"]),
+                             expected_roles - {"targeted_seed", "targeted_seed_manifest"})
 
     def test_module_help_runs_from_repo_root(self):
         proc = subprocess.run([sys.executable, "-m", "AgenticArxiv.rl.self_evolve", "--help"],

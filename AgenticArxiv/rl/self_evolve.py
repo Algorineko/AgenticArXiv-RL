@@ -768,19 +768,24 @@ def cmd_run(args: argparse.Namespace) -> int:
     files: Dict[str, Path] = {f"eval:{s}": p for s, p in assignments.items()}
     files["split"] = split_path
     files["snapshot"] = snapshot_path
+    files["weakness_report"] = round_dir / WEAKNESS_FILE_NAME
     if args.traces:
+        files["traces"] = Path(args.traces)
         n = mine_badcases(Path(args.traces), tasks, round_dir / BADCASE_FILE_NAME,
                           source=f"self_evolve:round_{args.round}")
         files["badcases"] = round_dir / BADCASE_FILE_NAME
         print(f"mined {n} badcases -> {round_dir / BADCASE_FILE_NAME}")
 
     # 3. select
+    parametric_manifest_path = Path(args.parametric_manifest)
+    files["parametric_manifest"] = parametric_manifest_path
     selection = select_parents(
-        report, derived_parent_map(load_json(Path(args.parametric_manifest))), train_ids,
+        report, derived_parent_map(load_json(parametric_manifest_path)), train_ids,
         max_strict_rate=args.max_strict_rate, max_families=args.max_families,
         parents_per_family=args.parents_per_family,
     )
     dump_json(round_dir / SELECTION_FILE_NAME, selection.to_dict())
+    files["selection"] = round_dir / SELECTION_FILE_NAME
     print(f"selected parents: {selection.parents or '(none)'}")
 
     # 4. synthesize (subprocess: the derivation script owns env execution + manifest)
