@@ -20,6 +20,7 @@ from benchmark.badcases import (
     matches,
     replay,
     verdict_of,
+    verdict_of_result,
 )
 from benchmark.tasks_expanded import EXPANDED_TASKS
 
@@ -88,10 +89,14 @@ class ReplayOutcomeTest(unittest.TestCase):
         return replay([c], EXPANDED_TASKS)[0]
 
     def test_open_case_that_still_reproduces(self):
-        out = self._replay_one(case(status=STATUS_OPEN, reproduces_when={"false_finish": True}))
+        c = case(status=STATUS_OPEN, reproduces_when={"false_finish": True})
+        out = self._replay_one(c)
         self.assertTrue(out.reproduces)
         self.assertEqual(out.outcome, "still_open")
         self.assertFalse(out.is_regression)
+        self.assertEqual(out.execution, "historical-rescore")
+        # 复用同一条原历史核对结果投影；不执行 Agent 或构造新轨迹步骤。
+        self.assertEqual(out.verdict, verdict_of_result(TASK, {"history": c.history}))
 
     def test_open_case_that_no_longer_reproduces_is_newly_fixed(self):
         out = self._replay_one(case(status=STATUS_OPEN, reproduces_when={"false_finish": False}))

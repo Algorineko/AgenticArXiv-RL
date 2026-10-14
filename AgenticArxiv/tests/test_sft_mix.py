@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from augment_parametric_sft_data import validate_parametric_rows  # noqa: E402
 from augment_sft_data import canonical_hash, sha256_file  # noqa: E402
 from build_sft_train_mix import build_mix, validate_source_manifest  # noqa: E402
+from agents.react_contract import protocol_metadata  # noqa: E402
 
 
 SPLIT_NAME = "v2_62.json"
@@ -32,6 +33,7 @@ def row(task_id: str, parent: str, task: str, trajectory_step: int):
         {"role": "assistant", "content": "Thought: x\nAction: FINISH"},
     ]
     return {
+        "protocol_metadata": protocol_metadata(),
         "source_task_id": task_id,
         "source_split": f"{SPLIT_NAME}:train:parametric_v1",
         "trajectory_step": trajectory_step,
@@ -63,6 +65,7 @@ class ParametricRowValidationTest(unittest.TestCase):
             },
         }
         self.manifest = {
+            "protocol_metadata": protocol_metadata(),
             "kind": "train_only_parametric_expert_seed",
             "sample_rows": 2,
             "derived_tasks": 1,
@@ -121,7 +124,8 @@ class MixTest(unittest.TestCase):
             {"role": "user", "content": label},
             {"role": "assistant", "content": "answer"},
         ]
-        return {"messages": messages, "sample_sha256": canonical_hash(messages)}
+        return {"messages": messages, "sample_sha256": canonical_hash(messages),
+                "protocol_metadata": protocol_metadata()}
 
     def test_mix_is_deterministic_and_tags_sources(self):
         original = [self._mix_row("o1"), self._mix_row("o2")]
@@ -148,6 +152,7 @@ class SourceManifestValidationTest(unittest.TestCase):
         path.write_text("".join(json.dumps({"i": i}) + "\n" for i in range(rows)), encoding="utf-8")
         manifest_path = path.with_suffix(path.suffix + ".manifest.json")
         manifest = {
+            "protocol_metadata": protocol_metadata(),
             "augmentation_kind" if kind == "original_train_linguistic" else "kind": (
                 "linguistic_semantics_preserving" if kind == "original_train_linguistic" else kind
             ),

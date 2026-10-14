@@ -1,23 +1,21 @@
-# AgenticArxiv/benchmark/runner.py
-"""Benchmark 运行器：驱动三种 Agent 执行标准化测试集。"""
+"""Benchmark 运行器：使用共同 episode 执行文本 ReAct 评测。"""
 
-import sys
 import os
-import time
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-import glob
-
-from utils.llm_client import get_env_llm_client, LLMClient, TransformersLLMClient
-from utils.logger import log
-from benchmark.tasks import get_task_by_id, get_dependency_chain, BENCHMARK_TASKS
+from agents.agent_engine import ReActAgent
 from benchmark.metrics import TaskMetrics, extract_metrics, is_strict_success
-from config import settings as app_settings
+from benchmark.tasks import BENCHMARK_TASKS
+from rl.multiturn_env import AgenticArxivMultiTurnEnv
+from utils.llm_client import TransformersLLMClient, get_env_llm_client
+from utils.logger import log
 
 
 @dataclass
@@ -32,30 +30,28 @@ class BenchmarkResult:
 
 
 class BenchmarkRunner:
-    """对比测试三种 Agent 模式的性能和准确性"""
+    """评测文本 ReAct；每个 task/trial 拥有独立状态和产物。"""
 
-    AGENT_TYPES = ["regex", "mcp", "skill_cli"]
+    AGENT_TYPES = ["regex"]
     LLM_BACKENDS = ("api", "transformers")
 
     def __init__(
-        self,
-        agent_types: Optional[List[str]] = None,
-        repeat: int = 3,
-        model: Optional[str] = None,
-        session_prefix: Optional[str] = None,
-        llm_extra: Optional[Dict[str, Any]] = None,
-        offline: bool = False,
-        snapshot: Optional[str] = None,
-        llm_backend: str = "api",
-        local_device: str = "auto",
-        local_dtype: str = "auto",
+        self, agent_types: Optional[List[str]] = None, repeat: int = 3,
+        model: Optional[str] = None, session_prefix: Optional[str] = None,
+        llm_extra: Optional[Dict[str, Any]] = None, offline: bool = False,
+        snapshot: Optional[str] = None, llm_backend: str = "api",
+        local_device: str = "auto", local_dtype: str = "auto",
         generation_seed: Optional[int] = None,
     ):
         if llm_backend not in self.LLM_BACKENDS:
-            raise ValueError(
-                f"llm_backend 必须是 {self.LLM_BACKENDS} 之一，收到 {llm_backend!r}"
-            )
-        self.agent_types = agent_types or self.AGENT_TYPES
+            raise ValueError(f"llm_backend 必须是 {self.LLM_BACKENDS} 之一")
+        self.agent_types = agent_types or list(self.AGENT_TYPES)
+        if self.agent_types != self.AGENT_TYPES:
+            raise ValueError("仅支持文本 ReAct；agent_types 必须为 ['regex']")
+        if repeat < 1:
+            raise ValueError("repeat 必须至少为 1")
+        if snapshot and not offline:
+            raise ValueError("snapshot 仅可用于显式 offline 模式")
         self.repeat = repeat
         self.model = model
         self.llm_extra = dict(llm_extra or {})
@@ -65,16 +61,11 @@ class BenchmarkRunner:
         self.local_device = local_device
         self.local_dtype = local_dtype
         self.generation_seed = generation_seed
-        self._env = None
         if session_prefix is None:
             from datetime import datetime
             session_prefix = f"bench_r{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.session_prefix = session_prefix
         self._llm_client: Optional[Any] = None
-        self._side_fx = None
-        self._sandbox = None
-        # 缓存已执行的依赖任务，避免重复
-        self._dep_done: Dict[str, bool] = {}
 
     @property
     def llm_client(self) -> Any:
@@ -82,300 +73,97 @@ class BenchmarkRunner:
             if self.llm_backend == "transformers":
                 if not self.model:
                     raise ValueError("transformers 后端需要本地模型路径")
+                if not Path(self.model).exists():
+                    raise FileNotFoundError(f"本地模型不存在: {self.model}")
                 self._llm_client = TransformersLLMClient(
-                    model=self.model,
-                    device=self.local_device,
-                    dtype=self.local_dtype,
-                    seed=self.generation_seed,
+                    model=self.model, device=self.local_device,
+                    dtype=self.local_dtype, seed=self.generation_seed,
                 )
             else:
                 self._llm_client = get_env_llm_client()
         return self._llm_client
 
-    def run_all(self, tasks: Optional[List[Dict]] = None) -> List[BenchmarkResult]:
-        tasks = tasks or BENCHMARK_TASKS
+    def _snapshot_path(self) -> Path:
+        return Path(self.snapshot) if self.snapshot else (
+            Path(PROJECT_ROOT).parent / "data" / "mock_arxiv_snapshot.json"
+        )
+
+    def _tool_env(self) -> AgenticArxivMultiTurnEnv:
         if self.offline:
-            from benchmark.semantic_oracle import attach_expected_paper_ids
+            path = self._snapshot_path()
+            if not path.exists():
+                raise FileNotFoundError(f"离线模式需要已有快照: {path}")
+            return AgenticArxivMultiTurnEnv(path, mode="replay")
+        return AgenticArxivMultiTurnEnv(mode="live")
 
-            tasks = attach_expected_paper_ids(tasks, self._snapshot_path())
-        results: List[BenchmarkResult] = []
-        total = len(tasks) * len(self.agent_types) * self.repeat
-        done = 0
-
-        for task_def in tasks:
-            for agent_type in self.agent_types:
-                for trial in range(self.repeat):
-                    done += 1
-                    task_id = task_def["id"]
-                    session_id = f"{self.session_prefix}_{task_id}_{agent_type}_{trial}"
-
-                    log.info(f"[{done}/{total}] task={task_id} agent={agent_type} trial={trial}")
-                    print(f"[{done}/{total}] task={task_id} agent={agent_type} trial={trial}", flush=True)
-
-                    try:
-                        self._reset_offline_trial_state()
-                        # 确保依赖任务已执行
-                        self._ensure_dependencies(task_def, session_id, agent_type)
-                        self._apply_setup(task_def, session_id)
-
-                        # 下载/翻译任务：清理上一次试验留下的文件和 DB 记录
-                        if task_def.get("category") in ("download", "translate"):
-                            self._cleanup_paper_artifacts(session_id)
-
-                        # 每条轨迹使用由 task_id + trial 派生的独立随机流。
-                        # 不包含 session prefix，确保 Base/SFT/RL 换前缀后仍可配对；
-                        # 也不受前面任务实际用了多少轮 ReAct 调用的影响。
-                        self._start_generation_stream(task_id, trial)
-                        agent = self._create_agent(
-                            agent_type, task_def.get("max_iterations"))
-                        # setup 是当前请求之前已经发生的会话历史。环境状态由
-                        # _apply_setup 真实铺设；同一份声明再渲染为模型可见上下文，
-                        # 使 Benchmark 与 GRPO 面对一致的可观测状态。它不进入
-                        # raw_result.history，因此不会被当作策略动作参与评分。
-                        from agents.prompt_templates import build_visible_setup_context
-
-                        raw = agent.run(
-                            task=task_def["task"],
-                            agent_model=self.model,
-                            session_id=session_id,
-                            initial_history=build_visible_setup_context(task_def),
-                        )
-                        metrics = extract_metrics(task_def, raw, agent_type, trial, session_id=session_id)
-                        br = BenchmarkResult(
-                            task_id=task_id,
-                            agent_type=agent_type,
-                            trial=trial,
-                            raw_result=raw,
-                            session_id=session_id,
-                            metrics=metrics,
-                        )
-                    except Exception as e:
-                        log.error(f"Benchmark 任务执行异常: {e}", exc_info=True)
-                        br = BenchmarkResult(
-                            task_id=task_id,
-                            agent_type=agent_type,
-                            trial=trial,
-                            raw_result={},
-                            session_id=session_id,
-                            error=str(e),
-                        )
-
-                    results.append(br)
-                    self._print_step_summary(br)
-
-        return results
+    def _create_agent(self, agent_type: str, max_iterations: Optional[int] = None):
+        if agent_type != "regex":
+            raise ValueError("仅支持文本 ReAct")
+        return ReActAgent(
+            self.llm_client, env=self._tool_env(), llm_extra=self.llm_extra,
+            max_iterations=max_iterations if max_iterations is not None else 6,
+        )
 
     def _start_generation_stream(self, task_id: str, trial: int) -> None:
         reset = getattr(self.llm_client, "start_generation_stream", None)
         if callable(reset):
             reset(f"{task_id}:{trial}")
 
-    def _reset_offline_trial_state(self) -> None:
-        """Give every offline task/trial an independent mutable environment."""
-        if not self.offline:
-            return
-        from models.store import get_store, use_memory_store
-
-        if self._sandbox is None:
-            # Create the replay environment and capture its pristine state
-            # before dependency/setup actions are applied.  Subsequent trials
-            # restore this exact baseline instead of relying on ad-hoc clears.
-            use_memory_store(reset=True)
-            self._tool_env()
-            reset_env = getattr(self._env, "reset_runtime_state", None)
-            if callable(reset_env):
-                reset_env()
-            from rl.sandbox import RolloutSandbox
-
-            self._sandbox = RolloutSandbox(
-                self._env,
-                get_store(),
-                file_roots=self._artifact_roots(),
-            )
-        else:
-            self._sandbox.reset()
-        if self._side_fx is not None:
-            # fake translation IDs and buffered events are also rollout-local.
-            if hasattr(self._side_fx, "_translate_seq"):
-                self._side_fx._translate_seq = 0
-            if hasattr(self._side_fx, "published_events"):
-                self._side_fx.published_events.clear()
+    def run_all(self, tasks: Optional[List[Dict]] = None) -> List[BenchmarkResult]:
+        tasks = list(BENCHMARK_TASKS if tasks is None else tasks)
+        if self.offline:
+            from benchmark.semantic_oracle import attach_expected_paper_ids
+            tasks = attach_expected_paper_ids(tasks, self._snapshot_path())
+        lookup = {task["id"]: task for task in tasks}
+        results: List[BenchmarkResult] = []
+        total = len(tasks) * self.repeat
+        for task_def in tasks:
+            for trial in range(self.repeat):
+                task_id = task_def["id"]
+                session_id = f"{self.session_prefix}_{task_id}_regex_{trial}"
+                print(f"[{len(results) + 1}/{total}] task={task_id} trial={trial}", flush=True)
+                agent = None
+                try:
+                    self._start_generation_stream(task_id, trial)
+                    agent = self._create_agent("regex", task_def.get("max_iterations"))
+                    # 环境真实初始化并过滤可见状态；setup 不进入策略 history。
+                    raw = agent.run(
+                        task=task_def["task"], agent_model=self.model,
+                        session_id=session_id, task_def=task_def, task_lookup=lookup,
+                    )
+                    metrics = extract_metrics(task_def, raw, "regex", trial, session_id)
+                    result = BenchmarkResult(
+                        task_id, "regex", trial, raw, session_id, metrics=metrics,
+                    )
+                except Exception as exc:
+                    log.error(f"Benchmark 任务执行异常: {exc}", exc_info=True)
+                    result = BenchmarkResult(
+                        task_id, "regex", trial, {}, session_id, error=str(exc),
+                    )
+                finally:
+                    if agent is not None:
+                        agent.close()
+                results.append(result)
+                self._print_step_summary(result)
+        return results
 
     @staticmethod
-    def _artifact_roots():
-        from pathlib import Path as _Path
-
-        return (
-            _Path(app_settings.pdf_raw_path),
-            _Path(app_settings.pdf_translated_path),
+    def _print_step_summary(result: BenchmarkResult):
+        if result.error:
+            print(f"  ERROR: {result.error[:100]}")
+            return
+        metrics = result.metrics
+        if metrics is None:
+            return
+        status = "PASS" if is_strict_success(metrics) else (
+            "FAIL(WRONG_RESULT)" if metrics.task_completed else
+            f"FAIL({metrics.termination_type})"
         )
-
-    def _side_effects(self):
-        """Benchmark 沿用原行为（MySQL 落库 + SSE）；无数据库时自动降级到本地内存。
-
-        离线模式必须用 LocalSideEffectManager：否则翻译任务仍会起线程调 pdf2zh、
-        会话状态仍写 MySQL，"离线"就只离了一半。
-        """
-        if self._side_fx is None:
-            if self.offline:
-                from agents.side_effects import LocalSideEffectManager
-                self._side_fx = LocalSideEffectManager()
-            else:
-                from agents.side_effects import default_side_effect_manager
-                self._side_fx = default_side_effect_manager()
-        return self._side_fx
-
-    def _tool_env(self):
-        """离线模式下用 MockArxivEnv 回放快照，取代真实 arXiv 请求。"""
-        if not self.offline:
-            return None
-        if self._env is None:
-            from pathlib import Path as _Path
-            from rl.env import MockArxivEnv
-            path = self._snapshot_path()
-            if not path.exists():
-                raise SystemExit(
-                    f"离线模式需要快照，但未找到: {path}\n"
-                    f"请先运行: python -m AgenticArxiv.rl.build_snapshot"
-                )
-            self._env = MockArxivEnv(snapshot_path=path, mode="replay")
-            log.info(f"[Benchmark] 离线模式，回放快照 {path}")
-        return self._env
-
-    def _snapshot_path(self):
-        from pathlib import Path as _Path
-
-        return _Path(self.snapshot) if self.snapshot else (
-            _Path(PROJECT_ROOT).parent / "data" / "mock_arxiv_snapshot.json"
-        )
-
-    def _create_agent(self, agent_type: str, max_iterations: Optional[int] = None):
-        """按任务声明的轮数预算创建 Agent。
-
-        Agent 默认 5 轮 = 最多 4 次工具调用 + 一次 FINISH。链更长的任务必须
-        显式抬高，否则会被判成 FORCE_STOP —— 那是「预算不够」而不是「不会
-        规划」，混在一起会让长链任务的失败率没法解读。
-        """
-        side_fx = self._side_effects()
-        env = self._tool_env()
-        kwargs = {"side_effect_mgr": side_fx, "env": env, "llm_extra": self.llm_extra}
-        if max_iterations is not None:
-            kwargs["max_iterations"] = max_iterations
-        if agent_type == "mcp":
-            from mcp_protocol.mcp_agent import MCPAgent
-            return MCPAgent(self.llm_client, **kwargs)
-        elif agent_type == "skill_cli":
-            from skill_cli.skill_agent import SkillAgent
-            return SkillAgent(self.llm_client, **kwargs)
-        else:
-            from agents.agent_engine import ReActAgent
-            return ReActAgent(self.llm_client, **kwargs)
-
-    @staticmethod
-    def _cleanup_paper_artifacts(session_id: str):
-        """清理 session 关联的 paper 下载/翻译状态，确保每次试验从干净状态开始"""
-        from models.store import store
-        papers = store.get_last_papers(session_id)
-        if not papers:
-            return
-        for paper in papers:
-            pid = paper.id
-            # 清理 DB 记录
-            store.delete_pdf_asset(pid)
-            store.delete_translate_asset(pid)
-            # 清理文件
-            raw_pdf = os.path.join(app_settings.pdf_raw_path, f"{pid}.pdf")
-            for f in [raw_pdf, raw_pdf + ".lock"]:
-                if os.path.exists(f):
-                    os.remove(f)
-            for pattern in [f"{pid}-mono.pdf", f"{pid}-dual.pdf", f"{pid}-mono.pdf.lock"]:
-                path = os.path.join(app_settings.pdf_translated_path, pattern)
-                if os.path.exists(path):
-                    os.remove(path)
-            log_path = os.path.join(app_settings.pdf_translated_log_path, f"{pid}.pdf2zh.log")
-            if os.path.exists(log_path):
-                os.remove(log_path)
-
-    def _apply_setup(self, task_def: Dict, session_id: str):
-        """执行任务的 setup 动作，把会话状态铺好。
-
-        与 depends_on 的区别：depends_on 会再跑一遍完整 Agent（含 LLM 调用），
-        setup 直接调用工具铺状态。后者更适合"被测任务本身不该包含这些步骤"的场景 ——
-        例如「下载标题含 X 的那篇」，论文列表应当是既有前提，
-        而不是让被测 Agent 先检索一次（那样 expected_tools 就必须包含检索，
-        ref 参数的正确性反而测不出来了）。
-        """
-        setup = task_def.get("setup")
-        if not setup:
-            return
-
-        from models.schemas import Paper
-        from tools.tool_registry import registry
-
-        env = self._tool_env()
-        side_fx = self._side_effects()
-        for action in setup:
-            args = dict(action.get("args") or {})
-            args["session_id"] = session_id
-            name = action["name"]
-            if name == "translate_arxiv_pdf":
-                side_fx.enqueue_translate(**args)
-                continue
-            result = env.execute_tool(name, args) if env else registry.execute_tool(name, args)
-            if name == "get_recently_submitted_cs_papers" and isinstance(result, list) and result:
-                side_fx.set_last_papers(session_id, [Paper(**p) for p in result])
-            if isinstance(result, dict) and isinstance(result.get("paper_id"), str):
-                side_fx.set_last_active_paper_id(session_id, result["paper_id"])
-        log.info(f"  已铺设会话状态: {[a['name'] for a in setup]}")
-
-    def _ensure_dependencies(self, task_def: Dict, session_id: str, agent_type: str):
-        """如果任务有依赖，先执行依赖任务确保上下文（论文列表等）存在"""
-        dep_id = task_def.get("depends_on")
-        if not dep_id:
-            return
-
-        chain = get_dependency_chain(task_def["id"])
-        # chain 包含从最早依赖到当前任务，去掉当前任务
-        chain = chain[:-1]
-
-        for dep_task_id in chain:
-            dep_key = f"{dep_task_id}_{session_id}"
-            if dep_key in self._dep_done:
-                continue
-
-            dep_task = get_task_by_id(dep_task_id)
-            if dep_task is None:
-                continue
-
-            log.info(f"  执行依赖任务: {dep_task_id} (for {task_def['id']})")
-            agent = self._create_agent(agent_type)
-            agent.run(
-                task=dep_task["task"],
-                agent_model=self.model,
-                session_id=session_id,
-            )
-            self._dep_done[dep_key] = True
-
-    @staticmethod
-    def _print_step_summary(br: BenchmarkResult):
-        if br.error:
-            print(f"  ERROR: {br.error[:100]}")
-            return
-        m = br.metrics
-        if m is None:
-            return
-        # FINISH 只代表模型主动结束，不代表任务做对了。此前 infeasible
-        # 任务乱调工具后 FINISH 仍打印 PASS，和同一行 accurate=False 矛盾。
-        if is_strict_success(m):
-            status = "PASS"
-        elif m.task_completed:
-            status = "FAIL(WRONG_RESULT)"
-        else:
-            status = f"FAIL({m.termination_type})"
-        tools = " -> ".join(m.tool_call_sequence) or "(none)"
+        tools = " -> ".join(metrics.tool_call_sequence) or "(none)"
         print(
-            f"  {status} | {m.total_time_ms}ms "
-            f"(LLM:{m.total_llm_ms} Tool:{m.total_tool_ms} OH:{m.framework_overhead_ms}) "
-            f"| iter={m.iteration_count} | tools=[{tools}] "
-            f"| accurate={m.tool_call_accurate}"
+            f"  {status} | {metrics.total_time_ms}ms "
+            f"(LLM:{metrics.total_llm_ms} Tool:{metrics.total_tool_ms} "
+            f"OH:{metrics.framework_overhead_ms}) "
+            f"| iter={metrics.iteration_count} | tools=[{tools}] "
+            f"| accurate={metrics.tool_call_accurate}"
         )

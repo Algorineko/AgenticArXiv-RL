@@ -1,10 +1,5 @@
-# ===== 可选依赖（仅 eval/demo 时需要） =====
-pdf2zh  # PDF 翻译（训练时用 mock）
-mcp  # mcp_protocol/（可选 MCP agent）的客户端/服务端依赖
-fastapi
-uvicorn[standard]
-sqlalchemy>=2.0
-pymysql
+# ===== 真实工具的可选依赖 =====
+pdf2zh  # 同步 PDF 翻译；离线回放不调用该进程
 
 # ===== 训练曲线后端（--report_to，按需装一个） =====
 tensorboard   # 零配置、离线可用，推荐；查看: tensorboard --logdir outputs/<stage>/logs

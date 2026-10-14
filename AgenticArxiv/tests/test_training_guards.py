@@ -24,13 +24,10 @@ from rl.precision import (
     trainable_model_load_kwargs,
 )
 from rl.train_grpo import (
-    DAPO_PRESET,
     DEFAULT_BETA,
     RewardVarianceGuard,
     _build_reward_calculator,
     _load_tasks,
-    resolve_dapo_options,
-    resolve_dynamic_sampling_option,
 )
 from rl.train_sft import (
     QLORA_TARGET_MODULES,
@@ -437,12 +434,10 @@ class PrecisionFlagsTest(unittest.TestCase):
     def test_falls_back_to_fp16_without_bf16(self):
         self.assertEqual(self._flags(cuda=True, bf16=False), {"fp16": True})
 
-    def test_all_three_trainers_agree(self):
-        from rl.train_dpo import _precision_flags as dpo
+    def test_both_mainline_trainers_agree(self):
         from rl.train_grpo import _precision_flags as grpo
         from rl.train_sft import _precision_flags as sft
-        self.assertEqual(sft(), dpo())
-        self.assertEqual(dpo(), grpo())
+        self.assertEqual(sft(), grpo())
 
 
 class CudaSupportsBf16Test(unittest.TestCase):
@@ -570,139 +565,29 @@ class DistributedLaunchGuardTest(unittest.TestCase):
             assert_quantization_is_single_process(False)
 
 
-class DapoPresetTest(unittest.TestCase):
-    """DAPO 预设只填空，不覆盖显式给出的参数。"""
+class MainlineAlgorithmDefaultsTest(unittest.TestCase):
+    """保留源码明确的 KL 系数与未设置字段的库委托边界。"""
 
-    def _resolve(self, dapo, **overrides):
-        kwargs = {
-            "loss_type": None,
-            "epsilon_high": None,
-            "mask_truncated_completions": None,
-            "beta": DEFAULT_BETA,
-        }
-        kwargs.update(overrides)
-        return resolve_dapo_options(dapo=dapo, **kwargs)
-
-    def test_without_the_flag_nothing_changes(self):
-        self.assertEqual(self._resolve(False), (None, None, None, DEFAULT_BETA))
-
-    def test_preset_fills_every_default(self):
-        self.assertEqual(
-            self._resolve(True),
-            (
-                DAPO_PRESET["loss_type"],
-                DAPO_PRESET["epsilon_high"],
-                DAPO_PRESET["mask_truncated_completions"],
-                DAPO_PRESET["beta"],
-            ),
-        )
-
-    def test_explicit_values_beat_the_preset(self):
-        self.assertEqual(
-            self._resolve(
-                True,
-                loss_type="dr_grpo",
-                epsilon_high=0.2,
-                mask_truncated_completions=False,
-                beta=0.1,
-            ),
-            ("dr_grpo", 0.2, False, 0.1),
-        )
-
-    def test_a_changed_beta_survives_the_preset(self):
-        """beta 没有「未设置」哨兵值，所以只认「没动过默认值」这一种情况。"""
-        self.assertEqual(self._resolve(True, beta=0.2)[3], 0.2)
-        self.assertEqual(self._resolve(True, beta=DEFAULT_BETA)[3], 0.0)
-
-    def test_preset_values_are_trl_field_names(self):
-        import dataclasses
-
-        from trl import GRPOConfig
-
-        fields = {f.name for f in dataclasses.fields(GRPOConfig)}
-        for name in DAPO_PRESET:
-            with self.subTest(field=name):
-                self.assertIn(name, fields)
-
-
-class GspoDrGrpoWiringTest(unittest.TestCase):
-    """GSPO / Dr.GRPO 参数是直通项：None 不改行为，显式值必须被 TRL 接受。"""
-
-    def test_trl_fields_exist(self):
-        import dataclasses
-
-        from trl import GRPOConfig
-
-        fields = {f.name for f in dataclasses.fields(GRPOConfig)}
-        for name in ("importance_sampling_level", "scale_rewards", "loss_type"):
-            with self.subTest(field=name):
-                self.assertIn(name, fields)
-
-    def test_trl_accepts_documented_values(self):
-        # GSPO = sequence 级重要性采样；Dr.GRPO = dr_grpo loss + 不做组内 std 归一
-        from trl import GRPOConfig
-
-        # TRL's GRPOConfig defaults bf16=True; on a CPU-only host (CI runners,
-        # most laptops) transformers' argument validation then raises
-        # "Your setup doesn't support bf16/gpu". The test only checks that TRL
-        # accepts the documented values, so pin it to CPU / no mixed precision.
-        cpu = {"use_cpu": True, "bf16": False, "fp16": False}
-        GRPOConfig(output_dir="x", importance_sampling_level="sequence", **cpu)
-        GRPOConfig(output_dir="x", loss_type="dr_grpo", scale_rewards="none", **cpu)
-
-    def test_cli_flags_parse(self):
-        # 参数在 argparse 与 main() 签名两侧都要存在，否则 CLI 传不进去
+    def test_defaults_remain_unset_without_a_variant_preset(self):
         import inspect
 
         from rl import train_grpo
 
-        parser = argparse.ArgumentParser()
-        # 复用脚本自己的 parser 构建：直接跑 build_parser 路径太重，
-        # 这里校验 main 的签名与 argparse 注册的选项一致性
         sig = inspect.signature(train_grpo.main)
-        for name in ("importance_sampling_level", "scale_rewards"):
+        for name in (
+            "loss_type", "epsilon_high", "mask_truncated_completions",
+            "importance_sampling_level", "scale_rewards",
+        ):
             with self.subTest(param=name):
-                self.assertIn(name, sig.parameters)
-
-    def test_defaults_are_none_so_behavior_is_unchanged(self):
-        # None 直通时 cfg_kwargs 不落这两个键，历史实验的可比性不被默认值悄悄改掉
-        import inspect
-
-        from rl import train_grpo
-
-        sig = inspect.signature(train_grpo.main)
-        self.assertIsNone(
-            sig.parameters["importance_sampling_level"].default
-        )
-        self.assertIsNone(sig.parameters["scale_rewards"].default)
-
-    def test_dapo_enables_dynamic_sampling_by_default(self):
-        self.assertFalse(
-            resolve_dynamic_sampling_option(dapo=False, dynamic_sampling=None)
-        )
-        self.assertTrue(
-            resolve_dynamic_sampling_option(dapo=True, dynamic_sampling=None)
-        )
-
-    def test_explicit_dynamic_sampling_override_beats_dapo(self):
-        self.assertFalse(
-            resolve_dynamic_sampling_option(dapo=True, dynamic_sampling=False)
-        )
-        self.assertTrue(
-            resolve_dynamic_sampling_option(dapo=False, dynamic_sampling=True)
-        )
+                self.assertIsNone(sig.parameters[name].default)
+        self.assertEqual(DEFAULT_BETA, 0.04)
+        self.assertEqual(sig.parameters["beta"].default, DEFAULT_BETA)
 
 
 class StageVerificationDefaultTest(unittest.TestCase):
-    """五个训练阶段的 `--verify` 默认值必须一致，而且必须默认开启。
+    """SFT 与 GRPO 的质量闸门都须默认开启，并允许显式跳过。"""
 
-    README 把阶段验证写成每个阶段都有的质量闸门（「每个阶段产出模型须过最低
-    质量阈值……`--no-verify` 可跳过」）。SFT 与 DPO 曾经默认关闭、GRPO/PPO/OPD
-    默认开启，于是最基础的两步实际上没有闸门：SFT 训坏了要一路跑到 GRPO 才看得
-    出来，而中间那轮 DPO 数据采样已经白烧掉一两个小时。
-    """
-
-    STAGES = ("train_sft", "train_dpo", "train_grpo", "train_ppo", "train_opd")
+    STAGES = ("train_sft", "train_grpo")
 
     def test_sources_declare_verify_defaulting_to_true(self):
         import re
@@ -745,7 +630,6 @@ class ToolRegistrationCoverageTest(unittest.TestCase):
 
     ENTRY_POINTS = (
         "rl.train_grpo",
-        "rl.train_opd",
         "rl.stage_verifier",
         "rl.build_snapshot",
     )
@@ -778,38 +662,10 @@ class ToolRegistrationCoverageTest(unittest.TestCase):
                 )
 
 
-class PpoAvailabilityTest(unittest.TestCase):
-    """PPO 对当前 TRL 不可用时，必须响亮失败而不是静默消失。
-
-    TRL 从 0.9 起弃用、并在后续版本移除了经典 PPO trainer
-    （`PPOTrainer` / `PPOConfig` / `AutoModelForCausalLMWithValueHead`）。
-    requirements.txt 只写了 `trl>=0.28.0`，所以 README 里作为「阶段4」宣传的这条
-    路径在受支持的版本上根本跑不起来 —— 这正是需要被说出来的那类不一致。
-    """
-
-    def test_import_either_succeeds_or_explains_itself(self):
-        import importlib
-        import sys
-
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-        try:
-            importlib.import_module("rl.train_ppo")
-        except SystemExit as exc:
-            message = str(exc)
-            for expected in ("PPOTrainer", "trl.experimental.ppo", "GRPO"):
-                with self.subTest(fragment=expected):
-                    self.assertIn(expected, message)
-        except ImportError as exc:  # pragma: no cover - 未受控的失败形态
-            self.fail(
-                "train_ppo 抛出了不带解释的 ImportError，应当改成 SystemExit 并说明"
-                f"受支持的替代路径: {exc}"
-            )
-
-
 class VerificationModelDeviceTest(unittest.TestCase):
     """阶段验证必须在训练设备上生成。
 
-    `StageVerifier` 里的三个 verify_* 原本用裸 `from_pretrained` 加载产物模型，
+    `StageVerifier` 原本用裸 `from_pretrained` 加载产物模型，
     模型落在 CPU；`CanaryEvaluator` 又是从参数上读设备，于是整道闸门在 CPU 上
     做生成。1.5B 模型跑 8×256 token 要几十分钟一个阶段 —— 闸门慢到这个程度就
     没人愿意留着它，这正是它当初被默认关掉的原因之一。
@@ -868,25 +724,23 @@ class StageVerifierTest(unittest.TestCase):
     def test_report_failed_formatting(self):
         from rl.stage_verifier import VerificationReport
         report = VerificationReport(
-            stage="dpo", model_path="/tmp/model",
+            stage="grpo", model_path="/tmp/model",
             passed=False, metrics={"mean_reward": -0.5},
-            thresholds={"mean_reward": -0.3},
+            thresholds={"mean_reward": -0.2},
             failures=["mean_reward too low"],
         )
         summary = report.summary()
         self.assertIn("FAIL", summary)
-        self.assertIn("DPO", summary)
+        self.assertIn("GRPO", summary)
         self.assertIn("too low", summary)
 
     def test_thresholds_configurable(self):
         from rl.stage_verifier import StageVerifier
         v = StageVerifier(
             sft_min_parse_rate=0.5,
-            dpo_min_reward=0.0,
             grpo_min_reward=0.1,
         )
         self.assertEqual(v.thresholds["sft"]["parse_rate"], 0.5)
-        self.assertEqual(v.thresholds["dpo"]["mean_reward"], 0.0)
         self.assertEqual(v.thresholds["grpo"]["mean_reward"], 0.1)
 
     def test_verify_sft_model_load_failure(self):
@@ -894,13 +748,6 @@ class StageVerifierTest(unittest.TestCase):
         from rl.stage_verifier import StageVerifier
         v = StageVerifier()
         report = v.verify_sft(model_path="/nonexistent/path/model")
-        self.assertFalse(report.passed)
-        self.assertIn("模型加载失败", report.failures[0])
-
-    def test_verify_dpo_model_load_failure(self):
-        from rl.stage_verifier import StageVerifier
-        v = StageVerifier()
-        report = v.verify_dpo(model_path="/nonexistent/path/model")
         self.assertFalse(report.passed)
         self.assertIn("模型加载失败", report.failures[0])
 
@@ -931,6 +778,8 @@ class StageVerifierTest(unittest.TestCase):
             self.assertEqual(data["stage"], "sft")
             self.assertTrue(data["passed"])
             self.assertEqual(data["metrics"]["parse_rate"], 0.8)
+            self.assertEqual(data["coverage"], report.coverage)
+            self.assertEqual(data["protocol"], report.protocol)
 
     def test_sft_prompts_use_chat_template_when_available(self):
         from rl.stage_verifier import StageVerifier
@@ -956,29 +805,23 @@ class StageVerifierTest(unittest.TestCase):
             self.assertIs(tokenize, False)
             self.assertIs(add_generation_prompt, True)
 
-    def test_sft_prompts_fall_back_to_react_prompt_without_template(self):
+    def test_sft_prompts_without_tokenizer_fail_instead_of_falling_back(self):
+        """缺少 tokenizer 必须失败，不能回退成另一套裸文本上下文。"""
         from rl.stage_verifier import StageVerifier
 
-        prompts = StageVerifier._sft_prompts(2, None)
-        self.assertEqual(len(prompts), 2)
-        for prompt in prompts:
-            self.assertIn("你是一个AI研究助手", prompt)
-            self.assertNotIn("System:", prompt)
+        with self.assertRaises(ValueError):
+            StageVerifier._sft_prompts(2, None)
 
 
 class TrainingTaskSetTest(unittest.TestCase):
-    """GRPO 训到哪些任务上。
+    """正式 GRPO 显式绑定训练切分，8 条冒烟任务仅供显式冒烟模式。"""
 
-    此前写死 get_all_tasks()，也就是 benchmark/tasks.py 那 8 条冒烟任务 ——
-    59 条的完整基准集和 data/splits/v1.json 的切分都在，训练脚本一条都没用上。
-    """
+    def test_explicit_smoke_mode_uses_the_existing_subset(self):
+        self.assertEqual(len(_load_tasks("default", None, smoke=True)), len(get_all_tasks()))
 
-    def test_default_still_uses_the_smoke_subset(self):
-        """默认值不动：换了会让此前所有训练曲线不可比。"""
-        self.assertEqual(len(_load_tasks("default", None)), len(get_all_tasks()))
-
-    def test_expanded_uses_the_full_benchmark_set(self):
-        self.assertEqual(len(_load_tasks("expanded", None)), len(get_expanded_tasks()))
+    def test_expanded_without_a_training_split_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            _load_tasks("expanded", None)
 
     def test_rl_train_split_keeps_only_the_middle_band(self):
         """两端的任务同一 prompt 采样出的奖励一致，组内方差为零，没有梯度。"""
@@ -989,7 +832,7 @@ class TrainingTaskSetTest(unittest.TestCase):
     def test_split_against_the_wrong_task_set_fails_loudly(self):
         """切分按完整任务集划定；配上冒烟集会静默少掉大半训练数据。"""
         with self.assertRaises(SystemExit) as ctx:
-            _load_tasks("default", "rl_train")
+            _load_tasks("default", "rl_train", smoke=True)
         self.assertIn("不在当前任务集中", str(ctx.exception))
 
     def test_task_ids_come_back_in_a_deterministic_order(self):

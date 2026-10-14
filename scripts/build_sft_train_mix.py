@@ -14,7 +14,11 @@ from typing import Any, Dict, Iterable, List
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from augment_sft_data import canonical_hash, read_jsonl, sha256_file, write_jsonl  # noqa: E402
+from augment_sft_data import (  # noqa: E402
+    canonical_hash, read_jsonl, sha256_file, validate_data_protocol, write_jsonl,
+)
+from agents.react_contract import protocol_metadata, validate_react_messages  # noqa: E402
+from rl.run_manifest import require_training_protocol  # noqa: E402
 
 
 def build_mix(
@@ -27,6 +31,7 @@ def build_mix(
     parametric_rows = list(parametric_rows)
     if not original_rows or not parametric_rows:
         raise ValueError("两个混合来源都不能为空")
+    validate_data_protocol(original_rows + parametric_rows)
 
     mixed: List[Dict[str, Any]] = []
     seen = set()
@@ -36,6 +41,7 @@ def build_mix(
     ):
         for index, original in enumerate(rows):
             row = dict(original)
+            validate_react_messages(row.get("messages"), require_completion=True)
             fingerprint = canonical_hash(row.get("messages"))
             if row.get("sample_sha256") != fingerprint:
                 raise ValueError(f"{source} row {index} 的 sample_sha256 不匹配")
@@ -53,6 +59,7 @@ def validate_source_manifest(
     path: Path, manifest_path: Path, *, expected_kind: str, expected_rows: int
 ) -> Dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    require_training_protocol(manifest, protocol_metadata(), source_label="混合来源 manifest")
     if manifest.get("augmentation_kind") == "linguistic_semantics_preserving":
         actual_kind = "original_train_linguistic"
     else:
@@ -69,11 +76,11 @@ def validate_source_manifest(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="构建最终 QLoRA SFT 训练混合数据")
-    parser.add_argument("--original", default="data/sft/sft_v1_linguistic.jsonl")
+    parser.add_argument("--original", default="data/sft/sft_react_messages_v3_linguistic.jsonl")
     parser.add_argument(
-        "--parametric", default="data/sft/sft_v2_parametric_linguistic.jsonl"
+        "--parametric", default="data/sft/sft_react_messages_v3_parametric_linguistic.jsonl"
     )
-    parser.add_argument("--output", default="data/sft/sft_v3_train_mix.jsonl")
+    parser.add_argument("--output", default="data/sft/sft_react_messages_v3_train_mix.jsonl")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -90,6 +97,9 @@ def main() -> None:
             raise SystemExit(f"{label} 不存在: {path}")
     if output_path.resolve() in {original_path.resolve(), parametric_path.resolve()}:
         raise SystemExit("output 不能覆盖任何输入")
+    manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
+    if output_path.exists() or manifest_path.exists():
+        raise SystemExit(f"拒绝覆盖已有数据或 manifest: {output_path}")
 
     # 行数以各来源自己的 manifest 为准（它们已按 SHA256 冻结），而不是写死某一代数据的
     # 1020 / 1908：v4 / v5 的派生数据行数已经不同，写死会让 README 的 SFT 数据管线跑不通。
@@ -103,18 +113,51 @@ def main() -> None:
         parametric_path, parametric_manifest_path,
         expected_kind="parametric_v1_linguistic", expected_rows=len(parametric_rows),
     )
+    for rows, source_manifest in ((original_rows, original_manifest),
+                                  (parametric_rows, parametric_manifest)):
+        for index, row in enumerate(rows):
+            require_training_protocol(row, source_manifest, source_label=f"混合来源 row {index}")
+
+    # 同名/包含关系不等于同一来源声明，不能把跨版本 train 混称为一个切分。
+    split_files = [Path(str(source.get("split_file") or ""))
+                   for source in (original_manifest, parametric_manifest)]
+    for path, source in zip(split_files, (original_manifest, parametric_manifest)):
+        if not path.is_file() or source.get("split_sha256") != sha256_file(path):
+            raise ValueError(f"混合来源缺少有效的切分文件或其 SHA256: {path}")
+    if (split_files[0].name != split_files[1].name
+            or original_manifest["split_sha256"] != parametric_manifest["split_sha256"]):
+        raise ValueError("两个混合来源必须声明同一个版本化 train 切分")
+    source_split = f"{split_files[0].name}:train"
+    payload = json.loads(split_files[0].read_text(encoding="utf-8"))
+    groups = payload["split"]
+    train = set(groups["train"])
+    heldout = set(groups["dev"] + groups["iid_test"] + groups["ood_test"])
+    if train & heldout:
+        raise ValueError("train 与留出切分存在交叉污染")
+    for index, row in enumerate(original_rows):
+        if row.get("source_split") != source_split or row.get("source_task_id") not in train:
+            raise ValueError(f"原始来源 row {index} 不属于声明的 train")
+    for index, row in enumerate(parametric_rows):
+        declared = row.get("source_split")
+        if (not isinstance(declared, str) or not declared.startswith(source_split + ":")
+                or row.get("parent_task_id") not in train):
+            raise ValueError(f"参数化来源 row {index} 的父任务不属于声明的 train")
 
     mixed = build_mix(original_rows, parametric_rows, seed=args.seed)
-    write_jsonl(output_path, mixed)
     source_counts = Counter(row["mixture_source"] for row in mixed)
     original_tasks = {row["source_task_id"] for row in original_rows}
     parametric_tasks = {row["source_task_id"] for row in parametric_rows}
     if original_tasks & parametric_tasks:
         raise ValueError("原始任务 id 与派生任务 id 冲突")
+    write_jsonl(output_path, mixed)
 
     manifest = {
         "version": 3,
         "kind": "qlora_sft_train_mix",
+        "protocol_metadata": validate_data_protocol(mixed),
+        "source_split": source_split,
+        "split_file": str(split_files[0]),
+        "split_sha256": original_manifest["split_sha256"],
         "shuffle_seed": args.seed,
         "output": str(output_path),
         "output_sha256": sha256_file(output_path),
@@ -147,7 +190,6 @@ def main() -> None:
             "file order is deterministically shuffled."
         ),
     }
-    manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )

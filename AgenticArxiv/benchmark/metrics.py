@@ -5,16 +5,13 @@ import json
 import re
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional, Sequence
+from collections.abc import Mapping
+
+from agents.react_contract import project_result
 
 
 # 非工具调用的动作标记
 NON_TOOL_ACTIONS = ("FINISH", "FORCE_STOP", "ERROR")
-
-# Pinned only so experiment artifacts remain reproducible.  Raw router token
-# counts are also stored, so a report can be repriced if the provider changes
-# its public price later.
-JEV_INPUT_PRICE_PER_MILLION_USD = 0.042
-
 
 @dataclass
 class TaskMetrics:
@@ -29,33 +26,17 @@ class TaskMetrics:
     iteration_count: int = 0
     total_llm_ms: int = 0
     total_tool_ms: int = 0
-    total_router_ms: int = 0
     framework_overhead_ms: int = 0
     avg_llm_ms: float = 0.0
     avg_tool_ms: float = 0.0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-
-    # --- optional external tool router ---
-    router_mode: str = "policy"
-    router_decision_count: int = 0
-    router_accepted_count: int = 0
-    router_used_count: int = 0
-    router_fallback_count: int = 0
-    router_first_selected_tool: str = ""
-    router_first_accurate: bool = False
-    router_first_applicable: bool = False
-    router_confidence_count: int = 0
-    router_mean_confidence: float = 0.0
-    router_input_tokens: int = 0
-    router_output_tokens: int = 0
-    router_estimated_cost_usd: float = 0.0
-    router_fallback_reasons: Dict[str, int] = field(default_factory=dict)
+    prompt_tokens: Optional[int] = 0
+    completion_tokens: Optional[int] = 0
+    total_tokens: Optional[int] = 0
 
     # --- 准确性 ---
     task_completed: bool = False
     termination_type: str = "UNKNOWN"
+    termination_reason: Optional[str] = None
     tool_call_sequence: List[str] = field(default_factory=list)
     expected_tools: List[str] = field(default_factory=list)
     tool_call_accurate: bool = False
@@ -108,19 +89,21 @@ def extract_metrics(
     session_id: str = "",
 ) -> TaskMetrics:
     """从 agent.run() 返回值提取 TaskMetrics"""
+    result = project_result(result)
     history = result.get("history", [])
     timing = result.get("timing", {})
-    token_usage = result.get("token_usage", {})
-    routing = result.get("routing") or {}
+    reported_usage = result.get("token_usage")
+    token_usage = reported_usage if isinstance(reported_usage, Mapping) else {}
 
     # --- 性能指标 ---
     total_time_ms = result.get("total_time_ms", 0)
     total_llm_ms = timing.get("total_llm_ms", 0)
     total_tool_ms = timing.get("total_tool_ms", 0)
-    total_router_ms = timing.get("total_router_ms", 0)
+    # 读取旧轨迹时仅沿用其明确记录的路由耗时，不生成新的路由指标。
+    legacy_router_ms = timing.get("total_router_ms", 0)
     framework_overhead_ms = timing.get(
         "framework_overhead_ms",
-        total_time_ms - total_router_ms - total_llm_ms - total_tool_ms,
+        total_time_ms - legacy_router_ms - total_llm_ms - total_tool_ms,
     )
     iteration_count = result.get("iteration_count", len(history))
 
@@ -130,13 +113,14 @@ def extract_metrics(
 
     # --- 准确性指标 ---
     termination_type = _get_termination_type(history)
+    termination_reason = result.get("termination_reason") or (
+        history[-1].get("termination_reason") if history else None
+    )
     task_completed = termination_type == "FINISH"
 
     tool_sequence = _extract_tool_sequence(history)
     expected_tools = task_def.get("expected_tools", [])
     tool_call_accurate = _check_tool_sequence(tool_sequence, expected_tools)
-
-    route_stats = _extract_router_metrics(routing, expected_tools)
 
     parse_failures = _count_parse_failures(history)
     tool_exec_failures = _count_tool_failures(history)
@@ -196,16 +180,15 @@ def extract_metrics(
         iteration_count=iteration_count,
         total_llm_ms=total_llm_ms,
         total_tool_ms=total_tool_ms,
-        total_router_ms=total_router_ms,
         framework_overhead_ms=framework_overhead_ms,
         avg_llm_ms=avg_llm_ms,
         avg_tool_ms=avg_tool_ms,
-        prompt_tokens=token_usage.get("prompt_tokens", 0),
-        completion_tokens=token_usage.get("completion_tokens", 0),
-        total_tokens=token_usage.get("total_tokens", 0),
-        **route_stats,
+        prompt_tokens=token_usage.get("prompt_tokens"),
+        completion_tokens=token_usage.get("completion_tokens"),
+        total_tokens=token_usage.get("total_tokens"),
         task_completed=task_completed,
         termination_type=termination_type,
+        termination_reason=termination_reason,
         tool_call_sequence=tool_sequence,
         expected_tools=expected_tools,
         tool_call_accurate=tool_call_accurate,
@@ -220,85 +203,6 @@ def extract_metrics(
         terminal_semantics_applicable=terminal_semantics_applicable,
         error=error,
     )
-
-
-def _extract_router_metrics(
-    routing: Dict[str, Any], expected_tools: Sequence[str]
-) -> Dict[str, Any]:
-    """Turn raw per-turn router decisions into stable trajectory-level fields.
-
-    A fallback is any attempted external decision that did not actually control
-    the action.  This includes low confidence, API/malformed responses, unknown
-    tools, and policy/router disagreement.  ``router_first_accurate`` evaluates
-    the raw first choice (including low-confidence choices); an API failure has
-    no choice and is therefore incorrect.  Policy-only trajectories are marked
-    not applicable instead of being reported as 0% accurate.
-    """
-    raw_decisions = routing.get("decisions") or []
-    decisions = [row for row in raw_decisions if isinstance(row, dict)]
-    accepted = sum(bool(row.get("accepted")) for row in decisions)
-    used = sum(bool(row.get("used")) for row in decisions)
-
-    fallback_reasons: Dict[str, int] = {}
-    for row in decisions:
-        if row.get("used"):
-            continue
-        reason = (
-            row.get("fallback_reason")
-            or row.get("reason")
-            or "not_used"
-        )
-        key = str(reason)
-        fallback_reasons[key] = fallback_reasons.get(key, 0) + 1
-
-    input_tokens = 0
-    output_tokens = 0
-    confidences = []
-    for row in decisions:
-        usage = row.get("usage") or {}
-        if not isinstance(usage, dict):
-            usage = {}
-        input_tokens += _safe_nonnegative_int(usage.get("input_tokens"))
-        output_tokens += _safe_nonnegative_int(usage.get("output_tokens"))
-        try:
-            confidence = float(row["confidence"])
-        except (KeyError, TypeError, ValueError, OverflowError):
-            pass
-        else:
-            if 0.0 <= confidence <= 1.0:
-                confidences.append(confidence)
-
-    first = decisions[0] if decisions else {}
-    first_selected = str(first.get("selected_tool") or "")
-    expected_first = str(expected_tools[0]) if expected_tools else "FINISH"
-
-    return {
-        "router_mode": str(routing.get("mode") or "policy"),
-        "router_decision_count": len(decisions),
-        "router_accepted_count": accepted,
-        "router_used_count": used,
-        "router_fallback_count": len(decisions) - used,
-        "router_first_selected_tool": first_selected,
-        "router_first_accurate": bool(decisions) and first_selected == expected_first,
-        "router_first_applicable": bool(decisions),
-        "router_confidence_count": len(confidences),
-        "router_mean_confidence": (
-            sum(confidences) / len(confidences) if confidences else 0.0
-        ),
-        "router_input_tokens": input_tokens,
-        "router_output_tokens": output_tokens,
-        "router_estimated_cost_usd": (
-            input_tokens / 1_000_000 * JEV_INPUT_PRICE_PER_MILLION_USD
-        ),
-        "router_fallback_reasons": fallback_reasons,
-    }
-
-
-def _safe_nonnegative_int(value: Any) -> int:
-    try:
-        return max(0, int(value or 0))
-    except (TypeError, ValueError, OverflowError):
-        return 0
 
 
 def classify_blocked_terminal_semantics(
@@ -393,6 +297,8 @@ def _get_termination_type(history: List[Dict]) -> str:
         return "FORCE_STOP"
     elif last_action == "ERROR":
         return "ERROR"
+    elif last_action == "PARSE_ERROR":
+        return "PARSE_ERROR"
     # action 是 JSON 字符串（工具调用后没有正常终止）
     return "INCOMPLETE"
 
@@ -404,7 +310,7 @@ def _parse_tool_action(action: Any) -> Optional[Dict[str, Any]]:
     JSON 外壳 `{"name": "FINISH", "args": {}}`。后者若不排除，会在
     tool_call_sequence 里多出一个 "FINISH"，把完全正确的轨迹判成
     accurate=False。Agent 侧已在解析阶段拦截（见
-    agents/base_agent.py::is_terminal_action），这里再兜一层，
+    agents/react_contract.py::parse_react_response），这里再兜一层，
     以便正确处理历史结果文件和第三方 Agent 的轨迹。
     """
     if isinstance(action, str) and action.strip().upper() in NON_TOOL_ACTIONS:
@@ -760,7 +666,9 @@ def _count_parse_failures(history: List[Dict]) -> int:
         if action == "FINISH" and i < len(history) - 1:
             failures += 1
         # observation 包含"无法解析"
-        if observation_reports(step.get("observation", ""), ("无法解析",), action):
+        if step.get("parse_failed") or observation_reports(
+            step.get("observation", ""), ("无法解析",), action
+        ):
             failures += 1
     return failures
 

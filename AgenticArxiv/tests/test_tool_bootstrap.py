@@ -95,17 +95,16 @@ class RequireAllToolsTest(unittest.TestCase):
 
 
 class AgentsUseTheSharedBootstrapTest(unittest.TestCase):
-    """三个 Agent 曾各自复制同一段注册代码，改一处漏两处。"""
+    """主线 Agent 必须继续使用共同工具注册入口。"""
 
-    AGENTS = ("agents/agent_engine.py", "mcp_protocol/mcp_agent.py",
-              "skill_cli/skill_agent.py")
+    AGENTS = ("agents/agent_engine.py",)
 
     def test_no_agent_keeps_its_own_shared_try_block(self):
         root = Path(__file__).resolve().parents[1]
         for rel in self.AGENTS:
             source = (root / rel).read_text(encoding="utf-8")
             with self.subTest(agent=rel):
-                self.assertIn("register_all_tools", source)
+                self.assertIn('require_all_tools("ReAct")', source)
                 self.assertNotIn("import tools.arxiv_tool", source,
                                  f"{rel} 仍在自己导入工具模块")
 

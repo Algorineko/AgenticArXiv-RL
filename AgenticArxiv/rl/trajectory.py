@@ -7,10 +7,12 @@
 """
 
 import json
-from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, asdict, field, fields
+from typing import List, Dict, Any, Mapping, Optional
 from pathlib import Path
 from datetime import datetime
+
+from agents.react_contract import protocol_metadata
 
 
 @dataclass
@@ -24,6 +26,18 @@ class TrajectoryStep:
     llm_latency_ms: int = 0
     tool_latency_ms: int = 0
     parse_failed: bool = False
+    raw_response: Optional[str] = None
+    policy_text: Optional[str] = None
+    parsed_action: Optional[Dict[str, Any]] = None
+    tool_result: Any = None
+    visible_observation: Optional[str] = None
+    scoring_observation: Optional[str] = None
+    observation_metadata: Dict[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
+    termination_reason: Optional[str] = None
+    token_usage: Dict[str, Any] = field(default_factory=dict)
+    framework_generated: bool = False
+    extra_fields: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -40,6 +54,32 @@ class Trajectory:
     model: str = ""
     termination_type: str = ""  # "FINISH" | "FORCE_STOP" | "ERROR"
     reward_components: Dict[str, Any] = field(default_factory=dict)
+    termination_reason: Optional[str] = None
+    runtime_version: Optional[str] = None
+    context_version: Optional[str] = None
+    training_protocol: Optional[str] = None
+    prompt_template_hash: Optional[str] = None
+    chat_template_hash: Optional[str] = None
+    observation_body_limit: Optional[int] = None
+    training_protocol_metadata: Optional[Dict[str, Any]] = None
+    protocol_relation: Optional[Dict[str, Any]] = None
+    token_usage: Optional[Dict[str, Any]] = None
+    extra_fields: Dict[str, Any] = field(default_factory=dict)
+
+
+def _known_fields(cls, data: Mapping[str, Any]) -> Dict[str, Any]:
+    """读取未知扩展字段时保留原值，不补造历史协议或原始响应。"""
+    names = {item.name for item in fields(cls)}
+    known = {key: value for key, value in data.items() if key in names}
+    extras = dict(known.get("extra_fields") or {})
+    extras.update({key: value for key, value in data.items() if key not in names})
+    known["extra_fields"] = extras
+    return known
+
+
+def _flatten_extensions(data: Dict[str, Any]) -> Dict[str, Any]:
+    extras = data.pop("extra_fields", {})
+    return {**extras, **data}
 
 
 def save_trajectory(traj: Trajectory, filepath: Path) -> None:
@@ -52,7 +92,8 @@ def save_trajectory(traj: Trajectory, filepath: Path) -> None:
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
     # 转为字典（嵌套 dataclass 也会被正确转换）
-    traj_dict = asdict(traj)
+    traj_dict = _flatten_extensions(asdict(traj))
+    traj_dict["steps"] = [_flatten_extensions(step) for step in traj_dict["steps"]]
 
     with open(filepath, "a", encoding="utf-8") as f:
         f.write(json.dumps(traj_dict, ensure_ascii=False) + "\n")
@@ -79,9 +120,9 @@ def load_trajectories(filepath: Path) -> List[Trajectory]:
 
             # 重建嵌套的 TrajectoryStep 对象
             steps_data = data.pop("steps", [])
-            steps = [TrajectoryStep(**step) for step in steps_data]
+            steps = [TrajectoryStep(**_known_fields(TrajectoryStep, step)) for step in steps_data]
 
-            traj = Trajectory(steps=steps, **data)
+            traj = Trajectory(steps=steps, **_known_fields(Trajectory, data))
             trajectories.append(traj)
 
     return trajectories
@@ -97,6 +138,11 @@ def create_trajectory(
     model: str = "",
     termination_type: str = "FINISH",
     reward_components: Optional[Dict[str, Any]] = None,
+    termination_reason: Optional[str] = None,
+    protocol_fields: Optional[Mapping[str, Any]] = None,
+    training_protocol_metadata: Optional[Mapping[str, Any]] = None,
+    protocol_relation: Optional[Mapping[str, Any]] = None,
+    token_usage: Optional[Mapping[str, Any]] = None,
 ) -> Trajectory:
     """从 Agent 执行结果构造 Trajectory
 
@@ -115,17 +161,18 @@ def create_trajectory(
     """
     steps = []
     for i, step_dict in enumerate(history):
-        step = TrajectoryStep(
-            step=i + 1,
-            thought=step_dict.get("thought", ""),
-            action=step_dict.get("action", ""),
-            observation=step_dict.get("observation", ""),
-            llm_latency_ms=step_dict.get("llm_latency_ms", 0),
-            tool_latency_ms=step_dict.get("tool_latency_ms", 0),
-            parse_failed=step_dict.get("parse_failed", False),
-        )
+        step_data = {"thought": "", "action": "", "observation": "", **step_dict, "step": i + 1}
+        step = TrajectoryStep(**_known_fields(TrajectoryStep, step_data))
         steps.append(step)
 
+    # 执行上下文已知不代表 checkpoint 的训练协议已知。
+    metadata = dict(protocol_fields) if protocol_fields is not None else protocol_metadata(
+        include_training_protocol=False,
+    )
+    protocol_names = {
+        "runtime_version", "context_version", "training_protocol",
+        "prompt_template_hash", "chat_template_hash", "observation_body_limit",
+    }
     return Trajectory(
         task_id=task_id,
         task=task,
@@ -137,4 +184,11 @@ def create_trajectory(
         model=model,
         termination_type=termination_type,
         reward_components=reward_components or {},
+        termination_reason=termination_reason,
+        training_protocol_metadata=(
+            dict(training_protocol_metadata) if training_protocol_metadata is not None else None
+        ),
+        protocol_relation=dict(protocol_relation) if protocol_relation is not None else None,
+        token_usage=dict(token_usage) if token_usage is not None else None,
+        **{key: value for key, value in metadata.items() if key in protocol_names},
     )

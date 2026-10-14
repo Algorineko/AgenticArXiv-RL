@@ -2,17 +2,21 @@
 
 先对当前策略跑一次冻结探测（README 阶段3；`--lr 0.0` 不更新权重）：
 
-    python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final \\
-        --split data/splits/v3_81.json:train --lr 0.0 --max_steps 408 \\
-        --allow_zero_variance --no-verify --output_dir outputs/grpo_frozen_probe
+    python -m AgenticArxiv.rl.train_grpo --model outputs/sft_messages_v3/final \\
+        --task_set expanded --split data/splits/v7_86.json:train \\
+        --lr 0.0 --max_steps 408 --allow_zero_variance --no-verify \\
+        --output_dir outputs/grpo_messages_v3_frozen_probe
 
 再用本脚本按「每任务至少 2 个有组内奖励方差的 prompt 组」筛选训练任务：
 
     python -m scripts.build_grpo_signal_split \\
-        --probe outputs/grpo_frozen_probe/reward_probe_summary.json \\
-        --source-split data/splits/v3_81.json:train \\
-        --model outputs/sft/final \\
-        --output data/splits/v6_grpo_train.json
+        --probe outputs/grpo_messages_v3_frozen_probe/reward_probe_summary.json \\
+        --source-split data/splits/v7_86.json:train \\
+        --model outputs/sft_messages_v3/final \\
+        --output data/splits/grpo_messages_v3_signal_train.json
+
+候选只允许来自声明的 train，且不能与 dev/iid_test/ood_test 重叠。
+输出必须是新路径，历史切分不能被覆盖。以上命令仅供未来有研究输入时运行。
 """
 
 from __future__ import annotations
@@ -20,9 +24,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "AgenticArxiv"
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
+from rl.run_manifest import evaluation_protocol_relation, read_protocol_metadata  # noqa: E402
 
 
 def sha256_file(path: Path) -> str:
@@ -42,11 +53,27 @@ def parse_split_ref(ref: str) -> Tuple[Path, str]:
 
 def load_eligible_tasks(ref: str) -> List[str]:
     path, name = parse_split_ref(ref)
+    if name != "train":
+        raise SystemExit(f"信号选择候选必须来自 FILE:train，拒绝切分 {name!r}")
     document = json.loads(path.read_text(encoding="utf-8"))
     split = document.get("split", {})
+    if not isinstance(split, Mapping):
+        raise SystemExit(f"{path} 的 split 必须为对象")
     if name not in split:
         raise SystemExit(f"{path} 里没有切分 {name!r}（可选：{sorted(split)}）")
-    return list(split[name])
+    eligible = split[name]
+    if not isinstance(eligible, list) or not all(isinstance(task_id, str) for task_id in eligible):
+        raise SystemExit(f"{path}:train 必须为任务 ID 列表")
+    if len(set(eligible)) != len(eligible):
+        raise SystemExit(f"{path}:train 包含重复任务 ID")
+    for heldout in ("dev", "iid_test", "ood_test"):
+        members = split.get(heldout, [])
+        if not isinstance(members, list) or not all(isinstance(task_id, str) for task_id in members):
+            raise SystemExit(f"{path}:{heldout} 必须为任务 ID 列表")
+        overlap = sorted(set(eligible) & set(members))
+        if overlap:
+            raise SystemExit(f"{path}:train 与留出切分 {heldout} 交叉: {overlap}")
+    return list(eligible)
 
 
 def informative_group_count(entry: Mapping[str, Any]) -> int:
@@ -111,8 +138,13 @@ def build_document(
     groups_per_task = Counter(
         probe_tasks[task_id]["group_count"] for task_id in selected
     ).most_common(1)[0][0]
+    model_protocol = read_protocol_metadata(Path(model))
+    probe_protocol = read_protocol_metadata(probe)
     return {
         "version": 6,
+        "protocol_metadata": probe_protocol,
+        "training_protocol_metadata": model_protocol,
+        "protocol_relation": evaluation_protocol_relation(model_protocol, probe_protocol),
         "status": "probe_selected_pending_train",
         "task_set": "expanded",
         "purpose": (
@@ -131,6 +163,7 @@ def build_document(
             "reward_curriculum_steps": 0,
             "reward_summary": str(probe_path),
             "reward_summary_sha256": sha256_file(probe_path),
+            "model_protocol_metadata": model_protocol,
         },
         "selection_policy": {
             "eligibility": (
@@ -176,21 +209,24 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe", required=True, help="reward_probe_summary.json 路径")
     parser.add_argument(
-        "--source-split", required=True, help="候选任务来源，FILE:NAME（如 data/splits/v3_81.json:train）"
+        "--source-split", required=True, help="候选任务来源，仅 FILE:train（如 data/splits/v7_86.json:train）"
     )
     parser.add_argument("--model", required=True, help="被探测的策略模型路径")
-    parser.add_argument("--output", required=True, help="输出切分文件路径")
+    parser.add_argument("--output", required=True, help="新输出切分路径，拒绝覆盖既存文件")
     parser.add_argument("--num-generations", type=int, default=4)
     parser.add_argument("--seed", type=int, default=43)
     parser.add_argument("--min-informative-groups", type=int, default=2)
     args = parser.parse_args()
 
+    output = Path(args.output)
+    if output.exists() or output.is_symlink():
+        raise SystemExit(f"输出路径已存在，拒绝覆盖历史切分: {output}")
+    eligible = load_eligible_tasks(args.source_split)
     probe_path = Path(args.probe)
     probe = json.loads(probe_path.read_text(encoding="utf-8"))
     if "tasks" not in probe:
         raise SystemExit(f"{probe_path} 里没有 tasks 字段，不是探测汇总文件")
 
-    eligible = load_eligible_tasks(args.source_split)
     buckets = select_tasks(probe["tasks"], eligible, args.min_informative_groups)
     if buckets["missing"]:
         raise SystemExit(
@@ -213,11 +249,12 @@ def main() -> None:
         min_informative_groups=args.min_informative_groups,
         buckets=buckets,
     )
-    output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    try:
+        with output.open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(document, ensure_ascii=False, indent=2) + "\n")
+    except FileExistsError as exc:
+        raise SystemExit(f"输出路径已存在，拒绝覆盖历史切分: {output}") from exc
     summary = document["summary"]
     print(f"已写入 {output}")
     print(

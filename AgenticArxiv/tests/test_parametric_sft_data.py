@@ -12,6 +12,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from generate_parametric_sft_data import (  # noqa: E402
     DEFAULT_SPLIT_FILE,
     build_parametric_tasks,
+    filter_derived_by_parents,
     tool_names,
     validate_derived_tasks,
 )
@@ -82,6 +83,23 @@ class ParametricSftTaskTest(unittest.TestCase):
             with self.subTest(task=item.spec.id):
                 self.assertEqual(item.spec.terminal_mode, "blocked")
                 self.assertEqual(item.spec.terminal_reason, parent.terminal_reason)
+
+
+class OnlyParentsFilterTest(unittest.TestCase):
+    def test_filter_keeps_only_requested_parents(self):
+        derived = build_parametric_tasks()
+        parents = sorted({d.parent_task_id for d in derived})[:2]
+        kept = filter_derived_by_parents(derived, parents)
+        self.assertTrue(kept)
+        self.assertEqual({d.parent_task_id for d in kept}, set(parents))
+        self.assertEqual(len(kept), sum(d.parent_task_id in parents for d in derived))
+
+    def test_unknown_or_empty_parents_fail_loudly(self):
+        derived = build_parametric_tasks()
+        with self.assertRaises(ValueError):
+            filter_derived_by_parents(derived, ["no_such_parent"])
+        with self.assertRaises(ValueError):
+            filter_derived_by_parents(derived, [" "])
 
 
 if __name__ == "__main__":

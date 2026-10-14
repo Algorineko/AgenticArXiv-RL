@@ -8,6 +8,9 @@
 不需要工具：轨迹是死的，重新跑的只有打分器。所以它能回答的问题很窄，
 但很确定：**同一条轨迹，今天的代码还认为它是坏的吗。**
 
+`replay` 保持历史只读重评分；`run_cases` 显式使用共同 Agent 执行当前
+模型的完整 episode。两者不互相降级，实际运行不复用旧观测作为工具结果。
+
 两种用法，同一份数据：
 
   - 坏例回归：`status="open"` 的用例记着「这个毛病还在」。修好之后回放
@@ -28,8 +31,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
+from agents.react_contract import project_result
 from benchmark.metrics import TaskMetrics
 from rl.reward import RewardCalculator
+from rl.run_manifest import read_protocol_metadata
 
 # 回放时比对的字段。刻意只取判定类的，不取耗时 / token —— 那些取决于
 # 当时那台机器和那个模型，回放里没有意义，留着只会制造假的 regression。
@@ -41,6 +46,8 @@ VERDICT_FIELDS = (
     "false_finish",
     "arg_score",
     "ref_score",
+    "ref_applicable",
+    "strict_success",
 )
 
 _COMPARATORS = {
@@ -67,6 +74,7 @@ class BadCase:
     note: str = ""
     # 捕获当时的判定。不参与「是否复现」的判断，只用来显示漂移了多少。
     captured: Dict[str, Any] = field(default_factory=dict)
+    protocol_metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.status not in (STATUS_OPEN, STATUS_FIXED):
@@ -99,6 +107,8 @@ class BadCase:
             out["note"] = self.note
         if self.captured:
             out["captured"] = self.captured
+        if self.protocol_metadata:
+            out["protocol_metadata"] = self.protocol_metadata
         return out
 
 
@@ -109,6 +119,9 @@ class ReplayOutcome:
     reproduces: bool
     outcome: str          # still_open / newly_fixed / regressed / stays_fixed
     reward_drift: Optional[float]
+    execution: str = "historical-rescore"
+    protocol_metadata: Dict[str, Any] = field(default_factory=dict)
+    protocol_relation: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_regression(self) -> bool:
@@ -123,18 +136,33 @@ def verdict_of(
     calculator: Optional[RewardCalculator] = None,
 ) -> Dict[str, Any]:
     """用今天的打分器给一条死轨迹判分。"""
+    return verdict_of_result(
+        task, {"history": list(history), "timing": {}, "token_usage": {},
+               "iteration_count": len(history)},
+        training_step=training_step, calculator=calculator,
+    )
+
+
+def verdict_of_result(
+    task: Mapping[str, Any], result: Mapping[str, Any], *,
+    training_step: int = 100, calculator: Optional[RewardCalculator] = None,
+    agent_type: str = "badcase-replay",
+) -> Dict[str, Any]:
+    """只读实际轨迹及旧评分投影；此函数不执行工具或补造结束步骤。"""
+    if "history" not in result or result["history"] is None:
+        raise ValueError("坏例评分缺少实际 history")
     calc = calculator or RewardCalculator()
     breakdown, metrics = calc.compute_reward_breakdown(
-        dict(task),
-        {"history": list(history), "timing": {}, "token_usage": {},
-         "iteration_count": len(history)},
-        agent_type="badcase-replay",
+        dict(task), project_result(result),
+        agent_type=agent_type,
         training_step=training_step,
     )
     return _verdict_from(breakdown.total, metrics)
 
 
 def _verdict_from(reward: float, metrics: TaskMetrics) -> Dict[str, Any]:
+    from benchmark.metrics import is_strict_success
+
     return {
         "reward": reward,
         "task_completed": metrics.task_completed,
@@ -143,6 +171,8 @@ def _verdict_from(reward: float, metrics: TaskMetrics) -> Dict[str, Any]:
         "false_finish": metrics.false_finish,
         "arg_score": metrics.arg_score,
         "ref_score": metrics.ref_score,
+        "ref_applicable": metrics.ref_applicable,
+        "strict_success": is_strict_success(metrics),
     }
 
 
@@ -172,7 +202,7 @@ def replay(
     *,
     training_step: int = 100,
 ) -> List[ReplayOutcome]:
-    """回放全部用例。任务 id 找不到时直接报错——静默跳过等于悄悄少测。"""
+    """历史只读重评分，不运行 Agent/环境。任务缺失直接报错，不静默少测。"""
     by_id = {str(t["id"]): t for t in tasks}
     calculator = RewardCalculator()
     outcomes = []
@@ -185,16 +215,63 @@ def replay(
             )
         verdict = verdict_of(task, case.history,
                              training_step=training_step, calculator=calculator)
-        reproduces = matches(verdict, case.reproduces_when)
-        if case.status == STATUS_OPEN:
-            outcome = "still_open" if reproduces else "newly_fixed"
-        else:
-            outcome = "regressed" if reproduces else "stays_fixed"
-        drift = None
-        if "reward" in case.captured and isinstance(case.captured["reward"], (int, float)):
-            drift = round(verdict["reward"] - case.captured["reward"], 6)
-        outcomes.append(ReplayOutcome(case, verdict, reproduces, outcome, drift))
+        outcomes.append(_replay_outcome(case, verdict, "historical-rescore"))
     return outcomes
+
+
+def run_cases(
+    cases: Iterable[BadCase], tasks: Sequence[Mapping[str, Any]], agent: Any, *,
+    training_step: int = 100,
+) -> List[ReplayOutcome]:
+    """显式执行当前模型的完整 episode；不改旧用例、不把旧历史送给模型。"""
+    case_list = list(cases)
+    by_id = {str(task["id"]): task for task in tasks}
+    selected = []
+    for task_id in dict.fromkeys(case.task_id for case in case_list):
+        if task_id not in by_id:
+            raise KeyError(f"坏例指向的任务 {task_id!r} 不在当前任务集里")
+        selected.append(by_id[task_id])
+    environment = getattr(agent, "env", None)
+    snapshot = getattr(getattr(environment, "backend", None), "snapshot_path", None)
+    if getattr(environment, "mode", None) == "replay" and snapshot:
+        from benchmark.semantic_oracle import attach_expected_paper_ids
+
+        selected = attach_expected_paper_ids(selected, snapshot, task_lookup=by_id)
+        by_id.update({str(task["id"]): task for task in selected})
+    calculator = RewardCalculator()
+    outcomes = []
+    for index, case in enumerate(case_list):
+        task = by_id.get(case.task_id)
+        if task is None:
+            raise KeyError(f"用例 {case.case_id} 指向的任务 {case.task_id!r} 不在当前任务集里")
+        result = agent.run(
+            task["task"], task_def=task, task_lookup=by_id, session_id=f"badcase_{index}"
+        )
+        verdict = verdict_of_result(
+            task, result, training_step=training_step, calculator=calculator,
+            agent_type="badcase-episode",
+        )
+        outcomes.append(_replay_outcome(
+            case, verdict, "complete-episode",
+            protocol=result.get("protocol_metadata"), relation=result.get("protocol_relation"),
+        ))
+    return outcomes
+
+
+def _replay_outcome(case, verdict, execution, *, protocol=None, relation=None):
+    reproduces = matches(verdict, case.reproduces_when)
+    if case.status == STATUS_OPEN:
+        outcome = "still_open" if reproduces else "newly_fixed"
+    else:
+        outcome = "regressed" if reproduces else "stays_fixed"
+    drift = None
+    if "reward" in case.captured and isinstance(case.captured["reward"], (int, float)):
+        drift = round(verdict["reward"] - case.captured["reward"], 6)
+    return ReplayOutcome(
+        case, verdict, reproduces, outcome, drift, execution,
+        read_protocol_metadata(case.protocol_metadata if protocol is None else protocol),
+        dict(relation or {}),
+    )
 
 
 # ---- 读写 ----
@@ -266,7 +343,9 @@ def capture(
     by_id = {str(t["id"]): t for t in tasks}
     calculator = RewardCalculator()
     out, counter = [], {}
-    for task_id, history in samples:
+    for sample in samples:
+        task_id, history = sample[:2]
+        metadata = read_protocol_metadata(sample[2] if len(sample) > 2 else None)
         task = by_id.get(str(task_id))
         if task is None or not history:
             continue
@@ -283,6 +362,7 @@ def capture(
             status=STATUS_OPEN,
             source=source,
             captured=verdict,
+            protocol_metadata=metadata if metadata["metadata_status"] != "unknown" else {},
         ))
     return out
 

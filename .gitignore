@@ -23,8 +23,10 @@ data/traces.jsonl
 # 坏例回放：用例库要进版本控制（它是资产），跑出来的结果不要
 eval/results/
 
-# 本地运行时产物（bin/start.sh 会写入 pid/日志）
+# 退出服务遗留的本地运行时产物
 .run/
+AgenticArxivWeb/node_modules/
+AgenticArxivWeb/.vite/
 
 # 环境配置
 .env

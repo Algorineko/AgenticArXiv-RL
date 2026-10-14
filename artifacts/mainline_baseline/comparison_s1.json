@@ -1,0 +1,1192 @@
+{
+  "schema_version": 1,
+  "phase": "S1",
+  "description": "S0/S1 对相同已有历史文件的只读解析、评分及报告投影差分；不是环境回放或新行为 fixture。",
+  "sources": [
+    {
+      "path": "artifacts/mainline_baseline/historical_records.json",
+      "sha256": "bcd37cc1cec76a840b57d013914c300c6c3ff9df006a16a597db2ece4449557f"
+    },
+    {
+      "path": "artifacts/mainline_baseline/historical_records_s1.json",
+      "sha256": "306f61949e62244bbfa58ea15bfda27530f8b8262714e05ab3295b161b344dce"
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": ".venv/bin/python scripts/audit_historical_records.py --phase S1 --json > artifacts/mainline_baseline/historical_records_s1.json",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python - （只读解析两份检查记录，逐一比较 inventory、trace_checks 与聚合结果；不执行工具/模型）",
+      "exit_code": 0
+    }
+  ],
+  "checks": {
+    "historical_input_inventory_equal": true,
+    "trace_members_equal": true,
+    "all_trace_comparisons_equal": true,
+    "all_aggregate_comparisons_equal": true,
+    "both_audits_without_errors": true,
+    "inputs_unchanged_during_both_checks": true,
+    "sources_stable_during_both_checks": true
+  },
+  "comparison_passed": true,
+  "scope": {
+    "indexed_existing_files": 299,
+    "trace_files": 53,
+    "historical_rows": 1865,
+    "historical_steps": 5075,
+    "parsed_recorded_actions": 3210,
+    "task_ids_seen": 77
+  },
+  "aggregate_comparisons": {
+    "totals": {
+      "equal": true,
+      "s0": {
+        "historical_rows": 1865,
+        "historical_steps": 5075,
+        "parsed_recorded_actions": 3210,
+        "actions_containing_session_id": 462,
+        "read_only_scored_rows": 1865,
+        "current_strict_success_on_recorded_history": 658,
+        "current_ref_applicable_rows": 0,
+        "current_ref_not_applicable_rows": 1865
+      },
+      "s1": {
+        "historical_rows": 1865,
+        "historical_steps": 5075,
+        "parsed_recorded_actions": 3210,
+        "actions_containing_session_id": 462,
+        "read_only_scored_rows": 1865,
+        "current_strict_success_on_recorded_history": 658,
+        "current_ref_applicable_rows": 0,
+        "current_ref_not_applicable_rows": 1865
+      }
+    },
+    "task_ids_seen": {
+      "equal": true,
+      "s0": "来源见S0记录",
+      "s1": "来源见S1记录"
+    },
+    "termination_on_recorded_histories": {
+      "equal": true,
+      "s0": {
+        "FORCE_STOP": 110,
+        "FINISH": 1755
+      },
+      "s1": {
+        "FORCE_STOP": 110,
+        "FINISH": 1755
+      }
+    },
+    "recorded_action_counts": {
+      "equal": true,
+      "s0": {
+        "get_recently_submitted_cs_papers": 1038,
+        "download_arxiv_pdf": 895,
+        "translate_arxiv_pdf": 243,
+        "FORCE_STOP": 110,
+        "FINISH": 1755,
+        "search_arxiv_papers": 422,
+        "get_paper_cache_status": 283,
+        "print_paper_list": 1,
+        "extract_paper_figures": 141,
+        "get_paper_content": 98,
+        "summarize_paper": 52,
+        "get_author_email": 19,
+        "analyze_figure": 12,
+        "extract_paper_content": 1,
+        "manual_search": 2,
+        "print_paper_info": 3
+      },
+      "s1": {
+        "get_recently_submitted_cs_papers": 1038,
+        "download_arxiv_pdf": 895,
+        "translate_arxiv_pdf": 243,
+        "FORCE_STOP": 110,
+        "FINISH": 1755,
+        "search_arxiv_papers": 422,
+        "get_paper_cache_status": 283,
+        "print_paper_list": 1,
+        "extract_paper_figures": 141,
+        "get_paper_content": 98,
+        "summarize_paper": 52,
+        "get_author_email": 19,
+        "analyze_figure": 12,
+        "extract_paper_content": 1,
+        "manual_search": 2,
+        "print_paper_info": 3
+      }
+    },
+    "observation_marker_counts": {
+      "equal": true,
+      "s0": {
+        "READY": 770,
+        "PENDING": 188,
+        "mocktask": 188,
+        "SSE": 188,
+        "工具执行失败": 815,
+        "错误: 工具": 26
+      },
+      "s1": {
+        "READY": 770,
+        "PENDING": 188,
+        "mocktask": 188,
+        "SSE": 188,
+        "工具执行失败": 815,
+        "错误: 工具": 26
+      }
+    },
+    "observation_marker_examples": {
+      "equal": true,
+      "s0": "来源见S0记录",
+      "s1": "来源见S1记录"
+    },
+    "historical_field_presence": {
+      "equal": true,
+      "s0": {},
+      "s1": {}
+    },
+    "historical_detail_comparison_totals": {
+      "equal": true,
+      "s0": {
+        "equal_termination": 1865,
+        "equal_tools": 1865,
+        "equal_tool_accurate": 1865,
+        "equal_arg_score": 1787,
+        "equal_ref_score": 1377,
+        "equal_parse_fail": 1865,
+        "equal_tool_fail": 1865,
+        "equal_false_finish": 1810,
+        "different_false_finish": 55,
+        "different_ref_score": 488,
+        "different_arg_score": 78
+      },
+      "s1": {
+        "equal_termination": 1865,
+        "equal_tools": 1865,
+        "equal_tool_accurate": 1865,
+        "equal_arg_score": 1787,
+        "equal_ref_score": 1377,
+        "equal_parse_fail": 1865,
+        "equal_tool_fail": 1865,
+        "equal_false_finish": 1810,
+        "different_false_finish": 55,
+        "different_ref_score": 488,
+        "different_arg_score": 78
+      }
+    }
+  },
+  "trace_comparisons": [
+    {
+      "path": "artifacts/base_pilot_v1/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/base_pilot_v2/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/base_smoke/traces.jsonl",
+      "rows": 2,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/base_smoke_v2/traces.jsonl",
+      "rows": 2,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo60_v4_rl_train_r3/traces.jsonl",
+      "rows": 21,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_dapo_v381_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_dapo_v381_iid_r3_s45/traces.jsonl",
+      "rows": 54,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_dapo_v381_ood_r3_s45/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_dapo_v6_rl_train_r3_s45/traces.jsonl",
+      "rows": 99,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_drgrpo_v381_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_drgrpo_v381_iid_r3_s45/traces.jsonl",
+      "rows": 54,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_drgrpo_v381_ood_r3_s45/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_drgrpo_v6_rl_train_r3_s45/traces.jsonl",
+      "rows": 99,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_gspo_v381_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_gspo_v381_iid_r3_s45/traces.jsonl",
+      "rows": 54,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_gspo_v381_ood_r3_s45/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_gspo_v6_rl_train_r3_s45/traces.jsonl",
+      "rows": 99,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_smoke_v4_rl_train_r3/traces.jsonl",
+      "rows": 21,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_v381_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_v381_iid_r3_s45/traces.jsonl",
+      "rows": 54,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_v381_ood_r3_s45/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_v5_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_v5_rl_train_r3_s45/traces.jsonl",
+      "rows": 21,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_grpo_v6_rl_train_r3_s45/traces.jsonl",
+      "rows": 99,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_t5_v381_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_t5_v381_iid_r3_s45/traces.jsonl",
+      "rows": 54,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_t5_v381_ood_r3_s45/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_t5_v6_rl_train_r3_s45/traces.jsonl",
+      "rows": 99,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v1_terminal_probe_r8_s47/traces.jsonl",
+      "rows": 32,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v2_terminal_probe_r8_s47/traces.jsonl",
+      "rows": 32,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v381_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v381_iid_r3_s45/traces.jsonl",
+      "rows": 54,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v381_ood_r3_s45/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v4_rl_train_r3/traces.jsonl",
+      "rows": 21,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v5_dev_r3_s45/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v5_rl_train_r3_s45/traces.jsonl",
+      "rows": 21,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/eval_sft_v6_rl_train_r3_s45/traces.jsonl",
+      "rows": 99,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_dev_pair/traces.jsonl",
+      "rows": 8,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_pilot_v3a/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_pilot_v3b/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_v2_62/dev/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_v2_62/iid_test/traces.jsonl",
+      "rows": 42,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_v2_62/ood_test/traces.jsonl",
+      "rows": 12,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_base_v2_62/train/traces.jsonl",
+      "rows": 108,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r1/traces.jsonl",
+      "rows": 8,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r3/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r1/traces.jsonl",
+      "rows": 8,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r3/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_checkpoint-366_dev_r1/traces.jsonl",
+      "rows": 8,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_final_dev_r1/traces.jsonl",
+      "rows": 8,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_final_dev_r3/traces.jsonl",
+      "rows": 24,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_e1_final_train_r3/traces.jsonl",
+      "rows": 108,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    },
+    {
+      "path": "artifacts/qwen25_15b_sft_smoke_dev_pair/traces.jsonl",
+      "rows": 8,
+      "checks_equal": {
+        "rows": true,
+        "read_only_scored": true,
+        "current_reward_min": true,
+        "current_reward_max": true,
+        "current_reward_components_sha256": true,
+        "report_read_projection_count": true,
+        "historical_fields_present": true,
+        "historical_missing_fields": true,
+        "historical_detail_comparison": true,
+        "comparison_examples": true,
+        "training_trajectory_loader": true
+      },
+      "different_fields": []
+    }
+  ],
+  "historical_input_changes": [],
+  "source_changes": [
+    {
+      "path": "AgenticArxiv/agents/agent_engine.py",
+      "s0_sha256": "16c7dbe2aa7fccee8f7a8456734df79f1da3df682bee30c7924e0ab108383a0f",
+      "s1_sha256": "5f4b95b93e4b0e5a9e5fc1a3e459b32e55a3c6a287e24906c2e789abbe20983c",
+      "s1_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/agents/base_agent.py",
+      "s0_sha256": "59e938dc288ab9a8f1b92825b6ccf52473dab323616e0a9fceb1e926b310a974",
+      "s1_sha256": "c1d09b6d25b753d1c5011e8bf5a3df11eaac1cc7945cd2eebc7d7f1a3991cf6f",
+      "s1_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/agents/side_effects.py",
+      "s0_sha256": "0dc5be659d033d8a6ce65e39141d4914d312739cd2567d8ebbe0a2cdad980feb",
+      "s1_sha256": "59d5edc3939db89db90b9b88227adc33769cf0beccf5c92ae733ef7544b40239",
+      "s1_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/benchmark/metrics.py",
+      "s0_sha256": "8d050531a36b4919d55ba09d9f8b7e48238e2a52dcebae025408b35d2ad70e40",
+      "s1_sha256": "c8faa374cf4690cd508f103fcfec8928a05a3a5fd49fee066d396e949818a067",
+      "s1_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/benchmark/report.py",
+      "s0_sha256": "35683900a829acb6566276e2f1f93bb8a124a86ab69eabd65e95bceeb1b5ee2c",
+      "s1_sha256": "c902e6373abb782679f4755eb26038d01084ba0787b97d594d6e8188769755c5",
+      "s1_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/benchmark/runner.py",
+      "s0_sha256": "aa625184caf37b331e56aec52d0782c581b4d238127cb87c6467b0f0b2ce681e",
+      "s1_sha256": "b078a4460ec205b2811c2625e1b3376b1ba702543ee056e720ae39aee805c64d",
+      "s1_status": "present"
+    },
+    {
+      "path": "scripts/audit_historical_records.py",
+      "s0_sha256": "a2b638352fa1c0096fc55baccb88915fa87921827155d19aa1f2eddc2875da61",
+      "s1_sha256": "a17c311f9932062197cf4c0350f7157fd8a1ac3d39f691079dc058aec80e3b46",
+      "s1_status": "present"
+    }
+  ],
+  "reward_weight_check": "全部53份每条已有history评分分解及weights的规范化哈希一致；检查均使用curriculum_steps=0。不反推历史训练步数或有效配方。",
+  "limits": [
+    "结论只覆盖相同299个已有文件、53份traces和当前TaskSpec的只读评分；77个历史任务ID不是完整86任务执行。",
+    "工具、模型、网络、旧behavior fixture/test、数据生成、训练均未执行。",
+    "原始history缺失的状态、奖励分量、真实token、协议与模板字段仍未知；没有补造或改写。",
+    "历史报告与当前只读指标之间已有78条arg、488条ref及55条false_finish差异在S1保持原样；不把它们认定为新回归或历史等价。",
+    "ref_applicable=False的1865条中性ref=1不是指代准确证据；缺失语义oracle目标未重建。",
+    "源码变更列表记录S1工程清理事实；S0已知路径差异仍属S0静态说明，不用旧位置推断新源码已动态验证。",
+    "训练Trajectory loader与benchmark history原schema的读取差异维持原样；直接JSONL读取与BenchmarkReport投影条数无变化。"
+  ]
+}

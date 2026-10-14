@@ -5,7 +5,6 @@ Benchmark CLI 入口。
 用法:
   cd AgenticArxiv
   python -m benchmark.run_benchmark                              # 全部
-  python -m benchmark.run_benchmark --agents regex mcp     # 指定 Agent
   python -m benchmark.run_benchmark --repeat 5                   # 重复次数
   python -m benchmark.run_benchmark --tasks search               # 按类别
   python -m benchmark.run_benchmark --task-ids search_01 cache_01 # 按 ID
@@ -18,6 +17,7 @@ import json
 import sys
 import os
 from pathlib import Path
+from collections.abc import Mapping
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
@@ -29,11 +29,12 @@ from benchmark.tasks_expanded import get_expanded_tasks
 from benchmark.splits import DEFAULT_SPLIT_PATH, load_split
 from benchmark.runner import BenchmarkRunner
 from benchmark.report import BenchmarkReport
+from rl.run_manifest import read_protocol_metadata
 from config import settings
 
 
 def _trace_record(result) -> dict:
-    """Keep enough raw data to reproduce both task and router metrics."""
+    """保留任务评分、耗时与 token 用量的实际运行记录。"""
     raw = result.raw_result or {}
     return {
         "task_id": result.task_id,
@@ -48,18 +49,39 @@ def _trace_record(result) -> dict:
         ),
         "timing": raw.get("timing") or {},
         "token_usage": raw.get("token_usage") or {},
-        "routing": raw.get("routing") or {"mode": "policy", "decisions": []},
+        "termination_reason": raw.get("termination_reason"),
+        "runtime_version": raw.get("runtime_version"),
+        "context_version": raw.get("context_version"),
+        "prompt_template_hash": raw.get("prompt_template_hash"),
+        "chat_template_hash": raw.get("chat_template_hash"),
+        "chat_template_hashes": raw.get("chat_template_hashes"),
+        "observation_body_limit": raw.get("observation_body_limit"),
+        "protocol_metadata": raw.get("protocol_metadata"),
+        "training_protocol_metadata": raw.get("training_protocol_metadata"),
+        "protocol_relation": raw.get("protocol_relation"),
     }
 
 
+def _common_protocol_metadata(results, field: str) -> dict:
+    """报告复用实际 episode 事实；缺报或不同值保持未知，不重算默认模板。"""
+    documents = []
+    for result in results:
+        if result.metrics is None:
+            continue
+        source = (result.raw_result or {}).get(field)
+        documents.append(read_protocol_metadata(source if isinstance(source, Mapping) else None))
+    if not documents:
+        return read_protocol_metadata(None)
+    first = documents[0]
+    common = {
+        key: value if all(document.get(key) == value for document in documents) else None
+        for key, value in first.items() if key != "metadata_status"
+    }
+    return read_protocol_metadata(common)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="AgenticArxiv Benchmark — 三种 Agent 模式对比测试")
-    parser.add_argument(
-        "--agents", nargs="+",
-        default=["regex", "mcp", "skill_cli"],
-        choices=["regex", "mcp", "skill_cli"],
-        help="要测试的 Agent 类型 (默认全部)",
-    )
+    parser = argparse.ArgumentParser(description="AgenticArxiv Benchmark：文本 ReAct 评测")
     parser.add_argument(
         "--repeat", type=int, default=3,
         help="每个任务重复次数 (默认 3)",
@@ -108,8 +130,7 @@ def main():
     parser.add_argument(
         "--no-thinking", action="store_true",
         help="关闭 Qwen3 等推理模型的思维链。思维链会让生成 token 数翻倍，"
-             "而 token 用量是本 benchmark 的核心对比指标之一，"
-             "混入后三种范式之间的差异会被淹没。",
+             "而 token 用量是本 benchmark 的核心指标之一。",
     )
     parser.add_argument(
         "--offline", action="store_true",
@@ -205,7 +226,6 @@ def main():
     model = args.model or settings.models.agent_model
 
     runner = BenchmarkRunner(
-        agent_types=args.agents,
         repeat=args.repeat,
         model=model,
         session_prefix=args.prefix,
@@ -225,10 +245,10 @@ def main():
     if args.backend == "transformers":
         print(f"  设备/精度: {args.local_device} / {args.local_dtype}")
     print(f"  前缀:     {runner.session_prefix}")
-    print(f"  Agent:    {', '.join(args.agents)}")
+    print("  Agent:    文本 ReAct")
     print(f"  任务数:   {len(task_list)}")
     print(f"  重复次数: {args.repeat}")
-    print(f"  总运行数: {len(task_list) * len(args.agents) * args.repeat}")
+    print(f"  总运行数: {len(task_list) * args.repeat}")
     print(f"  输出目录: {args.output}")
     print(f"  工具执行: {'离线快照回放' if args.offline else '真实 arXiv API'}")
     print("=" * 60)
@@ -272,7 +292,12 @@ def main():
         print("无有效指标数据，退出")
         sys.exit(1)
 
-    report = BenchmarkReport(all_metrics, model=model, errors=error_dicts)
+    execution_protocol = _common_protocol_metadata(results, "protocol_metadata")
+    training_protocol = _common_protocol_metadata(results, "training_protocol_metadata")
+    report = BenchmarkReport(
+        all_metrics, model=model, errors=error_dicts,
+        protocol_metadata=execution_protocol, training_metadata=training_protocol,
+    )
     report.print_report()
     report.save_all(args.output)
 

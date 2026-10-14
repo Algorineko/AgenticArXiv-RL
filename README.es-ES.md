@@ -5,7 +5,7 @@
 # AgenticArXiv-RL — Entorno de Entrenamiento para RL Agentic
 
 > **Entorno de entrenamiento de RL agentic basado en un agente ReAct + herramientas de arXiv**
-> Soporta rutas de entrenamiento SFT/DPO/GRPO/OPD y recompensa verificable (RLVR), para investigar el aprendizaje por refuerzo en agentes LLM.
+> La línea de entrenamiento admitida es SFT → GRPO; la inferencia y la evaluación usan ReAct textual con recompensas verificables (RLVR).
 > Objetivo final: **un asistente de papers multimodal y ligero, desplegado en el dispositivo** — un modelo de lectura de papers de extremo a extremo, desde la búsqueda, la descarga y la traducción hasta el resumen y el análisis de figuras.
 
 <p align="center">
@@ -19,35 +19,42 @@
 Convertir las tareas de búsqueda/descarga/traducción/interpretación de papers de arXiv en un **entorno de aprendizaje por refuerzo entrenable**, centrado en:
 
 1. **Verifiable Reward**: recompensas basadas en reglas (precisión de las llamadas a herramientas, completitud de la tarea, errores de parseo, etc.), sin anotación humana
-2. **Entrenamiento progresivo**: SFT → DPO → GRPO (se ofrece además una ruta de destilación on-policy con OPD; PPO no está disponible con las dependencias actuales)
+2. **Línea directa de entrenamiento**: SFT → GRPO, con QLoRA por defecto y entrenamiento de todos los parámetros explícito
 3. **Ingeniería ligera**: Python puro + almacenamiento en JSONL, sin base de datos ni frontend, enfocado en el entrenamiento offline
 
 **No es objetivo**: una aplicación de arXiv de nivel de producción, una UI web o un servicio de traducción en tiempo real (la app web original se retiró de este repositorio; véase el [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) original).
 
 ---
 
-## 🚀 Inicio Rápido
+## Inicio Rápido
+
+Ejecuta los comandos desde la raíz del repositorio y usa `.venv`. La instalación no requiere frontend ni base de datos.
 
 ```bash
-# 1. Clonar e instalar (Python 3.9+)
 git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r AgenticArxiv/requirements.txt
 
-# 2. Configurar la API del LLM (necesaria para los rollouts con API; el entrenamiento/evaluación con modelos locales no la necesita)
-cat > AgenticArxiv/.env << 'EOF'
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-your-api-key
-MODEL=gpt-4-turbo
-EOF
-
-# 3. Probar un rollout (recompensa en el rango [-1, 1], varía según la trayectoria)
-python -m AgenticArxiv.rl.rollout search_01 traces/train/
-# ✅ Task search_01 rollout 完成  Reward: 1.00
+python -m AgenticArxiv.rl.rollout --help
+python -m AgenticArxiv.benchmark.run_benchmark --help
+python -m AgenticArxiv.main --help
 ```
 
-Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/`. Los comandos siguientes se ejecutan por defecto desde la raíz del repositorio.
+Para la inferencia mediante API, configura explícitamente `LLM_BASE_URL`, `LLM_API_KEY` y `MODEL`; no publiques credenciales ni un `.env` real. El entrenamiento y la evaluación locales no necesitan API key. Instala `AgenticArxiv/requirements-extra.txt` solo para traducción PDF real o registro de curvas; no hay servicio asíncrono de la aplicación.
+
+```bash
+# Ejecución futura con modelo local y snapshot existentes; no se ejecutó aquí
+python -m AgenticArxiv.rl.rollout \
+  --task_id=search_01 --output_dir=traces/react_messages \
+  --model=outputs/sft_qlora/final --offline=True \
+  --snapshot=data/mock_arxiv_snapshot.json --max_iterations=6
+```
+
+main usa API/live por defecto. Rollout usa offline=True; False explícito activa herramientas live. El modo de herramientas es independiente del backend del modelo; véase el [contrato de ejecución](docs/react_runtime.md).
+
+Ejecutar tareas requiere un modelo existente o una API disponible. Las herramientas offline necesitan un snapshot existente y no descargan entradas ausentes. Verificar la instalación o la ayuda no equivale a ejecutar tareas; este cambio no llamó a APIs externas, entrenó modelos ni evaluó su rendimiento.
 
 ---
 
@@ -66,16 +73,18 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — Navegación por subárea + ventana temporal
 2. `search_arxiv_papers(query, max_results, days=None)` — Búsqueda por palabra clave/título/autor
-3. `download_arxiv_pdf(ref, session_id)` — Descarga del PDF
-4. `translate_arxiv_pdf(ref, session_id)` — Traducción del PDF (pdf2zh)
-5. `get_paper_cache_status(ref, session_id)` — Consulta del estado de la caché
-6. `get_paper_content(ref, session_id, section=None)` — Lectura del abstract o de una sección concreta (extracción determinista)
+3. `download_arxiv_pdf(ref)` — Descarga del PDF
+4. `translate_arxiv_pdf(ref)` — Traducción del PDF (pdf2zh)
+5. `get_paper_cache_status(ref)` — Consulta del estado de la caché
+6. `get_paper_content(ref, section=None)` — Lectura del abstract o de una sección concreta (extracción determinista)
 7. `summarize_paper(ref, style, max_words)` — Resumen del lado del entorno (tldr / structured / bullet)
 8. `extract_paper_figures(ref)` — Extracción de los archivos de figuras y sus captions
 9. `analyze_figure(ref, figure_no, question=None)` — Análisis de figuras: el entorno llama a un VLM local para leer la imagen (requiere el entorno multimodal)
-10. `get_translated_content(ref, session_id, page=1)` — Lectura de la traducción página a página (el PDF traducido al chino, extracción determinista; la página 1 suele contener el título y el abstract)
+10. `get_translated_content(ref, page=1)` — Lectura de la traducción página a página (el PDF traducido al chino, extracción determinista; la página 1 suele contener el título y el abstract)
 
-> El bucle de interpretación «búsqueda → descarga → lectura → resumen → extracción de figuras → análisis de figuras» está completamente cerrado: el análisis de figuras lo realiza del lado del entorno el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto, que graba las respuestas en el snapshot, y del lado de la política existen los pesos [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5), que aprendieron esa cadena de cuatro pasos.
+> Se muestran parámetros de negocio habituales, no el schema completo. `session_id` se inyecta al ejecutar y nunca se incluye en Action ni en las etiquetas SFT.
+
+> **Capacidad histórica del protocolo original, sin repetir la evaluación con el protocolo nuevo.** El bucle de interpretación «búsqueda → descarga → lectura → resumen → extracción de figuras → análisis de figuras» está completamente cerrado: el análisis de figuras lo realiza del lado del entorno el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto, que graba las respuestas en el snapshot, y del lado de la política existen los pesos [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5), que aprendieron esa cadena de cuatro pasos.
 > **Criterio de admisión**: un espacio de acciones más grande no es automáticamente mejor — el estándar para añadir una herramienta es «habilita una nueva categoría de tareas», no «puede que sea útil». La cadena de decisiones de diseño está en [Diseño de Evolución del Conjunto de Herramientas](docs/toolset_evolution.md).
 
 ### Verifiable Reward (cinco componentes)
@@ -91,98 +100,72 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 | `outcome` | 3 | Completado correcto +1, completado con ruta errónea +0.25, parada forzada −0.5, error −1 |
 | `result_quality` / `efficiency` | gate de diagnóstico | Si la observation representa un éxito real; la redundancia grave activa un techo de reward |
 
-- **Currículo**: durante los primeros 30 pasos los pesos de `tool`/`argument`/`outcome` se multiplican por 1/3 (`RewardCalculator.schedule`). Conclusión medida: un punto de partida SFT ya domina la estructura ReAct (format arranca en 0.983) y los dos brazos del currículo son indistinguibles — **partiendo de SFT usa directamente `--reward_curriculum_steps 0`**; esa rampa queda reservada para escenarios de arranque en frío.
+- **Currículo**: el código conserva el escalado por 1/3 de `tool`/`argument`/`outcome` durante los primeros 30 pasos (`RewardCalculator.schedule`); la limpieza no lo cambió a 0. El registro histórico indica format 0.983 al inicio SFT y brazos indistinguibles. Una futura opción explícita `--reward_curriculum_steps 0` debe registrarse en el manifest y no describirse como valor predeterminado conservado.
 - **Fallos no compensables**: un fallo de parseo, un fallo de ejecución o un FINISH falso reciben como mucho recompensa negativa y no pueden compensarse con puntos de formato; si `analyze_figure` no aporta una respuesta válida, la recompensa total queda limitada a −0.75.
 - Toda recompensa es **verificable por reglas** (RLVR) y cada trayectoria registra el desglose de `reward_components` para facilitar la auditoría. Los criterios detallados están en la [documentación de la recompensa multigranular](docs/multigranular_rl.md).
 
-### Aislamiento de Rollout
+### Aislamiento por Episodio
 
-El `RolloutSandbox` de `rl/sandbox.py` registra antes de cada trayectoria la línea base del entorno, del Store y de los directorios de artefactos, y la restaura y limpia al terminar — el GRPO multiturno, el rollout y el benchmark comparten este contrato de reset, eliminando cualquier encadenamiento de estado entre trayectorias.
+Cada episodio posee su estado de sesión mutable y su directorio de artefactos. Los snapshots y los recursos precargados se comparten en modo de solo lectura; reset/close limpia únicamente rutas propias, nunca archivos del usuario ni de otros episodios. El presupuesto predeterminado es de 6 turnos, incluido FINISH. Solicitar terminar no demuestra que la tarea haya tenido éxito.
 
 ---
 
-## 🛠️ Ruta de Entrenamiento (SFT → DPO → GRPO / OPD)
+## Protocolo de Mensajes Compartido
 
-### Fase 1: SFT
+El único protocolo activo es `react-runtime-v2` / `react-messages-v3`: un mensaje user inicial establece tarea/herramientas/setup real, seguido de turnos assistant y Observation del entorno como mensajes user marcados explícitamente como datos. SFT supervisa solo la completion actual. GRPO conserva los IDs muestreados, máscara de política=1 y de entorno/límites insertados=0, verifica estrictamente el prefijo de tokens, conserva EOS existente y no vuelve a multiplicar por G en rollout.
+
+No se declaran compatibles automáticamente datos antiguos/desconocidos ni artefactos entrenados; omitir la comprobación de manifest no evita la validación de protocolo. Los informes separan el protocolo de ejecución y los metadatos reales de entrenamiento del modelo de origen, con relaciones same_protocol/cross_protocol/unknown; unknown no es una reproducción comparable. Aquí no se verificaron prefijos con tokenizer real, gradientes ni capacidad del modelo. Véase el [contrato de ejecución](docs/react_runtime.md).
+
+## Línea de Entrenamiento: SFT → GRPO
+
+Estos comandos corresponden a una ejecución futura separada, no a la aceptación de ingeniería. Requieren datos SFT del protocolo nuevo y su manifest, modelo base/recursos de entrenamiento y un snapshot offline existente. Este cambio no generó esas entradas ni ejecutó entrenamiento.
 
 ```bash
-python scripts/generate_parametric_sft_data.py   # deriva trayectorias expertas de forma paramétrica (sin API)
-python -m AgenticArxiv.rl.train_sft              # produce outputs/sft/final
+# QLoRA por defecto: GRPO carga el adaptador SFT y sus metadatos de modelo base
+python -m AgenticArxiv.rl.train_sft \
+  --config configs/training/mainline.json \
+  --data data/sft/sft_react_messages_v3_train_mix.jsonl \
+  --output_dir outputs/sft_qlora
+python -m AgenticArxiv.rl.train_grpo \
+  --config configs/training/mainline.json \
+  --model outputs/sft_qlora/final \
+  --task_set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max_turns 6
+
+# Todos los parámetros explícitamente; no usar un directorio de adaptador como modelo completo
+python -m AgenticArxiv.rl.train_sft \
+  --config configs/training/mainline.json \
+  --data data/sft/sft_react_messages_v3_train_mix.jsonl \
+  --no-qlora --output_dir outputs/sft_full
+python -m AgenticArxiv.rl.train_grpo \
+  --config configs/training/mainline.json --model outputs/sft_full/final \
+  --no-qlora --task_set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max_turns 6
 ```
+
+GRPO formal vincula explícitamente un conjunto de tareas y una partición de entrenamiento `FILE:NAME`. `--smoke` selecciona las 8 tareas smoke; las 86 tareas nunca se usan implícitamente todas para entrenar. Las 33 tareas históricas de `v6_grpo_train.json:rl_train` no son las 55 de `v7_86.json:train`.
+
+La configuración mínima conserva valores explícitos del código, valores predeterminados y transmisión condicional de argumentos. Los campos no establecidos de pérdida, muestreo de importancia o escalado de recompensa se delegan en la biblioteca; no se inventan valores efectivos ni equivalencia con recetas históricas. La ausencia de entradas/metadatos produce un error, sin cambiar de modelo o API. La [guía principal](docs/rl_building.md) detalla generación, ampliación y mezcla futuras, recursos, mensajes/máscaras y compatibilidad.
+
+Se conservan controles de longitud, diagnóstico de varianza, Canary, umbral SFT de parseo ≥ 0.3, umbral GRPO de recompensa media ≥ −0.2, precisión y registro. La validación usa episodios completos, no solo la primera acción correcta; aquí no se verificó que modelos reales superen los umbrales.
+
+Se retiraron las entradas activas de DPO, OPD, PPO, variantes GRPO, autoevolución, post-entrenamiento VLM independiente, Jev, MCP/Skill CLI, Web/HTTP, MySQL y SSE. Se conservan inferencia de figuras, construcción de snapshots, backfill T5, puntuación de casos malos y APIs LLM externas.
+
+### Resultados Históricos Publicados (protocolo original, sin repetir)
+
+Los datos publicados y las cifras siguientes conservan su alcance experimental original. No demuestran la capacidad actual bajo el protocolo nuevo. El entrenamiento nuevo rechaza entradas incompatibles; la evaluación entre protocolos debe indicarlo explícitamente.
 
 > Publicado: [AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT) (Qwen2.5-1.5B a parámetros completos, 2 epochs / 2628 trayectorias expertas, loss 0.079; cubre solo las primeras 8 herramientas).
 
-### Fase 2: DPO
-
-```bash
-python scripts/generate_dpo_data.py --model outputs/sft/final --num_rollouts_per_task 8
-python -m AgenticArxiv.rl.train_dpo              # produce outputs/dpo/final
-```
-
-Los pares de preferencia proceden del muestreo local del modelo SFT (sin necesidad de `LLM_API_KEY`); cuando hay snapshot, el replay offline es automático, y solo forman par las trayectorias cuya diferencia de recompensa supera `--min_reward_gap` y cuya primera herramienta es distinta.
-
-### Fase 3: GRPO
-
-```bash
-python -m AgenticArxiv.rl.build_snapshot         # genera el snapshot offline (único paso con red)
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
-
-# Preset DAPO (loss_type=dapo + clip-higher + overlong filtering + dynamic sampling)
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
-
-# Importancia a nivel de secuencia (GSPO) y variante sin sesgo Dr.GRPO
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --importance_sampling_level sequence
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --loss_type dr_grpo
-
-# Multi-GPU (DDP verificado en dos tarjetas; FSDP necesita torch>=2.6)
-accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
-  -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
-
-# Curvas de entrenamiento
-python -m AgenticArxiv.rl.train_grpo --report_to tensorboard
-tensorboard --logdir outputs/grpo/logs
-```
-
 > Publicado: [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) (33 tareas con señal, replay offline de snapshots de principio a fin). Evaluación offline (seed 45 / repeat 3, tasa de éxito estricta pass³) SFT → GRPO: **rl_train 0.081→0.636, dev 0.000→0.375, iid_test 0.056→0.444, ood_test 0.000→0.500**.
-
-**Rollout y puntuación multiturno** (`rl/grpo_reward.py`): en cada turno la política actual genera una acción ReAct y un `MockArxivEnv` independiente la ejecuta, reinsertando la observation en el contexto; los tokens del assistant entran en la loss y los del entorno actúan solo como contexto vía `env_mask=0`; la trayectoria completa la puntúa el `RewardCalculator` de cinco componentes, con el mismo estándar que usan el rollout y el benchmark.
-
-**Garantías de calidad del entrenamiento** (de fallos silenciosos a errores sonoros): chequeo de la longitud de generación, guarda de varianza cero (`RewardVarianceGuard`), evaluación canary intermedia con parada temprana, umbrales de verificación por fase (tasa de parseo SFT ≥ 0.3, reward DPO ≥ −0.3, reward GRPO ≥ −0.2), precisión mixta adaptativa y validación previa del backend de logging. Además de las métricas que trae TRL, las curvas registran `reward_components/*` (desglose por componente), `reward_weights/*` (pesos del currículo) y `rollout/*` (turns / finished / parse_error_rate).
-
-### Fase 3': OPD (destilación on-policy, opcional, intercambiable con GRPO)
-
-```bash
-python -m AgenticArxiv.rl.train_opd --model outputs/sft/final \
-  --teacher Qwen/Qwen2.5-7B-Instruct --max_turns 4 --snapshot data/mock_arxiv_snapshot.json
-```
-
-El estudiante muestrea on-policy sobre los prompts de las tareas, el profesor aporta los logprobs por token y la pérdida es una reverse-KL (mode-seeking). Frente a GRPO:
-
-| Dimensión | GRPO | OPD |
-|---|---|---|
-| Señal de aprendizaje | recompensa verificable (dispersa, a nivel de trayectoria) | logprobs por token del profesor (densa) |
-| Modelo adicional | ninguno | modelo profesor (necesita pesos locales) |
-| Techo | puede explorar y superar al profesor | converge al comportamiento del profesor |
-| Cuándo usarlo | hay recompensa verificable | hay un profesor fuerte y se quiere ahorrar el coste de exploración |
-
-### Fase 4: PPO — ⚠️ No disponible con las dependencias actuales
-
-TRL eliminó el PPOTrainer clásico (no existe en `trl>=0.28.0`); `train_ppo.py` muestra una explicación clara en la fase de import y después termina. Con recompensa verificable la vía es GRPO y con un profesor fuerte, OPD — ambas consumen menos VRAM que PPO.
-
-### Post-entrenamiento multimodal (VLM del lado del entorno)
-
-```bash
-python scripts/build_figure_qa_dataset.py                          # datos semilla de QA de figuras
-python -m AgenticArxiv.rl.train_vlm_figure_qa                      # post-entrenamiento LoRA de Qwen3-VL-4B
-FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<directorio de FigureQA> \
-  python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
-```
 
 > Publicado: [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) (451 figuras / 73 papers, partición por paper para evitar fugas; holdout de 94 figuras, ROUGE-1 0.105→0.126 y ROUGE-L 0.081→0.102).
 
 ---
 
 ## 📦 Modelos Publicados
+
+> **Lista de publicaciones históricas.** Las variantes retiradas no son entradas de entrenamiento y no se garantiza el comportamiento de checkpoints antiguos con el contexto nuevo.
 
 | Modelo | Base | Descripción |
 |------|------|------|
@@ -202,22 +185,26 @@ Todos se alojan en ModelScope (`Algorineko/AgenticArXiv-RL-*`); las model cards 
 
 - **Conjunto de humo** (`benchmark/tasks.py`): 8 tareas (search / download / translate / cache / composite)
 - **Conjunto ampliado** (`benchmark/tasks_expanded.py`): 86 tareas y catorce familias de plantillas (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**); se activa con `run_benchmark.py --task-set expanded`. Ambos conjuntos pasan por el mismo `TaskSpec`: `expected_tools` / `expected_tool_args` se derivan de una única fuente `steps`, de modo que nunca hay dos listas escritas a mano que diverjan.
-- **Particiones**: train / iid_test / ood_test por plantilla (`benchmark/splits.py`, fijadas en `data/splits/`); `rl_train` toma solo la banda intermedia de la tasa de éxito (en los extremos la varianza intragrupo es cero y no se produce gradiente). Tras cambiar de modelo hay que volver a medir las rates: los umbrales antiguos no se pueden reutilizar.
-- **Criterios de evaluación**: fiabilidad `pass^k` (convención tau-bench), `false_finish` (la política degradada `always_finish` alcanza un 91.5% frente al 0% de `reference`), `ref_score` (compara el `paper_id` y no la forma literal del `ref`), coste normalizado por número de aciertos.
-- **Puertas de discriminación** (`run_baselines.py`): políticas degradadas deterministas con umbral por categoría — «buscar siempre cs.AI» baja de 0.833 a 0.446 en la categoría de búsqueda, y «llamar a herramientas cuando no tocaba» pasa de +0.165 a −0.235.
+- **Particiones**: `data/splits/v7_86.json` contiene train 55 / dev 8 / iid_test 19 / ood_test 4. Las 33 tareas históricas de `v6_grpo_train.json:rl_train` proceden de otra partición. Una futura selección de señal usa solo train declarado y escribe un archivo nuevo; dev/iid/ood no entran en entrenamiento y aquí no se volvieron a medir las rates.
+- **Criterios de evaluación (cifras históricas)**: fiabilidad `pass^k` (convención tau-bench), `false_finish` (la política degradada `always_finish` alcanza un 91.5% frente al 0% de `reference`), `ref_score` (compara el `paper_id` y no la forma literal del `ref`), coste normalizado por número de aciertos.
+- **Puertas de discriminación (estadísticas históricas)** (`run_baselines.py`): políticas degradadas deterministas con umbral por categoría — «buscar siempre cs.AI» baja de 0.833 a 0.446 en la categoría de búsqueda, y «llamar a herramientas cuando no tocaba» pasa de +0.165 a −0.235.
 - **Replay de casos malos** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`, 17 casos): cada trayectoria fallida se congela como caso de regresión permanente; el replay ejecuta solo el evaluador y el propio `pytest` hace de puerta. `hack/*` documenta formas de engañar la puntuación con aserciones de umbral y sirve además de biblioteca de casos de reward hacking.
 
 ```bash
-python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_test --offline
+python -m AgenticArxiv.benchmark.run_benchmark \
+  --backend transformers --model outputs/grpo/final \
+  --task-set expanded --split data/splits/v7_86.json:iid_test \
+  --offline --snapshot data/mock_arxiv_snapshot.json \
+  --repeat 3 --output artifacts/eval_react_messages_iid
 ```
 
 ---
 
-## 🛡️ Notas sobre Dependencias
+## Dependencias
 
-**Dependencias principales** (`AgenticArxiv/requirements.txt`): `torch>=2.0`, `transformers>=4.45`, `trl>=0.28.0` (verificado en 0.29.1; el mínimo lo fija la ruta `rollout_func` del GRPO multiturno), `peft`, `bitsandbytes` (QLoRA), `datasets`, `accelerate`, `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic>=2`, `fire`.
+[requirements.txt](AgenticArxiv/requirements.txt) declara las bibliotecas de entrenamiento y `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic`, `fire`, PyMuPDF y Pillow. Se conservan las versiones declaradas y los controles de interfaz, sin actualizar ni degradar bibliotecas. Las notas históricas de validación no prueban una integración real actual.
 
-**Dependencias opcionales** (`requirements-extra.txt`): `pdf2zh` (traducción real de PDF), `fastapi`/`uvicorn`/`sqlalchemy`/`pymysql` (capa de compatibilidad web archivada), `mcp` (capa de compatibilidad MCP archivada), `tensorboard`/`wandb` (backends de curvas de entrenamiento), `matplotlib`/`numpy`/`pandas` (scripts de gráficas).
+[requirements-extra.txt](AgenticArxiv/requirements-extra.txt) conserva `pdf2zh` para traducción real y `tensorboard` para curvas; `wandb` puede instalarse por separado. Los backends de figuras/resumen necesitan modelos locales explícitos. Una dependencia opcional ausente falla al usar su función, sin reducir las 10 herramientas. Web, bases de datos y otros agentes ya no son opciones de instalación.
 
 ---
 
@@ -241,7 +228,7 @@ Licencia MIT
 
 ## 🙋 FAQ
 
-**P: ¿En qué se diferencia del AgenticArXiv original?** El original es una aplicación web de nivel de producción (FastAPI+Vue3+MySQL, tres arquitecturas de agente); este proyecto es un entorno de entrenamiento RL en Python puro + JSONL que conserva únicamente la política única ReAct: su núcleo son el entrenamiento SFT/DPO/GRPO y la recompensa verificable.
+**P: ¿En qué se diferencia del AgenticArXiv original?** El original es una aplicación web de nivel de producción (FastAPI+Vue3+MySQL, tres arquitecturas de agente); este proyecto es un entorno de entrenamiento RL en Python puro + JSONL que conserva únicamente la política única ReAct: su núcleo son SFT → GRPO y ReAct textual con recompensa verificable.
 
 **P: ¿Por qué GRPO y no PPO?** GRPO no necesita value model (menor consumo de VRAM), encaja con modelos pequeños de la escala de 1.5B y su implementación es simple y fácil de depurar; PPO es más adecuado para entrenar modelos grandes de nivel de producción.
 
@@ -249,7 +236,10 @@ Licencia MIT
 
 ---
 
-## 📝 Roadmap (Hoja de Ruta)
+## Roadmap Histórico (no son tareas actuales)
+
+> **Lo siguiente conserva las direcciones originales, no un plan actual de ejecución o implementación.** Cifras, flags antiguos y rutas mantienen su contexto histórico. Las entradas retiradas no funcionan; los experimentos antiguamente pendientes no forman parte de la aceptación de este cambio. La [guía principal](docs/rl_building.md) recoge comandos futuros y el alcance no ejecutado.
+
 
 > Los argumentos completos y la ruta de adopción están en [docs/roadmap_notes.md](docs/roadmap_notes.md). Anímate a reclamar una tarea (véase 🤝 Contribuir).
 

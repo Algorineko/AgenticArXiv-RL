@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.tool_registry import registry
 from utils.file_writer import save_papers_to_file
+from utils.artifact_paths import search_output_path
 
 cs_categories = {
     "*": "All Computer Science",
@@ -138,6 +139,7 @@ def get_recently_submitted_cs_papers(
     """
     获取最近 days 天内提交的 cs.<aspect> 论文列表
     """
+    path = search_output_path(output_path, _default_output_path()) if save_to_file else None
     now_utc = datetime.now(timezone.utc)
     start_date = (now_utc - timedelta(days=days)).strftime("%Y%m%d")
     end_date = now_utc.strftime("%Y%m%d")
@@ -161,7 +163,6 @@ def get_recently_submitted_cs_papers(
             papers.append(_paper_info(result))
 
     if save_to_file:
-        path = output_path or _default_output_path()
         save_papers_to_file(papers, path)
 
     return papers

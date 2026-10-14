@@ -22,8 +22,7 @@ import tools.pdf_translate_tool  # noqa: F401,E402
 
 from agents.agent_engine import ReActAgent  # noqa: E402
 from agents.prompt_templates import build_visible_setup_context  # noqa: E402
-from agents.side_effects import LocalSideEffectManager  # noqa: E402
-from rl.grpo_reward import build_prompt_dataset  # noqa: E402
+from agents.react_contract import build_react_messages  # noqa: E402
 from utils.llm_client import TransformersLLMClient  # noqa: E402
 
 
@@ -41,8 +40,11 @@ class CapturingClient:
 
 def run_once(**agent_kwargs):
     client = CapturingClient()
-    agent = ReActAgent(client, side_effect_mgr=LocalSideEffectManager(), **agent_kwargs)
-    agent.run("检索最近7天AI论文", session_id="t")
+    agent = ReActAgent(client, **agent_kwargs)
+    try:
+        agent.run("检索最近7天AI论文", session_id="t")
+    finally:
+        agent.close()
     return client.calls[0]
 
 
@@ -55,8 +57,10 @@ class TestStopSequences(unittest.TestCase):
         class NoStop(ReActAgent):
             stop_sequences = ()
         client = CapturingClient()
-        NoStop(client, side_effect_mgr=LocalSideEffectManager()).run("x", session_id="t")
-        # 无任何额外参数时 BaseAgent 传 None（保持改动前的行为）
+        agent = NoStop(client)
+        self.addCleanup(agent.close)
+        agent.run("x", session_id="t")
+        # 无任何额外参数时运行器传 None（保持原有请求边界）
         extra = client.calls[0]["extra"]
         self.assertTrue(extra is None or "stop" not in extra, f"意外携带 stop: {extra}")
 
@@ -72,14 +76,16 @@ class TestLlmExtra(unittest.TestCase):
         self.assertEqual(extra["stop"], ["###"])
 
     def test_default_is_empty_dict_not_none(self):
-        agent = ReActAgent(CapturingClient(), side_effect_mgr=LocalSideEffectManager())
+        agent = ReActAgent(CapturingClient())
+        self.addCleanup(agent.close)
         self.assertEqual(agent.llm_extra, {})
 
 
 class TestInitialHistory(unittest.TestCase):
     def test_initial_history_is_visible_but_not_a_scored_policy_step(self):
         client = CapturingClient()
-        agent = ReActAgent(client, side_effect_mgr=LocalSideEffectManager())
+        agent = ReActAgent(client)
+        self.addCleanup(agent.close)
         result = agent.run(
             "把刚才那篇论文翻译一下",
             session_id="seeded",
@@ -95,7 +101,7 @@ class TestInitialHistory(unittest.TestCase):
         self.assertEqual([step["action"] for step in result["history"]], ["FINISH"])
         self.assertNotIn("此前已下载", str(result["history"]))
 
-    def test_benchmark_first_turn_matches_grpo_prompt(self):
+    def test_first_turn_uses_shared_messages_without_task_answers(self):
         task = {
             "id": "ref_ctrl_null_translate",
             "task": "把刚才那篇论文翻译一下",
@@ -110,10 +116,14 @@ class TestInitialHistory(unittest.TestCase):
             "expected_tools": ["translate_arxiv_pdf"],
             "expected_tool_args": [{"ref": None}],
         }
-        expected = build_prompt_dataset([task])[0]["prompt"][0]["content"]
-
         client = CapturingClient()
-        ReActAgent(client, side_effect_mgr=LocalSideEffectManager()).run(
+        agent = ReActAgent(client)
+        self.addCleanup(agent.close)
+        expected = build_react_messages(
+            task["task"], agent.format_tools_for_prompt(agent.discover_tools()),
+            visible_setup_context=build_visible_setup_context(task),
+        )[0]["content"]
+        agent.run(
             task["task"],
             session_id="benchmark-visible-state",
             initial_history=build_visible_setup_context(task),
@@ -186,6 +196,9 @@ class TestTransformersClientResponse(unittest.TestCase):
             response["choices"][0]["message"]["content"],
             "Thought: x\nAction: FINISH\n",
         )
+        self.assertEqual(response["raw_model_content"],
+                         "Thought: x\nAction: FINISH\nObservation: invented")
+        self.assertEqual(response["choices"][0]["finish_reason"], "stop")
         self.assertEqual(response["usage"]["prompt_tokens"], 2)
         self.assertEqual(response["usage"]["completion_tokens"], 3)
         self.assertEqual(client.model.generation_kwargs["stop_strings"], ["Observation:"])

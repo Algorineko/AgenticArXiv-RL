@@ -23,6 +23,7 @@ from rl.observability import (  # noqa: E402
     trajectory_health,
 )
 from rl.reward import RewardCalculator  # noqa: E402
+from tests.test_rollout_audit import _clean_trajectory  # noqa: E402
 
 
 class FakeTrainer:
@@ -224,10 +225,11 @@ class RewardFnTrackerWiringTest(unittest.TestCase):
         tasks = {"t": {"id": "t", "task": "x",
                        "expected_tools": ["get_recently_submitted_cs_papers"],
                        "expected_termination": "FINISH"}}
-        fn = make_grpo_reward_fn(tasks, env=None, tracker=tracker)
+        fn = make_grpo_reward_fn(tasks, tracker=tracker)
         rewards = fn(
             completions=['Thought: 检索\nAction: {"name": "get_recently_submitted_cs_papers", "args": {}}'],
             task_id=["t"],
+            trajectory_results=[_clean_trajectory()],
         )
         self.assertEqual(len(rewards), 1)
         self.assertIn("reward_components/tool", trainer._metrics["train"])
@@ -237,7 +239,7 @@ class RewardFnTrackerWiringTest(unittest.TestCase):
     def test_reward_fn_rejects_misaligned_task_ids(self):
         tasks = {"t": {"id": "t", "task": "x", "expected_tools": [],
                        "expected_termination": "FINISH"}}
-        fn = make_grpo_reward_fn(tasks, env=None)
+        fn = make_grpo_reward_fn(tasks)
         with self.assertRaisesRegex(ValueError, "输入长度不一致"):
             fn(
                 completions=["Thought: 完成\nAction: FINISH"] * 2,
@@ -247,8 +249,11 @@ class RewardFnTrackerWiringTest(unittest.TestCase):
     def test_reward_fn_without_tracker_still_works(self):
         tasks = {"t": {"id": "t", "task": "x", "expected_tools": [],
                        "expected_termination": "FINISH"}}
-        fn = make_grpo_reward_fn(tasks, env=None)
-        self.assertEqual(len(fn(completions=["Thought: 完成\nAction: FINISH"], task_id=["t"])), 1)
+        fn = make_grpo_reward_fn(tasks)
+        self.assertEqual(len(fn(
+            completions=["Thought: 完成\nAction: FINISH"], task_id=["t"],
+            trajectory_results=[_clean_trajectory()],
+        )), 1)
 
 
 class DescribeLoggingTest(unittest.TestCase):

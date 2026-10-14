@@ -8,7 +8,7 @@ import json
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPO_ROOT / "AgenticArxiv"
@@ -17,6 +17,9 @@ if str(PACKAGE_ROOT) not in sys.path:
 
 from benchmark.metrics import classify_blocked_terminal_semantics  # noqa: E402
 from benchmark.tasks_expanded import get_expanded_tasks  # noqa: E402
+from rl.run_manifest import (  # noqa: E402
+    canonical_hash, evaluation_protocol_relation, read_protocol_metadata,
+)
 
 
 FORMAT_FLAGS = {
@@ -43,7 +46,18 @@ def load_records(path: Path) -> List[Dict[str, Any]]:
             raise SystemExit(f"Invalid JSON at {path}:{line_number}: {exc}") from exc
         if not isinstance(item, dict):
             raise SystemExit(f"Expected object at {path}:{line_number}")
-        records.append(item)
+        protocol = read_protocol_metadata(item)
+        if protocol["metadata_status"] == "unknown":
+            protocol = read_protocol_metadata(item.get("trajectory"))
+        trajectory = item.get("trajectory")
+        trajectory = trajectory if isinstance(trajectory, Mapping) else {}
+        training = read_protocol_metadata(item.get(
+            "training_protocol_metadata", trajectory.get("training_protocol_metadata")
+        ))
+        records.append({
+            **item, "protocol_metadata": protocol, "training_protocol_metadata": training,
+            "protocol_relation": evaluation_protocol_relation(training, protocol),
+        })
     if not records:
         raise SystemExit(f"No rollout records found in {path}")
     return records
@@ -60,8 +74,24 @@ def summarize(records: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     terminal_counts: Counter[str] = Counter()
     terminal_rewards: Dict[str, List[float]] = defaultdict(list)
     task_terminal_counts: Dict[str, Counter[str]] = defaultdict(Counter)
+    protocol_counts: Counter[str] = Counter()
+    protocols: Dict[str, Dict[str, Any]] = {}
+    relations: Dict[str, Dict[str, Any]] = {}
 
     for row in rows:
+        protocol = read_protocol_metadata(row)
+        if protocol["metadata_status"] == "unknown":
+            protocol = read_protocol_metadata(row.get("trajectory"))
+        trajectory = row.get("trajectory")
+        trajectory = trajectory if isinstance(trajectory, Mapping) else {}
+        training = read_protocol_metadata(row.get(
+            "training_protocol_metadata", trajectory.get("training_protocol_metadata")
+        ))
+        relation = evaluation_protocol_relation(training, protocol)
+        protocol_key = canonical_hash(relation)
+        protocols[protocol_key] = protocol
+        relations[protocol_key] = relation
+        protocol_counts[protocol_key] += 1
         flags = set(row.get("active_anomalies") or [])
         task_id = str(row.get("task_id"))
         task_samples[task_id] += 1
@@ -70,7 +100,7 @@ def summarize(records: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
             task_anomalies[task_id] += 1
         if flags & FORMAT_FLAGS:
             format_anomalous += 1
-        groups[(row.get("batch_index"), row.get("group_index"))].append(row)
+        groups[(protocol_key, row.get("batch_index"), row.get("group_index"))].append(row)
         task = tasks_by_id.get(task_id)
         if task and task.get("expected_terminal_mode") == "blocked":
             trajectory = row.get("trajectory") or {}
@@ -97,6 +127,12 @@ def summarize(records: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     anomalous_samples = sum(bool(row.get("active_anomalies")) for row in rows)
     terminal_sample_count = sum(terminal_counts.values())
     return {
+        "protocol_groups": [
+            {"protocol_metadata": protocols[key], "protocol_relation": relations[key],
+             "sample_count": protocol_counts[key]}
+            for key in sorted(protocol_counts)
+        ],
+        "mixed_protocols": len(protocol_counts) > 1,
         "sample_count": len(rows),
         "group_count": group_count,
         "anomalous_sample_count": anomalous_samples,

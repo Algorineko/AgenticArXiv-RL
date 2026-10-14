@@ -1,7 +1,6 @@
 # AgenticArxiv/config.py
 from dataclasses import dataclass
 import os
-from typing import Optional
 
 try:
     from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
@@ -58,23 +57,6 @@ class Settings:
     pdf2zh_bin: str = os.getenv("PDF2ZH_BIN", "pdf2zh")
     pdf2zh_service: str = os.getenv("PDF2ZH_SERVICE", "bing")
     pdf2zh_threads: int = int(os.getenv("PDF2ZH_THREADS", "4"))
-
-    # --- MySQL ---
-    # MySQL 属已归档 Web 栈的可选配置：未设置 MYSQL_URI 时保持为空，
-    # 取值方（models/db.py）在使用时会收到 mysql_uri 的明确报错；
-    # RL 训练路径不依赖 MySQL，不受影响。
-    _mysql_uri: Optional[str] = os.getenv("MYSQL_URI")
-
-    @property
-    def mysql_uri(self) -> Optional[str]:
-        """显式配置的 MySQL 连接串；未配置时报错提示如何设置。"""
-        if not self._mysql_uri:
-            raise RuntimeError(
-                "未配置 MySQL 连接：请设置环境变量 MYSQL_URI"
-                "（例：mysql+pymysql://user:pass@127.0.0.1:3306/agentic_arxiv）。"
-                "RL 训练路径不依赖 MySQL，可不配置。"
-            )
-        return self._mysql_uri
 
 
 settings = Settings()

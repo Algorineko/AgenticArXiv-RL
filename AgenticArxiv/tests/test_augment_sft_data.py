@@ -21,6 +21,7 @@ from augment_sft_data import (  # noqa: E402
 from benchmark.metrics import classify_blocked_terminal_semantics  # noqa: E402
 from benchmark.task_spec import reference_terminal_thought  # noqa: E402
 from benchmark.tasks_expanded import get_expanded_tasks  # noqa: E402
+from agents.react_contract import protocol_metadata  # noqa: E402
 
 
 def _prompt(task="训练任务", history="历史保持不变"):
@@ -47,6 +48,7 @@ class ActionInvariantTest(unittest.TestCase):
     def test_action_text_is_byte_for_byte_unchanged(self):
         action = ' {"name":"download_arxiv_pdf","args":{"ref":1}}'
         parent = {
+            "protocol_metadata": protocol_metadata(),
             "source_task_id": "train_1",
             "source_split": "v2_62.json:train",
             "trajectory_step": 0,
@@ -82,6 +84,7 @@ class ActionInvariantTest(unittest.TestCase):
             if task["id"] == "infeasible_no_session"
         )
         parent = {
+            "protocol_metadata": protocol_metadata(),
             "source_task_id": task["id"],
             "source_split": "v2_62.json:train",
             "trajectory_step": 0,
@@ -107,6 +110,7 @@ class ActionInvariantTest(unittest.TestCase):
             if task["id"] == "infeasible_no_session"
         )
         parent = {
+            "protocol_metadata": protocol_metadata(),
             "source_task_id": task["id"],
             "messages": [
                 {"role": "user", "content": _prompt(task["task"])},
@@ -122,6 +126,7 @@ class ActionInvariantTest(unittest.TestCase):
 class LeakageGuardTest(unittest.TestCase):
     def test_heldout_source_id_is_rejected(self):
         row = {
+            "protocol_metadata": protocol_metadata(),
             "source_task_id": "heldout",
             "source_split": "v2_62.json:train",
             "messages": [
@@ -146,6 +151,7 @@ class WrapperSetTest(unittest.TestCase):
     @staticmethod
     def _parent():
         return {
+            "protocol_metadata": protocol_metadata(),
             "source_task_id": "search_AI_1d_3",
             "messages": [
                 {"role": "user", "content": _prompt("查最近一天 AI 论文")},

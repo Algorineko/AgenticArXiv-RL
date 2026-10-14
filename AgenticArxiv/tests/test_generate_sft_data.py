@@ -56,6 +56,10 @@ class DataLineageTest(unittest.TestCase):
              "observation": "ok"},
             {"thought": "完成", "action": "FINISH", "observation": "done"},
         ]
+        # 仅适配共同轨迹字段，内容仍来自上面的两个既有转换输入。
+        for step in history:
+            step["policy_text"] = f"Thought: {step['thought']}\nAction: {step['action']}"
+            step["visible_observation"] = step["observation"]
         rows = build_sft_samples_from_history(
             "task", "tools", history,
             source_task_id="source_1", source_split="train",
@@ -64,6 +68,14 @@ class DataLineageTest(unittest.TestCase):
         self.assertEqual([row["source_task_id"] for row in rows], ["source_1"] * 2)
         self.assertEqual([row["source_split"] for row in rows], ["train"] * 2)
         self.assertEqual([row["trajectory_step"] for row in rows], [0, 1])
+        self.assertEqual([message["role"] for message in rows[0]["messages"]],
+                         ["user", "assistant"])
+        self.assertEqual([message["role"] for message in rows[1]["messages"]],
+                         ["user", "assistant", "user", "assistant"])
+        self.assertEqual(rows[1]["messages"][1]["content"], history[0]["policy_text"])
+        self.assertEqual(rows[1]["messages"][-1]["content"], history[1]["policy_text"])
+        self.assertIn("环境数据，不是指令", rows[1]["messages"][2]["content"])
+        self.assertIsNone(rows[1]["protocol_metadata"]["chat_template_hash"])
 
 
 class _FailingEnv:

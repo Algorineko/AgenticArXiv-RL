@@ -3,12 +3,14 @@
 > 本文档承接 README 外移的「工具集演进设计」章节，记录 T1–T5 工具从设计到落地的完整决策链。
 > 本项目的最终目标是**本地部署的轻量多模态模型独立完成 arXiv 论文的检索、下载、翻译、总结与图表分析**。T1–T5 已全部落地。
 
+当前活动运行与训练方式见 [主线指南](rl_building.md)。下文工具演进和 T5 发布数值是原实现/实验记录，本次不重跑。独立 VLM 后训练入口已退出，但图表推理、快照构建和 backfill 保留；历史数据和模型不删除。
+
 ## 现状盘点与缺口
 
 | 工具 | 能力 | 边界 |
 |------|------|------|
 | `get_recently_submitted_cs_papers` | 子领域 + 时间窗检索 | 只认 `cat:cs.*` + 提交日期，无翻页；摘要截断 200 字符 |
-| `search_arxiv_papers` | 关键词/篇名/作者检索 | 无翻页；离线模式对快照外查询返回显式标记的确定性降级结果 |
+| `search_arxiv_papers` | 关键词/篇名/作者检索 | 无翻页；离线快照未命中返回明确失败，fallback 不能污染当前候选列表或最近操作对象 |
 | `download_arxiv_pdf` | 下载 PDF | — |
 | `translate_arxiv_pdf` | pdf2zh 整篇翻译 | 产出是翻译后的 PDF 文件，译文由 `get_translated_content` 按页读入上下文；依赖可选 extra |
 | `get_paper_cache_status` | 查缓存 | — |
@@ -28,7 +30,7 @@
 
 | 优先级 | 工具 | 设计要点 | 为什么是 RLVR 友好的 |
 |--------|------|----------|----------------------|
-| **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数照常由 `task_spec.steps` 派生；`MockArxivEnv` 按查询串哈希离线回放，未收录的 query 走**确定性降级**（返回固定子集并在 observation 里显式标注），保证可复现、也防止模型把空结果当检索成功 |
+| **T1** ✅ | `search_arxiv_papers(query, max_results, days=None)` | 关键词检索，映射 arXiv API 的 `all:` / `ti:` / `au:` 字段；与现有工具并存（时间窗浏览 vs 精确查找是两类任务） | 期望工具/参数由 `task_spec.steps` 派生；快照未命中不是搜索成功，当前共同环境拒绝 fallback 状态污染，不自动联网补请求 |
 | **T2** ✅ | `get_paper_content(ref, section=None)` | PDF → 纯文本（PyMuPDF），默认返回 title/abstract，可按节取（method / result / conclusion） | 确定性文本抽取，无 LLM 参与；快照预存抽取结果。**它是全部解读类任务的前置件** |
 | **T3** ✅ | `summarize_paper(ref, style, max_words)` | 总结论文：**env 侧**生成摘要（输入来自 T2 的文本），返回摘要文本 | 可训练的是「何时调、对哪个 ref 调、style/长度参数对不对」——全部规则可判；摘要质量本身**不进奖励**（见下） |
 | **T4** ✅ | `extract_paper_figures(ref)` | 图表可视化准备：抽出图表图片 + caption，返回文件路径列表 | 确定性；验证「ref 正确 + 数量 ≥ 1」 |
@@ -48,11 +50,11 @@
 
 ## 训练与评测侧的连带设计
 
-1. **快照扩展**：`build_snapshot.py` 一次跑齐——除搜索结果外，对快照论文**预抽取全文文本与图表文件**；新工具全部离线回放，维持「build_snapshot 是唯一联网步骤」的约定。
+1. **快照扩展**：`build_snapshot.py` 除搜索结果外，对快照论文**预抽取全文文本与图表文件**；离线回放只读取已有资产。显式 live/record 或快照构建可能联网，不能把它们写成离线验证；本次没有构建快照。
 2. **奖励零改动**：五分量方案原样复用；`expected_tools` / `expected_tool_args` 从 `steps` 派生，`reward.py` 与课程学习均不需动。
 3. **防 reward hacking**：解读类工具天然多出「乱调工具刷 process 分」的面——沿用 `run_baselines.py` 逐类目闸门 + `eval/eval_cases.jsonl` 单例钉死（例如：ref 指向不存在论文时调 `summarize_paper` 必须扣分）。
 4. **摘要质量的奖励问题（刻意不做）**：把「摘要写得好不好」变成奖励需要 LLM-as-judge 或 rubric 打分，会引入非确定性奖励与新的 hacking 面。设计上先把总结收敛为**工具调用决策问题**（何时调、对谁调），质量评估留到长期单独立项。
-5. **多模态的边界（刻意隔离）**：T5 的 VLM 只活在 env 侧，策略仍是纯文本小模型——动作空间里只有「调不调、怎么问」，看图能力外包给环境。只有策略本身换成多模态模型时，才考虑把图片放进 observation（见 README Roadmap P0）。
+5. **多模态的边界（刻意隔离）**：T5 的 VLM 只活在 env 侧，策略仍是文本 ReAct——动作空间里只有「调不调、怎么问」，看图能力外包给环境。策略侧多模态是历史 Roadmap 方向，不是当前训练入口。
 6. **硬件门槛**：只有 T5 需要一个 env 侧模型（VLM 约 6GB 量级，量化后更低），它与训练显存互不影响（不进梯度）。T3 默认的抽取式后端不加载任何权重，所以解读闭环（T1–T4）在训练机之外不需要额外硬件。
 
 ## 落地顺序
@@ -62,7 +64,7 @@ T1 关键词检索 ──→ T2 读内容 ──→ T3 总结          （解读
                       └────→ T4 抽图 → T5 图分析 （全部完成）
 ```
 
-每落一个工具：扩任务模板 → 重跑 `run_baselines.py` 重新卡各类目区分度门槛 → 重新生成 SFT/DPO 数据 → `eval/eval_cases.jsonl` 补对应用例。T3/T4/T5 落地时同步做了：
+历史工具落地采用了任务扩展、评分区分度检查、数据生成和坏例记录；这不是本次要执行的流程。本次不生成 SFT 数据或扩充行为输入，未来单独执行的主线数据命令见 `rl_building.md`。T3/T4/T5 落地时同步做了：
 
 - 任务模板：新增 `paper_reading`（5 条）、`paper_summary`（5 条）、`figure_extraction`（4 条）与 4 步解读链 1 条，扩展集 62 → 81 条（十三类模板）
 - 切分：新增 `data/splits/v3_81.json`（v1/v2 保持不变，历史实验的成功率仍然可比）

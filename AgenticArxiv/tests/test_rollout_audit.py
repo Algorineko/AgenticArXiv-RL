@@ -164,7 +164,13 @@ class RolloutSetupTest(unittest.TestCase):
 
         class Tokenizer:
             def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
-                return [1, 2]
+                ids = [1, 2]
+                for message in prompt[1:]:
+                    if message["role"] == "assistant":
+                        ids.append(101 if "download_arxiv_pdf" in message["content"] else 102)
+                    else:
+                        ids.extend(self(message["content"])["input_ids"])
+                return ids
 
             def __call__(self, text, add_special_tokens=False):
                 return {"input_ids": [200 + i for i, _ in enumerate(text)]}

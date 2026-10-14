@@ -17,6 +17,7 @@ from utils.pdf_downloader import (
 )
 from utils.pdf_translator import run_pdf2zh_translate
 from config import settings
+from utils.artifact_paths import artifact_path, safe_artifact_name
 
 
 def _fallback_pdf_url(paper_id: str) -> str:
@@ -32,7 +33,9 @@ def _ensure_pdf_downloaded_by_id(
     不依赖 session 短期记忆：只靠 paper_id/pdf_url 确保 raw pdf 存在，并同步更新 pdf_cache.json
     """
     url = normalize_arxiv_pdf_url(pdf_url or _fallback_pdf_url(paper_id))
-    local_path = os.path.join(settings.pdf_raw_path, safe_filename(paper_id) + ".pdf")
+    raw_root = artifact_path("pdf_raw_path")
+    os.makedirs(raw_root, exist_ok=True)
+    local_path = os.path.join(raw_root, safe_filename(paper_id) + ".pdf")
 
     existed = os.path.exists(local_path) and os.path.getsize(local_path) > 0
     asset = store.get_pdf_asset(paper_id)
@@ -46,6 +49,7 @@ def _ensure_pdf_downloaded_by_id(
                 status="READY",
                 size_bytes=os.path.getsize(local_path),
                 downloaded_at=datetime.now(),
+                source="live",
             )
             store.upsert_pdf_asset(asset)
         elif asset.status != "READY":
@@ -57,6 +61,7 @@ def _ensure_pdf_downloaded_by_id(
                 size_bytes=os.path.getsize(local_path),
                 downloaded_at=asset.downloaded_at or datetime.now(),
                 error=None,
+                source="live",
             )
         return local_path
 
@@ -94,6 +99,7 @@ def _ensure_pdf_downloaded_by_id(
             sha256=sha256_hex,
             downloaded_at=datetime.now(),
             error=None,
+            source="live",
         )
         return local_path
     except Exception as e:
@@ -110,11 +116,11 @@ def translate_arxiv_pdf(
     service: str = None,
     threads: int = None,
     keep_dual: bool = False,
-    # 依赖 session 的参数（用于 TranslateTask 执行）
+    # 可显式提供输入，不依赖 session 的短期候选。
     paper_id: Optional[str] = None,
     pdf_url: Optional[str] = None,
     input_pdf_path: Optional[str] = None,
-    #  内部进度回调（异步任务用；HTTP 同步接口不传也不影响）
+    # 内部进度回调，不属于模型业务参数。
     progress_cb: Optional[Callable[[float, Optional[Dict[str, Any]]], None]] = None,
 ) -> Dict[str, Any]:
     """
@@ -179,16 +185,19 @@ def translate_arxiv_pdf(
     store.set_last_active_paper_id(session_id, paper_id)
 
     # 2) 输出路径
-    os.makedirs(settings.pdf_translated_path, exist_ok=True)
-    mono_path = os.path.join(settings.pdf_translated_path, f"{paper_id}-mono.pdf")
-    dual_path = os.path.join(settings.pdf_translated_path, f"{paper_id}-dual.pdf")
-    os.makedirs(settings.pdf_translated_log_path, exist_ok=True)
-    log_path = os.path.join(settings.pdf_translated_log_path, f"{paper_id}.pdf2zh.log")
+    translated_root = artifact_path("pdf_translated_path")
+    log_root = artifact_path("pdf_translated_log_path")
+    os.makedirs(translated_root, exist_ok=True)
+    safe_id = safe_artifact_name(paper_id)
+    mono_path = os.path.join(translated_root, f"{safe_id}-mono.pdf")
+    dual_path = os.path.join(translated_root, f"{safe_id}-dual.pdf")
+    os.makedirs(log_root, exist_ok=True)
+    log_path = os.path.join(log_root, f"{safe_id}.pdf2zh.log")
 
     existed = os.path.exists(mono_path) and os.path.getsize(mono_path) > 0
     asset = store.get_translate_asset(paper_id)
 
-    # 3) 若已存在且不强制，直接返回（异步任务跳过：runner 已有 fast-path）
+    # 3) 若已存在且不强制，同步返回已完成的真实缓存。
     if existed and not force and not progress_cb:
         if asset is None:
             asset = TranslateAsset(
@@ -201,6 +210,7 @@ def translate_arxiv_pdf(
                 threads=threads,
                 translated_at=datetime.now(),
                 error=None,
+                source="live",
             )
             store.upsert_translate_asset(asset)
         elif asset.status != "READY":
@@ -214,6 +224,7 @@ def translate_arxiv_pdf(
                 threads=threads,
                 translated_at=asset.translated_at or datetime.now(),
                 error=None,
+                source="live",
             )
         _emit(1.0, {"stage": "done", "msg": "cache hit"})
         return {
@@ -264,7 +275,7 @@ def translate_arxiv_pdf(
         res = run_pdf2zh_translate(
             pdf2zh_bin=settings.pdf2zh_bin,
             input_pdf=in_path,
-            out_dir=settings.pdf_translated_path,
+            out_dir=translated_root,
             service=service,
             threads=threads,
             keep_dual=keep_dual,
@@ -296,6 +307,7 @@ def translate_arxiv_pdf(
             output_dual_path=kept_dual,
             translated_at=datetime.now(),
             error=None,
+            source="live",
         )
 
         return {

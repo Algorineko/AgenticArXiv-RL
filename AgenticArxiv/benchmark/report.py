@@ -1,28 +1,36 @@
 # AgenticArxiv/benchmark/report.py
-"""Benchmark 报告生成：Markdown 对比表格 + CSV + JSON"""
+"""Benchmark 评测报告：Markdown + CSV + JSON。"""
 
 import csv
 import json
 import os
 import math
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from benchmark.metrics import (
-    JEV_INPUT_PRICE_PER_MILLION_USD,
     TaskMetrics,
     is_strict_success,
 )
+from rl.run_manifest import evaluation_protocol_relation, read_protocol_metadata
 
 
 class BenchmarkReport:
-    """从 TaskMetrics 列表生成多种格式的对比报告"""
+    """从 TaskMetrics 生成报告，历史 Agent 标签只用作读取分组。"""
 
     def __init__(self, metrics: List[TaskMetrics], model: str = "unknown",
-                 errors: Optional[List[Dict[str, Any]]] = None):
+                 errors: Optional[List[Dict[str, Any]]] = None, *,
+                 protocol_metadata: Optional[Dict[str, Any]] = None,
+                 training_metadata: Optional[Dict[str, Any]] = None):
         self.metrics = metrics
         self.model = model
         self.errors = errors or []
+        self.protocol_metadata = read_protocol_metadata(protocol_metadata)
+        self.training_protocol_metadata = read_protocol_metadata(training_metadata)
+        self.protocol_relation = evaluation_protocol_relation(
+            self.training_protocol_metadata, self.protocol_metadata
+        )
 
     # ---- 聚合统计 ----
 
@@ -35,15 +43,16 @@ class BenchmarkReport:
         summary = {}
         for agent_type, items in grouped.items():
             n = len(items)
+            usage = _token_usage_summary(items)
             summary[agent_type] = {
                 "count": n,
                 "avg_total_ms": _avg(items, "total_time_ms"),
                 "avg_llm_ms": _avg(items, "total_llm_ms"),
                 "avg_tool_ms": _avg(items, "total_tool_ms"),
-                "avg_router_ms": _avg(items, "total_router_ms"),
                 "avg_overhead_ms": _avg(items, "framework_overhead_ms"),
                 "avg_iterations": _avg(items, "iteration_count"),
                 "avg_tokens": _avg(items, "total_tokens"),
+                "token_usage_coverage": usage,
                 "completion_rate": _rate(items, "task_completed"),
                 "strict_success_rate": sum(is_strict_success(m) for m in items) / n,
                 "tool_accuracy": _rate(items, "tool_call_accurate"),
@@ -64,7 +73,6 @@ class BenchmarkReport:
                 ),
                 "avg_parse_failures": _avg(items, "parse_failures"),
                 "avg_tool_failures": _avg(items, "tool_exec_failures"),
-                **_router_summary(items),
             }
         return summary
 
@@ -126,7 +134,15 @@ class BenchmarkReport:
             wins = [m for m in items if is_success(m)]
             losses = [m for m in items if not is_success(m)]
             n_win = len(wins)
-            total_tokens = sum(m.total_tokens for m in items)
+            usage = _token_usage_summary(items)
+            known_total = usage["total_tokens"]["known_sum"]
+            total_tokens = known_total if not usage["total_tokens"]["unknown_runs"] else None
+            known_lower_bound = sum(
+                m.total_tokens if _known_token_count(m.total_tokens) else sum(
+                    value for value in (m.prompt_tokens, m.completion_tokens)
+                    if _known_token_count(value)
+                ) for m in items
+            )
             total_calls = sum(len(m.tool_call_sequence) for m in items)
             total_ms = sum(m.total_time_ms for m in items)
             summary[agent_type] = {
@@ -134,7 +150,11 @@ class BenchmarkReport:
                 "successes": n_win,
                 # 一次成功也没有时，「每次成功的代价」无从谈起 —— 返回 None
                 # 而不是 0 或无穷大，两者都会在排序里给出错误结论。
-                "tokens_per_success": total_tokens / n_win if n_win else None,
+                "tokens_per_success": total_tokens / n_win if n_win and total_tokens is not None else None,
+                "total_tokens": total_tokens,
+                "known_total_tokens": known_total,
+                "known_token_lower_bound": known_lower_bound,
+                "token_usage_coverage": usage,
                 "calls_per_success": total_calls / n_win if n_win else None,
                 "ms_per_success": total_ms / n_win if n_win else None,
                 "median_iterations_success": _median([m.iteration_count for m in wins]),
@@ -193,25 +213,9 @@ class BenchmarkReport:
                 "total_ms": m.total_time_ms,
                 "llm_ms": m.total_llm_ms,
                 "tool_ms": m.total_tool_ms,
-                "router_ms": m.total_router_ms,
                 "overhead_ms": m.framework_overhead_ms,
                 "iterations": m.iteration_count,
                 "tokens": m.total_tokens,
-                "router_mode": m.router_mode,
-                "router_decisions": m.router_decision_count,
-                "router_accepted": m.router_accepted_count,
-                "router_used": m.router_used_count,
-                "router_fallbacks": m.router_fallback_count,
-                "router_first_selected": m.router_first_selected_tool,
-                "router_first_accurate": m.router_first_accurate,
-                "router_first_applicable": m.router_first_applicable,
-                "router_mean_confidence": m.router_mean_confidence,
-                "router_input_tokens": m.router_input_tokens,
-                "router_output_tokens": m.router_output_tokens,
-                "router_estimated_cost_usd": m.router_estimated_cost_usd,
-                "router_fallback_reasons": json.dumps(
-                    m.router_fallback_reasons, ensure_ascii=False, sort_keys=True
-                ),
                 "completed": m.task_completed,
                 "termination": m.termination_type,
                 "tool_accurate": m.tool_call_accurate,
@@ -234,19 +238,24 @@ class BenchmarkReport:
     # ---- 输出格式 ----
 
     def comparison_table_md(self) -> str:
-        """生成 Markdown 格式的对比表格"""
+        """生成评测表格；保留方法名供已有调用方读取历史结果。"""
         summary = self.summary_by_agent()
         agents = sorted(summary.keys())
         if not agents:
             return "无数据"
 
         lines = []
-        lines.append(f"## Benchmark 对比报告")
+        lines.append(f"## Benchmark 评测报告")
         lines.append(f"模型: {self.model} | 样本数: {len(self.metrics)} | 异常: {len(self.errors)}")
+        lines.append(
+            f"训练协议: {self.training_protocol_metadata['training_protocol'] or '未知'} | "
+            f"评测协议: {self.protocol_metadata['context_version'] or '未知'} | "
+            f"协议关系: {self.protocol_relation['relation']}"
+        )
         lines.append("")
 
         # 性能对比表
-        lines.append("### 性能对比（平均值）")
+        lines.append("### 性能（平均值）")
         lines.append("")
         header = "| 指标 | " + " | ".join(agents) + " |"
         sep = "|---|" + "|".join(["---"] * len(agents)) + "|"
@@ -257,7 +266,6 @@ class BenchmarkReport:
             ("总耗时(ms)", "avg_total_ms"),
             ("LLM 时间(ms)", "avg_llm_ms"),
             ("工具时间(ms)", "avg_tool_ms"),
-            ("路由时间(ms)", "avg_router_ms"),
             ("框架开销(ms)", "avg_overhead_ms"),
             ("迭代次数", "avg_iterations"),
             ("Token 用量", "avg_tokens"),
@@ -267,50 +275,6 @@ class BenchmarkReport:
             lines.append(f"| {label} | " + " | ".join(vals) + " |")
 
         lines.append("")
-
-        if any(summary[a].get("router_decisions", 0) for a in agents):
-            lines.append("### 外部工具路由")
-            lines.append("")
-            lines.append(header)
-            lines.append(sep)
-            router_rows = [
-                ("路由请求数", "router_decisions", "count"),
-                ("接受率", "router_acceptance_rate", "rate"),
-                ("实际采用率", "router_use_rate", "rate"),
-                ("回退率", "router_fallback_rate", "rate"),
-                ("首步路由准确率", "router_first_accuracy", "rate"),
-                ("平均 confidence", "router_mean_confidence", "number"),
-                ("平均每次路由耗时(ms)", "router_ms_per_decision", "number"),
-                ("路由输入 token", "router_input_tokens", "count"),
-                ("路由输出 token", "router_output_tokens", "count"),
-                ("估算路由费用(USD)", "router_estimated_cost_usd", "usd"),
-                ("回退原因", "router_fallback_reasons", "text"),
-            ]
-            for label, key, kind in router_rows:
-                values = []
-                for agent in agents:
-                    value = summary[agent].get(key)
-                    if value is None:
-                        values.append("n/a")
-                    elif kind == "rate":
-                        values.append(f"{value:.1%}")
-                    elif kind == "usd":
-                        values.append(f"${value:.6f}")
-                    elif kind == "text":
-                        values.append(
-                            ", ".join(f"{k}={v}" for k, v in value.items())
-                            if value else "none"
-                        )
-                    else:
-                        values.append(_fmt(value))
-                lines.append(f"| {label} | " + " | ".join(values) + " |")
-            lines.append("")
-            lines.append(
-                "> 路由费用按固定实验单价估算："
-                f"${JEV_INPUT_PRICE_PER_MILLION_USD}/百万输入 token；"
-                "原始 token 数保留在 JSON/CSV 中，可按实际账单重算。"
-            )
-            lines.append("")
 
         # 可靠性对比表
         rel = self.reliability_by_agent()
@@ -336,7 +300,7 @@ class BenchmarkReport:
             lines.append("")
 
         # 准确性对比表
-        lines.append("### 准确性对比")
+        lines.append("### 准确性")
         lines.append("")
         lines.append(header)
         lines.append(sep)
@@ -375,6 +339,7 @@ class BenchmarkReport:
             lines.append(sep)
             cost_rows = [
                 ("Token / 成功", "tokens_per_success"),
+                ("已知 Token 下界（非完整用量）", "known_token_lower_bound"),
                 ("工具调用 / 成功", "calls_per_success"),
                 ("耗时(ms) / 成功", "ms_per_success"),
                 ("迭代数中位·成功", "median_iterations_success"),
@@ -386,6 +351,14 @@ class BenchmarkReport:
                     v = cost.get(a, {}).get(key)
                     vals.append("n/a" if v is None else _fmt(v))
                 lines.append(f"| {label} | " + " | ".join(vals) + " |")
+            coverage = [
+                f"{cost[a]['token_usage_coverage']['total_tokens']['known_runs']}/{cost[a]['runs']}"
+                for a in agents
+            ]
+            lines.append("| 完整 Token 用量覆盖 | " + " | ".join(coverage) + " |")
+            if any(cost[a]["token_usage_coverage"]["total_tokens"]["unknown_runs"] for a in agents):
+                lines.append("")
+                lines.append("> 部分请求缺少 usage，Token / 成功为 n/a；已知下界不代表完整费用或免费运行。")
             lines.append("")
             lines.append("失败形态：")
             lines.append("")
@@ -407,7 +380,7 @@ class BenchmarkReport:
         # 按任务对比
         task_summary = self.summary_by_task()
         if task_summary:
-            lines.append("### 按任务对比")
+            lines.append("### 按任务汇总")
             lines.append("")
             lines.append("| 任务 | 样本 | 平均耗时(ms) | 正常结束率 | 严格成功率 | 工具准确率 |")
             lines.append("|---|---|---|---|---|---|")
@@ -425,7 +398,7 @@ class BenchmarkReport:
         total = sum(len(v) for v in bands.values())
         if not total:
             return ""
-        lines = ["### 任务难度分档（跨 Agent 合并成功率）", ""]
+        lines = ["### 任务难度分档（合并成功率）", ""]
         lines.append("| 档位 | 成功率 | 任务数 | 用途 |")
         lines.append("|---|---|---|---|")
         lines.append(f"| floor | < 20% | {len(bands['floor'])} | 评测下限；GRPO 无梯度 |")
@@ -448,14 +421,14 @@ class BenchmarkReport:
         """导出 JSON 格式（汇总 + 明细）"""
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         data = {
+            "protocol_metadata": self.protocol_metadata,
+            "training_protocol_metadata": self.training_protocol_metadata,
+            "protocol_relation": self.protocol_relation,
             "model": self.model,
             "sample_count": len(self.metrics),
             "error_count": len(self.errors),
-            "routing_cost_assumption": {
-                "input_usd_per_million": JEV_INPUT_PRICE_PER_MILLION_USD,
-                "note": "Pinned experiment estimate; reprice from raw router tokens.",
-            },
             "summary_by_agent": self.summary_by_agent(),
+            "cost_by_agent": self.cost_by_agent(),
             "summary_by_task": self.summary_by_task(),
             "details": self.detail_table(),
             "errors": list(self.errors),
@@ -500,6 +473,21 @@ class BenchmarkReport:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(self.errors)
+
+
+def read_report(path: str | Path) -> Dict[str, Any]:
+    """只读历史 JSON 报告；缺失协议保持未知，不重新评分或改写原件。"""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"评测报告必须为 JSON 对象: {path}")
+    protocol = read_protocol_metadata(data)
+    training = read_protocol_metadata(data.get("training_protocol_metadata"))
+    return {
+        **data,
+        "protocol_metadata": protocol,
+        "training_protocol_metadata": training,
+        "protocol_relation": evaluation_protocol_relation(training, protocol),
+    }
 
 
 # ---- 工具函数 ----
@@ -548,53 +536,33 @@ def _median(values: List[float]) -> Optional[float]:
     return (ordered[mid - 1] + ordered[mid]) / 2
 
 
-def _router_summary(items: List[TaskMetrics]) -> Dict[str, Any]:
-    """Aggregate router observability without hiding fallbacks in averages."""
-    decisions = sum(m.router_decision_count for m in items)
-    accepted = sum(m.router_accepted_count for m in items)
-    used = sum(m.router_used_count for m in items)
-    first_rows = [m for m in items if m.router_first_applicable]
-    confidence_count = sum(m.router_confidence_count for m in items)
-    fallback_reasons: Dict[str, int] = defaultdict(int)
-    for metric in items:
-        for reason, count in metric.router_fallback_reasons.items():
-            fallback_reasons[str(reason)] += int(count)
-    return {
-        "router_modes": sorted({m.router_mode for m in items}),
-        "router_decisions": decisions,
-        "router_accepted": accepted,
-        "router_used": used,
-        "router_fallbacks": decisions - used,
-        "router_acceptance_rate": accepted / decisions if decisions else None,
-        "router_use_rate": used / decisions if decisions else None,
-        "router_fallback_rate": (decisions - used) / decisions if decisions else None,
-        "router_first_accuracy": (
-            sum(m.router_first_accurate for m in first_rows) / len(first_rows)
-            if first_rows else None
-        ),
-        "router_mean_confidence": (
-            sum(
-                m.router_mean_confidence * m.router_confidence_count
-                for m in items
-            ) / confidence_count
-            if confidence_count else None
-        ),
-        "router_ms_per_decision": (
-            sum(m.total_router_ms for m in items) / decisions if decisions else None
-        ),
-        "router_input_tokens": sum(m.router_input_tokens for m in items),
-        "router_output_tokens": sum(m.router_output_tokens for m in items),
-        "router_estimated_cost_usd": sum(
-            m.router_estimated_cost_usd for m in items
-        ),
-        "router_fallback_reasons": dict(sorted(fallback_reasons.items())),
-    }
+def _known_token_count(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value >= 0)
 
 
-def _avg(items: List[TaskMetrics], attr: str) -> float:
+def _token_usage_summary(items: List[TaskMetrics]) -> Dict[str, Any]:
+    """逐字段记录覆盖，已知零与未知 None 不混淆。"""
+    summary = {}
+    for field in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        values = [getattr(item, field) for item in items]
+        known = [value for value in values if _known_token_count(value)]
+        summary[field] = {
+            "known_runs": len(known), "unknown_runs": len(items) - len(known),
+            "coverage": len(known) / len(items) if items else None,
+            "known_sum": sum(known),
+        }
+    return summary
+
+
+def _avg(items: List[TaskMetrics], attr: str) -> Optional[float]:
     if not items:
         return 0.0
-    vals = [getattr(m, attr, 0) or 0 for m in items]
+    vals = [getattr(m, attr, 0) for m in items]
+    if any(value is None for value in vals):
+        return None
+    if attr == "total_tokens" and any(not _known_token_count(value) for value in vals):
+        return None
     return round(sum(vals) / len(vals), 1)
 
 
@@ -620,6 +588,8 @@ def _rate(items: List[TaskMetrics], attr: str) -> float:
 
 
 def _fmt(v) -> str:
+    if v is None:
+        return "n/a"
     if isinstance(v, float):
         if v == int(v):
             return str(int(v))

@@ -31,6 +31,7 @@ from rl.canary import (  # noqa: E402
     CanaryResult,
 )
 from rl.reward import RewardCalculator  # noqa: E402
+from rl.env import MockArxivEnv  # noqa: E402
 
 # 正确的 tool call（search_01 的 gold action）
 CORRECT_COMPLETION = (
@@ -72,8 +73,11 @@ class _FakeTokenizer:
         n = ids.shape[0] if hasattr(ids, 'shape') else len(ids)
         return [self._completion] * n
 
+    def decode(self, ids, skip_special_tokens=True):
+        return self.batch_decode(ids.unsqueeze(0), skip_special_tokens=skip_special_tokens)[0]
+
     @staticmethod
-    def apply_chat_template(messages, tokenize=False):
+    def apply_chat_template(messages, tokenize=False, add_generation_prompt=False):
         return "mock prompt"
 
 
@@ -112,12 +116,16 @@ class _FakeModel:
         self._training = False
         return self
 
-    def train(self):
-        self._training = True
+    def train(self, mode=True):
+        self._training = mode
         return self
 
     def parameters(self):
-        return [torch.nn.Parameter(torch.zeros(1))]
+        return iter([torch.nn.Parameter(torch.zeros(1))])
+
+    @property
+    def training(self):
+        return self._training
 
 
 class CanaryResultTest(unittest.TestCase):
@@ -134,12 +142,14 @@ class CanaryEvaluatorTest(unittest.TestCase):
     def setUp(self):
         self.model = _FakeModel()
         self.tokenizer = _FakeTokenizer()
+        # 复用原模型输出；空离线后端只产生明确未命中，不补造快照结果。
+        self.env = MockArxivEnv(mode="replay")
         self.evaluator = CanaryEvaluator(
             model=self.model,
             tokenizer=self.tokenizer,
             canary_task_ids=DEFAULT_CANARY_TASK_IDS,
             reward_calc=RewardCalculator(),
-            env=None,
+            env=self.env,
             num_generations=2,
         )
 
@@ -153,6 +163,11 @@ class CanaryEvaluatorTest(unittest.TestCase):
         # 两个 canary 任务都应该有结果
         for tid in DEFAULT_CANARY_TASK_IDS:
             self.assertIn(tid, result.per_task_rewards)
+        self.assertEqual(result.episode_count, 4)
+        self.assertEqual(result.task_ids, DEFAULT_CANARY_TASK_IDS)
+        self.assertEqual(result.max_iterations, 6)
+        self.assertEqual(result.task_completion_rate, 0.0)
+        self.assertEqual(result.termination_counts, {"MAX_TURNS": 4})
 
     def test_invalid_task_id_raises(self):
         with self.assertRaises(ValueError):
@@ -174,13 +189,18 @@ class CanaryEvaluatorTest(unittest.TestCase):
             tokenizer=self.tokenizer,
             canary_task_ids=DEFAULT_CANARY_TASK_IDS,
             reward_calc=reward_calc,
-            env=None,
+            env=self.env,
             num_generations=2,
         )
         evaluator.evaluate(step=37)
         self.assertTrue(reward_calc.compute_reward_breakdown.called)
         for call in reward_calc.compute_reward_breakdown.call_args_list:
             self.assertEqual(call.kwargs["training_step"], 37)
+            result = call.args[1]
+            self.assertEqual(result["termination_reason"], "MAX_TURNS")
+            self.assertEqual(sum(not s.get("framework_generated", False)
+                                 for s in result["history"]), 6)
+            self.assertNotIn("FINISH", [s["action"] for s in result["history"]])
 
     def test_prompt_is_rendered_through_chat_template_when_available(self):
         tokenizer = _RecordingTokenizer()
@@ -189,7 +209,7 @@ class CanaryEvaluatorTest(unittest.TestCase):
             tokenizer=tokenizer,
             canary_task_ids=["search_01"],
             reward_calc=RewardCalculator(),
-            env=None,
+            env=self.env,
         )
         evaluator.evaluate(step=0)
         self.assertTrue(tokenizer.calls)

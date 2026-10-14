@@ -16,6 +16,8 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
+from rl.run_manifest import canonical_hash, evaluation_protocol_relation, read_protocol_metadata
+
 
 def _jsonable(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -128,6 +130,8 @@ class RolloutAuditWriter:
         num_generations: int,
         allowed_tools: Iterable[str] = (),
         max_samples: int = 0,
+        protocol_metadata: Optional[Mapping[str, Any]] = None,
+        training_metadata: Optional[Mapping[str, Any]] = None,
     ) -> None:
         if num_generations < 1:
             raise ValueError("num_generations must be at least 1")
@@ -139,6 +143,11 @@ class RolloutAuditWriter:
         self.num_generations = int(num_generations)
         self.allowed_tools = set(allowed_tools)
         self.max_samples = int(max_samples)
+        self.protocol_metadata = read_protocol_metadata(protocol_metadata)
+        self.training_protocol_metadata = read_protocol_metadata(training_metadata)
+        self.protocol_counts: Counter[str] = Counter()
+        self.protocols: Dict[str, Dict[str, Any]] = {}
+        self.protocol_relations: Dict[str, Dict[str, Any]] = {}
         self.batch_count = 0
         self.group_count = 0
         self.seen_samples = 0
@@ -197,6 +206,29 @@ class RolloutAuditWriter:
             for offset, sample_index in enumerate(range(start, stop)):
                 completion = completions[sample_index]
                 trajectory = trajectories[sample_index]
+                declared_protocol = read_protocol_metadata(trajectory)
+                if declared_protocol["metadata_status"] == "unknown":
+                    declared_protocol = dict(self.protocol_metadata)
+                else:
+                    for key, value in self.protocol_metadata.items():
+                        if key == "metadata_status" or value is None:
+                            continue
+                        if declared_protocol.get(key) not in (None, value):
+                            raise ValueError(f"rollout audit protocol mismatch: {key}")
+                training_protocol = read_protocol_metadata(trajectory.get("training_protocol_metadata"))
+                if training_protocol["metadata_status"] == "unknown":
+                    training_protocol = dict(self.training_protocol_metadata)
+                else:
+                    for key, value in self.training_protocol_metadata.items():
+                        if key == "metadata_status" or value is None:
+                            continue
+                        if training_protocol.get(key) not in (None, value):
+                            raise ValueError(f"rollout audit model protocol mismatch: {key}")
+                relation = evaluation_protocol_relation(training_protocol, declared_protocol)
+                protocol_key = canonical_hash(relation)
+                self.protocols[protocol_key] = declared_protocol
+                self.protocol_relations[protocol_key] = relation
+                self.protocol_counts[protocol_key] += 1
                 task_id = group_task_ids[offset]
                 anomalies = detect_rollout_anomalies(
                     completion,
@@ -216,6 +248,9 @@ class RolloutAuditWriter:
                     continue
                 records.append({
                     "schema_version": 1,
+                    "protocol_metadata": declared_protocol,
+                    "training_protocol_metadata": training_protocol,
+                    "protocol_relation": relation,
                     "training_step": int(training_step),
                     "batch_index": batch_index,
                     "group_index": group_index,
@@ -255,6 +290,17 @@ class RolloutAuditWriter:
             }
         return {
             "schema_version": 1,
+            "protocol_metadata": dict(self.protocol_metadata),
+            "training_protocol_metadata": dict(self.training_protocol_metadata),
+            "protocol_relation": evaluation_protocol_relation(
+                self.training_protocol_metadata, self.protocol_metadata
+            ),
+            "protocol_groups": [
+                {"protocol_metadata": self.protocols[key],
+                 "protocol_relation": self.protocol_relations[key],
+                 "sample_count": self.protocol_counts[key]}
+                for key in sorted(self.protocol_counts)
+            ],
             "trace_path": str(self.path),
             "num_generations": self.num_generations,
             "batch_count": self.batch_count,

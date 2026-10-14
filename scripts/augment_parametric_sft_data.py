@@ -23,8 +23,11 @@ from augment_sft_data import (  # noqa: E402
     sha256_file,
     split_assistant_action,
     split_prompt_task,
+    validate_data_protocol,
     write_jsonl,
 )
+from agents.react_contract import protocol_metadata, validate_react_messages  # noqa: E402
+from rl.run_manifest import require_training_protocol  # noqa: E402
 
 
 def validate_parametric_rows(
@@ -40,6 +43,8 @@ def validate_parametric_rows(
         raise ValueError("parametric seed 为空")
     if manifest.get("kind") != "train_only_parametric_expert_seed":
         raise ValueError(f"manifest kind 错误: {manifest.get('kind')!r}")
+    require_training_protocol(manifest, protocol_metadata(), source_label="parametric manifest")
+    validate_data_protocol(rows)
     if manifest.get("sample_rows") != len(rows):
         raise ValueError("manifest sample_rows 与实际行数不一致")
     if input_path is not None and manifest.get("output_sha256") != sha256_file(input_path):
@@ -82,6 +87,7 @@ def validate_parametric_rows(
     fingerprints = set()
     steps_seen: Dict[str, set] = {task_id: set() for task_id in task_manifest}
     for index, row in enumerate(rows):
+        require_training_protocol(row, manifest, source_label=f"parametric row {index}")
         task_id = row["source_task_id"]
         task_info = task_manifest[task_id]
         if row.get("derived_task_id") != task_id:
@@ -94,12 +100,11 @@ def validate_parametric_rows(
             raise ValueError(f"row {index} 的 dataset_stage 错误")
 
         messages = row.get("messages")
-        if not isinstance(messages, list) or len(messages) != 2:
-            raise ValueError(f"row {index} 不是两轮 messages")
+        validate_react_messages(messages, require_completion=True)
         _, task_text, _ = split_prompt_task(messages[0].get("content", ""))
         if task_text.strip() != task_info["task"].strip():
             raise ValueError(f"row {index} 的任务正文与 manifest 不一致")
-        split_assistant_action(messages[1].get("content", ""))
+        split_assistant_action(messages[-1].get("content", ""))
 
         fingerprint = row.get("sample_sha256")
         if fingerprint != canonical_hash(messages):
@@ -118,13 +123,13 @@ def validate_parametric_rows(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="语言扩增参数化 SFT 专家 seed")
-    parser.add_argument("--input", default="data/sft/sft_v2_parametric_seed.jsonl")
+    parser.add_argument("--input", default="data/sft/sft_react_messages_v3_parametric_seed.jsonl")
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--split-file", default="data/splits/v3_81.json")
-    parser.add_argument("--output", default="data/sft/sft_v2_parametric_linguistic.jsonl")
+    parser.add_argument("--output", default="data/sft/sft_react_messages_v3_parametric_linguistic.jsonl")
     parser.add_argument(
         "--wrapper-set", choices=sorted(WRAPPER_SETS), default="base",
-        help="措辞框架：base=默认数据集；targeted=自进化闭环定向补数据（与 base 不相交，不与基础混合集撞指纹）",
+        help="措辞框架：base=默认数据集；targeted=定向语言扩增（与 base 不相交）",
     )
     args = parser.parse_args()
 
@@ -142,10 +147,15 @@ def main() -> None:
             raise SystemExit(f"{label} 不存在: {path}")
     if input_path.resolve() == output_path.resolve():
         raise SystemExit("禁止覆盖 parametric seed 原件")
+    out_manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
+    if output_path.exists() or out_manifest_path.exists():
+        raise SystemExit(f"拒绝覆盖已有数据或 manifest: {output_path}")
 
     rows = read_jsonl(input_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     split_payload = json.loads(split_path.read_text(encoding="utf-8"))
+    if manifest.get("split_sha256") != sha256_file(split_path):
+        raise SystemExit("参数化 seed 声明的切分 SHA256 与实际切分不一致")
     validated = validate_parametric_rows(
         rows, split_payload, manifest, split_name=split_path.name,
         input_path=input_path,
@@ -158,6 +168,7 @@ def main() -> None:
     derived_tasks = len({row["source_task_id"] for row in augmented})
     parent_tasks = len({row["parent_task_id"] for row in augmented})
     out_manifest = {
+        "protocol_metadata": validate_data_protocol(augmented),
         "version": 1,
         "kind": "parametric_v1_linguistic",
         "input": str(input_path),
@@ -184,7 +195,6 @@ def main() -> None:
     }
     if manifest.get("include_t5"):
         out_manifest["include_t5"] = True
-    out_manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     out_manifest_path.write_text(
         json.dumps(out_manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

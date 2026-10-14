@@ -18,7 +18,7 @@ def setup_logger():
         encoding="utf-8",
         backtrace=True,  # 记录堆栈跟踪
         diagnose=True,  # 显示变量值
-        mode="w"  # "w"为覆盖写入,"a"为追加写入
+        mode="a"  # 导入入口不得截断用户已有日志
     )
     return logger
 

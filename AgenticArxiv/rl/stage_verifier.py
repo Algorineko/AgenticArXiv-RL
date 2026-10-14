@@ -17,13 +17,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
-from rl.grpo_reward import parse_react_action
-from rl.reward import RewardCalculator
+from agents.react_contract import build_react_messages, protocol_metadata
+from rl.run_manifest import evaluation_protocol_relation, read_protocol_metadata
 
 # 工具导入（触发注册）
 from tools.bootstrap import register_all_tools
@@ -35,20 +35,27 @@ register_all_tools()
 class VerificationReport:
     """单次阶段验证的结果。"""
 
-    stage: str  # "sft", "dpo", "grpo"
+    stage: str  # "sft", "grpo"
     model_path: str
     passed: bool
     metrics: Dict[str, float] = field(default_factory=dict)
     thresholds: Dict[str, float] = field(default_factory=dict)
     failures: List[str] = field(default_factory=list)
+    coverage: Dict[str, Any] = field(default_factory=dict)
+    protocol: Dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> str:
         status = "✅ PASS" if self.passed else "❌ FAIL"
         lines = [f"{status} {self.stage.upper()} 阶段验证: {self.model_path}"]
         for k, v in self.metrics.items():
-            t = self.thresholds.get(k, 0)
-            flag = "✅" if v >= t else "❌"
-            lines.append(f"  {flag} {k}: {v:.4f} (阈值: {t})")
+            if k in self.thresholds:
+                t = self.thresholds[k]
+                flag = "✅" if v >= t else "❌"
+                lines.append(f"  {flag} {k}: {v:.4f} (阈值: {t})")
+            else:
+                lines.append(f"  {k}: {v:.4f}（报告指标，无阶段阈值）")
+        if self.coverage:
+            lines.append(f"  覆盖: {self.coverage}")
         if self.failures:
             lines.append(f"  失败: {', '.join(self.failures)}")
         return "\n".join(lines)
@@ -84,8 +91,7 @@ class StageVerifier:
     """在每个训练阶段结束后验证模型质量。
 
     阈值参考：
-    - SFT parse_rate=0.3：至少 30% 的输出能解析为合法工具调用
-    - DPO mean_reward=-0.3：应优于随机猜测
+    - SFT parse_rate=0.3：完整 episode 中至少 30% 的模型决策可解析
     - GRPO mean_reward=-0.2：应展现学习进展
 
     所有阈值均可通过构造参数覆盖。
@@ -94,12 +100,10 @@ class StageVerifier:
     def __init__(
         self,
         sft_min_parse_rate: float = 0.3,
-        dpo_min_reward: float = -0.3,
         grpo_min_reward: float = -0.2,
     ):
         self.thresholds = {
             "sft": {"parse_rate": sft_min_parse_rate},
-            "dpo": {"mean_reward": dpo_min_reward},
             "grpo": {"mean_reward": grpo_min_reward},
         }
 
@@ -112,16 +116,17 @@ class StageVerifier:
         model_path: str | Path,
         tokenizer: PreTrainedTokenizer | None = None,
         num_samples: int = 8,
+        env: Any = None,
+        max_iterations: int = 6,
     ) -> VerificationReport:
-        """验证 SFT 模型能否产出可解析的 ReAct 动作。
+        """完整执行冒烟任务，分别报告决策解析率与真实任务完成率。
 
-        加载模型，对 benchmark 任务生成 completion，统计 parse 成功率。
-        使用 chat template（SFT 模型训练时的格式），而非裸 ReAct prompt。
+        SFT 原解析阈值不变，但解析率不再只测首步；它不是任务成功率。
 
         Args:
             model_path: 模型路径
             tokenizer: 可选外部 tokenizer；不传则从 model_path 加载
-            num_samples: 生成样本数（每个任务一条）
+            num_samples: 冒烟任务选择数，不足时循环；每次选择运行两个 episode
         """
         model_path = str(model_path)
         print(f"🔍 验证 SFT 模型: {model_path}")
@@ -136,10 +141,26 @@ class StageVerifier:
                 metrics={"parse_rate": 0.0},
                 thresholds=self.thresholds["sft"],
                 failures=[f"模型加载失败: {e}"],
+                coverage={"execution": "not-started", "scope": "smoke-only"},
+                protocol=_evaluation_protocol(model_path, tokenizer),
             )
 
-        prompts = self._sft_prompts(num_samples, tokenizer)
-        parse_rate = _check_parse_rate(model, tokenizer, prompts)
+        from benchmark.tasks import get_all_tasks
+
+        tasks = get_all_tasks()
+        selected = (tasks * (1 + num_samples // max(1, len(tasks))))[:num_samples]
+        if not selected:
+            raise ValueError("SFT 验证必须至少选择一个任务")
+        task_ids = [task["id"] for task in selected]
+        try:
+            result = _check_episode_result(
+                model, tokenizer, task_ids=task_ids, env=env,
+                num_generations=2, temperature=0.3, max_iterations=max_iterations,
+                model_source=model_path,
+            )
+        except Exception as error:
+            return self._evaluation_failure("sft", model_path, error, task_ids, max_iterations, tokenizer)
+        parse_rate = result.parse_rate
 
         thresholds = self.thresholds["sft"]
         passed = parse_rate >= thresholds["parse_rate"]
@@ -153,60 +174,11 @@ class StageVerifier:
             stage="sft",
             model_path=model_path,
             passed=passed,
-            metrics={"parse_rate": round(parse_rate, 4)},
+            metrics=_episode_metrics(result),
             thresholds=thresholds,
             failures=failures,
-        )
-
-    # ------------------------------------------------------------------
-    # DPO 验证
-    # ------------------------------------------------------------------
-
-    def verify_dpo(
-        self,
-        model_path: str | Path,
-        tokenizer: PreTrainedTokenizer | None = None,
-        env: Any = None,
-    ) -> VerificationReport:
-        """验证 DPO 模型在 canary 任务上的平均奖励。
-
-        Args:
-            model_path: 模型路径
-            tokenizer: 可选外部 tokenizer
-            env: 可选 MockArxivEnv 用于工具执行
-        """
-        model_path = str(model_path)
-        print(f"🔍 验证 DPO 模型: {model_path}")
-
-        try:
-            model, tokenizer = _load_verification_model(model_path, tokenizer)
-        except Exception as e:
-            return VerificationReport(
-                stage="dpo",
-                model_path=model_path,
-                passed=False,
-                metrics={"mean_reward": -1.0},
-                thresholds=self.thresholds["dpo"],
-                failures=[f"模型加载失败: {e}"],
-            )
-
-        mean_reward = _check_canary_reward(model, tokenizer, env=env)
-
-        thresholds = self.thresholds["dpo"]
-        passed = mean_reward >= thresholds["mean_reward"]
-        failures = []
-        if not passed:
-            failures.append(
-                f"mean_reward={mean_reward:.4f} < {thresholds['mean_reward']}"
-            )
-
-        return VerificationReport(
-            stage="dpo",
-            model_path=model_path,
-            passed=passed,
-            metrics={"mean_reward": round(mean_reward, 4)},
-            thresholds=thresholds,
-            failures=failures,
+            coverage=_episode_coverage(result),
+            protocol=_evaluation_protocol(model_path, tokenizer),
         )
 
     # ------------------------------------------------------------------
@@ -218,6 +190,7 @@ class StageVerifier:
         model_path: str | Path,
         tokenizer: PreTrainedTokenizer | None = None,
         env: Any = None,
+        max_iterations: int = 6,
     ) -> VerificationReport:
         """验证 GRPO 模型在 canary 任务上的平均奖励。
 
@@ -239,9 +212,22 @@ class StageVerifier:
                 metrics={"mean_reward": -1.0},
                 thresholds=self.thresholds["grpo"],
                 failures=[f"模型加载失败: {e}"],
+                coverage={"execution": "not-started", "scope": "smoke-only"},
+                protocol=_evaluation_protocol(model_path, tokenizer),
             )
 
-        mean_reward = _check_canary_reward(model, tokenizer, env=env)
+        from rl.canary import DEFAULT_CANARY_TASK_IDS
+
+        try:
+            result = _check_episode_result(
+                model, tokenizer, task_ids=DEFAULT_CANARY_TASK_IDS,
+                env=env, max_iterations=max_iterations, model_source=model_path,
+            )
+        except Exception as error:
+            return self._evaluation_failure(
+                "grpo", model_path, error, DEFAULT_CANARY_TASK_IDS, max_iterations, tokenizer
+            )
+        mean_reward = result.mean_reward
 
         thresholds = self.thresholds["grpo"]
         passed = mean_reward >= thresholds["mean_reward"]
@@ -255,9 +241,21 @@ class StageVerifier:
             stage="grpo",
             model_path=model_path,
             passed=passed,
-            metrics={"mean_reward": round(mean_reward, 4)},
+            metrics=_episode_metrics(result),
             thresholds=thresholds,
             failures=failures,
+            coverage=_episode_coverage(result),
+            protocol=_evaluation_protocol(model_path, tokenizer),
+        )
+
+    def _evaluation_failure(self, stage, model_path, error, task_ids, max_iterations, tokenizer):
+        return VerificationReport(
+            stage=stage, model_path=model_path, passed=False,
+            metrics={"parse_rate": 0.0, "mean_reward": -1.0, "task_completion_rate": 0.0},
+            thresholds=self.thresholds[stage], failures=[f"完整 episode 验证失败: {error}"],
+            coverage={"task_ids": list(task_ids), "max_iterations": max_iterations,
+                      "execution": "failed", "scope": "smoke-only"},
+            protocol=_evaluation_protocol(model_path, tokenizer),
         )
 
     # ------------------------------------------------------------------
@@ -278,6 +276,8 @@ class StageVerifier:
                     "metrics": report.metrics,
                     "thresholds": report.thresholds,
                     "failures": report.failures,
+                    "coverage": report.coverage,
+                    "protocol": report.protocol,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -292,31 +292,21 @@ class StageVerifier:
 
     @staticmethod
     def _sft_prompts(num_samples: int, tokenizer=None) -> List[str]:
-        """构造 SFT 验证用的 prompt 列表（与 canary 同口径）。
-
-        使用与训练一致的 ReAct prompt（含工具描述），并在 tokenizer 带
-        chat_template 时按 user 消息渲染——此前用 "System:/User:/Assistant:"
-        伪格式裸文本 tokenize，模型在训练时从未见过这种输入，parse_rate 被
-        系统性压低到 6%（已发布 SFT 与新模型同为 1/16），验证失去区分度。
-        """
+        """仅供初始输入检查；共同消息经实际模板渲染，禁止裸 prompt 降级。"""
         from benchmark.tasks import get_all_tasks
-        from rl.canary import CanaryEvaluator
+        from agents.prompt_templates import format_tool_description
+        from tools.tool_registry import registry
 
         tasks = get_all_tasks()
         # 取前 num_samples 个任务，不够就循环
         selected = (tasks * (1 + num_samples // max(1, len(tasks))))[:num_samples]
-        prompts = [CanaryEvaluator._build_prompt(task) for task in selected]
-
-        if tokenizer is not None and getattr(tokenizer, "chat_template", None):
-            prompts = [
-                tokenizer.apply_chat_template(
-                    [{"role": "user", "content": prompt}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-                for prompt in prompts
-            ]
-        return prompts
+        if tokenizer is None or not callable(getattr(tokenizer, "apply_chat_template", None)):
+            raise ValueError("验证输入需要实际 tokenizer/chat template，不回退裸 prompt")
+        description = format_tool_description(registry.list_tools())
+        return [tokenizer.apply_chat_template(
+            build_react_messages(task["task"], description),
+            tokenize=False, add_generation_prompt=True,
+        ) for task in selected]
 
 
 # ------------------------------------------------------------------
@@ -324,87 +314,51 @@ class StageVerifier:
 # ------------------------------------------------------------------
 
 
-def _check_parse_rate(
+def _check_episode_result(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizer,
-    prompts: Sequence[str],
-    max_new_tokens: int = 256,
-    temperature: float = 0.3,
-) -> float:
-    """生成 completion 并统计 parse 成功率。
-
-    一个 completion 被认为"可解析"当且仅当：
-    - 包含合法的 JSON 对象（有 "name" 字段）
-    - 或可被 parse_react_action 识别为 "call"
-    """
-    device = next(model.parameters()).device
-    model.eval()
-
-    parsed = 0
-    total = 0
-    pad_token_id = tokenizer.pad_token_id or tokenizer.eos_token_id
-
-    with torch.no_grad():
-        for prompt in prompts:
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
-            prompt_len = inputs.input_ids.shape[1]
-
-            try:
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    temperature=temperature,
-                    do_sample=True,
-                    num_return_sequences=2,
-                    pad_token_id=pad_token_id,
-                )
-            except Exception:
-                total += 2
-                continue
-
-            generated_ids = outputs[:, prompt_len:]
-            completions = tokenizer.batch_decode(
-                generated_ids, skip_special_tokens=True
-            )
-
-            for completion in completions:
-                total += 1
-                # 先尝试 ReAct 解析
-                kind, action = parse_react_action(completion)
-                if kind == "call":
-                    parsed += 1
-                    continue
-                # 再尝试直接 JSON 解析（SFT 模型可能不输出 ReAct 前缀）
-                try:
-                    obj = json.loads(completion.strip())
-                    if isinstance(obj, dict) and "name" in obj:
-                        parsed += 1
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-    model.train()
-    return parsed / total if total > 0 else 0.0
-
-
-def _check_canary_reward(
-    model: PreTrainedModel,
-    tokenizer: PreTrainedTokenizer,
+    *,
+    task_ids,
     env: Any = None,
     num_generations: int = 4,
-) -> float:
-    """在 canary 任务上评估模型，返回平均奖励。
-
-    复用 CanaryEvaluator 以保持评估逻辑一致。
-    """
-    from rl.canary import DEFAULT_CANARY_TASK_IDS, CanaryEvaluator
+    temperature: float = 1.0,
+    max_iterations: int = 6,
+    model_source: str = "",
+):
+    """全部阶段共用真实多轮执行，不从首个 completion 合成轨迹。"""
+    from rl.canary import CanaryEvaluator
 
     evaluator = CanaryEvaluator(
         model=model,
         tokenizer=tokenizer,
-        canary_task_ids=DEFAULT_CANARY_TASK_IDS,
-        reward_calc=RewardCalculator(),
+        canary_task_ids=task_ids,
         env=env,
         num_generations=num_generations,
+        temperature=temperature,
+        max_iterations=max_iterations,
+        model_source=model_source,
     )
-    result = evaluator.evaluate(step=0)
-    return result.mean_reward
+    return evaluator.evaluate(step=0)
+
+
+def _episode_metrics(result):
+    return {"parse_rate": result.parse_rate, "mean_reward": result.mean_reward,
+            "task_completion_rate": result.task_completion_rate}
+
+
+def _evaluation_protocol(model_path, tokenizer):
+    """训练协议来自原 manifest；缺字段保持未知，不能从评测协议倒推。"""
+    return evaluation_protocol_relation(
+        read_protocol_metadata(Path(model_path)), protocol_metadata(tokenizer)
+    )
+
+
+def _episode_coverage(result):
+    return {"scope": "smoke-only", "execution": "complete-episode",
+            "task_ids": result.task_ids, "episode_count": result.episode_count,
+            "num_generations_per_task": result.num_generations_per_task,
+            "max_iterations": result.max_iterations,
+            "termination_counts": result.termination_counts,
+            "task_completion_basis": "is_strict_success; FINISH is not success",
+            "reference_oracle": result.reference_oracle,
+            "parse_rate_basis": "all-model-decisions including token truncation; framework-only markers excluded"}

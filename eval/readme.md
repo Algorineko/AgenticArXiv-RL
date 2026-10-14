@@ -11,16 +11,43 @@
 但很确定的问题——同一条轨迹，今天的代码还认为它是坏的吗。
 
 ```bash
+# 以下命令从仓库根目录执行
 # 回放全部用例；有 regression 时退出码 1
 python eval/badcase_replay.py
 
 # 带上每条的判定条件和说明
 python eval/badcase_replay.py -v
 
-# 从一次 benchmark 跑的轨迹里挑坏例，追加进用例库
-python -m benchmark.run_benchmark --task-set expanded --offline --save-traces
-python eval/badcase_replay.py capture --traces data/traces.jsonl --dry-run
+# 未来另行运行已有模型后挑选坏例；本次不执行模型或追加新用例
+python -m AgenticArxiv.benchmark.run_benchmark \
+  --backend transformers --model outputs/grpo/final \
+  --task-set expanded --split data/splits/v7_86.json:dev \
+  --offline --snapshot data/mock_arxiv_snapshot.json \
+  --save-traces --output artifacts/eval_react_messages_dev
+python eval/badcase_replay.py capture \
+  --traces artifacts/eval_react_messages_dev/traces.jsonl --dry-run
 ```
+
+默认回放读取现有完整轨迹，只重跑评分器，不重新执行 Agent、初始化或工具。
+Canary/StageVerifier 的模型健康检查需要实际完整 episode，不能用历史记录重评分
+代替。新协议执行与旧文件读取分别标注版本关系；缺失的历史协议/模板字段保持未知。
+未来实际模型执行需要已有模型、快照和必要元数据，本次不要求补齐这些输入。
+
+`run` 是与默认历史评分分开的实际模型入口：
+
+```bash
+# 只查看帮助，不执行模型
+python eval/badcase_replay.py run --help
+
+# 未来另行运行；--task-set/--cases 等全局选项放在 run 前
+python eval/badcase_replay.py --task-set expanded run \
+  --model outputs/grpo/final --offline \
+  --snapshot data/mock_arxiv_snapshot.json --max-iterations 6
+```
+
+不传 `--offline` 的 run 使用 live 工具；只有默认/replay 才是旧轨迹只读评分。
+run 不会覆盖历史用例，FINISH 与严格任务成功分别报告，具体运行时契约见
+[react_runtime.md](../docs/react_runtime.md)。
 
 `tests/test_badcases.py::ShippedCasesTest` 会跑同一份用例库，所以
 `pytest` 本身就是这道闸门，不必额外配 CI。

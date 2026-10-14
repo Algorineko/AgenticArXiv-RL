@@ -75,7 +75,12 @@ def main() -> None:
                 continue
             detail = old_details.get(_key(trace), {})
             trace_timing = trace.get("timing") or {}
-            trace_usage = trace.get("token_usage") or {}
+            if "token_usage" in trace:
+                # 新记录显式未知不可被旧详情中的零覆盖。
+                declared_usage = trace["token_usage"]
+                trace_usage = declared_usage if isinstance(declared_usage, dict) else {}
+            else:
+                trace_usage = {"total_tokens": detail.get("tokens")}
             result = {
                 "history": trace.get("history") or [],
                 "total_time_ms": trace.get(
@@ -99,13 +104,7 @@ def main() -> None:
                         "framework_overhead_ms", detail.get("overhead_ms", 0)
                     ),
                 },
-                "token_usage": trace_usage or {
-                    "total_tokens": detail.get("tokens", 0)
-                },
-                "routing": trace.get("routing") or {
-                    "mode": detail.get("router_mode", "policy"),
-                    "decisions": [],
-                },
+                "token_usage": trace_usage,
             }
             metrics.append(extract_metrics(
                 task,
@@ -120,7 +119,12 @@ def main() -> None:
     if not metrics:
         raise SystemExit("没有可重算的轨迹")
 
-    report = BenchmarkReport(metrics, model=summary.get("model", "unknown"))
+    # 重评分沿用原执行/模型声明，不把本次读取代码版本当成新的模型运行。
+    report = BenchmarkReport(
+        metrics, model=summary.get("model", "unknown"),
+        protocol_metadata=summary,
+        training_metadata=summary.get("training_protocol_metadata"),
+    )
     report.print_report()
     report.save_all(args.output)
     print(

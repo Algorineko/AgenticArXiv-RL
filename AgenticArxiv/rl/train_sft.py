@@ -3,7 +3,7 @@
 SFT（Supervised Fine-Tuning）：
 - 目标：让模型学会基本的工具调用格式
 - 数据：expert demonstrations（从 benchmark tasks 生成）
-- 输出：SFT 模型（作为 DPO/GRPO 的起点）
+- 输出：SFT 全参或适配器产物（直接作为 GRPO 的起点）
 
 使用方式：
     python -m AgenticArxiv.rl.train_sft --inspect_only --max_length 4096
@@ -34,6 +34,21 @@ from datasets import Dataset
 
 from rl.observability import describe_logging, resolve_report_to
 from rl.stage_verifier import StageVerifier
+from rl.mainline_config import (
+    config_file_path,
+    load_mainline_config,
+    parse_mainline_args,
+    require_supported_config,
+    resolve_model_source,
+    stage_config,
+)
+from rl.run_manifest import (
+    build_run_manifest, file_fingerprint, model_input_fingerprint,
+    read_protocol_metadata, require_training_protocol, source_fingerprint,
+)
+from agents.react_contract import protocol_metadata, validate_react_messages
+
+SFT_DEFAULTS = stage_config("sft")["defaults"]
 
 
 QLORA_TARGET_MODULES = (
@@ -176,7 +191,7 @@ def _precision_flags():
     return precision_flags()
 
 
-def _load_sft_rows(path: Path) -> list:
+def _load_sft_rows(path: Path, *, expected_protocol: dict | None = None) -> list:
     """Read only the columns training needs.
 
     The JSONL also carries provenance columns (``generation_parameters``,
@@ -191,11 +206,16 @@ def _load_sft_rows(path: Path) -> list:
     rows = []
 
     with Path(path).open(encoding="utf-8") as handle:
-        for line in handle:
+        for line_number, line in enumerate(handle, start=1):
             line = line.strip()
             if not line:
                 continue
             row = json.loads(line)
+            if expected_protocol is not None:
+                require_training_protocol(
+                    row, expected_protocol, source_label=f"SFT 数据第 {line_number} 行",
+                )
+                _validate_training_messages(row)
             if "messages" in row:
                 rows.append({"messages": row["messages"]})
             else:
@@ -220,11 +240,11 @@ def _messages_of(row):
 
 
 def _to_prompt_completion(row):
-    """把单轮 messages 样本转换成 TRL 的 prompt-completion 格式。
+    """将共同多轮历史前缀与唯一当前 assistant completion 分开。
 
-    项目的 assistant message 只包含 Action。显式拆分 prompt/completion 后，
+    此前 assistant/setup/Observation 全部留在 prompt。显式拆分后，
     ``completion_only_loss=True`` 可以在不依赖模型 chat template 是否提供
-    assistant mask 的情况下，仅监督 Action。
+    assistant mask 的情况下，仅监督当前目标响应。
     """
     messages = list(row["messages"])
     if not messages or messages[-1].get("role") != "assistant":
@@ -233,6 +253,42 @@ def _to_prompt_completion(row):
         "prompt": messages[:-1],
         "completion": messages[-1:],
     }
+
+
+def _validate_training_messages(row: dict) -> None:
+    """训练标签只能是一条当前 assistant，不能把历史动作当作 completion。"""
+    if "messages" in row:
+        converted = _to_prompt_completion(row)
+        if "prompt" in row or "completion" in row:
+            if converted != {"prompt": row.get("prompt"), "completion": row.get("completion")}:
+                raise ValueError("SFT messages 与 prompt/completion 不一致")
+    else:
+        converted = {"prompt": row.get("prompt"), "completion": row.get("completion")}
+    prompt, completion = converted["prompt"], converted["completion"]
+    if not isinstance(prompt, list) or not prompt:
+        raise ValueError("SFT prompt 必须包含共同初始 user 消息")
+    if not isinstance(completion, list) or len(completion) != 1:
+        raise ValueError("SFT completion 必须仅包含当前一条 assistant 消息")
+    validate_react_messages(prompt)
+    validate_react_messages(prompt + completion, require_completion=True)
+
+
+def _training_model_metadata(source: str, expected_protocol: dict) -> dict | None:
+    """保留显式 SFT 基座入口；已有训练产物不能以未知协议冒充兼容。"""
+    root = Path(source)
+    manifest = root / "training_manifest.json"
+    if manifest.is_file():
+        return require_training_protocol(
+            manifest, expected_protocol, source_label="SFT 输入模型",
+            require_chat_template_hash=True,
+        )
+    if root.is_dir() and (
+        (root / "adapter_config.json").is_file()
+        or root.resolve().is_relative_to(REPO_ROOT / "outputs")
+    ):
+        raise ValueError(f"SFT 已有训练产物缺少必要 training_manifest: {manifest}")
+    # 这里只有调用者指定的 SFT 起点，不由缺 manifest 推断其真实训练历史。
+    return None
 
 
 def _token_length(tokenizer, messages) -> int:
@@ -270,35 +326,41 @@ def _check_lengths(tokenizer, dataset, max_length: int):
 
 
 def main(
-    model: str = "Qwen/Qwen2.5-1.5B-Instruct",
-    data: str = None,
-    data_manifest: str = None,
-    output_dir: str = "outputs/sft_qlora",
-    epochs: int = 3,
-    batch_size: int = 1,
-    grad_accum: int = 8,
-    lr: float = 1e-4,
-    max_length: int = 4096,
-    max_steps: int = -1,
-    qlora: bool = True,
-    lora_r: int = 16,
-    lora_alpha: int = 32,
-    lora_dropout: float = 0.05,
-    gradient_checkpointing: bool = True,
-    optim: str = "paged_adamw_8bit",
-    inspect_only: bool = False,
-    skip_data_manifest_check: bool = False,
-    seed: int = 42,
-    verify: bool = True,
-    min_parse_rate: float = 0.3,
-    report_to: str = "none",
-    run_name: str = None,
+    model: str = SFT_DEFAULTS["model"],
+    data: str = SFT_DEFAULTS["data"],
+    data_manifest: str = SFT_DEFAULTS["data_manifest"],
+    output_dir: str = SFT_DEFAULTS["output_dir"],
+    epochs: int = SFT_DEFAULTS["epochs"],
+    batch_size: int = SFT_DEFAULTS["batch_size"],
+    grad_accum: int = SFT_DEFAULTS["grad_accum"],
+    lr: float = SFT_DEFAULTS["lr"],
+    max_length: int = SFT_DEFAULTS["max_length"],
+    max_steps: int = SFT_DEFAULTS["max_steps"],
+    qlora: bool = SFT_DEFAULTS["qlora"],
+    lora_r: int = SFT_DEFAULTS["lora_r"],
+    lora_alpha: int = SFT_DEFAULTS["lora_alpha"],
+    lora_dropout: float = SFT_DEFAULTS["lora_dropout"],
+    gradient_checkpointing: bool = SFT_DEFAULTS["gradient_checkpointing"],
+    optim: str = SFT_DEFAULTS["optim"],
+    inspect_only: bool = SFT_DEFAULTS["inspect_only"],
+    skip_data_manifest_check: bool = SFT_DEFAULTS["skip_data_manifest_check"],
+    seed: int = SFT_DEFAULTS["seed"],
+    verify: bool = SFT_DEFAULTS["verify"],
+    min_parse_rate: float = SFT_DEFAULTS["min_parse_rate"],
+    report_to: str = SFT_DEFAULTS["report_to"],
+    run_name: str = SFT_DEFAULTS["run_name"],
+    config_path: str = None,
 ):
     import torch
+    requested_config = dict(locals())
+    requested_config.pop("torch")
+    configured = stage_config("sft", config_path)
+    if configured["trainer_parameters"].get("completion_only_loss") is not True:
+        raise SystemExit("SFT 主线必须仅监督当前 assistant completion")
 
     train_data_path = (
         Path(data) if data
-        else REPO_ROOT / "data" / "sft" / "sft_v3_train_mix.jsonl"
+        else REPO_ROOT / "data" / "sft" / "sft_react_messages_v3_train_mix.jsonl"
     )
     out_path = REPO_ROOT / output_dir if not Path(output_dir).is_absolute() else Path(output_dir)
     # 先校验日志后端再加载模型：参数写错时应立刻失败
@@ -311,21 +373,42 @@ def main(
             f"❌ 数据集不存在: {train_data_path}\n"
             f"   请先运行: python scripts/build_sft_train_mix.py"
         )
+    manifest_path = (Path(data_manifest) if data_manifest else
+                     train_data_path.with_suffix(train_data_path.suffix + ".manifest.json"))
+    current_protocol = protocol_metadata()
+    try:
+        require_training_protocol(manifest_path, current_protocol, source_label="SFT 数据 manifest")
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     manifest = None
     if not skip_data_manifest_check:
-        manifest_path = Path(data_manifest) if data_manifest else None
         manifest = _verify_data_manifest(train_data_path, manifest_path)
     else:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         print("⚠️  已跳过数据manifest校验；该运行不能作为正式可复现实验")
 
-    resolved_model = str(Path(model).resolve()) if Path(model).exists() else model
+    try:
+        resolved_model = resolve_model_source(model)
+        source_protocol = _training_model_metadata(resolved_model, current_protocol)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"📦 加载 tokenizer: {resolved_model}")
-    tokenizer = AutoTokenizer.from_pretrained(resolved_model, local_files_only=Path(model).exists())
+    tokenizer = AutoTokenizer.from_pretrained(resolved_model, local_files_only=Path(resolved_model).exists())
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
-
-    train_dataset = Dataset.from_list(_load_sft_rows(train_data_path))
+    current_protocol = protocol_metadata(tokenizer)
+    try:
+        require_training_protocol(
+            current_protocol, current_protocol, source_label="当前 SFT tokenizer",
+            require_chat_template_hash=True,
+        )
+        require_training_protocol(manifest, current_protocol, source_label="SFT 数据 manifest")
+        source_protocol = _training_model_metadata(resolved_model, current_protocol)
+        training_rows = _load_sft_rows(train_data_path, expected_protocol=current_protocol)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    train_dataset = Dataset.from_list(training_rows)
     if "messages" in train_dataset.column_names:
         train_dataset = train_dataset.map(
             _to_prompt_completion,
@@ -373,7 +456,7 @@ def main(
             device_map={"": 0},
             dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
-            local_files_only=Path(model).exists(),
+            local_files_only=Path(resolved_model).exists(),
         )
         # TRL 0.29.1 会按 SFTConfig 启用 gradient checkpointing 和 input grads；
         # 此处只做一次 k-bit 冻结/LayerNorm准备，不重复打开 checkpointing。
@@ -391,7 +474,7 @@ def main(
 
         policy = AutoModelForCausalLM.from_pretrained(
             resolved_model,
-            local_files_only=Path(model).exists(),
+            local_files_only=Path(resolved_model).exists(),
             **trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained),
         )
         if optim == "paged_adamw_8bit":
@@ -405,20 +488,14 @@ def main(
     # 字段。QLoRA 分支已在 policy.config.use_cache=False 关闭 KV cache，以兼容
     # gradient checkpointing；不要再把它传给 TrainingArguments。
     config_kwargs = {
+        **configured["trainer_parameters"],
         "output_dir": str(out_path),
         "num_train_epochs": epochs,
         "per_device_train_batch_size": batch_size,
         "gradient_accumulation_steps": grad_accum,
         "learning_rate": lr,
         "max_length": max_length,  # TRL>=0.20 用 max_length
-        "completion_only_loss": True,  # prompt 不计 loss，只监督 assistant Action
         "max_steps": max_steps,
-        "logging_steps": 1,
-        "logging_first_step": True,
-        "save_steps": 50,
-        "save_total_limit": 3,
-        "warmup_ratio": 0.03,
-        "lr_scheduler_type": "cosine",
         "optim": optim,
         "gradient_checkpointing": gradient_checkpointing,
         "gradient_checkpointing_kwargs": (
@@ -426,21 +503,11 @@ def main(
         ),
         "seed": seed,
         "data_seed": seed,
-        "dataloader_num_workers": 0,
-        "dataset_num_proc": 1,
-        "packing": False,
         "report_to": backends,
         "run_name": run_name or out_path.name,
         **_precision_flags(),  # 只有 CUDA 才开混合精度
     }
-    config_kwargs, dropped_config_keys = _filter_dataclass_kwargs(
-        SFTConfig, config_kwargs
-    )
-    if dropped_config_keys:
-        print(
-            "⚠️  当前TRL版本不支持以下SFTConfig参数，已忽略: "
-            + ", ".join(dropped_config_keys)
-        )
+    require_supported_config(SFTConfig, config_kwargs)
     config = SFTConfig(**config_kwargs)
 
     # 单进程时钉住单卡（避免 Trainer 走 DataParallel 的段错误）；
@@ -469,10 +536,85 @@ def main(
     if torch.cuda.is_available():
         print(f"   Trainer初始化显存: {torch.cuda.memory_allocated() / 2**30:.2f} GiB")
 
-    train_result = trainer.train()
+    def save_run_diagnostic(reason: str) -> dict:
+        """保存实际可得的运行事实；异常记录不产生成功 final。"""
+        record = build_run_manifest(
+            requested_config=requested_config,
+            resolved_config=config.to_dict(),
+            derived_values={
+                "effective_batch_size": effective_batch,
+                "trainable_parameters": trainable,
+                "model_parameters": total,
+                "trainer_planned_steps": getattr(trainer.state, "max_steps", None),
+                "data_protocol": read_protocol_metadata(manifest),
+                "source_model_protocol": source_protocol,
+                "source_model_kind": (
+                    "project_training_artifact" if source_protocol is not None else
+                    "local_unclassified_input" if Path(resolved_model).is_dir() else "requested_sft_base"
+                ),
+            },
+            source_baseline={
+                "configuration_baseline": load_mainline_config(config_path)["source_baseline"],
+                "execution_source": source_fingerprint(
+                    [Path(__file__), Path(__file__).with_name("mainline_config.py")],
+                    repo_root=REPO_ROOT,
+                ),
+            },
+            inputs={
+                "model": model_input_fingerprint(resolved_model),
+                "data": file_fingerprint(train_data_path),
+                "data_manifest": file_fingerprint(
+                    Path(data_manifest) if data_manifest
+                    else train_data_path.with_suffix(train_data_path.suffix + ".manifest.json")
+                ),
+                "mainline_configuration": file_fingerprint(config_file_path(config_path)),
+            },
+            resource_overrides={
+                key: {"baseline": SFT_DEFAULTS[key], "requested": requested_config[key]}
+                for key in ("qlora", "batch_size", "grad_accum", "gradient_checkpointing",
+                            "optim", "lora_r", "lora_alpha", "lora_dropout")
+                if requested_config[key] != SFT_DEFAULTS[key]
+            },
+            requested_steps=max_steps,
+            protocol_metadata=current_protocol,
+            actual_steps=getattr(trainer.state, "global_step", None),
+            stop_reason=reason,
+            protections={
+                "data_manifest_check": not skip_data_manifest_check,
+                "completion_only_loss": True,
+                "length_guard": True,
+                "verification_enabled": verify,
+            },
+        )
+        out_path.mkdir(parents=True, exist_ok=True)
+        (out_path / "run_manifest.json").write_text(
+            json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        return record
+
+    try:
+        train_result = trainer.train()
+    except BaseException as exc:
+        try:
+            save_run_diagnostic(f"training_exception:{type(exc).__name__}")
+        except Exception as record_error:
+            print(f"训练异常时未能保存运行诊断: {type(record_error).__name__}")
+        raise
     train_loss = float(train_result.training_loss)
     if not math.isfinite(train_loss):
+        try:
+            save_run_diagnostic("invalid_training_loss")
+        except Exception as record_error:
+            print(f"无效训练 loss 时未能保存运行诊断: {type(record_error).__name__}")
         raise SystemExit(f"❌ training_loss不是有限数: {train_loss}")
+    actual_steps = int(getattr(trainer.state, "global_step", 0) or 0)
+    planned_steps = max_steps if max_steps > 0 else getattr(trainer.state, "max_steps", None)
+    stop_reason = (
+        "trainer_stopped_early"
+        if planned_steps and actual_steps < planned_steps
+        else "max_steps_or_epochs_completed"
+    )
+    run_record = save_run_diagnostic(stop_reason)
 
     final_output_dir = out_path / "final"
     trainer.save_model(str(final_output_dir))
@@ -526,6 +668,7 @@ def main(
             if qlora or package not in ("peft", "bitsandbytes")
         },
     }
+    training_manifest.update(run_record)
     final_output_dir.mkdir(parents=True, exist_ok=True)
     (final_output_dir / "training_manifest.json").write_text(
         json.dumps(training_manifest, ensure_ascii=False, indent=2) + "\n",
@@ -547,7 +690,7 @@ def main(
         if not report.passed:
             print(
                 f"\n⚠️  SFT 阶段验证未通过，但模型已保存。"
-                f"请在继续 DPO/GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
+                f"请在继续 GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
             )
 
 
@@ -587,12 +730,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--skip_data_manifest_check", action="store_true",
-        help="允许临时数据运行；结果不得作为正式可复现实验",
+        help="仅跳过原数据 kind/hash/行数校验，不能绕过新协议兼容检查",
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--verify", action=argparse.BooleanOptionalAction, default=True,
-        help="训练结束后运行阶段验证（默认开启，与 GRPO/PPO/OPD 一致）；冒烟可显式写 --no-verify",
+        help="训练结束后运行阶段验证（默认开启，与 GRPO 一致）；可显式写 --no-verify",
     )
     parser.add_argument(
         "--min_parse_rate", type=float, default=0.3,
@@ -606,4 +749,4 @@ if __name__ == "__main__":
         "--run_name", default=None,
         help="本次运行在 TensorBoard / wandb 里的名字，默认取 output_dir 末段",
     )
-    main(**vars(parser.parse_args()))
+    main(**vars(parse_mainline_args(parser, "sft")))

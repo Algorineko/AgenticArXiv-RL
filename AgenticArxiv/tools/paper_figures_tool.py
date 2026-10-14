@@ -21,6 +21,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from utils.artifact_paths import artifact_path, safe_artifact_name
 from config import settings
 from models.store import store
 from tools.tool_registry import registry
@@ -49,8 +50,8 @@ _EXTENSION_BY_NAME = {
 
 def figures_output_dir(paper_id: str) -> Path:
     """Per-paper directory for extracted figures (inside the sandboxed root)."""
-    safe_id = str(paper_id).replace("/", "_")
-    return Path(settings.figures_path) / safe_id
+    safe_id = safe_artifact_name(str(paper_id))
+    return Path(artifact_path("figures_path", settings.figures_path)) / safe_id
 
 
 def _caption_for(page, bbox) -> Optional[str]:

@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "change": "simplify-sft-grpo-react-mainline",
+  "task": "1.1",
+  "status": "blocked",
+  "recipe_frozen": false,
+  "audit_date": "2026-10-14",
+  "source_revision": "ad0c067e8c5584b32bd7d697cb38f299bdbddf2e",
+  "evidence_boundary": "Local read-only audit. Confirmed means the value occurs in the indexed repository summary, not that the historical effective configuration has been verified against original run artifacts. Documentation claims are separate. No current defaults are used to fill missing historical values.",
+  "sources": {
+    "v6": {
+      "path": "data/splits/v6_grpo_train.json",
+      "sha256": "283a05b0ab689055e0e1f662b199573a5becf0045fdc026ad8289626905560c7",
+      "kind": "historical_split_and_run_summary"
+    },
+    "v3": {
+      "path": "data/splits/v3_81.json",
+      "sha256": "8e8bdbf0c164800df2c1582a2c671407a3a06aca2fef6000da9081986c195d5a",
+      "kind": "historical_split"
+    },
+    "paradigm_document": {
+      "path": "docs/rl_paradigm_comparison.md",
+      "sha256": "86d3e638efea3f5209c9371952d408d53041dfcf79ae4411f28463a4af0d9ca0",
+      "kind": "documentation_claim"
+    },
+    "requirements": {
+      "path": "AgenticArxiv/requirements.txt",
+      "sha256": "7c047a53645423330dd81bc919c74d8048cb1ca4161968568f15484b9dc079fe",
+      "kind": "current_dependency_constraints_not_release_versions"
+    },
+    "precision_source": {
+      "path": "AgenticArxiv/rl/precision.py",
+      "sha256": "a09c7b8f05c87dfde7dbe9e97629cf8291ad1d9e2deccf2d937e06edf34b21fe",
+      "kind": "current_source_documentation_not_release_versions"
+    },
+    "grpo_source": {
+      "path": "AgenticArxiv/rl/train_grpo.py",
+      "sha256": "f764780b87d3f5534aeeb40f96b021ee65dba9fb78e6793902bbfbf122e4d436",
+      "kind": "current_source_not_historical_effective_configuration"
+    },
+    "sft_source": {
+      "path": "AgenticArxiv/rl/train_sft.py",
+      "sha256": "3b5f46407ee6644f9f21d4dfdf8ac06c02a5f3d613eee6af9727b2e7328a6060",
+      "kind": "current_source_not_historical_effective_configuration"
+    },
+    "grpo_evaluation_summary": {
+      "path": "artifacts/eval_grpo_v6_rl_train_r3_s45/summary.json",
+      "sha256": "f045f363727b8311e0722aa94234f042b017d814b22d1bd3d971a57bbe114f52",
+      "kind": "historical_evaluation_summary_not_training_evidence"
+    },
+    "sft_evaluation_summary": {
+      "path": "artifacts/eval_sft_v6_rl_train_r3_s45/summary.json",
+      "sha256": "bb0ec1fb471c963dab3b682102c848705059895c99c289ee2256bc522e9689e9",
+      "kind": "historical_evaluation_summary_not_training_evidence"
+    }
+  },
+  "reference_contract": "Each source reference resolves to the sources entry containing the repository-relative path and raw-file SHA256. JSON pointers address the original JSON file, not this audit record. Line ranges address non-JSON evidence.",
+  "confirmed_summary_values": [
+    {"field": "output_dir", "value": "outputs/grpo_release_v2", "source": "v6", "json_pointer": "/formal_run/output_dir"},
+    {"field": "source_model", "value": "outputs/sft/final", "source": "v6", "json_pointer": "/formal_run/source_model"},
+    {"field": "num_generations", "value": 4, "source": "v6", "json_pointer": "/formal_run/num_generations"},
+    {"field": "beta", "value": 0.1, "source": "v6", "json_pointer": "/formal_run/beta"},
+    {"field": "learning_rate", "value": 0.000005, "source": "v6", "json_pointer": "/formal_run/learning_rate"},
+    {"field": "batch_size", "value": 16, "source": "v6", "json_pointer": "/formal_run/batch_size"},
+    {"field": "max_turns", "value": 6, "source": "v6", "json_pointer": "/formal_run/max_turns"},
+    {"field": "reward_curriculum_steps", "value": 0, "source": "v6", "json_pointer": "/formal_run/reward_curriculum_steps"},
+    {"field": "requested_max_steps", "value": 60, "source": "v6", "json_pointer": "/formal_run/max_steps"},
+    {"field": "actual_steps", "value": 60, "source": "v6", "json_pointer": "/formal_run/actual_steps"},
+    {"field": "seed", "value": 42, "source": "v6", "json_pointer": "/formal_run/seed"},
+    {"field": "reward_variance_guard.enabled", "value": false, "source": "v6", "json_pointer": "/formal_run/reward_variance_guard/enabled"},
+    {"field": "train_loss", "value": 0.019448589896880246, "source": "v6", "json_pointer": "/formal_run/train_loss"},
+    {"field": "peak_vram_gib", "value": 34.79, "source": "v6", "json_pointer": "/formal_run/peak_vram_gib"},
+    {"field": "rl_train_members", "value": "33 task IDs preserved in the source array", "source": "v6", "json_pointer": "/split/rl_train", "count": 33},
+    {"field": "split_origin", "value": "data/splits/v3_81.json:train", "source": "v6", "json_pointer": "/derived_from/0"},
+    {"field": "probe_origin", "value": "outputs/grpo_frozen_probe/reward_probe_summary.json", "source": "v6", "json_pointer": "/derived_from/1"},
+    {"field": "grpo_evaluation_model_reference", "value": "outputs/grpo_release_v2/final", "source": "grpo_evaluation_summary", "json_pointer": "/model"},
+    {"field": "sft_evaluation_model_reference", "value": "outputs/sft/final", "source": "sft_evaluation_summary", "json_pointer": "/model"}
+  ],
+  "documentation_only_claims": [
+    {"field": "sft_base_model_and_mode", "value": "Qwen2.5-1.5B-Instruct full-parameter SFT", "source": "paradigm_document", "line_range": [7, 7]},
+    {"field": "temperature", "value": 1.0, "source": "paradigm_document", "line_range": [9, 9]},
+    {"field": "prompt_generation_batch", "value": "4 prompts x 4 generations per step", "source": "paradigm_document", "line_range": [9, 9]},
+    {"field": "qlora", "value": false, "source": "paradigm_document", "line_range": [9, 9]},
+    {"field": "allow_zero_variance_flag", "value": true, "source": "paradigm_document", "line_range": [9, 9]},
+    {"field": "hardware_and_process_mode", "value": "Single Hygon DCU BW1000_H (64 GB), single process per variant; historical baseline equivalence is claimed", "source": "paradigm_document", "line_range": [10, 10]},
+    {"field": "importance_sampling_semantics", "value": "token-level", "source": "paradigm_document", "line_range": [16, 16]},
+    {"field": "reward_scaling_semantics", "value": "within-group standard deviation normalization", "source": "paradigm_document", "line_range": [16, 16]},
+    {"field": "verified_trl_version_not_bound_to_release", "value": "0.29.1", "source": "requirements", "line_range": [7, 8]},
+    {"field": "verified_library_combination_not_bound_to_release", "value": {"torch": "2.11.0+cu130", "transformers": "5.14.1", "trl": "0.29.1"}, "source": "precision_source", "line_range": [117, 117]}
+  ],
+  "unresolved": [
+    {"category": "loss", "fields": ["loss_type", "loss_length_normalization", "num_iterations"], "reason": "No original run manifest, resolved configuration or exact historical trainer version."},
+    {"category": "importance_sampling", "fields": ["importance_sampling_level", "any_effective_importance_sampling_corrections"], "reason": "Token-level semantics are claimed in documentation; exact parsed and derived fields are not verified."},
+    {"category": "reward_normalization", "fields": ["scale_rewards", "normalization_epsilon"], "reason": "Within-group standard deviation semantics are claimed, but no exact effective enum or trainer-derived values are available."},
+    {"category": "clipping", "fields": ["epsilon", "epsilon_high_effective", "other_active_clipping_parameters"], "reason": "No run-specific resolved or derived clipping values. DAPO variant values must not be copied into the baseline."},
+    {"category": "truncation", "fields": ["mask_truncated_completions", "max_completion_length", "max_prompt_length", "effective_truncation_handling"], "reason": "Not recorded in v6 formal_run; no original generation/trainer configuration."},
+    {"category": "sampling", "fields": ["temperature_effective", "top_p", "top_k", "min_p", "repetition_penalty", "eos_and_stop_settings", "generation_reuse", "dynamic_sampling_enabled"], "reason": "Temperature is documentation-only; complete run-specific sampling configuration is missing."},
+    {"category": "optimization", "fields": ["gradient_accumulation_steps", "effective_batch_size", "optimizer", "optimizer_parameters", "scheduler", "warmup", "weight_decay", "max_grad_norm", "precision", "gradient_checkpointing", "actual_distributed_configuration"], "reason": "Batch size and learning rate alone do not define the optimization or resource recipe."},
+    {"category": "guards", "fields": ["canary_enabled", "canary_interval", "canary_threshold", "reward_variance_diagnostic_thresholds", "other_active_training_guards", "stop_reason"], "reason": "The summary confirms reward-variance early stopping is disabled and actual_steps is 60, but does not record the complete guard configuration or stopping cause."},
+    {"category": "release_versions", "fields": ["sft_torch_version", "sft_transformers_version", "sft_trl_version", "grpo_torch_version", "grpo_transformers_version", "grpo_trl_version", "accelerate_version", "datasets_version", "peft_and_bitsandbytes_if_used", "launch_source_revision"], "reason": "Current requirements and verification comments are not tied to these release runs."},
+    {"category": "sft_provenance", "fields": ["training_data_identity_and_hash", "training_data_manifest_binding", "effective_training_configuration", "model_and_adapter_metadata", "tokenizer_identity", "chat_template_hash", "sft_artifact_hash"], "reason": "SFT training manifest and release files are absent; evaluation summaries prove only recorded model path references."}
+  ],
+  "missing_evidence": [
+    {"path": "outputs/grpo_release_v2/final/training_manifest.json", "status": "absent", "required_for": "Release GRPO recipe and provenance."},
+    {"path": "outputs/sft/final/training_manifest.json", "status": "absent", "required_for": "SFT starting point, configuration and versions."},
+    {"path": "outputs/grpo_frozen_probe/reward_probe_summary.json", "status": "absent", "required_for": "Original train-signal selection evidence; its SHA256 occurs only as a historical assertion in v6 /source/reward_summary_sha256."},
+    {"artifact": "Release GRPO and SFT launch commands and training logs", "status": "not_found", "required_for": "Explicit options, run identity, resource settings and version-bound defaults."},
+    {"artifact": "Release resolved training arguments and trainer state", "status": "not_found", "required_for": "Effective and trainer-derived loss, sampling, optimization and guard fields."},
+    {"artifact": "Exact run dependency lock, package freeze or equivalent version record", "status": "not_found", "required_for": "Historical default resolution and supported-interface verification."}
+  ],
+  "source_lookup": {
+    "scope": "This repository only; no parent-home asset search, external filesystem scan, remote host, model service or internet access.",
+    "methods": [
+      "Read all change proposal/design/tasks/spec context and check ancestor/repository AGENTS.md paths.",
+      "Inventory tracked and untracked hidden/ignored repository filenames for manifests, launch files, training logs, dependency locks and training assets, excluding .git contents, credentials, .env files, node_modules, virtual environments and bytecode.",
+      "Check the named outputs and release directories; outputs is absent.",
+      "Search local docs, split files, artifact summaries and training source for release references and version/configuration evidence.",
+      "Inspect local Git history and tracked filenames for training_manifest.json, trainer_state.json, training_args.json and launch scripts; no original release artifacts found.",
+      "Parse JSON summaries with jq and hash indexed source bytes using SHA256."
+    ],
+    "service_logs": "Only filenames under .run were inventoried. Web logs and database contents were not read or treated as training evidence.",
+    "network_used": false,
+    "remote_access_used": false,
+    "credentials_read": false,
+    "training_executed": false,
+    "runtime_modified": false
+  },
+  "interpretation_guards": [
+    "v6 /source describes the frozen-policy probe (learning_rate 0, seed 43, eight groups per task), not the formal_run recipe.",
+    "Current CLI defaults and current library defaults cannot fill historical evidence gaps.",
+    "Current GRPO manifest construction serializes optional requested values that can be null and omits dependency versions; obtaining that manifest alone may still require exact launch/version/derived-configuration evidence.",
+    "Evaluation artifacts and existing historical scores are not proof of training configuration or a locally reproduced experiment.",
+    "No effective mainline recipe is generated and task 1.1 remains incomplete."
+  ],
+  "unblock_requirements": [
+    "Provide the original published GRPO manifest and the exact SFT starting-point manifest.",
+    "Provide corresponding launch records, exact dependency versions and run source revisions.",
+    "Provide or derive from those exact run versions all required parsed and trainer-derived configuration values with traceable sources, resolving every unresolved category before declaring the recipe frozen."
+  ]
+}

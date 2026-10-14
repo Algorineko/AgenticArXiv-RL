@@ -326,23 +326,25 @@ class RunnerHonoursIterationBudgetTest(unittest.TestCase):
         runner = BenchmarkRunner.__new__(BenchmarkRunner)   # 不走 __init__，免得建 LLM 客户端
         runner.llm_extra = None
         runner._llm_client = object()      # ReActAgent 只是存下来，不会调用
-        runner._side_effects = lambda: None
         runner._tool_env = lambda: None
         return runner
 
     def test_budget_reaches_the_agent(self):
         agent = self._runner()._create_agent("regex", 7)
+        self.addCleanup(agent.close)
         self.assertEqual(agent.max_iterations, 7)
 
     def test_default_is_left_untouched_when_task_declares_nothing(self):
         agent = self._runner()._create_agent("regex", None)
-        self.assertEqual(agent.max_iterations, 5)
+        self.addCleanup(agent.close)
+        self.assertEqual(agent.max_iterations, 6)
 
     def test_task_dict_budget_is_what_gets_passed(self):
         """端到端：从任务字典取到的值，就是 Agent 拿到的值。"""
         task = next(t for t in EXPANDED_TASKS
                     if t["id"] == "chain_cv5_cache_dl_tr_cache")
         agent = self._runner()._create_agent("regex", task.get("max_iterations"))
+        self.addCleanup(agent.close)
         self.assertEqual(agent.max_iterations, task["max_iterations"])
         self.assertGreater(agent.max_iterations, len(task["expected_tools"]))
 

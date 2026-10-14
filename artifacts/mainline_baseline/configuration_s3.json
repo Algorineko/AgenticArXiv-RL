@@ -1,0 +1,1683 @@
+{
+  "schema_version": 1,
+  "status": "static_checks_passed",
+  "evidence_boundary": "仅源码/配置静态对照，不导入训练器、不运行快照/训练，不证明历史等价或库解析有效值。",
+  "baseline": "artifacts/mainline_baseline/source_configuration.json",
+  "configuration": "configs/training/mainline.json",
+  "checks": [
+    {
+      "check": "源码版本绑定",
+      "passed": true,
+      "detail": "比较记录的起点版本，不要求当前 HEAD 仍等于起点。"
+    },
+    {
+      "check": "sft.model 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "Qwen/Qwen2.5-1.5B-Instruct",
+        "expected": "Qwen/Qwen2.5-1.5B-Instruct",
+        "actual": "Qwen/Qwen2.5-1.5B-Instruct",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.data 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.data_manifest 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.output_dir 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "outputs/sft_qlora",
+        "expected": "outputs/sft_qlora",
+        "actual": "outputs/sft_qlora",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.epochs 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 3,
+        "expected": 3,
+        "actual": 3,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.batch_size 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "expected": 1,
+        "actual": 1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.grad_accum 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 8,
+        "expected": 8,
+        "actual": 8,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.lr 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0.0001,
+        "expected": 0.0001,
+        "actual": 0.0001,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.max_length 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 4096,
+        "expected": 4096,
+        "actual": 4096,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.max_steps 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": -1,
+        "expected": -1,
+        "actual": -1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.qlora 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "expected": true,
+        "actual": true,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.lora_r 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 16,
+        "expected": 16,
+        "actual": 16,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.lora_alpha 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 32,
+        "expected": 32,
+        "actual": 32,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.lora_dropout 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0.05,
+        "expected": 0.05,
+        "actual": 0.05,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.gradient_checkpointing 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "expected": true,
+        "actual": true,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.optim 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "paged_adamw_8bit",
+        "expected": "paged_adamw_8bit",
+        "actual": "paged_adamw_8bit",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.inspect_only 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": false,
+        "expected": false,
+        "actual": false,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.skip_data_manifest_check 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": false,
+        "expected": false,
+        "actual": false,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.seed 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 42,
+        "expected": 42,
+        "actual": 42,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.verify 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "expected": true,
+        "actual": true,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.min_parse_rate 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0.3,
+        "expected": 0.3,
+        "actual": 0.3,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.report_to 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "none",
+        "expected": "none",
+        "actual": "none",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft.run_name 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "sft 起点文件哈希绑定",
+      "passed": true,
+      "detail": "绑定不可变起点哈希，不将重构后的源文件要求为旧哈希。"
+    },
+    {
+      "check": "sft.model main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "Qwen/Qwen2.5-1.5B-Instruct",
+        "function": "Qwen/Qwen2.5-1.5B-Instruct"
+      }
+    },
+    {
+      "check": "sft.data main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "sft.data_manifest main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "sft.output_dir main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "outputs/sft_qlora",
+        "function": "outputs/sft_qlora"
+      }
+    },
+    {
+      "check": "sft.epochs main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 3,
+        "function": 3
+      }
+    },
+    {
+      "check": "sft.batch_size main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 1,
+        "function": 1
+      }
+    },
+    {
+      "check": "sft.grad_accum main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 8,
+        "function": 8
+      }
+    },
+    {
+      "check": "sft.lr main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0.0001,
+        "function": 0.0001
+      }
+    },
+    {
+      "check": "sft.max_length main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 4096,
+        "function": 4096
+      }
+    },
+    {
+      "check": "sft.max_steps main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": -1,
+        "function": -1
+      }
+    },
+    {
+      "check": "sft.qlora main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": true,
+        "function": true
+      }
+    },
+    {
+      "check": "sft.lora_r main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 16,
+        "function": 16
+      }
+    },
+    {
+      "check": "sft.lora_alpha main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 32,
+        "function": 32
+      }
+    },
+    {
+      "check": "sft.lora_dropout main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0.05,
+        "function": 0.05
+      }
+    },
+    {
+      "check": "sft.gradient_checkpointing main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": true,
+        "function": true
+      }
+    },
+    {
+      "check": "sft.optim main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "paged_adamw_8bit",
+        "function": "paged_adamw_8bit"
+      }
+    },
+    {
+      "check": "sft.inspect_only main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": false,
+        "function": false
+      }
+    },
+    {
+      "check": "sft.skip_data_manifest_check main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": false,
+        "function": false
+      }
+    },
+    {
+      "check": "sft.seed main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 42,
+        "function": 42
+      }
+    },
+    {
+      "check": "sft.verify main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": true,
+        "function": true
+      }
+    },
+    {
+      "check": "sft.min_parse_rate main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0.3,
+        "function": 0.3
+      }
+    },
+    {
+      "check": "sft.report_to main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "none",
+        "function": "none"
+      }
+    },
+    {
+      "check": "sft.run_name main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "sft 配置字典可定位",
+      "passed": true,
+      "detail": "只解析 AST，不构造真实训练配置。"
+    },
+    {
+      "check": "sft.completion_only_loss 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "actual": true
+      }
+    },
+    {
+      "check": "sft.logging_steps 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "actual": 1
+      }
+    },
+    {
+      "check": "sft.logging_first_step 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "actual": true
+      }
+    },
+    {
+      "check": "sft.save_steps 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 50,
+        "actual": 50
+      }
+    },
+    {
+      "check": "sft.save_total_limit 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 3,
+        "actual": 3
+      }
+    },
+    {
+      "check": "sft.warmup_ratio 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 0.03,
+        "actual": 0.03
+      }
+    },
+    {
+      "check": "sft.lr_scheduler_type 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": "cosine",
+        "actual": "cosine"
+      }
+    },
+    {
+      "check": "sft.dataloader_num_workers 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 0,
+        "actual": 0
+      }
+    },
+    {
+      "check": "sft.dataset_num_proc 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "actual": 1
+      }
+    },
+    {
+      "check": "sft.packing 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": false,
+        "actual": false
+      }
+    },
+    {
+      "check": "sft 显式配置接口保护",
+      "passed": true,
+      "detail": "要求在配置构造前调用保护；保护函数语义还需源码审查。"
+    },
+    {
+      "check": "sft 审查源码身份",
+      "passed": true,
+      "detail": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "sha256": "bcc686b5ded5a10dab6b897135cca6b6e46b343cd1192aad1d601ad7c7dc0b43"
+      }
+    },
+    {
+      "check": "grpo.model 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "outputs/dpo/final",
+        "expected": "outputs/sft_qlora/final",
+        "actual": "outputs/sft_qlora/final",
+        "entry_correction": true
+      }
+    },
+    {
+      "check": "grpo.output_dir 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "outputs/grpo",
+        "expected": "outputs/grpo",
+        "actual": "outputs/grpo",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.epochs 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "expected": 1,
+        "actual": 1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.max_steps 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": -1,
+        "expected": -1,
+        "actual": -1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.batch_size 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 4,
+        "expected": 4,
+        "actual": 4,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.grad_accum 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "expected": 1,
+        "actual": 1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.lr 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0.00001,
+        "expected": 0.00001,
+        "actual": 0.00001,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.beta 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0.04,
+        "expected": 0.04,
+        "actual": 0.04,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.reward_curriculum_steps 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 30,
+        "expected": 30,
+        "actual": 30,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.num_generations 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 4,
+        "expected": 4,
+        "actual": 4,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.max_completion_length 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 256,
+        "expected": 256,
+        "actual": 256,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.max_turns 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 4,
+        "expected": 6,
+        "actual": 6,
+        "entry_correction": true
+      }
+    },
+    {
+      "check": "grpo.temperature 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "expected": 1,
+        "actual": 1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.loss_type 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.epsilon_high 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.mask_truncated_completions 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.importance_sampling_level 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.scale_rewards 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.dapo 退出",
+      "passed": true,
+      "detail": "只删除退出分支，不将其数值复制到保留路径。"
+    },
+    {
+      "check": "grpo.dynamic_sampling 退出",
+      "passed": true,
+      "detail": "只删除退出分支，不将其数值复制到保留路径。"
+    },
+    {
+      "check": "grpo.dynamic_sampling_std_threshold 退出",
+      "passed": true,
+      "detail": "只删除退出分支，不将其数值复制到保留路径。"
+    },
+    {
+      "check": "grpo.dynamic_sampling_max_resamples 退出",
+      "passed": true,
+      "detail": "只删除退出分支，不将其数值复制到保留路径。"
+    },
+    {
+      "check": "grpo.seed 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 42,
+        "expected": 42,
+        "actual": 42,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.snapshot 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.task_set 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "default",
+        "expected": null,
+        "actual": null,
+        "entry_correction": true
+      }
+    },
+    {
+      "check": "grpo.split 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.allow_zero_variance 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": false,
+        "expected": false,
+        "actual": false,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.canary_steps 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 50,
+        "expected": 50,
+        "actual": 50,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.min_canary_reward 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": -1,
+        "expected": -1,
+        "actual": -1,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.canary_patience 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 3,
+        "expected": 3,
+        "actual": 3,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.verify 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "expected": true,
+        "actual": true,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.report_to 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "none",
+        "expected": "none",
+        "actual": "none",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.run_name 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.qlora 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "expected": true,
+        "actual": true,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.base_model 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.lora_r 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 16,
+        "expected": 16,
+        "actual": 16,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.lora_alpha 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 32,
+        "expected": 32,
+        "actual": 32,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.lora_dropout 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0.05,
+        "expected": 0.05,
+        "actual": 0.05,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.gradient_checkpointing 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "expected": true,
+        "actual": true,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.optim 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": "paged_adamw_8bit",
+        "expected": "paged_adamw_8bit",
+        "actual": "paged_adamw_8bit",
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.save_steps 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0,
+        "expected": 0,
+        "actual": 0,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.save_total_limit 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 2,
+        "expected": 2,
+        "actual": 2,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.resume_from_checkpoint 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.save_rollout_traces 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": false,
+        "expected": false,
+        "actual": false,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.rollout_trace_path 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": null,
+        "expected": null,
+        "actual": null,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo.rollout_trace_max_samples 默认值",
+      "passed": true,
+      "detail": {
+        "baseline": 0,
+        "expected": 0,
+        "actual": 0,
+        "entry_correction": false
+      }
+    },
+    {
+      "check": "grpo 起点文件哈希绑定",
+      "passed": true,
+      "detail": "绑定不可变起点哈希，不将重构后的源文件要求为旧哈希。"
+    },
+    {
+      "check": "grpo.model main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "outputs/sft_qlora/final",
+        "function": "outputs/sft_qlora/final"
+      }
+    },
+    {
+      "check": "grpo.output_dir main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "outputs/grpo",
+        "function": "outputs/grpo"
+      }
+    },
+    {
+      "check": "grpo.epochs main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 1,
+        "function": 1
+      }
+    },
+    {
+      "check": "grpo.max_steps main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": -1,
+        "function": -1
+      }
+    },
+    {
+      "check": "grpo.batch_size main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 4,
+        "function": 4
+      }
+    },
+    {
+      "check": "grpo.grad_accum main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 1,
+        "function": 1
+      }
+    },
+    {
+      "check": "grpo.lr main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0.00001,
+        "function": 0.00001
+      }
+    },
+    {
+      "check": "grpo.beta main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0.04,
+        "function": 0.04
+      }
+    },
+    {
+      "check": "grpo.reward_curriculum_steps main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 30,
+        "function": 30
+      }
+    },
+    {
+      "check": "grpo.num_generations main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 4,
+        "function": 4
+      }
+    },
+    {
+      "check": "grpo.max_completion_length main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 256,
+        "function": 256
+      }
+    },
+    {
+      "check": "grpo.max_turns main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 6,
+        "function": 6
+      }
+    },
+    {
+      "check": "grpo.temperature main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 1,
+        "function": 1
+      }
+    },
+    {
+      "check": "grpo.loss_type main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.epsilon_high main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.mask_truncated_completions main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.importance_sampling_level main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.scale_rewards main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.seed main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 42,
+        "function": 42
+      }
+    },
+    {
+      "check": "grpo.snapshot main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.task_set main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.split main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.smoke main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": false,
+        "function": false
+      }
+    },
+    {
+      "check": "grpo.allow_zero_variance main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": false,
+        "function": false
+      }
+    },
+    {
+      "check": "grpo.canary_steps main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 50,
+        "function": 50
+      }
+    },
+    {
+      "check": "grpo.min_canary_reward main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": -1,
+        "function": -1
+      }
+    },
+    {
+      "check": "grpo.canary_patience main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 3,
+        "function": 3
+      }
+    },
+    {
+      "check": "grpo.verify main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": true,
+        "function": true
+      }
+    },
+    {
+      "check": "grpo.report_to main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "none",
+        "function": "none"
+      }
+    },
+    {
+      "check": "grpo.run_name main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.qlora main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": true,
+        "function": true
+      }
+    },
+    {
+      "check": "grpo.base_model main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.lora_r main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 16,
+        "function": 16
+      }
+    },
+    {
+      "check": "grpo.lora_alpha main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 32,
+        "function": 32
+      }
+    },
+    {
+      "check": "grpo.lora_dropout main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0.05,
+        "function": 0.05
+      }
+    },
+    {
+      "check": "grpo.gradient_checkpointing main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": true,
+        "function": true
+      }
+    },
+    {
+      "check": "grpo.optim main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": "paged_adamw_8bit",
+        "function": "paged_adamw_8bit"
+      }
+    },
+    {
+      "check": "grpo.save_steps main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0,
+        "function": 0
+      }
+    },
+    {
+      "check": "grpo.save_total_limit main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 2,
+        "function": 2
+      }
+    },
+    {
+      "check": "grpo.resume_from_checkpoint main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.save_rollout_traces main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": false,
+        "function": false
+      }
+    },
+    {
+      "check": "grpo.rollout_trace_path main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": null,
+        "function": null
+      }
+    },
+    {
+      "check": "grpo.rollout_trace_max_samples main 默认绑定",
+      "passed": true,
+      "detail": {
+        "configured": 0,
+        "function": 0
+      }
+    },
+    {
+      "check": "grpo 配置字典可定位",
+      "passed": true,
+      "detail": "只解析 AST，不构造真实训练配置。"
+    },
+    {
+      "check": "grpo.logging_steps 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": 1,
+        "actual": 1
+      }
+    },
+    {
+      "check": "grpo.logging_first_step 固定训练参数",
+      "passed": true,
+      "detail": {
+        "baseline": true,
+        "actual": true
+      }
+    },
+    {
+      "check": "grpo 显式配置接口保护",
+      "passed": true,
+      "detail": "要求在配置构造前调用保护；保护函数语义还需源码审查。"
+    },
+    {
+      "check": "grpo.loss_type None 省略条件",
+      "passed": true,
+      "detail": "is not None 保留显式 False；None 不传给训练库，不填有效值。"
+    },
+    {
+      "check": "grpo.epsilon_high None 省略条件",
+      "passed": true,
+      "detail": "is not None 保留显式 False；None 不传给训练库，不填有效值。"
+    },
+    {
+      "check": "grpo.mask_truncated_completions None 省略条件",
+      "passed": true,
+      "detail": "is not None 保留显式 False；None 不传给训练库，不填有效值。"
+    },
+    {
+      "check": "grpo.importance_sampling_level None 省略条件",
+      "passed": true,
+      "detail": "is not None 保留显式 False；None 不传给训练库，不填有效值。"
+    },
+    {
+      "check": "grpo.scale_rewards None 省略条件",
+      "passed": true,
+      "detail": "is not None 保留显式 False；None 不传给训练库，不填有效值。"
+    },
+    {
+      "check": "grpo 审查源码身份",
+      "passed": true,
+      "detail": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "sha256": "d318ff4f67b9b2499c1da6d480f7901f38ea553eebb63974df87e31041852ee8"
+      }
+    }
+  ],
+  "failures": [],
+  "manual_review": [],
+  "not_verified": [
+    "真实 tokenizer 的上下文前缀一致、EOS与loss标签",
+    "真实训练库解析/派生算法有效值",
+    "on-policy采样与梯度/训练行为",
+    "实际模型/适配器加载",
+    "生产数据生成与新训练manifest生成",
+    "完整86任务环境执行",
+    "历史有效配方或模型性能等价"
+  ],
+  "task": "S3 最终源码/配置审计",
+  "audit_date": "2026-10-14",
+  "source_revision": "ad676bfb6dd51d0763b37e7fa081e663fc3af060",
+  "sources": {
+    "artifacts/mainline_baseline/source_configuration.json": {
+      "sha256": "684637910eed190be6441cbbdf232727260bdc76e56fc0f18c71fcc6d4d30dee",
+      "line_count": 4338
+    },
+    "configs/training/mainline.json": {
+      "sha256": "3479911b31a7740321283a30c70f929f1fd8835be9b9974573d2c377a894b34c",
+      "line_count": 101
+    },
+    "scripts/audit_mainline_configuration.py": {
+      "sha256": "ec7ea652083336ffc98bbab87cf20729a9e34a30b313311e0067afa0df15966a",
+      "line_count": 194
+    },
+    "AgenticArxiv/rl/train_sft.py": {
+      "sha256": "bcc686b5ded5a10dab6b897135cca6b6e46b343cd1192aad1d601ad7c7dc0b43",
+      "line_count": 752
+    },
+    "AgenticArxiv/rl/train_grpo.py": {
+      "sha256": "d318ff4f67b9b2499c1da6d480f7901f38ea553eebb63974df87e31041852ee8",
+      "line_count": 1072
+    },
+    "AgenticArxiv/rl/mainline_config.py": {
+      "sha256": "6f139bddbf479bded26a8f3df45836184dbdd5df9d0171fe3f91fca27cb70bb7",
+      "line_count": 125
+    },
+    "AgenticArxiv/rl/run_manifest.py": {
+      "sha256": "9181e8ac1ee93139ccd1d96199f2a2e0e62aff4c830cc39f235b2f809d839f89",
+      "line_count": 302
+    },
+    "AgenticArxiv/rl/grpo_reward.py": {
+      "sha256": "0ac4a4e080927019770bf191b869a03a53044a230b0c1aaca0974fab3a47aeb8",
+      "line_count": 578
+    },
+    "AgenticArxiv/agents/react_contract.py": {
+      "sha256": "51ae668ddeaed6b518e1939c2e18f62f8afb69ee9bd1dd168505c24ffd78782a",
+      "line_count": 399
+    }
+  },
+  "protocol_constants": {
+    "RUNTIME_VERSION": "react-runtime-v2",
+    "CONTEXT_VERSION": "react-messages-v3"
+  },
+  "command": {
+    "argv": [
+      "python3",
+      "scripts/audit_mainline_configuration.py"
+    ],
+    "exit_code": 0,
+    "meaning": "仅执行已有只读 AST/JSON 配置审计，不导入训练模块，不构造训练/模型/tokenizer输入。"
+  },
+  "summary": {
+    "static_check_count": 161,
+    "passed_count": 161,
+    "failed_count": 0,
+    "static_manual_item_count": 0,
+    "source_review_findings": []
+  },
+  "source_contract_review": [
+    {
+      "contract": "共同协议加载与版本",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/rl/train_sft.py",
+          "line_range": [
+            378,
+            410
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/train_grpo.py",
+          "line_range": [
+            448,
+            454
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/train_grpo.py",
+          "line_range": [
+            519,
+            535
+          ]
+        },
+        {
+          "path": "AgenticArxiv/agents/react_contract.py",
+          "line_range": [
+            17,
+            18
+          ]
+        }
+      ],
+      "detail": "两入口使用共同 protocol_metadata/require_training_protocol。当前声明为 react-runtime-v2/react-messages-v3，旧/未知项目训练产物不能自动视为兼容。SFT 数据manifest与逐行协议核对仍执行，不因skip_data_manifest_check而绕过协议契约。"
+    },
+    {
+      "contract": "SFT 仅监督最后一条 assistant",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/rl/train_sft.py",
+          "line_range": [
+            242,
+            273
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/train_sft.py",
+          "line_range": [
+            354,
+            359
+          ]
+        },
+        {
+          "path": "configs/training/mainline.json",
+          "json_pointer": "/sft/trainer_parameters/completion_only_loss"
+        }
+      ],
+      "detail": "messages 转换为 messages[:-1] 的prompt与 messages[-1:] 的completion；已有prompt/completion必须一致，completion必须恰好一条，消息角色与环境数据前缀由共同校验器检查。completion_only_loss=True 明确传入SFTConfig，关闭时拒绝训练。源码接线不等于已验证真实训练器标签。"
+    },
+    {
+      "contract": "实际 tokenizer 模板哈希来源",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/agents/react_contract.py",
+          "line_range": [
+            368,
+            399
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/train_sft.py",
+          "line_range": [
+            395,
+            408
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/train_grpo.py",
+          "line_range": [
+            519,
+            535
+          ]
+        }
+      ],
+      "detail": "哈希取实际 get_chat_template 选择后的正文，不把选择器名称当模板。拿不到模板时为None；训练入口要求当前tokenizer的实际chat_template_hash，并将其与项目来源声明核对。该记录只核对代码能力，本次未得到真实tokenizer哈希。"
+    },
+    {
+      "contract": "SFT 基座声明与项目训练来源区分",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/rl/train_sft.py",
+          "line_range": [
+            276,
+            291
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/train_sft.py",
+          "line_range": [
+            541,
+            579
+          ]
+        }
+      ],
+      "detail": "已有项目训练manifest需兼容；适配器或outputs中的项目产物不能以缺manifest绕过。显式原始SFT基座允许来源协议未知，派生记录将未知基座与已声明项目训练产物分开，不猜填基座训练历史。"
+    },
+    {
+      "contract": "GRPO 来源训练协议与采样协议区分",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/rl/train_grpo.py",
+          "line_range": [
+            599,
+            605
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/grpo_reward.py",
+          "line_range": [
+            351,
+            355
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/grpo_reward.py",
+          "line_range": [
+            519,
+            524
+          ]
+        }
+      ],
+      "detail": "训练入口向sampler传入实际source_metadata；轨迹顶层移除training_protocol并标sampling_protocol，来源协议独立存training_protocol_metadata。当前采样协议不冒充旧模型训练事实；未知来源不能作为same_protocol证明。"
+    },
+    {
+      "contract": "原算法默认与 None 省略",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "configs/training/mainline.json",
+          "json_pointer": "/grpo/defaults"
+        },
+        {
+          "path": "AgenticArxiv/rl/train_grpo.py",
+          "line_range": [
+            611,
+            650
+          ]
+        }
+      ],
+      "detail": "S3仍保留lr=1e-5/beta=.04/curriculum=30/G=4/temperature=1.0/batch=4/grad_accum=1/max_completion_length=256；loss_type/epsilon_high/mask_truncated_completions/importance_sampling_level/scale_rewards默认None，仅is not None才传。未填入库解析值；关键字段不支持时失败而非过滤。"
+    },
+    {
+      "contract": "GRPO 原采样 ID/追加前缀/EOS/mask",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/rl/grpo_reward.py",
+          "line_range": [
+            296,
+            327
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/grpo_reward.py",
+          "line_range": [
+            423,
+            493
+          ]
+        }
+      ],
+      "detail": "候选模板严格校验整个已采样前缀，仅返回末尾片段；原completion ID不被decode/re-encode候选替换。采样EOS在前缀扣除后不再插入，原策略token mask=1、环境/模板边界mask=0。不兼容模板明确失败。仅源码保护核对，不是对真实EOS/tokenizer的动态验证。"
+    },
+    {
+      "contract": "G、setup 与 256 累计预算",
+      "status": "passed_source_review",
+      "sources": [
+        {
+          "path": "AgenticArxiv/rl/grpo_reward.py",
+          "line_range": [
+            355,
+            410
+          ]
+        },
+        {
+          "path": "AgenticArxiv/rl/grpo_reward.py",
+          "line_range": [
+            494,
+            529
+          ]
+        },
+        {
+          "path": "configs/training/mainline.json",
+          "json_pointer": "/grpo/defaults/max_completion_length"
+        }
+      ],
+      "detail": "TRL已展开prompt不再乘G；每条实际setup先执行再编码且不进入policy history/labels；256预算包含策略与环境追加token并保留裁剪保护，预算框架终止不补策略token。没有擅自扩大预算，也不以此声称6轮真实任务一定完成。"
+    }
+  ],
+  "entry_and_protocol_changes": [
+    {
+      "field": "sft.data 的 None fallback",
+      "previous": "data/sft/sft_v3_train_mix.jsonl",
+      "current": "data/sft/sft_react_messages_v3_train_mix.jsonl",
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          361,
+          363
+        ]
+      },
+      "meaning": "新协议数据标识的入口修正，不是算法参数改动；本次未生成该数据，也不覆盖历史文件。"
+    },
+    {
+      "fields": [
+        "grpo.model",
+        "grpo.max_turns",
+        "grpo.task_set",
+        "grpo.smoke"
+      ],
+      "meaning": "沿用S1已记录的SFT直接交接、6轮与显式正式/冒烟任务选择，不混称所有默认行为等价。"
+    }
+  ],
+  "runtime_facts_not_obtained": {
+    "actual_tokenizer_chat_template_hash": null,
+    "parsed_trainer_algorithm_defaults": null,
+    "reason": "本次只执行源码/配置审计，未加载真实tokenizer或训练配置对象；空值不是训练器有效值。"
+  },
+  "success_boundary": "161项现有AST/JSON检查通过及上述源码接线核对完成，无此审查范围的可确认问题。结论只限工程代码和配置保全；既有token测试没有重复执行，静态审查不替代真实集成。"
+}

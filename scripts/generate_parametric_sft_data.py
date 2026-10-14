@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 v2 train 模板生成可执行、可审计的参数化 SFT 专家数据。
+"""从声明 train 模板生成可执行、可审计的参数化 SFT 专家数据。
 
 与 linguistic augmentation 的区别：本脚本真的改变工具参数和环境状态，但不改变
 父任务的工具链拓扑。每个派生任务都要在离线环境中执行，并通过 Benchmark 的严格
@@ -456,7 +456,7 @@ def validate_derived_tasks(
 def filter_derived_by_parents(
     derived: Sequence[DerivedTask], parents: Iterable[str]
 ) -> List[DerivedTask]:
-    """Keep only derivations whose parent is in ``parents`` (self-evolve targeting).
+    """Keep only derivations whose parent is in ``parents``.
 
     Unknown parents are an error rather than a silent no-op: a typo would
     otherwise produce an empty but valid-looking dataset.
@@ -489,8 +489,9 @@ def sha256_file(path: Path) -> str:
 def main() -> None:
     # 运行期依赖延迟加载：静态数据边界测试不应强制安装 torch/loguru 等完整环境。
     from agents.prompt_templates import format_tool_description
+    from agents.react_contract import protocol_metadata
     from generate_sft_data import generate_deterministic_trajectories
-    from rl.env import MockArxivEnv
+    from rl.multiturn_env import AgenticArxivMultiTurnEnv
     from tools.tool_registry import registry
 
     parser = argparse.ArgumentParser(description="生成 train-only 参数化 SFT 专家数据")
@@ -506,17 +507,20 @@ def main() -> None:
     )
     parser.add_argument(
         "--only-parents", default=None, metavar="ID,ID,...",
-        help="只生成这些 train 父任务的派生数据（自进化闭环的定向补数据）；未知 id 直接报错",
+        help="只生成这些 train 父任务的派生数据；未知 id 直接报错",
     )
     args = parser.parse_args()
 
     split_path = Path(args.split_file)
     snapshot_path = Path(args.snapshot)
     default_output = (
-        "data/sft/sft_v3_t5_parametric_seed.jsonl" if args.include_t5
-        else "data/sft/sft_v2_parametric_seed.jsonl"
+        "data/sft/sft_react_messages_v3_t5_parametric_seed.jsonl" if args.include_t5
+        else "data/sft/sft_react_messages_v3_parametric_seed.jsonl"
     )
     output_path = Path(args.output or default_output)
+    manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
+    if output_path.exists() or manifest_path.exists():
+        raise SystemExit(f"拒绝覆盖已有数据或 manifest: {output_path}")
     if not split_path.exists():
         raise SystemExit(f"切分文件不存在: {split_path}")
     if not snapshot_path.exists():
@@ -537,16 +541,19 @@ def main() -> None:
     if args.only_parents:
         only_parents = sorted({p.strip() for p in args.only_parents.split(",") if p.strip()})
         derived = filter_derived_by_parents(derived, only_parents)
-    env = MockArxivEnv(snapshot_path=snapshot_path, mode="replay")
+    env = AgenticArxivMultiTurnEnv(snapshot_path=snapshot_path, mode="replay")
     tools_desc = format_tool_description(registry.list_tools())
     specs = [item.spec for item in derived]
     source_split = (
         f"{split_path.name}:train:parametric_v1_t5" if args.include_t5
         else f"{split_path.name}:train:parametric_v1"
     )
-    rows = generate_deterministic_trajectories(
-        specs, env, tools_desc, source_split=source_split
-    )
+    try:
+        rows = generate_deterministic_trajectories(
+            specs, env, tools_desc, source_split=source_split
+        )
+    finally:
+        env.close()
 
     lineage = {item.spec.id: item for item in derived}
     fingerprints = set()
@@ -580,6 +587,7 @@ def main() -> None:
     ]
     manifest = {
         "version": 1,
+        "protocol_metadata": protocol_metadata(),
         "kind": "train_only_parametric_expert_seed",
         "split_file": str(split_path),
         "split_sha256": sha256_file(split_path),
@@ -606,7 +614,6 @@ def main() -> None:
         manifest["include_t5"] = True
     if only_parents is not None:
         manifest["only_parents"] = only_parents
-    manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )

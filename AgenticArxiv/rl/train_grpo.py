@@ -2,7 +2,7 @@
 
 GRPO（Group Relative Policy Optimization）：
 - 目标：用 verifiable reward 在线训练
-- 优势：无需 reward model、无需 value model（比 PPO 更轻量）
+- 优势：无需 reward model、无需 value model
 - 数据：**不需要预先生成**。GRPO 是在线算法，只要 prompt + 可验证奖励，
         数据集直接由 benchmark/tasks.py 派生
 
@@ -13,9 +13,8 @@ observation 插回上下文，并将完整轨迹交给 RewardCalculator 打分�
 训练结束后可选运行阶段验证（检查模型是否达到最低质量阈值）。
 
 使用方式：
-    python -m AgenticArxiv.rl.train_grpo
-    python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --num_generations 8
-    python -m AgenticArxiv.rl.train_grpo --canary_steps 20 --min_canary_reward -0.3
+    python -m AgenticArxiv.rl.train_grpo --task_set expanded --split data/splits/v7_86.json:train
+    python -m AgenticArxiv.rl.train_grpo --smoke
 """
 
 import argparse
@@ -30,8 +29,7 @@ from typing import Optional
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
 
-#: 历史实验一律跑在这个 KL 系数上。`--dapo` 预设只在调用方没有显式改过它时
-#: 才把它归零（DAPO 不用 KL 正则），否则会把用户传的值默默吃掉。
+#: 当前源码主线路径的显式默认，不据此推断历史运行有效值。
 DEFAULT_BETA = 0.04
 
 # 添加 AgenticArxiv 到 Python 路径
@@ -51,15 +49,24 @@ from trl import GRPOConfig, GRPOTrainer
 # prompt 里的工具列表少了三个，而策略的动作空间缩小是**静默**的。
 from tools.bootstrap import require_all_tools
 
-from benchmark.splits import DEFAULT_SPLIT_PATH
 from benchmark.task_io import load_tasks
+from benchmark.splits import DEFAULT_SPLIT_PATH
 from benchmark.semantic_oracle import attach_expected_paper_ids
 from rl.canary import CanaryEvaluator, CanaryCallback
-from rl.dynamic_sampling import (
-    DynamicSamplingDistributedError,
-    assert_dynamic_sampling_single_process,
-    make_dynamic_sampling_rollout_func,
+from rl.mainline_config import (
+    config_file_path,
+    load_mainline_config,
+    parse_mainline_args,
+    require_supported_config,
+    resolve_model_source,
+    stage_config,
+    validate_grpo_options,
 )
+from rl.run_manifest import (
+    build_run_manifest, file_fingerprint, model_input_fingerprint,
+    require_training_protocol, source_fingerprint,
+)
+from agents.react_contract import protocol_metadata
 from rl.grpo_reward import (
     SUPPORTED_TOOL_NAMES,
     build_prompt_dataset,
@@ -84,6 +91,7 @@ from rl.train_sft import (
 )
 
 DEFAULT_SNAPSHOT = REPO_ROOT / "data" / "mock_arxiv_snapshot.json"
+GRPO_DEFAULTS = stage_config("grpo")["defaults"]
 
 
 def _precision_flags():
@@ -99,26 +107,25 @@ def _build_reward_calculator(curriculum_steps: int) -> RewardCalculator:
     return RewardCalculator(curriculum_steps=curriculum_steps)
 
 
-def _load_tasks(task_set: str, split: Optional[str]):
-    """选择训练任务集（任务池与切分过滤见 benchmark.task_io.load_tasks）。
-
-    默认仍是 benchmark/tasks.py 的 8 条冒烟任务 —— 换默认值会让此前所有
-    训练曲线不可比，所以要用完整任务集必须显式 --task_set expanded。
-
-    `--split rl_train` 取的是 train 中成功率处于中间带的那部分：GRPO 的
-    优势是组内相对的，成功率贴近 0 或 1 的任务，同一 prompt 采样出的轨迹
-    奖励一致，组内方差为零、优势为零、不产生任何梯度。把它们放进训练集
-    是纯粹的空转，还会把 frac_reward_zero_std 顶到 1 触发方差守卫。
-    """
-    tasks = load_tasks(task_set, split)
-    if not split and task_set != "expanded":
-        print(
-            f"⚠️  正在用 benchmark/tasks.py 的 {len(tasks)} 条冒烟任务训练。"
-            "完整任务集用 --task_set expanded；\n"
-            "    只训练有梯度的那部分用 --task_set expanded "
-            f"--split rl_train（{DEFAULT_SPLIT_PATH.name}）"
+def _load_tasks(task_set: Optional[str], split: Optional[str], *, smoke: bool = False):
+    """正式训练显式选训练切分；8 条冒烟任务只在显式 smoke 模式下使用。"""
+    if smoke:
+        if task_set not in (None, "default"):
+            raise SystemExit("冒烟模式只允许 benchmark/tasks.py 的 8 条任务")
+        if split and split.rsplit(":", 1)[-1] not in ("train", "rl_train"):
+            raise SystemExit("冒烟模式不能使用 dev/iid_test/ood_test 等非训练切分")
+        return load_tasks("default", split)
+    if task_set != "expanded" or not split:
+        raise SystemExit(
+            "正式 GRPO 必须显式传 --task_set expanded 与 --split [FILE:]train/rl_train；"
+            "8 条冒烟任务需显式 --smoke，不能隐式训练完整任务池"
         )
-    return tasks
+    if split.rsplit(":", 1)[-1] not in ("train", "rl_train"):
+        raise SystemExit("正式 GRPO 仅允许 train/rl_train 训练切分，不能使用留出集")
+    split_path, separator, split_name = split.rpartition(":")
+    if separator and not Path(split_path).is_absolute():
+        split = f"{REPO_ROOT / split_path}:{split_name}"
+    return load_tasks(task_set, split)
 
 
 def _gold_completion_tokens(tokenizer, tasks) -> int:
@@ -152,24 +159,61 @@ def _global_step(state) -> int:
 def _adapter_base_model(adapter_path: Path, override: Optional[str] = None) -> str:
     """Resolve the immutable base model behind an SFT LoRA adapter."""
     if override:
-        base = Path(override)
-        return str(base.resolve()) if base.exists() else override
+        return resolve_model_source(override)
     config_path = adapter_path / "adapter_config.json"
     if not config_path.exists():
-        return ""
+        raise SystemExit(f"适配器元数据缺失: {config_path}")
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        raise SystemExit(f"adapter_config 必须为 JSON 对象: {config_path}")
     value = str(config.get("base_model_name_or_path") or "")
     if not value:
         raise SystemExit(f"❌ adapter_config 未声明 base_model_name_or_path: {config_path}")
-    base = Path(value)
-    if base.exists():
-        return str(base.resolve())
-    if "/" in value and not value.startswith(("outputs/", "./", "/")):
-        return value
-    raise SystemExit(
-        f"❌ SFT adapter 引用的基座模型不存在: {value}\n"
-        "   adapter 换机器后绝对路径可能失效，请显式传 --base_model"
-    )
+    try:
+        return resolve_model_source(value)
+    except ValueError as exc:
+        raise SystemExit(
+            f"SFT adapter 引用的基座模型不存在: {value}；"
+            "换机器后可显式传 --base_model 指定同一基座的有效位置"
+        ) from exc
+
+
+def _artifact_metadata(model_path: str, *, base_model: Optional[str] = None) -> dict:
+    """GRPO 只消费明确的本地产物，不能用基座或远程 API 替代丢失的 SFT。"""
+    local = Path(resolve_model_source(model_path, local_only=True))
+    manifest_path = local / "training_manifest.json"
+    if not manifest_path.is_file():
+        raise SystemExit(f"训练模型缺少必要 training_manifest: {manifest_path}")
+    metadata = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(metadata, dict):
+        raise SystemExit(f"training_manifest 必须是 JSON 对象: {manifest_path}")
+    stage = metadata.get("stage")
+    if stage not in ("sft_qlora", "sft_full", "grpo_qlora", "grpo_full"):
+        raise SystemExit(f"不支持的训练产物 stage={stage!r}: {manifest_path}")
+    is_adapter = (local / "adapter_config.json").is_file()
+    if is_adapter != stage.endswith("_qlora"):
+        raise SystemExit("训练 manifest 的全参/适配器类型与产物文件不一致")
+    if is_adapter:
+        if not metadata.get("base_model"):
+            raise SystemExit("适配器 training_manifest 缺少 base_model")
+        if not any((local / name).is_file() for name in (
+            "adapter_model.safetensors", "adapter_model.bin"
+        )):
+            raise SystemExit(f"适配器权重缺失: {local}")
+        adapter_config = json.loads((local / "adapter_config.json").read_text(encoding="utf-8"))
+        declared_base = adapter_config.get("base_model_name_or_path")
+        if not declared_base or declared_base != metadata["base_model"]:
+            raise SystemExit("适配器基座声明与 training_manifest 的 base_model 不一致")
+        _adapter_base_model(local, base_model)
+    else:
+        if not (local / "config.json").is_file():
+            raise SystemExit(f"全参模型 config.json 缺失: {local}")
+        if not any((local / name).is_file() for name in (
+            "model.safetensors", "model.safetensors.index.json",
+            "pytorch_model.bin", "pytorch_model.bin.index.json"
+        )):
+            raise SystemExit(f"全参模型权重或分片索引缺失: {local}")
+    return metadata
 
 
 def _load_policy(
@@ -181,16 +225,28 @@ def _load_policy(
     lora_alpha: int,
     lora_dropout: float,
 ):
-    """Load either an existing SFT adapter or a fresh policy for GRPO."""
+    """按全参/适配器产物合同加载，QLoRA 只是资源策略。"""
     import torch
 
-    local = Path(model_path)
+    _artifact_metadata(model_path, base_model=base_model)
+    local = Path(resolve_model_source(model_path, local_only=True))
+    model_path = str(local)
     is_adapter = local.is_dir() and (local / "adapter_config.json").exists()
+    if not is_adapter and base_model:
+        raise SystemExit("全参 SFT 产物不能用 --base_model 替换训练起点")
     if not qlora:
         print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
+        source = _adapter_base_model(local, base_model) if is_adapter else model_path
+        # 全参保留路径原本不传 dtype；适配器合并合同也不借机改写此省略语义。
         policy = AutoModelForCausalLM.from_pretrained(
-            model_path, local_files_only=local.exists()
+            source, local_files_only=Path(source).exists(),
         )
+        if is_adapter:
+            from peft import PeftModel
+
+            policy = PeftModel.from_pretrained(policy, model_path).merge_and_unload()
+        for parameter in policy.parameters():
+            parameter.requires_grad = True
         policy.config.use_cache = False
         return policy
 
@@ -200,10 +256,7 @@ def _load_policy(
     )
     from peft import PeftModel, get_peft_model, prepare_model_for_kbit_training
 
-    source = _adapter_base_model(local, base_model) if is_adapter else (
-        str(Path(base_model).resolve()) if base_model and Path(base_model).exists()
-        else base_model or model_path
-    )
+    source = _adapter_base_model(local, base_model) if is_adapter else model_path
     source_path = Path(source)
     print(
         "🪶 GRPO QLoRA: 4-bit NF4 + double quant + BF16 compute\n"
@@ -312,138 +365,68 @@ class RewardVarianceGuard(TrainerCallback):
         )
 
 
-#: DAPO 论文的推荐取值（clip-higher 上界、overlong filtering 开关、KL 系数）。
-DAPO_PRESET = {
-    "loss_type": "dapo",
-    "epsilon_high": 0.28,
-    "mask_truncated_completions": True,
-    "beta": 0.0,
-}
-
-
-def resolve_dapo_options(
-    *,
-    dapo: bool,
-    loss_type: Optional[str],
-    epsilon_high: Optional[float],
-    mask_truncated_completions: Optional[bool],
-    beta: float,
-) -> tuple:
-    """Fill in the DAPO preset without overwriting anything set explicitly.
-
-    ``--dapo --epsilon_high 0.2`` must keep 0.2.  ``beta`` is the exception: it
-    has no "unset" sentinel, so it only drops to zero when the caller left it at
-    the project default, which is what ``DEFAULT_BETA`` is for.
-    """
-    if not dapo:
-        return loss_type, epsilon_high, mask_truncated_completions, beta
-    return (
-        loss_type or DAPO_PRESET["loss_type"],
-        DAPO_PRESET["epsilon_high"] if epsilon_high is None else epsilon_high,
-        (
-            DAPO_PRESET["mask_truncated_completions"]
-            if mask_truncated_completions is None
-            else mask_truncated_completions
-        ),
-        DAPO_PRESET["beta"] if beta == DEFAULT_BETA else beta,
-    )
-
-
-def resolve_dynamic_sampling_option(
-    *, dapo: bool, dynamic_sampling: Optional[bool]
-) -> bool:
-    """DAPO enables dynamic sampling unless the user explicitly overrides it."""
-
-    if dynamic_sampling is None:
-        return bool(dapo)
-    return bool(dynamic_sampling)
-
-
 def main(
-    model: str = "outputs/dpo/final",
-    output_dir: str = "outputs/grpo",
-    epochs: int = 1,
-    max_steps: int = -1,
-    batch_size: int = 4,
-    grad_accum: int = 1,
-    lr: float = 1e-5,
-    beta: float = DEFAULT_BETA,
-    reward_curriculum_steps: int = 30,
-    num_generations: int = 4,
-    max_completion_length: int = 256,
-    max_turns: int = 4,
-    temperature: float = 1.0,
-    loss_type: str = None,
-    epsilon_high: float = None,
-    mask_truncated_completions: bool = None,
-    importance_sampling_level: str = None,
-    scale_rewards: str = None,
-    dapo: bool = False,
-    dynamic_sampling: bool = None,
-    dynamic_sampling_std_threshold: float = 0.0,
-    dynamic_sampling_max_resamples: int = 32,
-    seed: int = 42,
-    snapshot: str = None,
-    task_set: str = "default",
-    split: str = None,
-    allow_zero_variance: bool = False,
-    canary_steps: int = 50,
-    min_canary_reward: float = -1.0,
-    canary_patience: int = 3,
-    verify: bool = True,
-    report_to: str = "none",
-    run_name: str = None,
-    qlora: bool = True,
-    base_model: str = None,
-    lora_r: int = 16,
-    lora_alpha: int = 32,
-    lora_dropout: float = 0.05,
-    gradient_checkpointing: bool = True,
-    optim: str = "paged_adamw_8bit",
-    save_steps: int = 0,
-    save_total_limit: int = 2,
-    resume_from_checkpoint: str = None,
-    save_rollout_traces: bool = False,
-    rollout_trace_path: str = None,
-    rollout_trace_max_samples: int = 0,
+    model: str = GRPO_DEFAULTS["model"],
+    output_dir: str = GRPO_DEFAULTS["output_dir"],
+    epochs: int = GRPO_DEFAULTS["epochs"],
+    max_steps: int = GRPO_DEFAULTS["max_steps"],
+    batch_size: int = GRPO_DEFAULTS["batch_size"],
+    grad_accum: int = GRPO_DEFAULTS["grad_accum"],
+    lr: float = GRPO_DEFAULTS["lr"],
+    beta: float = GRPO_DEFAULTS["beta"],
+    reward_curriculum_steps: int = GRPO_DEFAULTS["reward_curriculum_steps"],
+    num_generations: int = GRPO_DEFAULTS["num_generations"],
+    max_completion_length: int = GRPO_DEFAULTS["max_completion_length"],
+    max_turns: int = GRPO_DEFAULTS["max_turns"],
+    temperature: float = GRPO_DEFAULTS["temperature"],
+    loss_type: str = GRPO_DEFAULTS["loss_type"],
+    epsilon_high: float = GRPO_DEFAULTS["epsilon_high"],
+    mask_truncated_completions: bool = GRPO_DEFAULTS["mask_truncated_completions"],
+    importance_sampling_level: str = GRPO_DEFAULTS["importance_sampling_level"],
+    scale_rewards: str = GRPO_DEFAULTS["scale_rewards"],
+    seed: int = GRPO_DEFAULTS["seed"],
+    snapshot: str = GRPO_DEFAULTS["snapshot"],
+    task_set: str = GRPO_DEFAULTS["task_set"],
+    split: str = GRPO_DEFAULTS["split"],
+    smoke: bool = GRPO_DEFAULTS["smoke"],
+    allow_zero_variance: bool = GRPO_DEFAULTS["allow_zero_variance"],
+    canary_steps: int = GRPO_DEFAULTS["canary_steps"],
+    min_canary_reward: float = GRPO_DEFAULTS["min_canary_reward"],
+    canary_patience: int = GRPO_DEFAULTS["canary_patience"],
+    verify: bool = GRPO_DEFAULTS["verify"],
+    report_to: str = GRPO_DEFAULTS["report_to"],
+    run_name: str = GRPO_DEFAULTS["run_name"],
+    qlora: bool = GRPO_DEFAULTS["qlora"],
+    base_model: str = GRPO_DEFAULTS["base_model"],
+    lora_r: int = GRPO_DEFAULTS["lora_r"],
+    lora_alpha: int = GRPO_DEFAULTS["lora_alpha"],
+    lora_dropout: float = GRPO_DEFAULTS["lora_dropout"],
+    gradient_checkpointing: bool = GRPO_DEFAULTS["gradient_checkpointing"],
+    optim: str = GRPO_DEFAULTS["optim"],
+    save_steps: int = GRPO_DEFAULTS["save_steps"],
+    save_total_limit: int = GRPO_DEFAULTS["save_total_limit"],
+    resume_from_checkpoint: str = GRPO_DEFAULTS["resume_from_checkpoint"],
+    save_rollout_traces: bool = GRPO_DEFAULTS["save_rollout_traces"],
+    rollout_trace_path: str = GRPO_DEFAULTS["rollout_trace_path"],
+    rollout_trace_max_samples: int = GRPO_DEFAULTS["rollout_trace_max_samples"],
+    config_path: str = None,
 ):
+    requested_config = dict(locals())
+    configured = stage_config("grpo", config_path)
+    try:
+        validate_grpo_options(
+            loss_type=loss_type,
+            importance_sampling_level=importance_sampling_level,
+            scale_rewards=scale_rewards,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     # 工具没注册齐就直接失败：模型不会因为工具列表不全而报错，
     # 它会编工具名，训练照跑、奖励照记，只是那些工具对应的任务永远做不成。
     require_all_tools("GRPO 训练")
 
     # 先校验日志后端再加载模型：参数写错时应立刻失败，而不是等模型加载完
     backends = resolve_report_to(report_to)
-    dapo_options = resolve_dapo_options(
-        dapo=dapo,
-        loss_type=loss_type,
-        epsilon_high=epsilon_high,
-        mask_truncated_completions=mask_truncated_completions,
-        beta=beta,
-    )
-    loss_type, epsilon_high, mask_truncated_completions, beta = dapo_options
-    dynamic_sampling = resolve_dynamic_sampling_option(
-        dapo=dapo, dynamic_sampling=dynamic_sampling
-    )
-    if dapo:
-        print(
-            f"🧬 DAPO 预设: loss_type={loss_type}, epsilon_high={epsilon_high}, "
-            f"mask_truncated_completions={mask_truncated_completions}, beta={beta}, "
-            f"dynamic_sampling={dynamic_sampling}"
-        )
-    if not math.isfinite(dynamic_sampling_std_threshold) or dynamic_sampling_std_threshold < 0:
-        raise SystemExit("❌ dynamic_sampling_std_threshold 必须是有限的非负数")
-    if dynamic_sampling_max_resamples < 0:
-        raise SystemExit("❌ dynamic_sampling_max_resamples 不能为负数")
-    if dynamic_sampling and num_generations < 2:
-        raise SystemExit("❌ dynamic sampling 要求 num_generations 至少为 2")
-    if dynamic_sampling:
-        try:
-            # Fail before loading tokenizer/model when launched with torchrun or
-            # accelerate. The wrapper repeats this check against the actual
-            # Accelerator at rollout time as a second line of defence.
-            assert_dynamic_sampling_single_process()
-        except DynamicSamplingDistributedError as exc:
-            raise SystemExit(f"❌ {exc}") from exc
     if rollout_trace_max_samples < 0:
         raise SystemExit("❌ rollout_trace_max_samples 不能为负数")
     if save_steps < 0:
@@ -460,19 +443,22 @@ def main(
         resolved_resume_checkpoint = str(resume_path)
     logging_dir = str(REPO_ROOT / output_dir / "logs")
 
-    model_path = REPO_ROOT / model
-    if model_path.exists():
-        resolved = str(model_path)
-    elif "/" in model and not model.startswith(("outputs/", "./", "/")):
-        resolved = model                    # 形如 org/name 的 HF 仓库
-    else:
-        raise SystemExit(
-            f"❌ 未找到本地模型 {model_path}\n"
-            f"请先运行 train_sft / train_dpo，或用 --model 指定其它检查点"
-        )
-
     # 先验证任务与快照，再加载模型。语义标准答案损坏时应在占用显存前失败。
-    tasks = _load_tasks(task_set, split)
+    tasks = _load_tasks(task_set, split, smoke=smoke)
+    try:
+        resolved = resolve_model_source(model, local_only=True)
+        source_metadata = _artifact_metadata(resolved, base_model=base_model)
+        require_training_protocol(
+            source_metadata, protocol_metadata(), source_label="GRPO 输入模型",
+            require_chat_template_hash=True,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    actual_base_model = (
+        _adapter_base_model(Path(resolved), base_model)
+        if (Path(resolved) / "adapter_config.json").is_file()
+        else resolved
+    )
     snapshot_path = Path(snapshot) if snapshot else DEFAULT_SNAPSHOT
     if not snapshot_path.exists():
         raise SystemExit(
@@ -536,6 +522,18 @@ def main(
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    current_protocol = protocol_metadata(tokenizer)
+    try:
+        require_training_protocol(
+            current_protocol, current_protocol, source_label="当前 GRPO tokenizer",
+            require_chat_template_hash=True,
+        )
+        require_training_protocol(
+            source_metadata, current_protocol, source_label="GRPO 输入模型",
+            require_chat_template_hash=True,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     policy = _load_policy(
         resolved,
         qlora=qlora,
@@ -579,6 +577,8 @@ def main(
             num_generations=num_generations,
             allowed_tools=SUPPORTED_TOOL_NAMES,
             max_samples=rollout_trace_max_samples,
+            protocol_metadata=current_protocol,
+            training_metadata=source_metadata,
         )
         limit_text = (
             str(rollout_trace_max_samples)
@@ -592,7 +592,6 @@ def main(
     tasks_by_id = {t["id"]: t for t in tasks}
     reward_fn = make_grpo_reward_fn(
         tasks_by_id,
-        env=None,
         reward_calc=reward_calc,
         tracker=tracker,
         auditor=auditor,
@@ -602,38 +601,15 @@ def main(
         max_turns=max_turns,
         tasks_by_id=tasks_by_id,
         prompt_task_ids=prompt_task_ids,
+        training_metadata=source_metadata,
     )
-    if dynamic_sampling:
-        # Preview scoring has no tracker/auditor. Rejected candidates therefore
-        # leave no formal training record; TRL still calls the normal reward_fn
-        # exactly once for the accepted batch.
-        preview_reward_fn = make_grpo_reward_fn(
-            tasks_by_id,
-            env=None,
-            reward_calc=reward_calc,
-            tracker=None,
-            auditor=None,
-        )
-        rollout_func = make_dynamic_sampling_rollout_func(
-            rollout_func,
-            prompt_rows=rows,
-            preview_reward_func=preview_reward_fn,
-            reward_std_threshold=dynamic_sampling_std_threshold,
-            max_resample_attempts=dynamic_sampling_max_resamples,
-            seed=seed,
-        )
-        print(
-            "🎲 DAPO dynamic sampling: "
-            f"std>{dynamic_sampling_std_threshold}, "
-            f"max_resamples={dynamic_sampling_max_resamples}, seed={seed}"
-        )
-
     # GRPO 要求生成批量能被 num_generations 整除
     if batch_size % num_generations != 0:
         batch_size = num_generations
         print(f"  调整 per_device_train_batch_size = {batch_size}（需被 num_generations 整除）")
 
     cfg_kwargs = {
+        **configured["trainer_parameters"],
         "output_dir": str(REPO_ROOT / output_dir),
         "num_train_epochs": epochs,
         "max_steps": max_steps,
@@ -646,8 +622,6 @@ def main(
         "temperature": temperature,
         "seed": seed,
         "data_seed": seed,
-        "logging_steps": 1,
-        "logging_first_step": True,
         "save_strategy": "steps" if save_steps > 0 else "no",
         "save_steps": save_steps if save_steps > 0 else 500,
         "save_total_limit": save_total_limit,
@@ -661,36 +635,19 @@ def main(
         **_precision_flags(),
     }
 
-    # ---- DAPO 系选项（README P3） ----
-    # 这三项 TRL 已经原生支持，无需 fork GRPOTrainer：clip-higher 走
-    # epsilon_high、overlong filtering 走 mask_truncated_completions、
-    # token-level loss 走 loss_type。默认全部保持 TRL 现值，只有显式指定
-    # （或用 --dapo 预设）才改变行为 —— 历史实验的可比性不能被默认值悄悄改掉。
-    #
-    # Dynamic sampling 走公开 rollout_func 的 extra-fields 通道，由包装器在
-    # 正式 reward 调用前完成无副作用预打分与补采，不覆写 TRL 私有方法。
+    # 未设置字段仍省略，不把某个 TRL 版本的默认值猜成当前请求值。
     if loss_type is not None:
         cfg_kwargs["loss_type"] = loss_type
     if epsilon_high is not None:
         cfg_kwargs["epsilon_high"] = epsilon_high
     if mask_truncated_completions is not None:
         cfg_kwargs["mask_truncated_completions"] = mask_truncated_completions
-    # ---- GSPO / Dr.GRPO（Roadmap P1） ----
-    # 序列级重要性采样走 importance_sampling_level=sequence（GSPO）；
-    # Dr.GRPO 完整配方是 --loss_type dr_grpo --scale_rewards none（全局常数
-    # 归一替代组内 std 归一，去长度偏置）。与 --dapo 预设正交可组合。
-    # 同样遵守「默认不动、显式才改」，保证历史实验可比性。
     if importance_sampling_level is not None:
         cfg_kwargs["importance_sampling_level"] = importance_sampling_level
     if scale_rewards is not None:
         cfg_kwargs["scale_rewards"] = scale_rewards
-    # GRPOConfig 的字段在 TRL 各版本间有增删，按实际安装版本过滤，
-    # 避免因为一个参数名不存在就整个训练起不来
-    valid = {f.name for f in dataclasses.fields(GRPOConfig)}
-    dropped = sorted(k for k in cfg_kwargs if k not in valid)
-    if dropped:
-        print(f"  提示：当前 TRL 不支持这些 GRPOConfig 参数，已忽略 -> {dropped}")
-    config = GRPOConfig(**{k: v for k, v in cfg_kwargs.items() if k in valid})
+    require_supported_config(GRPOConfig, cfg_kwargs)
+    config = GRPOConfig(**cfg_kwargs)
 
     # 单进程时钉住单卡（避免 Trainer 走 DataParallel 的段错误）；
     # accelerate launch 下 accelerator 自己管设备，这里自动跳过。
@@ -740,11 +697,81 @@ def main(
     if not allow_zero_variance:
         guard = RewardVarianceGuard()
         trainer.add_callback(guard)
+
+    def save_run_diagnostic(reason: str) -> dict:
+        """保护器或异常退出仍保存可得事实，不把失败运行标为成功 final。"""
+        step = getattr(trainer.state, "global_step", None)
+        planned = getattr(trainer.state, "max_steps", None)
+        split_path = (split.rpartition(":")[0] or DEFAULT_SPLIT_PATH) if split else None
+        if split_path and not Path(split_path).is_absolute():
+            split_path = REPO_ROOT / split_path
+        record = build_run_manifest(
+            requested_config=requested_config,
+            resolved_config=config.to_dict(),
+            derived_values={
+                "per_device_train_batch_size": batch_size,
+                "task_count": len(tasks),
+                "actual_task_ids": [task["id"] for task in tasks],
+                "actual_base_model": actual_base_model,
+                "trainer_planned_steps": planned,
+            },
+            source_baseline={
+                "configuration_baseline": load_mainline_config(config_path)["source_baseline"],
+                "execution_source": source_fingerprint(
+                    [Path(__file__), Path(__file__).with_name("mainline_config.py"),
+                     Path(__file__).with_name("grpo_reward.py")], repo_root=REPO_ROOT,
+                ),
+            },
+            inputs={
+                "model_manifest": file_fingerprint(Path(resolved) / "training_manifest.json"),
+                "source_model": {**model_input_fingerprint(resolved),
+                                 "stage": source_metadata["stage"]},
+                "base_model": model_input_fingerprint(actual_base_model),
+                "snapshot": file_fingerprint(snapshot_path),
+                "split": file_fingerprint(split_path),
+                "mainline_configuration": file_fingerprint(config_file_path(config_path)),
+            },
+            resource_overrides={
+                key: {"baseline": GRPO_DEFAULTS[key], "requested": requested_config[key]}
+                for key in ("qlora", "batch_size", "grad_accum", "gradient_checkpointing",
+                            "optim", "lora_r", "lora_alpha", "lora_dropout")
+                if requested_config[key] != GRPO_DEFAULTS[key]
+            },
+            requested_steps=max_steps,
+            protocol_metadata=current_protocol,
+            actual_steps=step,
+            stop_reason=reason,
+            protections={
+                "reward_variance_guard": {
+                    "enabled": guard is not None,
+                    "tripped": guard.tripped if guard is not None else None,
+                    "converged": guard.converged if guard is not None else None,
+                    "patience": guard.patience if guard is not None else None,
+                    "grace_steps": guard.grace_steps if guard is not None else None,
+                    "stop_step": guard.stop_step if guard is not None else None,
+                },
+                "canary_steps": canary_steps,
+                "canary_min_reward": min_canary_reward,
+                "canary_patience": canary_patience,
+                "canary_tripped": canary_cb.tripped if canary_cb is not None else None,
+                "verification_enabled": verify,
+            },
+        )
+        record_path = REPO_ROOT / output_dir / "run_manifest.json"
+        record_path.parent.mkdir(parents=True, exist_ok=True)
+        record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8")
+        return record
+
     try:
         train_result = trainer.train(
             resume_from_checkpoint=resolved_resume_checkpoint
         )
-    except BaseException:
+    except BaseException as exc:
+        try:
+            save_run_diagnostic(f"training_exception:{type(exc).__name__}")
+        except Exception as record_error:
+            print(f"训练异常时未能保存运行诊断: {type(record_error).__name__}")
         # JSONL is flushed after every reward batch. Also persist its compact
         # summary on OOM, Ctrl-C, or trainer failure so the last healthy batch
         # remains diagnosable instead of disappearing with the failed run.
@@ -755,9 +782,34 @@ def main(
             print(f"🔎 训练中断，已保留 rollout 审计: {failed_summary_path}")
         raise
 
+    train_loss = float(train_result.training_loss)
+    if not math.isfinite(train_loss):
+        try:
+            save_run_diagnostic("invalid_training_loss")
+        except Exception as record_error:
+            print(f"无效训练 loss 时未能保存运行诊断: {type(record_error).__name__}")
+        raise SystemExit(f"❌ GRPO training_loss不是有限数: {train_loss}")
+
+    actual_steps = int(getattr(trainer.state, "global_step", 0) or 0)
+    planned_steps = max_steps if max_steps > 0 else getattr(trainer.state, "max_steps", None)
+    stopped_early = bool(planned_steps and actual_steps < planned_steps)
+    if guard is not None and guard.tripped:
+        stop_reason = "reward_variance_initial_signal_missing"
+    elif guard is not None and guard.converged:
+        stop_reason = "reward_variance_window_saturated"
+    elif canary_cb is not None and canary_cb.tripped:
+        stop_reason = "canary_threshold"
+    elif stopped_early:
+        stop_reason = "trainer_stopped_early"
+    else:
+        stop_reason = "max_steps_or_epochs_completed"
+    run_record = save_run_diagnostic(stop_reason)
+
     # 放在方差/canary 退出检查之前：即使保护器提前停止，也保留诊断数据。
     reward_summary_path = tracker.save_task_summary(
-        REPO_ROOT / output_dir / "reward_probe_summary.json"
+        REPO_ROOT / output_dir / "reward_probe_summary.json",
+        protocol_metadata=current_protocol,
+        training_metadata=source_metadata,
     )
     print(f"📊 逐任务奖励统计: {reward_summary_path}")
     rollout_audit_summary_path = None
@@ -790,38 +842,22 @@ def main(
         if missing:
             raise SystemExit(f"❌ GRPO完成但adapter文件缺失: {missing}")
     import torch
-    actual_steps = int(getattr(trainer.state, "global_step", 0) or 0)
-    stopped_early = max_steps > 0 and actual_steps < max_steps
-    if guard is not None and guard.converged:
-        stop_reason = "reward_variance_window_saturated"
-    elif canary_cb is not None and canary_cb.tripped:
-        stop_reason = "canary_threshold"
-    elif stopped_early:
-        stop_reason = "trainer_stopped_early"
-    else:
-        stop_reason = "max_steps_or_epochs_completed"
     manifest = {
         "stage": "grpo_qlora" if qlora else "grpo_full",
         "source_model": resolved,
-        "base_model": base_model,
-        "task_set": task_set,
+        "base_model": actual_base_model,
+        "task_set": "default" if smoke else task_set,
         "split": split,
+        "smoke": smoke,
         "task_count": len(tasks),
-        "train_loss": float(train_result.training_loss),
+        "train_loss": train_loss,
         "learning_rate": lr,
         "beta": beta,
-        "dapo": dapo,
         "loss_type": loss_type,
         "epsilon_high": epsilon_high,
         "mask_truncated_completions": mask_truncated_completions,
         "importance_sampling_level": importance_sampling_level,
         "scale_rewards": scale_rewards,
-        "dynamic_sampling": {
-            "enabled": dynamic_sampling,
-            "reward_std_threshold": dynamic_sampling_std_threshold,
-            "max_resample_attempts": dynamic_sampling_max_resamples,
-            "single_process_only": True,
-        },
         "batch_size": batch_size,
         "gradient_accumulation_steps": grad_accum,
         "temperature": temperature,
@@ -873,8 +909,7 @@ def main(
         "model_parameters": model_parameters,
         "trainable_ratio_percent": trainable_ratio,
     })
-    if not math.isfinite(manifest["train_loss"]):
-        raise SystemExit(f"❌ GRPO training_loss不是有限数: {manifest['train_loss']}")
+    manifest.update(run_record)
     (final_dir / "training_manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -901,7 +936,7 @@ def main(
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="GRPO 训练")
-    p.add_argument("--model", default="outputs/dpo/final")
+    p.add_argument("--model", default=GRPO_DEFAULTS["model"])
     p.add_argument("--output_dir", default="outputs/grpo")
     p.add_argument("--epochs", type=int, default=1)
     p.add_argument("--max_steps", type=int, default=-1)
@@ -922,65 +957,35 @@ if __name__ == "__main__":
     )
     p.add_argument("--max_completion_length", type=int, default=256)
     p.add_argument(
-        "--max_turns", type=int, default=4,
-        help="每条 rollout 最多执行多少轮工具调用；环境 observation 不计入策略 loss",
+        "--max_turns", type=int, default=GRPO_DEFAULTS["max_turns"],
+        help="每条 rollout 最多执行6轮（含 FINISH）；环境 observation 不计入策略 loss",
     )
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument(
         "--loss_type", default=None,
-        choices=["grpo", "dapo", "bnpo", "dr_grpo", "cispo", "sapo", "luspo"],
-        help="token 级损失的归一化口径。'dapo' 按全局有效 token 数归一化，"
-             "消除长度偏置（DAPO 论文）。默认不传，沿用当前 TRL 的默认值",
+        choices=["grpo"],
+        help="主线损失字段；默认不传，继续委托当前 TRL，不猜填有效值",
     )
     p.add_argument(
         "--epsilon_high", type=float, default=None,
-        help="重要性比的上界（clip-higher）。DAPO 论文建议 0.28；"
+        help="重要性比的上界；"
              "默认不传，上下界取同一个 epsilon",
     )
     p.add_argument(
         "--mask_truncated_completions",
         action=argparse.BooleanOptionalAction, default=None,
-        help="把撞上 max_completion_length 的截断轨迹从 loss 里剔除（DAPO overlong "
-             "filtering）。默认不传，沿用 TRL 现值",
+        help="把撞上 max_completion_length 的截断轨迹从 loss 里剔除；默认不传",
     )
     p.add_argument(
         "--importance_sampling_level",
-        choices=["token", "sequence"], default=None,
-        help="重要性采样的粒度：token（默认）或 sequence（GSPO，Qwen3 提出的"
-             "序列级重要性采样——整条 completion 用一个比值，缓解长序列上"
-             "token 级比值的方差爆炸）。默认不传，沿用 TRL 现值",
+        choices=["token"], default=None,
+        help="主线重要性采样粒度；默认不传，继续委托 TRL",
     )
     p.add_argument(
         "--scale_rewards",
         choices=["group", "none", "batch"], default=None,
-        help="优势的归一化方式：group（组内 std 归一，默认）/ none（不归一，"
-             "Dr.GRPO 配方需配合 --loss_type dr_grpo 一起用）/ batch。"
+        help="优势的归一化方式：group / none / batch。"
              "默认不传，沿用 TRL 现值",
-    )
-    p.add_argument(
-        "--dapo", action="store_true",
-        help="DAPO 预设：loss_type=dapo、epsilon_high=0.28、"
-             "mask_truncated_completions=True、beta=0、dynamic_sampling=True。"
-             "显式给出的单项参数优先于该预设",
-    )
-    p.add_argument(
-        "--dynamic_sampling",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="按 prompt 过滤组内奖励标准差不足的 rollout，并用新 prompt 补满 batch。"
-             "默认仅随 --dapo 开启；当前只支持单进程",
-    )
-    p.add_argument(
-        "--dynamic_sampling_std_threshold",
-        type=float,
-        default=0.0,
-        help="接受 reward 组所需的最小样本标准差（严格大于该值）",
-    )
-    p.add_argument(
-        "--dynamic_sampling_max_resamples",
-        type=int,
-        default=32,
-        help="单个 generation batch 最多补采多少个新 prompt；耗尽时明确失败",
     )
     p.add_argument(
         "--seed", type=int, default=42,
@@ -1015,16 +1020,15 @@ if __name__ == "__main__":
     )
     p.add_argument("--snapshot", default=None)
     p.add_argument(
-        "--task_set", choices=["default", "expanded"], default="default",
-        help="default=benchmark/tasks.py 的 8 条冒烟任务（保持现状）；"
-             "expanded=完整基准集。改默认值会让既有训练曲线不可比，故需显式指定",
+        "--task_set", choices=["default", "expanded"], default=None,
+        help="正式训练显式选择 expanded 并指定训练切分；default只允许显式冒烟",
     )
     p.add_argument(
         "--split", default=None, metavar="[FILE:]NAME",
-        help=f"只用某一份切分训练，如 rl_train（用 {DEFAULT_SPLIT_PATH.name}）或 "
-             "data/splits/v2.json:train。rl_train 只含成功率中间带的任务——"
-             "GRPO 的梯度来自组内奖励方差，两端的任务不产生梯度。需配合 --task_set expanded",
+        help="正式训练必须指定已有 train/rl_train 切分，例如 data/splits/v7_86.json:train；"
+             "完整任务池不是训练集，dev/iid_test/ood_test禁止训练",
     )
+    p.add_argument("--smoke", action="store_true", help="显式选择8条冒烟任务，不是正式训练切分")
     p.add_argument(
         "--canary_steps", type=int, default=50,
         help="每隔多少步运行 canary 评估（0 表示禁用）",
@@ -1065,4 +1069,4 @@ if __name__ == "__main__":
         "--rollout_trace_max_samples", type=int, default=0,
         help="最多写入多少条原始 rollout（0=全部）；摘要统计始终覆盖全部样本",
     )
-    main(**vars(p.parse_args()))
+    main(**vars(parse_mainline_args(p, "grpo")))

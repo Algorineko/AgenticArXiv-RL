@@ -235,12 +235,22 @@ class RewardComponentTracker:
 
         return {"task_count": len(tasks), "tasks": tasks}
 
-    def save_task_summary(self, path: Any) -> Path:
+    def save_task_summary(
+        self, path: Any, *, protocol_metadata: Optional[Mapping[str, Any]] = None,
+        training_metadata: Optional[Mapping[str, Any]] = None,
+    ) -> Path:
         """持久化逐任务统计，并返回输出路径。"""
+        from rl.run_manifest import (
+            evaluation_protocol_relation, read_protocol_metadata, with_protocol_metadata,
+        )
+
+        summary = with_protocol_metadata(self.task_summary(), protocol_metadata)
+        summary["training_protocol_metadata"] = read_protocol_metadata(training_metadata)
+        summary["protocol_relation"] = evaluation_protocol_relation(training_metadata, protocol_metadata)
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
-            json.dumps(self.task_summary(), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         return output_path

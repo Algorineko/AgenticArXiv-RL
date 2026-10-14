@@ -46,10 +46,27 @@ class CostByAgentTest(unittest.TestCase):
 
     def test_failed_runs_count_toward_the_numerator(self):
         # 两次运行共 300 token，只有一次成功 -> 300，不是 100
-        row = self._cost([_m("regex", True, 100, 2), _m("regex", False, 200, 5)])
+        metrics = [_m("regex", True, 100, 2), _m("regex", False, 200, 5)]
+        row = self._cost(metrics)
         self.assertEqual(row["tokens_per_success"], 300.0)
         self.assertEqual(row["successes"], 1)
         self.assertEqual(row["runs"], 2)
+        # 复用原指标，仅核对 usage 未知与明确零的读取语义，不扩充行为输入。
+        metrics[1].total_tokens = None
+        report = BenchmarkReport(metrics, model="test")
+        partial = report.cost_by_agent()["regex"]
+        self.assertIsNone(partial["tokens_per_success"])
+        self.assertIsNone(report.summary_by_agent()["regex"]["avg_tokens"])
+        self.assertEqual(partial["known_total_tokens"], 100)
+        self.assertEqual(partial["token_usage_coverage"]["total_tokens"]["coverage"], 0.5)
+        self.assertIn("| Token / 成功 | n/a |", report.comparison_table_md())
+        metrics[0].total_tokens = None
+        unknown = self._cost(metrics)
+        self.assertIsNone(unknown["tokens_per_success"])
+        self.assertEqual(unknown["token_usage_coverage"]["total_tokens"]["unknown_runs"], 2)
+        for metric in metrics:
+            metric.total_tokens = 0
+        self.assertEqual(self._cost(metrics)["tokens_per_success"], 0)
 
     def test_cheap_but_useless_agent_is_not_flattered(self):
         # 失败得快 != 便宜。这正是不能只统计成功运行的原因。

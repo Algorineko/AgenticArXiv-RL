@@ -1,6 +1,9 @@
 import os
+import json
 import sys
+import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -8,6 +11,12 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 os.environ.setdefault("STORE_BACKEND", "memory")
 
 from rl.multiturn_env import AgenticArxivMultiTurnEnv  # noqa: E402
+from agents.react_contract import (  # noqa: E402
+    ParsedAction, ParseKind, make_history_step, render_observation,
+)
+from benchmark.runner import BenchmarkResult  # noqa: E402
+from benchmark.run_benchmark import _trace_record  # noqa: E402
+from rl.trajectory import create_trajectory, load_trajectories, save_trajectory  # noqa: E402
 
 
 PAPER = {
@@ -43,8 +52,8 @@ class FakeBackend:
 
 class MultiTurnEnvTest(unittest.TestCase):
     def setUp(self):
-        self.env = AgenticArxivMultiTurnEnv()
-        self.env.backend = FakeBackend()
+        self.env = AgenticArxivMultiTurnEnv(mode="replay", backend=FakeBackend())
+        self.addCleanup(self.env.close)
         self.env.reset(task_id="composite_01")
 
     def test_search_then_download_uses_same_session_state(self):
@@ -60,8 +69,14 @@ class MultiTurnEnvTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.env.download_arxiv_pdf(1)
 
-    def test_keyword_search_then_download_uses_same_session_state(self):
-        papers = self.env.search_arxiv_papers("all:agentic reinforcement learning", 3, 30)
+    def test_keyword_fallback_does_not_replace_session_state(self):
+        papers = self.env.get_recently_submitted_cs_papers("AI", 7, 3)
+        before = self.env.store.get_last_papers(self.env.session_id)
+        active = self.env.store.get_last_active_paper_id(self.env.session_id)
+        with self.assertRaisesRegex(ValueError, "未命中离线快照"):
+            self.env.search_arxiv_papers("all:agentic reinforcement learning", 3, 30)
+        self.assertEqual(self.env.store.get_last_papers(self.env.session_id), before)
+        self.assertEqual(self.env.store.get_last_active_paper_id(self.env.session_id), active)
         downloaded = self.env.download_arxiv_pdf(1)
         self.assertEqual(len(papers), 1)
         self.assertEqual(downloaded["paper_id"], PAPER["id"])
@@ -86,6 +101,31 @@ class MultiTurnEnvTest(unittest.TestCase):
         self.env.download_arxiv_pdf(None)
         after = self.env.get_paper_cache_status(paper_id=PAPER["id"])
         self.assertTrue(after["pdf_ready"])
+
+        # 复用上面的真实缓存结果，检查两条持久化路径，不补模型响应。
+        step = make_history_step(ParsedAction(
+            ParseKind.CALL, action={"name": "get_paper_cache_status", "args": {"paper_id": PAPER["id"]}},
+        ), result=after)
+        for field in ("downloaded_at", "updated_at"):
+            self.assertIsInstance(after["pdf"][field], datetime)
+            self.assertEqual(step["tool_result"]["pdf"][field], after["pdf"][field].isoformat())
+        self.assertEqual(step["visible_observation"], render_observation(after).text)
+        self.assertEqual(step["scoring_observation"], render_observation(
+            after, body_limit=None, include_reference_map=False,
+        ).text)
+        raw = {"history": [step]}
+        record = _trace_record(BenchmarkResult("composite_01", "regex", 0, raw))
+        restored = json.loads(json.dumps(record, ensure_ascii=False))
+        self.assertEqual(restored["history"][0]["tool_result"], step["tool_result"])
+        trajectory = create_trajectory(
+            task_id="composite_01", task="", session_id=self.env.session_id,
+            history=raw["history"], final_reward=0.0, metrics={},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "trajectory.jsonl"
+            save_trajectory(trajectory, path)
+            loaded = load_trajectories(path)
+        self.assertEqual(loaded[0].steps[0].tool_result, step["tool_result"])
 
     def test_null_reference_without_active_paper_fails(self):
         self.env.get_recently_submitted_cs_papers("AI", 7, 3)

@@ -23,15 +23,15 @@ import tools.pdf_download_tool  # noqa: F401,E402
 import tools.pdf_translate_tool  # noqa: F401,E402
 
 from benchmark.tasks import get_all_tasks  # noqa: E402
+from agents.react_contract import CONTEXT_VERSION, append_react_turn  # noqa: E402
 from rl.grpo_reward import (  # noqa: E402
     build_prompt_dataset,
-    build_multiturn_prompt_dataset,
     make_grpo_reward_fn,
     make_multiturn_rollout_func,
-    messages_to_trajectory,
     parse_react_action,
-    synthesize_trajectory,
 )
+from rl.reward import RewardCalculator  # noqa: E402
+from tests.test_rollout_audit import _clean_trajectory  # noqa: E402
 
 TASKS = {t["id"]: t for t in get_all_tasks()}
 TASK_ID = "search_01"
@@ -72,7 +72,7 @@ class TestParseReactAction(unittest.TestCase):
         失败调用；奖励因此低于 benchmark 对同一条轨迹的判定。
         """
         self.assertEqual(parse_react_action(JSON_FINISH), ("finish", None))
-        self.assertEqual(parse_react_action(JSON_FORCE_STOP), ("finish", None))
+        self.assertEqual(parse_react_action(JSON_FORCE_STOP), ("parse_error", None))
 
     def test_finish_case_insensitive(self):
         self.assertEqual(parse_react_action('Thought: t\nAction: {"name": "finish"}')[0],
@@ -94,26 +94,8 @@ class TestParseReactAction(unittest.TestCase):
         self.assertEqual(parse_react_action("")[0], "parse_error")
 
 
-class TestSynthesizeTrajectory(unittest.TestCase):
-    def test_tool_call_becomes_two_steps(self):
-        traj = synthesize_trajectory(CORRECT)
-        actions = [s["action"] for s in traj["history"]]
-        self.assertEqual(len(actions), 2)
-        self.assertIn("get_recently_submitted_cs_papers", actions[0])
-        self.assertEqual(actions[1], "FINISH")
-
-    def test_finish_is_single_step(self):
-        traj = synthesize_trajectory(BARE_FINISH)
-        self.assertEqual([s["action"] for s in traj["history"]], ["FINISH"])
-
-    def test_parse_error_marked(self):
-        traj = synthesize_trajectory(BAD_JSON)
-        self.assertEqual(traj["history"][0]["action"], "PARSE_ERROR")
-        self.assertTrue(traj["history"][0]["parse_failed"])
-
-
 class TestMultiTurnTrajectory(unittest.TestCase):
-    def test_structured_messages_preserve_real_tool_chain(self):
+    def test_structured_messages_cannot_replace_actual_trajectory(self):
         completion = [
             {
                 "role": "assistant",
@@ -138,14 +120,9 @@ class TestMultiTurnTrajectory(unittest.TestCase):
             {"role": "tool", "name": "download_arxiv_pdf", "content": "READY"},
             {"role": "assistant", "content": "已完成"},
         ]
-        traj = messages_to_trajectory(completion)
-        actions = [step["action"] for step in traj["history"]]
-        self.assertEqual(len(actions), 3)
-        self.assertIn("get_recently_submitted_cs_papers", actions[0])
-        self.assertIn("download_arxiv_pdf", actions[1])
-        self.assertEqual(actions[2], "FINISH")
-        self.assertEqual(traj["history"][0]["observation"], "3 papers")
-        self.assertEqual(traj["history"][1]["observation"], "READY")
+        fn = make_grpo_reward_fn(TASKS)
+        with self.assertRaisesRegex(ValueError, "缺少实际 trajectory_results"):
+            fn(completions=[completion], task_id=["composite_01"])
 
     def test_reward_uses_all_turns(self):
         completion = [
@@ -167,13 +144,20 @@ class TestMultiTurnTrajectory(unittest.TestCase):
             {"role": "assistant", "content": "done"},
         ]
         fn = make_grpo_reward_fn(TASKS)
-        reward = fn(completions=[completion], task_id=["composite_01"])[0]
-        self.assertEqual(reward, 1.0)
+        with self.assertRaisesRegex(ValueError, "缺少实际 trajectory_results"):
+            fn(completions=[completion], task_id=["composite_01"])
 
-    def test_custom_rollout_masks_environment_tokens(self):
+    @patch("rl.grpo_reward.require_rollout_func_support")
+    def test_custom_rollout_masks_environment_tokens(self, _require_trl):
         class Tokenizer:
             def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
-                return [1, 2]
+                ids = [1, 2]
+                for message in prompt[1:]:
+                    if message["role"] == "assistant":
+                        ids.append(101 if message["content"] == CORRECT else 102)
+                    else:
+                        ids.extend(self(message["content"])["input_ids"])
+                return ids
 
             def __call__(self, text, add_special_tokens=False):
                 return {"input_ids": [200 + i for i, _ in enumerate(text)]}
@@ -210,12 +194,32 @@ class TestMultiTurnTrajectory(unittest.TestCase):
             [[{"role": "user", "content": "task"}]], Trainer()
         )
         history = output["trajectory_results"][0]["history"]
+        trajectory = output["trajectory_results"][0]
+        self.assertEqual(trajectory["sampling_protocol"], CONTEXT_VERSION)
+        self.assertNotIn("training_protocol", trajectory)
+        self.assertIsNone(trajectory["training_protocol_metadata"]["training_protocol"])
         self.assertEqual(len(history), 2)
         self.assertIn("get_recently_submitted_cs_papers", history[0]["action"])
         self.assertEqual(history[1]["action"], "FINISH")
         self.assertIn(0, output["env_mask"][0])
         self.assertIn(1, output["env_mask"][0])
         self.assertEqual(len(output["completion_ids"][0]), len(output["env_mask"][0]))
+        self.assertEqual([
+            token for token, policy in zip(output["completion_ids"][0], output["env_mask"][0])
+            if policy
+        ], [101, 102])
+        fn = make_grpo_reward_fn(TASKS)
+        self.assertEqual(fn(
+            completions=[CORRECT], task_id=[TASK_ID],
+            trajectory_results=output["trajectory_results"],
+        ), [1.0])
+        # 复用迁移前已有的固定模板输出 [1, 2] 检查不兼容保护。
+        trainer = Trainer()
+        with patch.object(trainer.processing_class, "apply_chat_template", return_value=[1, 2]):
+            with self.assertRaisesRegex(ValueError, "无法保留原始采样 token 前缀"):
+                make_multiturn_rollout_func(Environment, max_turns=2)(
+                    [[{"role": "user", "content": "task"}]], trainer,
+                )
 
     @patch("rl.grpo_reward.require_rollout_func_support")
     def test_custom_rollout_excludes_generated_observations(self, _require_trl):
@@ -242,6 +246,23 @@ class TestMultiTurnTrajectory(unittest.TestCase):
                     def __call__(self, text, add_special_tokens=False):
                         return {"input_ids": [ord(char) for char in text]}
 
+                    def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
+                        ids = self(prompt[0]["content"])["input_ids"]
+                        for message in prompt[1:]:
+                            content = message["content"]
+                            if message["role"] == "assistant" and content.startswith(CORRECT):
+                                prefix = ""
+                                for token, piece in self.tokens.items():
+                                    if not content.startswith(prefix + piece):
+                                        break
+                                    ids.append(token)
+                                    prefix += piece
+                                    if prefix == content:
+                                        break
+                            else:
+                                ids.extend(self(content)["input_ids"])
+                        return ids
+
                     def decode(self, ids, skip_special_tokens=True):
                         return "".join(self.tokens.get(t, chr(t)) for t in ids)
 
@@ -266,6 +287,11 @@ class TestMultiTurnTrajectory(unittest.TestCase):
                         return "REAL_RESULT"
 
                 trainer = Trainer()
+                if name == "marker_at_start":
+                    with self.assertRaisesRegex(ValueError, "首轮没有合法策略 token"):
+                        make_multiturn_rollout_func(Environment, max_turns=2)(["task"], trainer)
+                    self.assertEqual(len(trainer.inputs), 1)
+                    continue
                 output = make_multiturn_rollout_func(Environment, max_turns=2)(
                     ["task"], trainer,
                 )
@@ -273,7 +299,7 @@ class TestMultiTurnTrajectory(unittest.TestCase):
                 mask = output["env_mask"][0]
                 tokenizer = trainer.processing_class
                 expected = list(tokenizer.tokens)[:retained]
-                invalid = name in {"overlapping_action", "marker_at_start"}
+                invalid = name == "overlapping_action"
                 if name != "budget_inside_marker" and not invalid:
                     expected += [ord(char) for char in BARE_FINISH]
                 self.assertEqual([t for t, m in zip(ids, mask) if m], expected)
@@ -289,10 +315,17 @@ class TestMultiTurnTrajectory(unittest.TestCase):
                     self.assertEqual(len(trainer.inputs), 1)
                     continue
 
-                suffix = "\nObservation: REAL_RESULT\nThought:"
+                suffix = append_react_turn(
+                    [{"role": "user", "content": "task"}], CORRECT, "REAL_RESULT",
+                )[-1]["content"]
                 env_text = tokenizer.decode([t for t, m in zip(ids, mask) if not m])
                 self.assertEqual(env_text, suffix[:budget - retained])
                 self.assertEqual(trajectory["history"][0]["observation"], "REAL_RESULT")
+                if name == "budget_inside_marker":
+                    self.assertEqual(trajectory["termination_reason"], "TOKEN_LIMIT")
+                    self.assertEqual(trajectory["history"][-1]["action"], "FORCE_STOP")
+                    self.assertTrue(trajectory["history"][-1]["framework_generated"])
+                    self.assertEqual(trajectory["iteration_count"], len(trainer.inputs))
                 if name != "budget_inside_marker":
                     self.assertEqual(trainer.inputs[1][0],
                                      output["prompt_ids"][0] + ids[:retained + len(suffix)])
@@ -300,59 +333,65 @@ class TestMultiTurnTrajectory(unittest.TestCase):
                     self.assertEqual(trajectory["history"][-1]["action"], "FINISH")
 
 
-class TestRewardOrdering(unittest.TestCase):
+class TestActualTrajectoryReward(unittest.TestCase):
     def setUp(self):
-        self.fn = make_grpo_reward_fn(TASKS, env=None)
+        self.fn = make_grpo_reward_fn(TASKS)
+        # 复用已有审计测试的完整 history，不另建单轮合成助手。
+        self.trajectory = _clean_trajectory()
 
     def r(self, completion, step=0):
         return self.fn(completions=[completion], task_id=[TASK_ID],
+                       trajectory_results=[self.trajectory],
                        trainer_state=FakeState(step))[0]
 
     def test_not_a_placeholder(self):
         """回归：原实现是 `return [0.0 for _ in responses]`，奖励恒为 0。"""
-        rewards = [self.r(c) for c in (CORRECT, WRONG_TOOL, BAD_JSON)]
-        self.assertNotEqual(len(set(rewards)), 1, "奖励不应恒为常数")
-        self.assertTrue(any(x != 0.0 for x in rewards))
-
-    def test_correct_beats_wrong_arguments(self):
-        self.assertGreater(self.r(CORRECT), self.r(WRONG_ARGS))
-
-    def test_correct_beats_wrong_tool(self):
-        self.assertGreater(self.r(CORRECT), self.r(WRONG_TOOL))
-
-    def test_valid_format_beats_unparseable(self):
-        self.assertGreater(self.r(WRONG_TOOL), self.r(BAD_JSON))
-        self.assertGreater(self.r(BARE_FINISH), self.r(NO_ACTION))
+        expected, _ = RewardCalculator().compute_reward_breakdown(
+            TASKS[TASK_ID], self.trajectory,
+        )
+        self.assertNotEqual(expected.total, 0.0)
+        # completion 文本不能覆写实际 history，也不能触发额外执行。
+        with patch("rl.grpo_reward._dispatch_environment_tool", side_effect=AssertionError):
+            rewards = [self.r(c) for c in (CORRECT, WRONG_TOOL, BAD_JSON)]
+        self.assertEqual(rewards, [expected.total] * 3)
 
     def test_batch_matches_elementwise(self):
         batch = self.fn(completions=[CORRECT, WRONG_TOOL, BAD_JSON],
+                        trajectory_results=[self.trajectory] * 3,
                         task_id=[TASK_ID] * 3, trainer_state=FakeState(0))
         self.assertEqual(len(batch), 3)
         self.assertEqual(batch, [self.r(CORRECT), self.r(WRONG_TOOL), self.r(BAD_JSON)])
 
     def test_unknown_task_id_is_neutral(self):
         self.assertEqual(
-            self.fn(completions=[CORRECT], task_id=["nope"], trainer_state=FakeState(0)),
+            self.fn(completions=[CORRECT], task_id=["nope"],
+                    trajectory_results=[self.trajectory], trainer_state=FakeState(0)),
             [0.0],
         )
 
+    def test_missing_trajectory_is_an_integration_error(self):
+        with self.assertRaisesRegex(ValueError, "缺少实际 trajectory_results"):
+            self.fn(completions=[CORRECT], task_id=[TASK_ID])
+
+    def test_trajectory_length_must_match_completions(self):
+        with self.assertRaisesRegex(ValueError, "输入长度不一致"):
+            self.fn(completions=[CORRECT, WRONG_TOOL, BAD_JSON],
+                    task_id=[TASK_ID] * 3, trajectory_results=[self.trajectory])
+
 
 class TestCurriculum(unittest.TestCase):
-    def test_correctness_gap_widens_after_curriculum(self):
+    def test_callback_forwards_curriculum_step(self):
         """RewardCalculator 的课程：早期压低语义正确性权重，后期给满。
 
         接上 trainer_state 后 training_step 才会推进；否则恒为 0、课程从不生效。
         """
-        fn = make_grpo_reward_fn(TASKS, env=None)
-
-        def gap(step):
-            good = fn(completions=[CORRECT], task_id=[TASK_ID],
-                      trainer_state=FakeState(step))[0]
-            bad = fn(completions=[WRONG_ARGS], task_id=[TASK_ID],
-                     trainer_state=FakeState(step))[0]
-            return good - bad
-
-        self.assertGreater(gap(60), gap(0))
+        calc = RewardCalculator()
+        fn = make_grpo_reward_fn(TASKS, reward_calc=calc)
+        with patch.object(calc, "compute_reward_breakdown", wraps=calc.compute_reward_breakdown) as score:
+            for step in (0, 60):
+                fn(completions=[CORRECT], task_id=[TASK_ID],
+                   trajectory_results=[_clean_trajectory()], trainer_state=FakeState(step))
+        self.assertEqual([call.kwargs["training_step"] for call in score.call_args_list], [0, 60])
 
 
 class TestPromptDataset(unittest.TestCase):
@@ -367,7 +406,7 @@ class TestPromptDataset(unittest.TestCase):
         self.assertIn("task_id", rows[0])
         self.assertEqual(rows[0]["prompt"][0]["_task_id"], rows[0]["task_id"])
 
-    def test_same_user_text_gets_observable_setup_context_and_hidden_ids(self):
+    def test_same_user_text_keeps_hidden_ids_without_invented_setup_state(self):
         tasks = [
             {"id": "empty_session", "task": "把刚才那篇论文翻译一下"},
             {
@@ -387,10 +426,10 @@ class TestPromptDataset(unittest.TestCase):
         rows = build_prompt_dataset(tasks)
         empty_prompt = rows[0]["prompt"][0]["content"]
         seeded_prompt = rows[1]["prompt"][0]["content"]
-        self.assertNotEqual(empty_prompt, seeded_prompt)
-        self.assertIn("没有既有论文列表", empty_prompt)
-        self.assertIn("此前已下载 ref=2", seeded_prompt)
-        self.assertIn("ref=null 会指向它", seeded_prompt)
+        self.assertEqual(empty_prompt, seeded_prompt)
+        self.assertNotIn("没有既有论文列表", empty_prompt)
+        self.assertNotIn("此前已下载 ref=2", seeded_prompt)
+        self.assertNotIn("ref=null 会指向它", seeded_prompt)
         # 环境状态可以看见，但任务标签和当前任务标准步骤不能混入文本。
         self.assertNotIn("empty_session", empty_prompt)
         self.assertNotIn("seeded_session", seeded_prompt)
@@ -400,12 +439,6 @@ class TestPromptDataset(unittest.TestCase):
             [row["prompt"][0]["_task_id"] for row in rows],
             ["empty_session", "seeded_session"],
         )
-
-    def test_multiturn_prompt_is_conversational(self):
-        rows = build_multiturn_prompt_dataset(get_all_tasks())
-        self.assertEqual([m["role"] for m in rows[0]["prompt"]], ["system", "user"])
-        self.assertIn("读取每次工具返回", rows[0]["prompt"][0]["content"])
-
 
 class FakeGenerationTrainer:
     """够 make_multiturn_rollout_func 跑一轮的最小 trainer 替身。"""
@@ -459,7 +492,8 @@ class MultiTurnRolloutCardinalityTest(unittest.TestCase):
                 return ""
 
         trainer = FakeGenerationTrainer(self._tokenizer(), num_generations=num_generations)
-        fn = make_multiturn_rollout_func(lambda: _Env(), max_turns=2)
+        with patch("rl.grpo_reward.require_rollout_func_support"):
+            fn = make_multiturn_rollout_func(lambda: _Env(), max_turns=2)
         prompts = [[{"role": "user", "content": "任务"}]] * num_prompts
         return fn(prompts, trainer), trainer
 
@@ -550,15 +584,15 @@ class MultiTurnRolloutCardinalityTest(unittest.TestCase):
             tasks["seeded_session"]["setup"],
         )
         self.assertTrue(tokenizer.seen_prompts)
-        self.assertNotEqual(
+        self.assertEqual(
             tokenizer.seen_prompts[0][0]["content"],
             tokenizer.seen_prompts[1][0]["content"],
         )
-        self.assertIn(
+        self.assertNotIn(
             "没有既有论文列表",
             tokenizer.seen_prompts[0][0]["content"],
         )
-        self.assertIn(
+        self.assertNotIn(
             "此前已检索最近 7 天",
             tokenizer.seen_prompts[1][0]["content"],
         )
@@ -574,8 +608,8 @@ class TrlVersionGuardTest(unittest.TestCase):
 
     trl < 0.28 只在 use_vllm 且 vllm_mode == "server" 时调用 rollout_func。
     默认配置下多轮采样根本不执行，也不报错 —— 奖励退回
-    messages_to_trajectory，任何非空 assistant 文本都被当成一步 FINISH，
-    随机初始化的模型输出词沙拉也能拿到正分。
+    旧单轮降级会将任意非空 assistant 文本当成 FINISH；当前回调禁止
+    缺少实际轨迹，因此仍须提前拒绝不调用 rollout_func 的旧版 TRL。
     """
 
     def test_version_boundary(self):

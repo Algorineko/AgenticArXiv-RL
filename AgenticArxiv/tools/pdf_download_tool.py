@@ -16,7 +16,7 @@ from utils.pdf_downloader import (
     release_lock,
     download_pdf,
 )
-from config import settings
+from utils.artifact_paths import artifact_path
 
 
 def _fallback_pdf_url(paper_id: str) -> str:
@@ -59,7 +59,9 @@ def download_arxiv_pdf(
     pdf_url = normalize_arxiv_pdf_url(pdf_url)
 
     filename = safe_filename(paper_id) + ".pdf"
-    local_path = os.path.join(settings.pdf_raw_path, filename)
+    raw_root = artifact_path("pdf_raw_path")
+    os.makedirs(raw_root, exist_ok=True)
+    local_path = os.path.join(raw_root, filename)
 
     # 1) 若已存在且不强制，直接返回 READY
     existed = os.path.exists(local_path) and os.path.getsize(local_path) > 0
@@ -74,6 +76,7 @@ def download_arxiv_pdf(
                 status="READY",
                 size_bytes=os.path.getsize(local_path),
                 downloaded_at=datetime.now(),
+                source="live",
             )
             store.upsert_pdf_asset(asset)
         else:
@@ -113,6 +116,7 @@ def download_arxiv_pdf(
                 sha256=None,
                 downloaded_at=None,
                 error=None,
+                source="live",
             )
             store.upsert_pdf_asset(asset)
         else:
@@ -135,6 +139,7 @@ def download_arxiv_pdf(
             sha256=sha256_hex,
             downloaded_at=datetime.now(),
             error=None,
+            source="live",
         )
 
         return {

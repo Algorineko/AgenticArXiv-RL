@@ -163,6 +163,21 @@ class TransformersLLMClient:
             self.model.to(device)
         self.model.eval()
 
+    @classmethod
+    def from_loaded(
+        cls, model: Any, tokenizer: Any, model_name: str = ""
+    ) -> "TransformersLLMClient":
+        """绑定已加载对象，不重复加载，也不改变模型的训练模式。"""
+        client = cls.__new__(cls)
+        client.model = model
+        client.tokenizer = tokenizer
+        client.model_name = model_name
+        client.seed = None
+        client._stream_seed = None
+        client._calls = 0
+        client.device = "loaded"
+        return client
+
     def start_generation_stream(self, stream_key: str) -> None:
         """Start an order-independent deterministic RNG stream for one rollout.
 
@@ -228,13 +243,42 @@ class TransformersLLMClient:
             output = self.model.generate(**inputs, **generation_kwargs)
         prompt_tokens = inputs["input_ids"].shape[-1]
         completion_ids = output[0, prompt_tokens:]
-        content = self.tokenizer.decode(completion_ids, skip_special_tokens=True)
+        raw_model_content = self.tokenizer.decode(completion_ids, skip_special_tokens=True)
+        content = raw_model_content
+        matched_stop = any(marker in raw_model_content for marker in stop)
         for marker in stop:
             if marker in content:
                 content = content.split(marker, 1)[0]
         completion_tokens = int(completion_ids.shape[-1])
+        # EOS 以实际 generate 覆盖/模型配置为准，不能把 tokenizer 的 EOS
+        # 猜成模型结束条件。配置不可得时保留未知，不据长度臆测结束原因。
+        unknown = object()
+        generation_config = generation_kwargs.get(
+            "generation_config", getattr(self.model, "generation_config", None)
+        )
+        eos_ids = generation_kwargs.get("eos_token_id", unknown)
+        if eos_ids is unknown:
+            config = generation_config if generation_config is not None else getattr(self.model, "config", None)
+            eos_ids = getattr(config, "eos_token_id", unknown)
+        eos_known = eos_ids is None or (
+            isinstance(eos_ids, int) and not isinstance(eos_ids, bool)
+        ) or (isinstance(eos_ids, (list, tuple)) and all(
+            isinstance(token, int) and not isinstance(token, bool) for token in eos_ids
+        ))
+        eos_values = (
+            {eos_ids} if isinstance(eos_ids, int) and not isinstance(eos_ids, bool)
+            else set(eos_ids or []) if eos_known else set()
+        )
+        ended_on_eos = bool(eos_values.intersection(completion_ids.tolist()))
+        finish_reason = None
+        if matched_stop or ended_on_eos:
+            finish_reason = "stop"
+        elif eos_known and completion_tokens >= int(generation_kwargs["max_new_tokens"]):
+            finish_reason = "length"
         return {
-            "choices": [{"message": {"role": "assistant", "content": content}}],
+            "choices": [{"message": {"role": "assistant", "content": content},
+                         "finish_reason": finish_reason}],
+            "raw_model_content": raw_model_content,
             "usage": {
                 "prompt_tokens": int(prompt_tokens),
                 "completion_tokens": completion_tokens,

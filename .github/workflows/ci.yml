@@ -28,9 +28,15 @@ jobs:
         pip install -r AgenticArxiv/requirements.txt
         pip install pytest pytest-cov
 
+    - name: Check service-free entrypoints and tools
+      env:
+        PYTHONPATH: AgenticArxiv
+      run: |
+        python -c 'import main; import rl.rollout; import benchmark.runner; from tools.bootstrap import require_all_tools, registered_tool_count; require_all_tools("CI"); assert registered_tool_count() == 10'
+
     - name: Run tests
       run: |
-        pytest AgenticArxiv/tests/ -v --tb=short
+        pytest AgenticArxiv/tests/ -v --tb=short --ignore=AgenticArxiv/tests/test_mainline_behavior_baseline.py
 
     - name: Lint with flake8
       run: |

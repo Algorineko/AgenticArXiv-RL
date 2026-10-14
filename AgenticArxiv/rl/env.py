@@ -1,26 +1,7 @@
-"""RL 环境封装：把"工具执行"变成可记录、可回放、可离线的状态转移函数。
+"""工具后端：显式 live、record 和只读 replay。
 
-设计要点
---------
-原实现有三个问题，这里一并修掉：
-
-1. **拦不住调用**：Agent 直接用全局 `registry`，env 根本没进链路。
-   → 现在 BaseAgent 支持注入 `env`，`_dispatch_tool()` 优先走 `env.execute_tool()`。
-
-2. **快照永远为空**：`_add_to_snapshot` 的调用点被注释掉了，
-   且 `generate_snapshot_from_benchmark()` 调用了并不存在的 `run_single_benchmark`。
-   → 现在 record 模式会真正落盘，快照生成脚本直接驱动工具、不依赖 benchmark runner。
-
-3. **key 含 session_id**：每次 rollout 的 session_id 都不同，缓存永远 miss。
-   → key 归一化时剔除易变字段。
-
-五个工具在离线模式下的处理策略不同：
-
-    get_recently_submitted_cs_papers  网络请求 → 快照回放
-    search_arxiv_papers               网络请求 → 快照回放 / 确定性降级
-    download_arxiv_pdf                网络请求 → 离线桩（写占位文件 + 更新 store）
-    translate_arxiv_pdf               子进程   → 由 LocalSideEffectManager 拦截，不进 env
-    get_paper_cache_status            纯本地   → 直接真实执行（读内存 store）
+共同 episode 持有会话与产物所有权。独立快照构建仍可使用 record；
+replay 缺记录时不会联网，翻译模拟由共同 episode 完成。
 """
 
 import inspect
@@ -62,7 +43,7 @@ class MockArxivEnv:
     工作原理：
       1. record 模式：真实调用工具，把 (tool, key) → result 落盘为 snapshot
       2. replay 模式：只查 snapshot，miss 即报错（保证完全离线、可复现）
-      3. auto   模式：先查 snapshot，miss 则真实调用并顺手记录
+      3. live 模式：仅真实执行，不隐式命中或写入旧快照
 
     适用场景：
       - 快速 rollout（避免真实 arXiv API 调用，GRPO 采样吞吐的刚需）
@@ -70,19 +51,19 @@ class MockArxivEnv:
       - 离线训练（不依赖外部网络）
     """
 
-    MODES = ("replay", "record", "auto")
+    MODES = ("replay", "record", "live")
 
     def __init__(
         self,
         snapshot_path: Optional[Path] = None,
-        mode: str = "auto",
-        offline_download: bool = True,
+        mode: str = "live",
+        offline_download: Optional[bool] = None,
         snapshot_tools: Optional[Set[str]] = None,
     ):
         """
         Args:
             snapshot_path: 快照文件路径（JSON）
-            mode: replay | record | auto
+            mode: replay | record | live
             offline_download: True 时 download_arxiv_pdf 走离线桩（不发 HTTP）
             snapshot_tools: 需要快照的工具名集合
         """
@@ -90,8 +71,10 @@ class MockArxivEnv:
             raise ValueError(f"mode 必须是 {self.MODES} 之一，收到 {mode!r}")
 
         self.snapshot_path = Path(snapshot_path) if snapshot_path else None
+        if mode == "replay" and self.snapshot_path and not self.snapshot_path.is_file():
+            raise FileNotFoundError(f"离线快照不存在: {self.snapshot_path}")
         self.mode = mode
-        self.offline_download = offline_download
+        self.offline_download = mode == "replay" if offline_download is None else offline_download
         self.snapshot_tools = snapshot_tools or set(DEFAULT_SNAPSHOT_TOOLS)
         self.snapshot: Dict[str, Dict[str, Any]] = {}
         # 只记录当前 rollout 进程内的离线下载状态。不能用磁盘文件是否存在
@@ -126,15 +109,28 @@ class MockArxivEnv:
         self._validate_tool_arguments(tool_name, internal_args)
         args = internal_args
 
+        # live 不从历史记录隐式命中，也不录制或合成失败替代结果。
+        if self.mode == "live":
+            self.stats["real_calls"] += 1
+            result = self._execute_live(tool_name, args)
+            self._sync_session_papers(tool_name, args, result)
+            return result
+
         # 1) 离线下载桩
         if tool_name == "download_arxiv_pdf" and self.offline_download:
             self.stats["offline_stubs"] += 1
             return self._offline_download(args)
 
+        if self.mode == "replay" and tool_name == "translate_arxiv_pdf":
+            raise ValueError("离线翻译必须经由每轨迹共同环境执行，不能启动真实翻译")
+
         # 2) 非快照工具（纯本地，如缓存查询）→ 直接真实执行
         if tool_name not in self.snapshot_tools:
+            if self.mode == "replay" and tool_name != "get_paper_cache_status":
+                self.stats["miss"] += 1
+                raise KeyError(f"[MockArxivEnv] replay 模式下快照缺失: tool={tool_name}")
             self.stats["real_calls"] += 1
-            return registry.execute_tool(tool_name, args)
+            return self._execute_live(tool_name, args)
 
         # 3) 快照工具
         key = self._make_key(args)
@@ -156,14 +152,14 @@ class MockArxivEnv:
         # 后续 aspect 直接命中已有池子，快照里就只剩第一条记录。
         if self.mode == "record":
             self.stats["real_calls"] += 1
-            result = registry.execute_tool(tool_name, args)
+            result = self._execute_live(tool_name, args)
             self._add_to_snapshot(tool_name, key, args, result)
             self._sync_session_papers(tool_name, args, result)
             return result
 
         if key in tool_data:
             self.stats["hit"] += 1
-            result = tool_data[key]["result"]
+            result = copy.deepcopy(tool_data[key]["result"])
             if tool_name == _KEYWORD_SEARCH_TOOL:
                 result = self._limit_search_result(result, args)
             self._sync_session_papers(tool_name, args, result)
@@ -175,19 +171,20 @@ class MockArxivEnv:
         if tool_name == _RECENT_SEARCH_TOOL:
             derived = self._derive_search_result(args, tool_data)
             if derived is not None:
-                self.stats["hit"] += 1
+                fallback = any(isinstance(item, dict) and item.get("_mock_env", {}).get("offline_fallback")
+                               for item in derived)
+                self.stats["fallback" if fallback else "hit"] += 1
                 self._sync_session_papers(tool_name, args, derived)
-                return derived
+                return copy.deepcopy(derived)
 
         if tool_name == _KEYWORD_SEARCH_TOOL:
             fallback = self._keyword_search_fallback(args, tool_data)
             if fallback is not None:
                 # 降级回退池不是快照命中：只返回带标记的结果，不写会话记忆。
-                # BaseAgent 检测到 offline_fallback 会向模型报告"工具执行失败"，
+                # 共同 episode 检测到 offline_fallback 会报告"工具执行失败"，
                 # 若这里把回退论文同步进 store，模型后续用 ref 操作会解析到
                 # 无关论文——观测说失败、状态里却有"论文"，两者矛盾。
-                # （多轮 GRPO 的 AgenticArxivMultiTurnEnv 会在方法层显式
-                # set_last_papers，其行为不受此影响。）
+                # 共同 episode 会将标记回退转换为明确的失败观测。
                 self.stats["fallback"] += 1
                 return fallback
 
@@ -203,32 +200,15 @@ class MockArxivEnv:
                 f"请先运行 `python -m rl.build_snapshot` 生成快照。"
             )
 
-        # record / auto：真实调用并记录
-        self.stats["real_calls"] += 1
-        try:
-            result = registry.execute_tool(tool_name, args)
-        except Exception as e:
-            # 外部 API 限流 (429) 或网络离线时提供确定性备选池
-            if tool_name == _RECENT_SEARCH_TOOL and self.mode == "auto":
-                aspect = str(args.get("aspect", "*"))
-                max_r = int(args.get("max_results", 5))
-                result = [
-                    {
-                        "id": f"2401.{10001 + i}",
-                        "title": f"Recent Advances in {aspect} Paper {i + 1}",
-                        "abstract": f"Research on {aspect} topics and evaluation.",
-                        "authors": ["Author A", "Author B"],
-                        "categories": [f"cs.{aspect}" if aspect != "*" else "cs.AI"],
-                        "pdf_url": f"https://arxiv.org/pdf/2401.{10001 + i}.pdf",
-                        "published": "2026-08-20T00:00:00Z",
-                    }
-                    for i in range(max_r)
-                ]
-            else:
-                raise
-        self._add_to_snapshot(tool_name, key, args, result)
-        self._sync_session_papers(tool_name, args, result)
-        return result
+        raise RuntimeError("回放模式未命中；禁止自动切换为真实执行")
+
+    @staticmethod
+    def _execute_live(tool_name: str, args: Dict[str, Any]) -> Any:
+        call_args = dict(args)
+        signature = inspect.signature(registry.get_tool(tool_name)["func"])
+        if "session_id" not in signature.parameters:
+            call_args.pop("session_id", None)
+        return registry.execute_tool(tool_name, call_args)
 
     @staticmethod
     def _validate_tool_arguments(tool_name: str, args: Dict[str, Any]) -> None:
@@ -261,6 +241,9 @@ class MockArxivEnv:
     ) -> None:
         """若带 session_id 且为搜索工具，同步更新 store 中的 papers 缓存"""
         if tool_name in _SEARCH_TOOLS and isinstance(result, list):
+            if any(isinstance(paper, dict) and paper.get("_mock_env", {}).get("offline_fallback")
+                   for paper in result):
+                return
             session_id = args.get("session_id")
             if session_id:
                 try:
@@ -289,7 +272,7 @@ class MockArxivEnv:
     def _derive_search_result(args: Dict[str, Any], tool_data: Dict[str, Any]):
         """从已记录的论文池里按 aspect 取子集，模拟真实检索的参数语义。
 
-        匹配优先级：同 aspect 的池 → "*" 全域池 → 任意池。
+        匹配优先级：同 aspect 的池 → "*" 全域池；任意池仅作为标记回退。
         返回 None 表示无可用池（交给上层走 miss 分支）。
         """
         if not tool_data:
@@ -322,7 +305,13 @@ class MockArxivEnv:
         except (TypeError, ValueError):
             max_results = 50
         max_results = max(1, min(max_results, len(pool)))
-        return pool[:max_results]
+        selected = copy.deepcopy(pool[:max_results])
+        if exact is None and wildcard is None:
+            selected[0]["_mock_env"] = {
+                "offline_fallback": True,
+                "message": "领域未命中离线快照；任意回退池不代表查询匹配结果。",
+            }
+        return selected
 
     @staticmethod
     def _limit_search_result(result: Any, args: Dict[str, Any]) -> Any:
@@ -388,6 +377,7 @@ class MockArxivEnv:
     def reset_runtime_state(self) -> None:
         """Clear mutable replay state between independent benchmark trials."""
         self._offline_downloaded.clear()
+        self.stats = {key: 0 for key in self.stats}
 
     def capture_state(self) -> Dict[str, Any]:
         """Capture mutable runtime state for a rollout sandbox.
@@ -417,7 +407,7 @@ class MockArxivEnv:
         """
         from datetime import datetime
 
-        from config import settings
+        from utils.artifact_paths import artifact_path
         from models.schemas import PdfAsset
         from models.store import store
 
@@ -444,9 +434,12 @@ class MockArxivEnv:
         ) or f"https://arxiv.org/pdf/{paper_id}.pdf"
         store.set_last_active_paper_id(session_id, paper_id)
 
-        safe_id = str(paper_id).replace("/", "_")
-        os.makedirs(settings.pdf_raw_path, exist_ok=True)
-        local_path = os.path.join(settings.pdf_raw_path, f"{safe_id}.pdf")
+        from utils.artifact_paths import safe_artifact_name
+
+        safe_id = safe_artifact_name(str(paper_id))
+        raw_root = artifact_path("pdf_raw_path")
+        os.makedirs(raw_root, exist_ok=True)
+        local_path = os.path.join(raw_root, f"{safe_id}.pdf")
 
         download_key = (str(session_id), str(paper_id))
         existed = download_key in self._offline_downloaded
@@ -470,6 +463,7 @@ class MockArxivEnv:
                 size_bytes=size_bytes,
                 downloaded_at=fixed_time,
                 updated_at=fixed_time,
+                source="offline_simulation",
             )
         )
         # MemoryStore.upsert_pdf_asset 会写入当前时间；离线回放必须固定它，

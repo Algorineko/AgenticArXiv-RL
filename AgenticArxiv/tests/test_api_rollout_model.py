@@ -11,7 +11,6 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agents.agent_engine import ReActAgent  # noqa: E402
-from agents.side_effects import NoOpSideEffectManager  # noqa: E402
 from rl.rollout import rollout_single_task  # noqa: E402
 from utils.llm_client import LLMClient  # noqa: E402
 
@@ -36,10 +35,10 @@ class TestApiRolloutModel(unittest.TestCase):
                 return [{"id": "paper-1", "title": "Paper one", "authors": [], "categories": ["cs.AI"]}]
 
         client = LLMClient(base_url="https://example.test", api_key="test")
-        agent = ReActAgent(client, side_effect_mgr=NoOpSideEffectManager(), env=Environment())
+        agent = ReActAgent(client, env=Environment())
         configured = SimpleNamespace(models=SimpleNamespace(agent_model=model))
         with tempfile.TemporaryDirectory() as output_dir:
-            with patch("agents.base_agent.settings", configured), patch("utils.llm_client.requests.post", side_effect=post):
+            with patch("agents.agent_engine.settings", configured), patch("utils.llm_client.requests.post", side_effect=post):
                 rollout_single_task("search_01", output_dir=output_dir, agent=agent, llm_client=client)
             trajectory = json.loads(next(Path(output_dir).glob("*.jsonl")).read_text(encoding="utf-8"))
 

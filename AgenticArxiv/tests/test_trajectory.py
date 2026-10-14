@@ -26,6 +26,8 @@ class TestTrajectoryStep(unittest.TestCase):
         self.assertEqual(step.llm_latency_ms, 0)
         self.assertEqual(step.tool_latency_ms, 0)
         self.assertFalse(step.parse_failed)
+        self.assertIsNone(step.raw_response)
+        self.assertIsNone(step.tool_result)
 
     def test_custom_values(self):
         step = TrajectoryStep(step=2, thought="t", action='{"name":"search"}', observation="ok",
@@ -56,6 +58,10 @@ class TestTrajectory(unittest.TestCase):
         self.assertEqual(traj.model, "")
         self.assertEqual(traj.termination_type, "")
         self.assertEqual(traj.reward_components, {})
+        self.assertIsNone(traj.runtime_version)
+        self.assertIsNone(traj.context_version)
+        self.assertIsNone(traj.chat_template_hash)
+        self.assertIsNone(traj.token_usage)
 
     def test_reward_components_not_shared(self):
         """field(default_factory=dict) 不应跨实例共享"""
@@ -93,6 +99,7 @@ class TestSaveLoadTrajectory(unittest.TestCase):
         self.assertEqual(loaded[0].final_reward, 1.5)
         self.assertEqual(loaded[0].model, "test-model")
         self.assertEqual(loaded[0].reward_components["format"], 1.0)
+        self.assertIsNone(loaded[0].token_usage)
 
     def test_save_appends_to_existing(self):
         save_trajectory(self._make_traj(task_id="a"), self.filepath)
@@ -156,6 +163,8 @@ class TestCreateTrajectory(unittest.TestCase):
         self.assertEqual(traj.model, "")
         self.assertEqual(traj.termination_type, "FINISH")
         self.assertEqual(traj.reward_components, {})
+        self.assertIsNone(traj.training_protocol)
+        self.assertIsNone(traj.token_usage)
 
     def test_empty_history(self):
         traj = create_trajectory(

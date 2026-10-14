@@ -1,287 +1,66 @@
-# AgenticArxiv
+# AgenticArXiv-RL 工程概览
 
-## 项目概览
+当前活动主线是 **SFT → GRPO → 文本 ReAct 评测**。普通 CLI、专家数据生成、训练采样和评测使用同一套 10 工具及任务资产，不再选择其他 Agent 架构或启动应用服务。
 
-ReAct Agent + arXiv 论文管理系统。支持三种 Agent 架构（ReAct、MCP、Skill/CLI），通过简单配置切换。核心特色：
+## 入口与模块
 
-- 🤖 **可扩展 Agent 框架**：三层架构（BaseAgent 通用循环 → 三种实现 → 工具执行）
-- 🔄 **实时 SSE 推送**：Agent 思考步骤、翻译进度实时更新
-- 💾 **自动化数据初始化**：FastAPI 启动时自动创建 7 张表，无需手动迁移
-- 🎨 **现代化前端**：Vue 3 + TypeScript，5 页面布局（KeepAlive 状态保留）
+| 入口 | 职责 |
+| --- | --- |
+| `AgenticArxiv/main.py` | 普通文本 ReAct 推理，保留外部 LLM API |
+| `AgenticArxiv/rl/rollout.py` | 执行任务并记录实际轨迹与奖励 |
+| `AgenticArxiv/benchmark/run_benchmark.py` | 指定任务集、切分及重复次数的评测 |
+| `scripts/generate_sft_data.py` | 按声明的 train 切分执行专家步骤，未来生成 SFT 数据 |
+| `scripts/generate_parametric_sft_data.py` | train 父任务的参数化派生与来源审计 |
+| `AgenticArxiv/rl/train_sft.py` | SFT，默认 QLoRA，也支持全参 |
+| `AgenticArxiv/rl/train_grpo.py` | 直接加载 SFT 产物的多轮 GRPO |
+| `AgenticArxiv/rl/reward.py` | 五分量评分、失败上限与诊断 |
+| `AgenticArxiv/models/store_memory.py` | 本地会话、论文及 PDF/译文资产状态 |
 
-## 技术栈
+工具注册来自 `tools/bootstrap.py` 和 `tools/tool_registry.py`。业务能力包括检索、下载、同步翻译、缓存查询、正文读取、总结、抽图、图表分析和译文读取；可选依赖缺失不能让工具注册静默缩水。
 
-- **后端**：FastAPI + uvicorn, SQLAlchemy 2.0 (pymysql), MySQL 8
-- **前端**：Vue 3 + TypeScript + Pinia + Vite
-- **Agent**：三种架构并存
-  - `regex`：正则解析 + 进程内调用（推荐默认，最快）
-  - `mcp`：MCP JSON-RPC 跨进程（标准、隔离）
-  - `skill_cli`：Skill 文档 + CLI 子进程（易理解）
+## 安装与检查
 
-## 关键架构设计
-
-### Agent 三层架构
-
-```
-BaseAgent (通用执行循环)
-  ├─ ReActAgent (正则解析)
-  ├─ MCPAgent (MCP 跨进程)
-  └─ SkillAgent (CLI 命令)
-       └─ ToolRegistry (进程内函数)
-```
-
-### 工作流程
-
-1. **工具发现**：子类 `discover_tools()` 返回 `[{name, description, parameters}]`
-2. **Prompt 构建**：`build_messages()` 注入历史和工具列表
-3. **LLM 调用**：通过 `llm_client.chat_completions()`
-4. **响应解析**：`parse_response()` 提取 `thought` 和 `action_dict`
-5. **副作用处理**：`_execute_with_side_effects()` 统一处理 session、翻译异步、论文状态
-6. **工具执行**：`invoke_tool()` 调用底层工具
-7. **日志 + SSE**：`_log_step()` 记录数据库 + 实时推送到前端
-
-### 数据库初始化（关键）
-
-**完全自动化**，无需手动迁移脚本：
-
-```python
-# api/app.py 启动时执行（lifespan context manager）
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    log.info("Initializing database tables...")
-    init_db()  # ← 自动创建 7 张表
-    store.validate_local_paths()
-    yield
-
-# models/db.py
-def init_db():
-    import models.orm  # 导入 ORM 注册到 Base.metadata
-    Base.metadata.create_all(bind=engine)  # SQLAlchemy 自动创建
-```
-
-**特性**：
-
-- ✅ 幂等性（可安全重复调用）
-- ✅ 无需 Alembic/FlywayDB
-- ✅ 自动创建索引
-- 表修改需手动 ALTER（对学生项目无问题）
-
-## 目录结构
-
-```
-AgenticArxiv/                    # Python 后端
-  agents/                        # Agent 核心
-    ├─ base_agent.py            # 通用执行循环 + SSE + 日志（最重要）
-    ├─ agent_engine.py          # ReActAgent 实现
-    ├─ prompt_templates.py      # Prompt 模板
-    └─ context_manager.py       # 上下文管理
-  mcp_protocol/                 # MCP 方案
-    ├─ server.py                # MCP 服务器
-    └─ mcp_agent.py             # MCPAgent 实现
-  skill_cli/                    # Skill/CLI 方案
-    ├─ SKILL.md                 # 工具文档（LLM 读这个）
-    ├─ skill_agent.py           # SkillAgent 实现
-    └─ tool_cli.py              # CLI 入口
-  tools/                        # 工具实现
-    ├─ tool_registry.py         # 工具注册表
-    ├─ arxiv_tool.py            # arXiv 搜索
-    ├─ pdf_download_tool.py     # PDF 下载
-    ├─ pdf_translate_tool.py    # PDF 翻译
-    └─ cache_status_tool.py     # 缓存查询
-  models/                       # 数据层
-    ├─ db.py                    # SQLAlchemy 引擎 + init_db()（关键）
-    ├─ orm.py                   # ORM 定义（7 张表）
-    ├─ store.py                 # 业务逻辑
-    └─ schemas.py               # Pydantic 模型
-  services/                     # 服务层
-    ├─ log_service.py           # 日志记录
-    ├─ runtime.py               # 翻译 Runner + Event Bus
-    └─ event_bus.py             # SSE 事件管理
-  api/                          # FastAPI 应用
-    ├─ app.py                   # 应用入口 + lifespan（自动初始化数据库）
-    └─ endpoints.py             # 路由定义
-  config.py                     # 环境变量配置
-  requirements.txt
-
-AgenticArxivWeb/                 # Vue 3 前端
-  src/
-    ├─ components/              # 5 大页面组件
-    │   ├─ ChatPanel.vue        # 对话 + Agent 思考链
-    │   ├─ PapersPanel.vue      # 论文列表
-    │   ├─ AssetsPanel.vue      # PDF 缓存 + 翻译进度
-    │   ├─ LogsPanel.vue        # 执行日志
-    │   ├─ SettingsPanel.vue    # 设置 (Agent 模式、主题、会话)
-    │   └─ Sidebar.vue          # 导航
-    ├─ stores/
-    │   └─ appStore.ts          # Pinia 状态管理
-    ├─ api/
-    │   ├─ client.ts            # axios
-    │   ├─ sse.ts               # SSE 管理
-    │   └─ types.ts             # 类型定义
-    ├─ App.vue                  # 主容器 (Sidebar + KeepAlive)
-    └─ main.ts                  # 入口
-```
-
-## 开发指南
-
-### 快速开发命令
+以下命令从仓库根目录执行：
 
 ```bash
-# 全自动启动（一键）
-make                # 启动前后端
-
-# 分别启动（调试）
-cd AgenticArxiv && uvicorn api.app:app --reload --port 8000
-cd AgenticArxivWeb && npm run dev -- --port 5173
-```
-
-### 三种 Agent 模式的差异
-
-| 模式                | 解析方式 | 执行方式   | 优点       | 缺点          | 最佳用途 |
-| ------------------- | -------- | ---------- | ---------- | ------------- | -------- |
-| **regex**     | 正则     | 进程内     | 快、简、稳 | JSON 格式敏感 | 推荐默认 |
-| **mcp**       | 正则     | JSON-RPC   | 标准、隔离 | 延迟、复杂    | 团队开发 |
-| **skill_cli** | 正则     | subprocess | 易理解     | 子进程开销    | 学习研究 |
-
-**如何切换**？编辑 `.env`：
-
-```env
-AGENT_TYPE=regex  # 改为 mcp 或 skill_cli
-```
-
-### 常见修改
-
-#### 增加新工具
-
-1. `tools/my_tool.py`：实现工具函数
-2. 调用 `register_tool()`
-3. Agent 自动发现
-
-#### 增加新 Agent 方案
-
-1. 继承 `BaseAgent`
-2. 实现 5 个抽象方法
-3. 在 `api/endpoints.py` 注册
-
-#### 修改 Prompt
-
-编辑 `agents/prompt_templates.py` 中的 `REACT_PROMPT_TEMPLATE` 或 `skill_cli/SKILL.md`
-
-#### 修改数据库表
-
-编辑 `models/orm.py`，启动时自动创建
-
-### 调试技巧
-
-```bash
-# 1. SQL 日志
-# models/db.py
-engine = create_engine(..., echo=True)
-
-# 2. 查看 Agent 详细日志
-# utils/logger.py
-log.debug(f"详细信息: {content}")
-
-# 3. FastAPI Swagger
-http://localhost:8000/docs
-
-# 4. 前端浏览器控制台
-// SSE 连接状态、API 响应
-
-# 5. 查看数据库
-mysql -u arxiv -parxiv123 agentic_arxiv
-SHOW TABLES;
-SELECT * FROM chat_logs;
-SELECT * FROM agent_steps;
-```
-
-## 部署清单
-
-### 新 Linux 环境部署
-
-```bash
-# 1. MySQL 初始化（一次性）
-mysql -u root -p << EOF
-CREATE DATABASE IF NOT EXISTS agentic_arxiv DEFAULT CHARACTER SET utf8mb4;
-CREATE USER IF NOT EXISTS 'arxiv'@'localhost' IDENTIFIED BY 'arxiv123';
-GRANT ALL PRIVILEGES ON agentic_arxiv.* TO 'arxiv'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-
-# 2. 环境配置
-cat > AgenticArxiv/.env << EOF
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-xxxxxxxx
-MODEL=gpt-4-turbo
-MYSQL_URI=mysql+pymysql://arxiv:arxiv123@localhost:3306/agentic_arxiv?charset=utf8mb4
-AGENT_TYPE=regex
-EOF
-
-# 3. 依赖安装
 make install
+source .venv/bin/activate
+# 按需安装真实 PDF 翻译和训练曲线后端
+make install-extra
 
-# 4. 启动（自动创建数据库表）
-make
-
-# ✅ 数据库表自动创建，无需额外步骤
+python -m AgenticArxiv.rl.rollout --help
+python -m AgenticArxiv.benchmark.run_benchmark --help
+python -m AgenticArxiv.main --help
+python -m pytest AgenticArxiv/tests/
 ```
 
-### 生产部署（systemd）
+测试命令另外需要 pytest，核心运行依赖不包含它；可运行范围与当前环境限制以迁移记录为准，不能把这条示例当作已执行的完整测试结果。
 
-```bash
-sudo tee /etc/systemd/system/agentic-arxiv-api.service > /dev/null << 'EOF'
-[Unit]
-Description=Agentic Arxiv API
-After=network.target mysql.service
+使用 API 后端时，显式配置 `LLM_BASE_URL`、`LLM_API_KEY` 与 `MODEL`；不要提交真实 `.env` 或凭据。使用本地训练模型不要求 API key。真实 PDF 翻译使用可选 `pdf2zh`，PDF/图像处理所需 PyMuPDF 与 Pillow 保留在核心依赖中。
 
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=/opt/agentic-arxiv
-Environment="PATH=/opt/agentic-arxiv/.venv/bin"
-ExecStart=/opt/agentic-arxiv/.venv/bin/python -m uvicorn AgenticArxiv.api.app:app \
-  --host 0.0.0.0 --port 8000
-Restart=always
+## 任务、切分与研究边界
 
-[Install]
-WantedBy=multi-user.target
-EOF
+- 8 条冒烟任务用于显式小范围检查，不代表全部任务执行。
+- 86 条扩展 TaskSpec 的身份、文本、标准步骤和初始化定义保留。
+- `data/splits/v7_86.json` 为 train 55、dev 8、iid_test 19、ood_test 4；完整任务集不等于训练集。
+- `data/splits/v6_grpo_train.json:rl_train` 是历史 33 条信号子集，来源为旧切分，不能报告为 v7 全量训练。
+- 历史数据、模型、报告和轨迹保持原样；历史字段缺失保持未知，不补写新协议事实。
 
-sudo systemctl daemon-reload
-sudo systemctl enable agentic-arxiv-api
-sudo systemctl start agentic-arxiv-api
-```
+正式命令必须明确使用哪份切分。默认 QLoRA 的 SFT 输出为 `outputs/sft_qlora/final`，GRPO 直接加载该目录；全参使用显式输出与模型目录。配置、模型交接、资源策略及未来命令见 [主线指南](docs/rl_building.md)。
 
-## 常见坑
+当前唯一消息协议为 `react-runtime-v2` / `react-messages-v3`：初始任务后 assistant 与环境 user Observation 交替，SFT 只监督当前 completion，GRPO 保留原采样 ID、严格前缀与 policy/env 掩码边界。旧/未知训练产物不会自动升级成兼容；历史读取与跨协议评测分别标注来源。
 
-❌ **错误**：启动时表未创建 → 删除数据库，重新启动（`init_db()` 会自动创建）
+## 退出范围
 
-❌ **错误**：LLM 生成 JSON 格式错误（True/False/None）→ ReAct prompt 中有严格约束
+DPO、OPD、PPO、GRPO 变体选择、自进化编排、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL 和 SSE 的活动入口已退出。图表工具的既有推理后端、快照构建、T5 backfill 和外部 LLM API 保留。旧算法对照和架构设计只作历史记录，不是当前运行方式。
 
-❌ **错误**：翻译进度卡住 → 检查后端日志，查看 SSE 连接是否正常
+本次工程重构不生成数据、不运行训练、不下载研究资产，不执行完整 86 任务、真实 tokenizer 集成或模型性能对照。帮助/源码核对、现有测试、历史记录读取和资产定义核对各自有独立证据，不能互相替代；实际结果与未验证路径见 [迁移记录](docs/mainline_migration.md)。
 
-❌ **错误**：Agent 重复搜索论文 → 会话上下文注入工作正常，LLM 有时会忽略
+## 文档
 
-❌ **错误**：启动时表未创建 → 确认 MySQL 已启动且 `.env` 中 `MYSQL_URI` 正确，然后重新启动（`init_db()` 会自动建表；若仍失败可重建空库 `agentic_arxiv` 后重启）
-
-## 文档位置
-
-- 📄 主 README：`README.md`（整体架构、快速开始、部署）
-- 📄 后端文档：`AgenticArxiv/readme.md`（三种 Agent 深入讲解）
-- 📄 前端文档：`AgenticArxivWeb/readme.md`（Vue 3 页面详解）
-- 📄 项目指南：此文件（Overview.md）
-
-## 关键代码位置
-
-| 功能           | 文件                          | 行号    |
-| -------------- | ----------------------------- | ------- |
-| Agent 执行循环 | `agents/base_agent.py`      | 66-173  |
-| 副作用处理     | `agents/base_agent.py`      | 192-277 |
-| 数据库初始化   | `api/app.py`                | 19-25   |
-| 数据库初始化   | `models/db.py`              | 27-30   |
-| ReAct 解析     | `agents/agent_engine.py`    | 58-121  |
-| MCP 工作流     | `mcp_protocol/mcp_agent.py` | 96-148  |
-| Skill 解析     | `skill_cli/skill_agent.py`  | 157-197 |
-| 工具注册       | `tools/tool_registry.py`    | -       |
-| 日志记录       | `services/log_service.py`   | -       |
-| SSE 推送       | `services/event_bus.py`     | -       |
+- [三语 README](README.md)：安装、主线命令与历史发布记录。
+- [后端说明](AgenticArxiv/readme.md)：文本 ReAct、工具与本地状态。
+- [benchmark 说明](AgenticArxiv/benchmark/readme.md)：切分、评分、报告与历史读取。
+- [主线指南](docs/rl_building.md)：配置、SFT 到 GRPO 与未来执行边界。
+- [坏例说明](eval/readme.md)：既有轨迹重评分与模型执行的区别。
+- [运行时契约](docs/react_runtime.md)：初始化、模式、解析、同步翻译及轨迹边界。

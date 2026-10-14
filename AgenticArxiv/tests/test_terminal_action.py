@@ -21,9 +21,9 @@ CLI 名之一，"FINISH" 匹配不上就走终止分支；实测 0 次命中，�
 import json
 import unittest
 
-from agents.base_agent import TERMINAL_ACTIONS, is_terminal_action
+from agents.react_contract import ParseKind, is_finish_action
 from agents.agent_engine import ReActAgent
-from benchmark.metrics import _check_tool_sequence, _extract_tool_sequence
+from benchmark.metrics import NON_TOOL_ACTIONS, _check_tool_sequence, _extract_tool_sequence
 
 
 def _step(action, observation=""):
@@ -31,17 +31,17 @@ def _step(action, observation=""):
 
 
 class IsTerminalActionTest(unittest.TestCase):
-    def test_accepts_every_terminal_marker(self):
-        for name in TERMINAL_ACTIONS:
-            self.assertTrue(is_terminal_action(name), name)
+    def test_only_finish_is_a_policy_terminal_marker(self):
+        for name in NON_TOOL_ACTIONS:
+            self.assertEqual(is_finish_action(name), name == "FINISH", name)
 
     def test_is_case_and_whitespace_insensitive(self):
         for text in ("finish", " FINISH ", "Finish\n"):
-            self.assertTrue(is_terminal_action(text), repr(text))
+            self.assertTrue(is_finish_action(text), repr(text))
 
     def test_rejects_tool_names_and_non_strings(self):
         for value in ("download_arxiv_pdf", "", None, 123, {"name": "FINISH"}):
-            self.assertFalse(is_terminal_action(value), repr(value))
+            self.assertFalse(is_finish_action(value), repr(value))
 
 
 class ReActParseTerminalTest(unittest.TestCase):
@@ -51,26 +51,30 @@ class ReActParseTerminalTest(unittest.TestCase):
         return ReActAgent._parse_react_text(None, response)
 
     def test_bare_finish_terminates(self):
-        _, action = self._parse("Thought: 完成了\nAction: FINISH")
-        self.assertIsNone(action)
+        parsed = self._parse("Thought: 完成了\nAction: FINISH")
+        self.assertEqual(parsed.kind, ParseKind.FINISH)
+        self.assertIsNone(parsed.action)
 
     def test_json_wrapped_finish_terminates(self):
-        _, action = self._parse(
+        parsed = self._parse(
             'Thought: 完成了\nAction: {"name": "FINISH", "args": {}}'
         )
-        self.assertIsNone(action)
+        self.assertEqual(parsed.kind, ParseKind.FINISH)
+        self.assertIsNone(parsed.action)
 
-    def test_json_wrapped_force_stop_terminates(self):
-        _, action = self._parse(
+    def test_json_wrapped_force_stop_is_not_finish(self):
+        parsed = self._parse(
             'Thought: 停\nAction: {"name": "FORCE_STOP", "args": {}}'
         )
-        self.assertIsNone(action)
+        self.assertEqual(parsed.kind, ParseKind.PARSE_ERROR)
+        self.assertIsNone(parsed.action)
 
     def test_real_tool_call_still_parses(self):
-        _, action = self._parse(
+        parsed = self._parse(
             'Thought: 下载\nAction: {"name": "download_arxiv_pdf", "args": {"ref": 1}}'
         )
-        self.assertEqual(action, {"name": "download_arxiv_pdf", "args": {"ref": 1}})
+        self.assertEqual(parsed.kind, ParseKind.CALL)
+        self.assertEqual(parsed.action, {"name": "download_arxiv_pdf", "args": {"ref": 1}})
 
 
 class MetricsTerminalActionTest(unittest.TestCase):

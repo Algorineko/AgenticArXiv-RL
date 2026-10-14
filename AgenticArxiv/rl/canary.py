@@ -18,18 +18,21 @@ Usage:
 
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Sequence
 
-import torch
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from transformers import TrainerCallback
 
+from agents.agent_engine import ReActAgent
+from agents.react_contract import ParseKind, build_react_messages, parse_react_response, project_result
+from benchmark.metrics import is_strict_success
 from benchmark.tasks import get_task_by_id
-from rl.grpo_reward import synthesize_trajectory
+from rl.env import MockArxivEnv
+from rl.multiturn_env import AgenticArxivMultiTurnEnv
 from rl.reward import RewardCalculator
+from utils.llm_client import TransformersLLMClient
 
 # 默认 canary 任务：一个简单搜索 + 一个复合任务，覆盖单步和多步场景
 DEFAULT_CANARY_TASK_IDS = ["search_01", "composite_01"]
@@ -44,14 +47,20 @@ class CanaryResult:
     task_completion_rate: float
     per_task_rewards: Dict[str, float]
     num_generations_per_task: int = 4
+    parse_rate: float = 0.0
+    task_ids: List[str] = field(default_factory=list)
+    episode_count: int = 0
+    max_iterations: int = 6
+    termination_counts: Dict[str, int] = field(default_factory=dict)
+    reference_oracle: str = "not_available"
+    protocol: Dict[str, Any] = field(default_factory=dict)
 
 
 class CanaryEvaluator:
     """在固定 canary 任务集上评估模型。
 
-    对每个任务生成多条 completion，计算 reward，汇总结果。
-    复用 grpo_reward.py 的 synthesize_trajectory 和 RewardCalculator，
-    确保评分标准与训练完全一致。
+    每个采样独立执行完整 episode，只从实际轨迹计算奖励与完成率。
+    默认仅离线回放，缺少输入明确失败，不自动调用在线工具。
     """
 
     def __init__(
@@ -64,6 +73,9 @@ class CanaryEvaluator:
         num_generations: int = 4,
         max_new_tokens: int = 256,
         temperature: float = 1.0,
+        max_iterations: int = 6,
+        environment_factory: Callable[[], AgenticArxivMultiTurnEnv] | None = None,
+        model_source: str = "",
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -73,38 +85,44 @@ class CanaryEvaluator:
         self.num_generations = num_generations
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
+        self.max_iterations = max_iterations
+        self.environment_factory = environment_factory
+        self.model_source = model_source
+        if num_generations < 1 or max_iterations < 1:
+            raise ValueError("Canary 采样数和完整 episode 轮数必须为正数")
 
         # 加载任务定义
-        self._tasks: Dict[str, Dict] = {}
+        self._tasks: List[Dict] = []
         for tid in self.canary_task_ids:
             task = get_task_by_id(tid)
             if task is None:
                 raise ValueError(f"Canary 任务不存在: {tid}")
-            self._tasks[tid] = task
+            self._tasks.append(task)
 
     @staticmethod
-    def _build_prompt(task: Dict) -> str:
-        """构造与训练时一致的 ReAct prompt（含工具描述与格式约束）。"""
-        from agents.prompt_templates import format_tool_description, get_react_prompt
+    def _build_messages(task: Dict) -> List[Dict]:
+        """验证辅助输入也使用共同初始消息，不保留另一种上下文实现。"""
+        from agents.prompt_templates import format_tool_description
         from tools.tool_registry import registry
 
         tools_desc = format_tool_description(registry.list_tools())
-        return get_react_prompt(task=task["task"], tools_description=tools_desc, history="")
+        return build_react_messages(task["task"], tools_desc)
 
-    def _render_prompt(self, prompt: str) -> str:
-        """按训练口径渲染：prompt 作为 user 消息过聊天模板。
-
-        `build_prompt_dataset` 交给 TRL 用 chat template 渲染消息；canary 若直接
-        tokenize 裸字符串，模型看到的是训练时从未出现过的输入格式——生成不收敛、
-        被 `max_new_tokens` 截断，JSON 解析失败，分数被系统性压到失败地板。
-        """
-        if not getattr(self.tokenizer, "chat_template", None):
-            return prompt
-        return self.tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+    def _new_environment(self) -> AgenticArxivMultiTurnEnv:
+        if self.environment_factory is not None:
+            return self.environment_factory()
+        source = self.env
+        if isinstance(source, AgenticArxivMultiTurnEnv):
+            source = source.backend
+        if source is None:
+            snapshot = Path(__file__).resolve().parents[2] / "data" / "mock_arxiv_snapshot.json"
+            return AgenticArxivMultiTurnEnv(snapshot_path=snapshot, mode="replay")
+        if not isinstance(source, MockArxivEnv):
+            raise TypeError("Canary env 必须是共同 episode 环境或 MockArxivEnv；也可显式传 factory")
+        if source.mode != "replay":
+            raise ValueError("Canary 默认离线回放，禁止自动联网后端；在线运行须显式传 environment_factory")
+        # 快照和后端可变状态的绑定/隔离只由共同环境负责。
+        return AgenticArxivMultiTurnEnv(backend=source, mode="replay")
 
     def evaluate(self, step: int = 0) -> CanaryResult:
         """运行一次 canary 评估。
@@ -112,67 +130,80 @@ class CanaryEvaluator:
         Returns:
             CanaryResult 包含聚合指标。
         """
-        device = next(iter(self.model.parameters())).device
+        was_training = bool(self.model.training)
         self.model.eval()
 
         all_rewards: List[float] = []
-        per_task: Dict[str, float] = {}
+        per_task: Dict[str, List[float]] = {}
         completed: int = 0
         total: int = 0
+        parsed = decisions = 0
+        termination_counts: Dict[str, int] = {}
+        client = TransformersLLMClient.from_loaded(self.model, self.tokenizer, self.model_source)
+        reference_oracle = "not_available"
+        protocol: Dict[str, Any] = {}
 
-        pad_token_id = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
+        try:
+            tasks = self._tasks
+            source = self.env.backend if isinstance(self.env, AgenticArxivMultiTurnEnv) else self.env
+            snapshot = getattr(source, "snapshot_path", None) if source is not None else (
+                Path(__file__).resolve().parents[2] / "data" / "mock_arxiv_snapshot.json"
+            )
+            if self.environment_factory is None and snapshot and Path(snapshot).is_file():
+                from benchmark.semantic_oracle import attach_expected_paper_ids
 
-        with torch.no_grad():
-            for tid, task in self._tasks.items():
-                prompt = self._build_prompt(task)
-                inputs = self.tokenizer(
-                    self._render_prompt(prompt), return_tensors="pt"
-                ).to(device)
-                prompt_len = inputs.input_ids.shape[1]
-
-                try:
-                    outputs = self.model.generate(
-                        **inputs,
-                        max_new_tokens=self.max_new_tokens,
-                        temperature=self.temperature,
-                        do_sample=True,
-                        num_return_sequences=self.num_generations,
-                        pad_token_id=pad_token_id,
-                    )
-                except Exception:
-                    # 生成失败（如 OOM）→ 记录地板分
-                    per_task[tid] = -1.0
-                    all_rewards.extend([-1.0] * self.num_generations)
-                    total += self.num_generations
-                    continue
-
-                # 只取新生成的 token（去掉 prompt 部分）
-                generated_ids = outputs[:, prompt_len:]
-                completions = self.tokenizer.batch_decode(
-                    generated_ids, skip_special_tokens=True
-                )
-
-                task_rewards = []
-                for completion in completions:
-                    result = synthesize_trajectory(completion, env=self.env)
+                tasks = attach_expected_paper_ids(tasks, snapshot)
+                reference_oracle = "snapshot-gold-steps; evaluator-only"
+            task_lookup = {task["id"]: task for task in tasks}
+            for task in tasks:
+                tid = task["id"]
+                task_rewards = per_task.setdefault(tid, [])
+                for trial in range(self.num_generations):
+                    environment = self._new_environment()
+                    agent = None
+                    try:
+                        agent = ReActAgent(
+                            client, env=environment, max_iterations=self.max_iterations,
+                            llm_extra={"temperature": self.temperature, "max_tokens": self.max_new_tokens},
+                        )
+                        result = agent.run(
+                            task["task"], task_def=task, task_lookup=task_lookup,
+                            session_id=f"canary_{tid}_{trial}"
+                        )
+                    finally:
+                        if agent is not None:
+                            agent.close()
+                        else:
+                            environment.close()
                     # 奖励带按 global step 变化的课程。Canary 必须使用当前训练
                     # step，否则跨过课程边界后会继续按 step=0 的早期权重打分，
                     # 与训练目标不可比。
-                    breakdown, _ = self.reward_calc.compute_reward_breakdown(
-                        task, result, training_step=step
+                    breakdown, metrics = self.reward_calc.compute_reward_breakdown(
+                        task, project_result(result), training_step=step
                     )
                     reward = float(breakdown.total)
                     task_rewards.append(reward)
-                    if breakdown.outcome > 0:
+                    if is_strict_success(metrics):
                         completed += 1
                     total += 1
-
-                per_task[tid] = (
-                    sum(task_rewards) / len(task_rewards) if task_rewards else -1.0
-                )
-                all_rewards.extend(task_rewards)
-
-        self.model.train()
+                    all_rewards.append(reward)
+                    reason = result.get("termination_reason") or metrics.termination_type
+                    termination_counts[reason] = termination_counts.get(reason, 0) + 1
+                    if not protocol:
+                        protocol = dict(result.get("protocol_relation") or {})
+                    for history_step in result["history"]:
+                        # 纯框架标记不是模型决策；TOKEN_LIMIT 保留了实际采样文本，
+                        # 即使它被框架截停，也须计入完整 episode 的解析率。
+                        if history_step.get("framework_generated") and history_step.get("termination_reason") != "TOKEN_LIMIT":
+                            continue
+                        raw = history_step.get("raw_response")
+                        if raw is None:
+                            continue
+                        decisions += 1
+                        if parse_react_response(raw).kind != ParseKind.PARSE_ERROR:
+                            parsed += 1
+        finally:
+            self.model.train(was_training)
 
         mean_reward = sum(all_rewards) / len(all_rewards) if all_rewards else -1.0
         completion_rate = completed / total if total > 0 else 0.0
@@ -181,8 +212,15 @@ class CanaryEvaluator:
             step=step,
             mean_reward=round(mean_reward, 4),
             task_completion_rate=round(completion_rate, 4),
-            per_task_rewards={k: round(v, 4) for k, v in per_task.items()},
+            per_task_rewards={k: round(sum(v) / len(v), 4) for k, v in per_task.items()},
             num_generations_per_task=self.num_generations,
+            parse_rate=round(parsed / decisions, 4) if decisions else 0.0,
+            task_ids=list(self.canary_task_ids),
+            episode_count=total,
+            max_iterations=self.max_iterations,
+            termination_counts=termination_counts,
+            reference_oracle=reference_oracle,
+            protocol=protocol,
         )
 
 

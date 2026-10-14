@@ -12,6 +12,8 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
+from agents.react_contract import project_result
+
 from benchmark.metrics import (
     TaskMetrics,
     argument_match_score,
@@ -166,6 +168,7 @@ class RewardCalculator:
         session_id: str = "rl_train",
         training_step: int = 0,
     ) -> Tuple[RewardBreakdown, TaskMetrics]:
+        result = project_result(result)
         metrics = extract_metrics(task_def, result, agent_type, trial, session_id)
         history = result.get("history", [])
         forced_finish = bool(result.get("forced_finish")) or any(
@@ -332,8 +335,8 @@ class RewardCalculator:
             semantic = min(metrics.arg_score, metrics.ref_score)
             outcome = max(0.25, 2 * semantic - 1)
             if forced_finish:
-                # `synthesize_trajectory` 在单步 rollout 末尾自动补的 FINISH
-                # 不是策略的终止决策：outcome 封顶到「部分完成」档即可。
+                # 历史单轮记录中的框架 FINISH 不是策略的终止决策：
+                # 读取旧记录时 outcome 仍封顶到「部分完成」档。
                 # 抑制范围只限 outcome 本身——format/tool/argument 的组内
                 # 区分度必须保留，否则单轮任务整组轨迹在安全门处被削平，
                 # 参数维度的优势在 GRPO 组内比较里彻底消失。
@@ -485,8 +488,8 @@ class RewardCalculator:
         elif metrics.false_finish:
             capped = min(capped, -0.25)
 
-        # ``synthesize_trajectory`` 用框架自动补的 FINISH 让单步 rollout 成形。
-        # 「不拿完整终止奖励」由 `_outcome_score` 的 forced_finish 分支在
+        # 历史单轮记录中的框架 FINISH 不应获得完整终止奖励。
+        # 该保护由 `_outcome_score` 的 forced_finish 分支在
         # outcome 内部执行；此处不再对总分截断——否则 format/tool/argument
         # 的组内区分度会在单轮任务上被一起削平（组内奖励全为同一常数，
         # GRPO 无梯度），恰好破坏本文件其余 safety gate 试图维持的区分度。

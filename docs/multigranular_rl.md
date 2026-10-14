@@ -42,6 +42,10 @@ A_i = (R_i - mean(R_group)) / (std(R_group) + epsilon)
 training/evaluation code; TRL's GRPO trainer performs the equivalent grouping
 internally. Constant-reward groups receive zero advantage.
 
+当前训练回调只返回实际轨迹的原始标量奖励，组内相对优势由训练器处理，不在
+rollout 或奖励回调中再归一化一次。上式说明概念，不能据此猜填未设置的
+`scale_rewards` 等库委托字段；当前源码显式配置与省略语义见 [主线指南](rl_building.md)。
+
 The full component dictionary is stored in every new trajectory under
 `reward_components`, making reward hacking and curriculum behavior auditable.
 Existing trajectory files load unchanged because the field has a default.
@@ -65,8 +69,9 @@ Existing trajectory files load unchanged because the field has a default.
 安全闸门只压低总奖励，不修改各分量的原始记录。
 因此审查轨迹时可以同时看 `total`、五个训练分量、
 `result_quality`、`efficiency` 和 `TaskMetrics`，判断分数为何被封顶。
-单步 rollout 由框架自动补出的 `FINISH` 使用 `forced_finish` 标记；
-它只限制 `outcome` 奖励，不把整个组的总分压成同一常数。
+历史轨迹中的 `forced_finish` 字段保留读取与评分语义。当前活动采样和验证
+必须提供实际多轮轨迹，不能自动补 FINISH、缺轨迹合成成功或评分时重执行工具。
+完整 episode 的 FINISH、解析失败、执行错误和预算截断分别记录。
 
 ## T5 图表分析 observation 的结果质量判定
 

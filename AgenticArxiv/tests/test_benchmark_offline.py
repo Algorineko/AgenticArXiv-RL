@@ -9,6 +9,8 @@ from unittest import mock
 
 from benchmark.metrics import _match_arg_value, argument_match_score
 from benchmark.runner import BenchmarkRunner
+from agents.react_contract import render_observation
+from rl.multiturn_env import AgenticArxivMultiTurnEnv
 
 
 def _step(name, args):
@@ -29,22 +31,6 @@ class _FakeEnv:
     def execute_tool(self, name, args):
         self.calls.append((name, dict(args)))
         return self._results.get(name)
-
-
-class _FakeSideEffects:
-    def __init__(self):
-        self.papers = {}
-        self.active = {}
-        self.translated = []
-
-    def set_last_papers(self, session_id, papers):
-        self.papers[session_id] = papers
-
-    def set_last_active_paper_id(self, session_id, paper_id):
-        self.active[session_id] = paper_id
-
-    def enqueue_translate(self, **kwargs):
-        self.translated.append(kwargs)
 
 
 class ArgumentMatchScoreTest(unittest.TestCase):
@@ -175,20 +161,20 @@ class ArgValueEquivalenceTest(unittest.TestCase):
 class ApplySetupTest(unittest.TestCase):
     """setup 直接调工具铺状态，不再走一遍完整 Agent。"""
 
-    def _runner(self, env, side_fx):
-        r = BenchmarkRunner(agent_types=["regex"], repeat=1, offline=True)
-        r._env, r._side_fx = env, side_fx
-        return r
+    def _environment(self, backend):
+        environment = AgenticArxivMultiTurnEnv(mode="live", backend=backend)
+        self.addCleanup(environment.close)
+        return environment
 
     def test_no_setup_is_a_no_op(self):
-        env, fx = _FakeEnv(), _FakeSideEffects()
-        self._runner(env, fx)._apply_setup({"id": "t"}, "s1")
+        env = _FakeEnv()
+        self._environment(env).reset(task_def={"id": "t"}, session_id="s1")
         self.assertEqual(env.calls, [])
 
     def test_search_setup_seeds_the_paper_list(self):
         papers = [{"id": "2608.1v1", "title": "A"}, {"id": "2608.2v1", "title": "B"}]
         env = _FakeEnv({"get_recently_submitted_cs_papers": papers})
-        fx = _FakeSideEffects()
+        environment = self._environment(env)
         task = {
             "id": "t",
             "setup": [
@@ -198,33 +184,36 @@ class ApplySetupTest(unittest.TestCase):
                 }
             ],
         }
-        self._runner(env, fx)._apply_setup(task, "s1")
+        environment.reset(task_def=task, session_id="s1")
 
         self.assertEqual(env.calls[0][0], "get_recently_submitted_cs_papers")
         self.assertEqual(env.calls[0][1]["session_id"], "s1")  # session_id 被注入
-        self.assertEqual([p.id for p in fx.papers["s1"]], ["2608.1v1", "2608.2v1"])
+        self.assertEqual([p.id for p in environment.store.get_last_papers("s1")],
+                         ["2608.1v1", "2608.2v1"])
 
     def test_download_setup_marks_the_active_paper(self):
         env = _FakeEnv(
             {"download_arxiv_pdf": {"paper_id": "2608.1v1", "status": "READY"}}
         )
-        fx = _FakeSideEffects()
+        environment = self._environment(env)
         task = {
             "id": "t",
             "setup": [{"name": "download_arxiv_pdf", "args": {"ref": 1}}],
         }
-        self._runner(env, fx)._apply_setup(task, "s1")
-        self.assertEqual(fx.active["s1"], "2608.1v1")
+        environment.reset(task_def=task, session_id="s1")
+        self.assertEqual(environment.store.get_last_active_paper_id("s1"), "2608.1v1")
 
-    def test_translate_setup_is_enqueued_not_executed(self):
-        env, fx = _FakeEnv(), _FakeSideEffects()
+    def test_translate_setup_is_synchronous_not_enqueued(self):
+        env = _FakeEnv()
+        environment = self._environment(env)
         task = {
             "id": "t",
             "setup": [{"name": "translate_arxiv_pdf", "args": {"ref": 1}}],
         }
-        self._runner(env, fx)._apply_setup(task, "s1")
-        self.assertEqual(env.calls, [])  # 不同步执行
-        self.assertEqual(fx.translated[0]["session_id"], "s1")
+        with self.assertRaises(RuntimeError):
+            environment.reset(task_def=task, session_id="s1")
+        self.assertEqual(env.calls[0][0], "translate_arxiv_pdf")
+        self.assertEqual(env.calls[0][1]["session_id"], "s1")
 
 
 class OfflineWiringTest(unittest.TestCase):
@@ -235,27 +224,26 @@ class OfflineWiringTest(unittest.TestCase):
 
         register_all_tools()
 
-    def test_online_runner_injects_no_env(self):
-        self.assertIsNone(BenchmarkRunner(offline=False)._tool_env())
+    def test_online_runner_uses_the_common_live_environment(self):
+        environment = BenchmarkRunner(offline=False)._tool_env()
+        self.addCleanup(environment.close)
+        self.assertIsInstance(environment, AgenticArxivMultiTurnEnv)
+        self.assertEqual(environment.mode, "live")
 
     def test_missing_snapshot_fails_loudly(self):
         r = BenchmarkRunner(offline=True, snapshot="/nonexistent/snap.json")
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(FileNotFoundError):
             r._tool_env()
 
-    def test_offline_forces_local_side_effects(self):
-        from agents.side_effects import LocalSideEffectManager
-
-        self.assertIsInstance(
-            BenchmarkRunner(offline=True)._side_effects(), LocalSideEffectManager
-        )
+    def test_runner_does_not_keep_a_global_side_effect_manager(self):
+        self.assertFalse(hasattr(BenchmarkRunner(offline=True), "_side_fx"))
 
     def test_empty_session_translate_fails_instead_of_creating_none_paper_task(self):
-        from agents.side_effects import LocalSideEffectManager
-
-        fx = LocalSideEffectManager()
-        with self.assertRaisesRegex(ValueError, "未找到指代对象"):
-            fx.enqueue_translate(session_id="empty-translate-test", ref=None)
+        environment = AgenticArxivMultiTurnEnv(mode="live")
+        self.addCleanup(environment.close)
+        environment.reset(session_id="empty-translate-test")
+        with self.assertRaisesRegex(RuntimeError, "未找到指代对象"):
+            environment.translate_arxiv_pdf(ref=None)
 
     def test_offline_download_state_and_timestamps_ignore_existing_disk_files(self):
         import config
@@ -279,33 +267,38 @@ class OfflineWiringTest(unittest.TestCase):
             existing = Path(tmpdir) / "2601.00001v1.pdf"
             existing.write_bytes(b"an old file with a different size")
 
-            use_memory_store(reset=True)
-            store.set_last_papers("trial", [paper])
-            env = MockArxivEnv(mode="replay")
+            env = AgenticArxivMultiTurnEnv(mode="replay", backend=MockArxivEnv(mode="replay"))
+            self.addCleanup(env.close)
+            env.reset(session_id="trial")
+            env.store.set_last_papers("trial", [paper])
             first = env.execute_tool(
-                "download_arxiv_pdf", {"session_id": "trial", "ref": 1}
+                "download_arxiv_pdf", {"ref": 1}
             )
             second = env.execute_tool(
-                "download_arxiv_pdf", {"session_id": "trial", "ref": 1}
+                "download_arxiv_pdf", {"ref": 1}
             )
-            first_asset = store.get_pdf_asset(paper.id)
+            first_asset = env.store.get_pdf_asset(paper.id)
 
             self.assertFalse(first["existed"])
             self.assertTrue(second["existed"])
-            self.assertEqual(first["size_bytes"], 39)
+            self.assertEqual(first["size_bytes"], 0)
+            self.assertTrue(first["offline"])
+            self.assertEqual(existing.read_bytes(), b"an old file with a different size")
             self.assertEqual(str(first_asset.downloaded_at), "2000-01-01 00:00:00")
             self.assertEqual(str(first_asset.updated_at), "2000-01-01 00:00:00")
 
-            use_memory_store(reset=True)
-            store.set_last_papers("trial", [paper])
-            another_env = MockArxivEnv(mode="replay")
+            another_env = AgenticArxivMultiTurnEnv(
+                mode="replay", backend=MockArxivEnv(mode="replay")
+            )
+            self.addCleanup(another_env.close)
+            another_env.reset(session_id="trial")
+            another_env.store.set_last_papers("trial", [paper])
             repeated_run = another_env.execute_tool(
-                "download_arxiv_pdf", {"session_id": "trial", "ref": 1}
+                "download_arxiv_pdf", {"ref": 1}
             )
             self.assertFalse(repeated_run["existed"])
 
-    def test_offline_trial_reset_clears_env_and_translate_runtime_state(self):
-        from agents.side_effects import LocalSideEffectManager
+    def test_episode_reset_clears_own_state_without_changing_shared_store(self):
         from models.store import store, use_memory_store
 
         class FakeEnv:
@@ -317,18 +310,15 @@ class OfflineWiringTest(unittest.TestCase):
 
         use_memory_store(reset=True)
         store.set_last_active_paper_id("old", "2601.00001v1")
-        runner = BenchmarkRunner(offline=True)
-        runner._env = FakeEnv()
-        runner._side_fx = LocalSideEffectManager()
-        runner._side_fx._translate_seq = 7
-        runner._side_fx.published_events.append({"old": True})
+        backend = FakeEnv()
+        environment = AgenticArxivMultiTurnEnv(mode="live", backend=backend)
+        self.addCleanup(environment.close)
+        environment.store.set_last_active_paper_id("old", "2601.00001v1")
+        environment.reset()
 
-        runner._reset_offline_trial_state()
-
-        self.assertIsNone(store.get_last_active_paper_id("old"))
-        self.assertEqual(runner._env.reset_count, 1)
-        self.assertEqual(runner._side_fx._translate_seq, 0)
-        self.assertEqual(runner._side_fx.published_events, [])
+        self.assertIsNone(environment.store.get_last_active_paper_id("old"))
+        self.assertEqual(store.get_last_active_paper_id("old"), "2601.00001v1")
+        self.assertEqual(backend.reset_count, 1)
 
 
 class ReplayArgumentValidationTest(unittest.TestCase):
@@ -374,30 +364,28 @@ class SearchSessionSyncTest(unittest.TestCase):
 
     def test_both_search_tools_seed_the_same_session_memory_and_show_titles(self):
         from agents.agent_engine import ReActAgent
-        from agents.side_effects import LocalSideEffectManager
 
         paper = {"id": "2601.00001v1", "title": "Keyword Result"}
         for tool_name in ("get_recently_submitted_cs_papers", "search_arxiv_papers"):
             with self.subTest(tool=tool_name):
                 session_id = f"search-sync-{tool_name}"
-                fx = LocalSideEffectManager()
                 env = _FakeEnv({tool_name: [paper]})
-                agent = ReActAgent(llm_client=None, side_effect_mgr=fx, env=env)
-                agent.session_id = session_id
-
-                observation = agent._execute_with_side_effects(
-                    {"name": tool_name, "args": {}}
-                )
+                agent = ReActAgent(llm_client=None, env=env)
+                self.addCleanup(agent.close)
+                agent.env.reset(session_id=session_id)
+                args = {"query": paper["title"]} if tool_name == "search_arxiv_papers" else {}
+                observation = render_observation(agent.env.step(
+                    {"name": tool_name, "args": args}
+                )).text
 
                 self.assertIn("Keyword Result", observation)
                 self.assertEqual(
-                    [p.id for p in fx.get_last_papers(session_id)],
+                    [p.id for p in agent.env.store.get_last_papers(session_id)],
                     ["2601.00001v1"],
                 )
 
     def test_keyword_fallback_is_reported_as_failure_and_does_not_seed_session(self):
         from agents.agent_engine import ReActAgent
-        from agents.side_effects import LocalSideEffectManager
 
         paper = {
             "id": "2601.00001v1",
@@ -408,21 +396,17 @@ class SearchSessionSyncTest(unittest.TestCase):
             },
         }
         session_id = "keyword-fallback-not-success"
-        fx = LocalSideEffectManager()
         env = _FakeEnv({"search_arxiv_papers": [paper]})
-        agent = ReActAgent(llm_client=None, side_effect_mgr=fx, env=env)
-        agent.session_id = session_id
+        agent = ReActAgent(llm_client=None, env=env)
+        self.addCleanup(agent.close)
+        agent.env.reset(session_id=session_id)
 
-        observation = agent._execute_with_side_effects(
-            {
+        with self.assertRaisesRegex(ValueError, "回退子集不是查询结果"):
+            agent.env.step({
                 "name": "search_arxiv_papers",
                 "args": {"query": "all:unknown", "days": 30, "max_results": 3},
-            }
-        )
-
-        self.assertIn("工具执行失败", observation)
-        self.assertIn("不代表查询匹配结果", observation)
-        self.assertEqual(fx.get_last_papers(session_id), [])
+            })
+        self.assertEqual(agent.env.store.get_last_papers(session_id), [])
 
 
 class LocalLlmBackendTest(unittest.TestCase):
@@ -462,6 +446,7 @@ class LocalLlmBackendTest(unittest.TestCase):
             mock.patch(
                 "benchmark.runner.TransformersLLMClient", return_value=sentinel
             ) as local,
+            mock.patch("benchmark.runner.Path.exists", return_value=True),
         ):
             runner = BenchmarkRunner(
                 model="/models/qwen",

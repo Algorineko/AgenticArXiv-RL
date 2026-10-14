@@ -11,7 +11,6 @@
     python -m AgenticArxiv.rl.rollout --all --snapshot data/mock_arxiv_snapshot.json
 """
 
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,16 +21,11 @@ import fire
 # 添加 AgenticArxiv 到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# RL 路径不依赖数据库：会话状态走内存 store
-os.environ.setdefault("STORE_BACKEND", "memory")
-
 from agents.agent_engine import ReActAgent
-from agents.side_effects import LocalSideEffectManager
 from benchmark.task_spec import build
 from benchmark.tasks import get_all_tasks, get_task_by_id
-from rl.env import MockArxivEnv
+from rl.multiturn_env import AgenticArxivMultiTurnEnv
 from rl.reward import RewardCalculator
-from rl.sandbox import RolloutSandbox
 from rl.trajectory import create_trajectory, save_trajectory
 from utils.llm_client import TransformersLLMClient, get_env_llm_client
 
@@ -68,40 +62,35 @@ def _create_agent(
     model: Optional[str] = None,
     snapshot: Optional[str] = None,
     temperature: float = 0.1,
-    max_iterations: int = 5,
+    max_iterations: int = 6,
+    offline: bool = True,
 ):
-    env = None
-    if snapshot:
-        snapshot_path = Path(snapshot)
-        if snapshot_path.exists():
-            env = MockArxivEnv(snapshot_path=snapshot_path, mode="replay")
-        else:
-            env = MockArxivEnv(mode="auto")
-    else:
-        default_snap = Path(__file__).resolve().parents[2] / "data" / "mock_arxiv_snapshot.json"
-        if default_snap.exists():
-            env = MockArxivEnv(snapshot_path=default_snap, mode="replay")
-
-    if model and Path(model).exists():
+    if max_iterations < 1:
+        raise ValueError("max_iterations 必须至少为 1，FINISH 也占用一轮")
+    if snapshot and not offline:
+        raise ValueError("snapshot 仅可用于显式 offline 模式")
+    snapshot_path = None
+    if offline:
+        snapshot_path = Path(snapshot) if snapshot else (
+            Path(__file__).resolve().parents[2] / "data" / "mock_arxiv_snapshot.json"
+        )
+        if not snapshot_path.exists():
+            raise FileNotFoundError(f"离线模式需要已有快照: {snapshot_path}")
+    if model:
+        if not Path(model).exists():
+            raise FileNotFoundError(f"指定的本地模型不存在: {model}")
         llm_client = TransformersLLMClient(model)
     else:
         llm_client = get_env_llm_client()
 
+    env = AgenticArxivMultiTurnEnv(
+        snapshot_path, mode="replay" if offline else "live"
+    )
     agent = ReActAgent(
         llm_client,
-        side_effect_mgr=LocalSideEffectManager(),
         env=env,
         max_iterations=max_iterations,
         llm_extra={"temperature": temperature},
-    )
-    # rollout_all_tasks reuses one Agent instance.  Capture a pristine
-    # in-memory/filesystem baseline so each task starts from the same world.
-    from models.store import get_store
-    from config import settings
-
-    agent.rollout_sandbox = RolloutSandbox(
-        *(component for component in (env, get_store()) if component is not None),
-        file_roots=(Path(settings.pdf_raw_path), Path(settings.pdf_translated_path)),
     )
     return agent, llm_client
 
@@ -133,12 +122,11 @@ def rollout_single_task(
     if agent is None:
         agent, llm_client = _create_agent()
 
-    sandbox = getattr(agent, "rollout_sandbox", None)
-    if sandbox is not None:
-        sandbox.reset()
-
     print(f"🤖 执行 Agent...")
-    result = agent.run(task_def["task"], session_id=session_id)
+    try:
+        result = agent.run(task_def["task"], session_id=session_id, task_def=task_def)
+    finally:
+        agent.close()
 
     # 计算 reward
     reward_calc = RewardCalculator()
@@ -147,7 +135,7 @@ def rollout_single_task(
     )
     reward = reward_breakdown.total
 
-    print(f"✅ 任务完成")
+    print(f"交互结束: {result['termination_reason']}")
     print(f"   Reward: {reward:.2f}")
     print(
         f"   Metrics: task_completed={metrics.task_completed}, "
@@ -157,7 +145,7 @@ def rollout_single_task(
     )
 
     # 构造 trajectory
-    model_name = _get_model_name(llm_client)
+    model_name = _get_model_name(llm_client or agent.llm_client) or result["model"]
     traj = create_trajectory(
         task_id=task_def["id"],
         task=task_def["task"],
@@ -176,16 +164,16 @@ def rollout_single_task(
         model=model_name,
         termination_type=metrics.termination_type,
         reward_components=reward_breakdown.to_dict(),
+        termination_reason=result["termination_reason"],
+        protocol_fields=result["protocol_metadata"],
+        training_protocol_metadata=result["training_protocol_metadata"],
+        protocol_relation=result["protocol_relation"],
+        token_usage=result.get("token_usage"),
     )
 
     output_path = Path(output_dir) / f"rollout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
     save_trajectory(traj, output_path)
     print(f"💾 Trajectory 保存至: {output_path}")
-
-    # Do not let this rollout's papers/cache/files leak into the next task.
-    if sandbox is not None:
-        sandbox.reset()
-
 
 def rollout_all_tasks(
     output_dir: str = "traces/train",
@@ -193,8 +181,9 @@ def rollout_all_tasks(
     model: Optional[str] = None,
     snapshot: Optional[str] = None,
     temperature: float = 0.1,
-    max_iterations: int = 5,
+    max_iterations: int = 6,
     task_set: str = "basic",
+    offline: bool = True,
 ) -> None:
     """对所有任务执行 rollout"""
     if task_set == "expanded":
@@ -205,7 +194,8 @@ def rollout_all_tasks(
 
     print(f"📚 共 {len(tasks)} 个任务 (task_set={task_set})")
     agent, llm_client = _create_agent(
-        model=model, snapshot=snapshot, temperature=temperature, max_iterations=max_iterations
+        model=model, snapshot=snapshot, temperature=temperature,
+        max_iterations=max_iterations, offline=offline,
     )
 
     for i, task_def in enumerate(tasks):
@@ -233,8 +223,9 @@ def main(
     model: Optional[str] = None,
     snapshot: Optional[str] = None,
     temperature: float = 0.1,
-    max_iterations: int = 5,
+    max_iterations: int = 6,
     task_set: str = "basic",
+    offline: bool = True,
 ):
     """Rollout 主函数"""
     if all:
@@ -245,10 +236,12 @@ def main(
             temperature=temperature,
             max_iterations=max_iterations,
             task_set=task_set,
+            offline=offline,
         )
     elif task_id:
         agent, llm_client = _create_agent(
-            model=model, snapshot=snapshot, temperature=temperature, max_iterations=max_iterations
+            model=model, snapshot=snapshot, temperature=temperature,
+            max_iterations=max_iterations, offline=offline,
         )
         rollout_single_task(
             task_id=task_id,

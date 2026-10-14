@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "change": "simplify-sft-grpo-react-mainline",
+  "audit_date": "2026-10-14",
+  "timezone": "Asia/Shanghai",
+  "status": "必需工程输入不齐，任务1.3未完成",
+  "scope": {
+    "root": "/Users/arkalin/Documents/MyDocuments/agent_rl/AgenticArXiv-RL",
+    "searched": ["data", "AgenticArxiv", "artifacts", "eval_results", "training_curves", "configs", "scripts", "docs", "仓库内文件名扫描（含ignored文件，排除.git、.venv和前端node_modules）"],
+    "runtime_directory": ".run只检查文件名；仅有backend/frontend日志、进程组文件和web.db，未读取日志或数据库内容",
+    "excluded": ["凭据和真实.env内容", "仓库之外的模型或Hugging Face缓存", "未授权远端", "网络下载", "真实缓存写入", "训练和模型评测"],
+    "limitations": "缺失结论仅针对当前仓库；不表示其他机器或用户缓存也没有这些资产。"
+  },
+  "required_engineering_inputs": [
+    {
+      "kind": "完整离线回放快照",
+      "path": "data/mock_arxiv_snapshot.json",
+      "exists": false,
+      "sha256": null,
+      "blocks": ["86条任务实际离线回放", "声明训练切分的专家SFT数据生成", "参数扩增的环境执行"],
+      "note": "两个现有测试快照只覆盖局部场景，不能替代完整输入；历史manifest中的快照哈希是来源声明而非本地核验值。"
+    },
+    {
+      "kind": "固定tokenizer及chat_template资产",
+      "referenced_model": "Qwen/Qwen2.5-1.5B-Instruct",
+      "model_directory_exists": false,
+      "repository_tokenizer_files": [],
+      "sha256": null,
+      "blocks": ["真实固定tokenizer上下文前缀一致性", "新协议SFT长度检查", "真实模板的可追加token/mask边界验证"],
+      "required_files": ["完整tokenizer词表或tokenizer.json", "tokenizer_config.json与特殊token定义", "明确chat_template或其配置值", "来源revision与文件哈希"],
+      "note": "现有测试使用Tokenizer替身，不能证明发布模型模板契约；本检查不要求模型权重。"
+    },
+    {
+      "kind": "发布训练配方证据",
+      "paths": ["outputs/grpo_release_v2/final/training_manifest.json", "outputs/sft/final/training_manifest.json"],
+      "exists": false,
+      "sha256": null,
+      "blocks": ["历史有效配方冻结"],
+      "note": "仓库无training_manifest.json或可识别的发布训练启动记录。评测摘要、CSV曲线和当前源码默认值不能补证历史解析值与依赖版本。"
+    },
+    {
+      "kind": "历史SFT数据正文",
+      "path_pattern": "data/sft/*.jsonl",
+      "existing_files": [],
+      "note": "12个对应manifest存在，数据正文都缺失。不能核验旧数据正文或声称已复现；新数据可以在完整快照与固定tokenizer可用后从保留任务和切分重新生成，不要求以训练补齐数据。"
+    }
+  ],
+  "training_only_missing_assets": {
+    "paths": ["Qwen/Qwen2.5-1.5B-Instruct/model.safetensors", "outputs/sft/final", "outputs/grpo_release_v2/final"],
+    "repository_weight_files": [],
+    "blocks_engineering_acceptance_by_itself": false,
+    "note": "权重、GPU、新checkpoint、实际训练和正式模型评测不在本次必需验收范围。训练manifest与tokenizer文件虽然通常随模型存放，却分别属于必需证据和必需工程输入，不能归入仅训练资产。模型交接测试可以使用测试产物或加载器替身。"
+  },
+  "available_inputs": [
+    {
+      "path": "AgenticArxiv/tests/fixtures/jev_integration_snapshot.json",
+      "sha256": "a06c7e1ae67ab4683deefdbea5f0ac967d0db4582c74fb587715bf0819f28956",
+      "coverage": {"get_recently_submitted_cs_papers": 1},
+      "role": "Jev局部测试输入，非86任务基线"
+    },
+    {
+      "path": "AgenticArxiv/tests/fixtures/t4_snapshot_for_t5.json",
+      "sha256": "5c6861877657d5e4e2c73e2d657e10254d770d73af3e017bbec9a477c89c8df3",
+      "coverage": {"extract_paper_figures": 1, "unrelated_tool": 1},
+      "role": "T5 backfill局部测试输入；图像路径明确不在本机"
+    },
+    {
+      "path": "data/splits/v6_grpo_train.json",
+      "sha256": "283a05b0ab689055e0e1f662b199573a5becf0045fdc026ad8289626905560c7",
+      "role": "历史33条GRPO训练切分与formal_run摘要，非完整训练manifest"
+    },
+    {
+      "path": "data/splits/v7_86.json",
+      "sha256": "29bdede1bf1864c2bcc98b079d52e1236b0ae376c632ea7105464c4befeca881",
+      "role": "86任务的55/8/19/4训练、开发、IID和OOD切分"
+    },
+    {
+      "path": "AgenticArxiv/agents/prompt_templates.py",
+      "sha256": "a5b1bc7490d2da1669476e885b8679a21720cc22e7dcafe2676ee9dc6c728e74",
+      "role": "本次审计时的历史文本prompt源码，非模型chat_template"
+    }
+  ],
+  "historical_sft_manifests": [
+    {"path": "data/sft/sft_v1_linguistic.jsonl.manifest.json", "sha256": "61d79ddfc335969f0664ee276db364613dd034b4616f6e7c64ccc72f94daf7da"},
+    {"path": "data/sft/sft_v2_parametric_linguistic.jsonl.manifest.json", "sha256": "e20d724ca061698e587e189dc062baa636eaa7157b087d582d59343fc918504b"},
+    {"path": "data/sft/sft_v2_parametric_seed.jsonl.manifest.json", "sha256": "9c15671948d64d749874978ef6cfb61a757c9d478b9deacc589c61842fcaf2f5"},
+    {"path": "data/sft/sft_v3_t5_parametric_linguistic.jsonl.manifest.json", "sha256": "80514334dce8555f9bcf77f44c52ea63f96bef83e3bc2f8191f15ecf2d431b00"},
+    {"path": "data/sft/sft_v3_t5_parametric_seed.jsonl.manifest.json", "sha256": "89fa15b09a5e21bf15c1102fd422491bae556d975794ec517afb0d7d5b68d27a"},
+    {"path": "data/sft/sft_v3_train_mix.jsonl.manifest.json", "sha256": "0c07612a2c73b753e3f09ba865f063996f309c0c81760c4940b1958c3f75d1ae"},
+    {"path": "data/sft/sft_v4_terminalfix_linguistic.jsonl.manifest.json", "sha256": "2e8d8cbb59718ee07ee4a573b09097e312ec0278a6aee6e978a9f4711b026b6c"},
+    {"path": "data/sft/sft_v4_terminalfix_parametric_linguistic.jsonl.manifest.json", "sha256": "376ff27badbf919b613bb7135d97258cb6a73827e78018d2333c18e76660b93a"},
+    {"path": "data/sft/sft_v4_terminalfix_parametric_seed.jsonl.manifest.json", "sha256": "ad71c47d4b2307d1f3a29b10bc4264a8bcf543edd60eafbac7c6369a5387f50b"},
+    {"path": "data/sft/sft_v4_terminalfix_train_mix.jsonl.manifest.json", "sha256": "7911dc2b5bb37162d6daf5f98bdef9351da958d5f6ed47bf8819e885725bfe55"},
+    {"path": "data/sft/sft_v5_parametric_linguistic.jsonl.manifest.json", "sha256": "6dfbccef7013dfaf771f368810dbff3d6b07e7c1c3b6758d25362b79e95ce359"},
+    {"path": "data/sft/sft_v5_parametric_seed.jsonl.manifest.json", "sha256": "9a67b0b83ad6970e393acb1a1c4728203cd3e9e2b618660375263a7eb54e8ba1"}
+  ],
+  "historical_source_claims": [
+    {"manifest": "data/sft/sft_v2_parametric_seed.jsonl.manifest.json", "snapshot_sha256": "fc164371e848826cce4eba5842e585c9ff2bb9c345da148c08b65c0b98352c1e"},
+    {"manifest": "data/sft/sft_v3_t5_parametric_seed.jsonl.manifest.json", "snapshot_sha256": "dcde74d7f86da03d544b6a7e27fee3e07df078be85f1b1c39d8f47e81c34aa3f"},
+    {"manifest": "data/sft/sft_v4_terminalfix_parametric_seed.jsonl.manifest.json", "snapshot_sha256": "fc164371e848826cce4eba5842e585c9ff2bb9c345da148c08b65c0b98352c1e"},
+    {"manifest": "data/sft/sft_v5_parametric_seed.jsonl.manifest.json", "snapshot_sha256": "35ab9b875cedd4284e0741f46e6f6e60604d0a7e2b9a3c80bd96edd50d36b8af", "missing_historical_split": "data/splits/v3_77.json"}
+  ],
+  "historical_model_and_report_index": {
+    "artifacts_trace_files": 49,
+    "artifacts_summary_files": 51,
+    "eval_results_summary_files": 24,
+    "note": "这些文件是历史研究结果，未作为本次运行结果，未重新评分；模型路径只代表历史报告引用，不证明本地模型存在。",
+    "representative_files": [
+      {"path": "artifacts/model_manifest.txt", "sha256": "6ba969db38f55fb992eaaceae8066231195045d8f4fc6d5e0dc803833db5141a", "role": "人工浏览器下载的模型摘要，含终端转义字符；不是训练manifest", "claimed_weight_sha256": "dd924a11b4c220f385b51ffa522daea7c9f3d850e31b162bb5661df483c6d3ee"},
+      {"path": "artifacts/eval_grpo_v6_rl_train_r3_s45/summary.json", "sha256": "f045f363727b8311e0722aa94234f042b017d814b22d1bd3d971a57bbe114f52", "referenced_model": "outputs/grpo_release_v2/final"},
+      {"path": "artifacts/eval_sft_v381_dev_r3_s45/summary.json", "sha256": "2151bc1d4e25c620351e2eefe4fd08dfda2330dfcd6d7982154b44c9346cb41e", "referenced_model": "outputs/sft/final"},
+      {"path": "data/vlm/figureqa_seed.jsonl.manifest.json", "sha256": "3da8b69748931f6b78f19633aad80f581a84823d21caa0496578c3118903836b", "role": "旁支历史数据元信息，保留不作为删除对象"},
+      {"path": "training_curves/q3_06b_grpo.csv", "sha256": "a07f148f3ac99a5c7e5b9d508dc34b698880a1a02047dda1c01898ba99328510", "role": "其他历史实验曲线，不能证明发布GRPO配方"},
+      {"path": "training_curves/q3_06b_sft.csv", "sha256": "f468a0594fcf18f4baf9f189a3076e2f5b3b7f0d2da5d3ddc0e36b3911d6d34b", "role": "其他历史实验曲线，不能证明发布SFT配方"}
+    ]
+  },
+  "verification": {
+    "performed": [
+      "使用JSON解析器读取12个SFT manifest及两个局部snapshot，确认JSON可解析与各output路径均缺失。",
+      "使用sha256核验本记录列出的可用来源文件。",
+      "两个train_mix manifest引用的4个现有来源manifest哈希全部匹配；这仅证明元信息链一致，不证明缺失数据正文一致。",
+      "仓库文件名扫描未发现tokenizer.json、tokenizer_config.json、vocab、merges、chat_template、training_manifest.json或模型权重。",
+      "使用importlib.metadata检查本地.venv，torch、transformers、tokenizers、trl、datasets、accelerate、peft、pytest均未安装；此信息不代表历史训练环境版本。"
+    ],
+    "not_performed": ["86条任务回放", "专家数据生成", "真实tokenizer长度或前缀检查", "训练", "模型评测", "远端资产获取"],
+    "unsafe_default_identified": {
+      "path": "scripts/generate_sft_data.py",
+      "lines": [357, 366],
+      "sha256": "5661459ccf478cda8bebad18a22cc908a8df9f99f9e79cfefa8ccdc35da1e445",
+      "note": "快照不存在时进入auto环境，可能联网；本次未运行默认生成命令。缺输入应先补证或明确修改规格，不以伪造快照绕过关口。"
+    },
+    "safe_commands_after_inputs_available": [
+      "先用test -f确认快照存在，再用shasum -a 256核对获授权来源哈希。",
+      "离线加载固定tokenizer须设置HF_HUB_OFFLINE=1和TRANSFORMERS_OFFLINE=1，并显式使用local_files_only=True；只做token/模板检查，不加载模型权重。",
+      "将完整回放输入绑定replay模式并使用episode临时目录；通过禁止网络的测试替身检查不会发起网络或真实翻译调用。"
+    ]
+  }
+}

@@ -19,7 +19,7 @@ import tools.cache_status_tool  # noqa: F401,E402
 import tools.pdf_download_tool  # noqa: F401,E402
 
 from agents.agent_engine import ReActAgent  # noqa: E402
-from agents.side_effects import LocalSideEffectManager  # noqa: E402
+from agents.react_contract import render_observation  # noqa: E402
 from models.schemas import Paper  # noqa: E402
 from models.store import store  # noqa: E402
 from rl.env import MockArxivEnv  # noqa: E402
@@ -73,13 +73,16 @@ def main():
 
     print("\n=== env 注入 Agent 后接管工具执行 ===")
     env2 = MockArxivEnv(snapshot_path=SNAPSHOT, mode="replay")
-    agent = ReActAgent(llm_client=None, side_effect_mgr=LocalSideEffectManager(), env=env2)
-    obs = agent._execute_with_side_effects(
+    agent = ReActAgent(llm_client=None, env=env2)
+    agent.env.reset(session_id="t")
+    obs = render_observation(agent.env.step(
         {"name": "get_recently_submitted_cs_papers",
          "args": {"aspect": "CV", "days": 7, "max_results": 3}}
-    )
+    )).text
     check("Agent 的工具调用走到了 env",
-          "成功获取 3 篇论文" in obs and env2.stats["hit"] >= 1, env2.describe())
+          len(agent.env.store.get_last_papers("t")) == 3
+          and env2.stats["hit"] >= 1, env2.describe())
+    agent.close()
 
     print("\n" + "=" * 56)
     print(f"通过 {len(PASSED)} / {len(PASSED) + len(FAILED)}")

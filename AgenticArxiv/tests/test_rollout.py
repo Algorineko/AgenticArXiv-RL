@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agents.agent_engine import ReActAgent  # noqa: E402
-from agents.side_effects import NoOpSideEffectManager  # noqa: E402
+from agents.react_contract import CONTEXT_VERSION, RUNTIME_VERSION  # noqa: E402
 from rl.rollout import _get_model_name, _history_with_timings, rollout_single_task  # noqa: E402
 from rl.trajectory import create_trajectory  # noqa: E402
 
@@ -89,22 +89,28 @@ class TestStepLatencyMetadata(unittest.TestCase):
                 return [{"id": "paper-1", "title": "Paper one", "authors": [], "categories": ["cs.AI"]}]
 
         client = Client()
-        agent = ReActAgent(client, side_effect_mgr=NoOpSideEffectManager(), env=Environment())
+        agent = ReActAgent(client, env=Environment())
         with tempfile.TemporaryDirectory() as output_dir:
             rollout_single_task("search_01", output_dir=output_dir, agent=agent, llm_client=client)
             trajectory = json.loads(next(Path(output_dir).glob("*.jsonl")).read_text(encoding="utf-8"))
 
         steps = trajectory["steps"]
+        self.assertEqual(trajectory["runtime_version"], RUNTIME_VERSION)
+        self.assertEqual(trajectory["context_version"], CONTEXT_VERSION)
+        self.assertEqual(trajectory["training_protocol_metadata"]["metadata_status"], "unknown")
+        self.assertEqual(trajectory["protocol_relation"]["relation"], "unknown")
+        self.assertEqual(steps[0]["tool_result"][0]["id"], "paper-1")
+        self.assertIsNone(steps[0]["token_usage"]["total_tokens"])
+        self.assertTrue(all(value is None for value in trajectory["token_usage"].values()))
         self.assertEqual(len(steps), 2)
         self.assertGreater(steps[0]["llm_latency_ms"], 0)
         self.assertGreater(steps[0]["tool_latency_ms"], 0)
         self.assertGreater(steps[1]["llm_latency_ms"], 0)
         self.assertEqual(steps[1]["tool_latency_ms"], 0)
 
-        forced = ReActAgent(
-            Client(), side_effect_mgr=NoOpSideEffectManager(),
-            env=Environment(), max_iterations=1,
-        ).run("检索论文", session_id="forced-stop")
+        forced_agent = ReActAgent(Client(), env=Environment(), max_iterations=1)
+        self.addCleanup(forced_agent.close)
+        forced = forced_agent.run("检索论文", session_id="forced-stop")
         forced_history = _history_with_timings(forced)
         self.assertEqual(forced_history[-1]["action"], "FORCE_STOP")
         self.assertEqual(forced_history[-1]["llm_latency_ms"], 0)

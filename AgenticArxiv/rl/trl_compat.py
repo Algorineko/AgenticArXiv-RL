@@ -1,6 +1,6 @@
 """trl 的旧版 torch 兼容层。
 
-TRL 的 DPOTrainer / GRPOTrainer / PPOTrainer 在内部无条件地
+TRL 的 GRPOTrainer 在内部无条件地
 ``from torch.distributed.fsdp import FSDPModule``，而 ``FSDPModule`` 只
 在 torch>=2.6 才存在。因此在使用 torch<2.6（例如本仓库本地 RTX 4050 +
 torch 2.5.x）时，仅仅 ``from trl import ...`` 就会直接崩溃：:
@@ -8,7 +8,7 @@ torch 2.5.x）时，仅仅 ``from trl import ...`` 就会直接崩溃：:
     ImportError: cannot import name 'FSDPModule' from 'torch.distributed.fsdp'
 
 单卡训练（大多数用户的场景）根本不需要真正的 FSDP 分布式打包，所以这里
-在导入 trl 之前补一个最小可用的占位类，让 DPO / GRPO / PPO 的
+在导入 trl 之前补一个最小可用的占位类，让 GRPO 的
 ``prepare_fsdp`` 能正常通过 while isinstance 判断、正常走非 FSDP 分支。
 
 用法：在 ``from trl import ...`` 之前 ``import AgenticArxiv.rl.trl_compat``。
