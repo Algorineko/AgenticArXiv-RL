@@ -28,31 +28,33 @@ Convertir las tareas de búsqueda/descarga/traducción/interpretación de papers
 
 ## Inicio Rápido
 
-Ejecuta los comandos desde la raíz del repositorio y usa `.venv`. La instalación no requiere frontend ni base de datos.
+Ejecuta los comandos de instalación desde la raíz del repositorio y usa `.venv`. La instalación no requiere frontend ni base de datos. Una vez instalado, `agentic-arxiv` funciona desde cualquier directorio sin `PYTHONPATH`.
 
 ```bash
 git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r AgenticArxiv/requirements.txt
+pip install .
 
-python -m AgenticArxiv.rl.rollout --help
-python -m AgenticArxiv.benchmark.run_benchmark --help
-python -m AgenticArxiv.main --help
+agentic-arxiv evaluate rollout --help
+agentic-arxiv evaluate run --help
+agentic-arxiv run --help
 ```
 
-Para la inferencia mediante API, configura explícitamente `LLM_BASE_URL`, `LLM_API_KEY` y `MODEL`; no publiques credenciales ni un `.env` real. El entrenamiento y la evaluación locales no necesitan API key. Instala `AgenticArxiv/requirements-extra.txt` solo para traducción PDF real o registro de curvas; no hay servicio asíncrono de la aplicación.
+La instalación base permite usar APIs externas y leer registros históricos, sin dependencias de modelos locales ni entrenamiento. Instala `pip install '.[local]'` para inferencia/evaluación local o `pip install '.[train]'` para SFT/GRPO. Para la inferencia mediante API, configura explícitamente `LLM_BASE_URL`, `LLM_API_KEY` y `MODEL`; no publiques credenciales ni un `.env` real. El entrenamiento y la evaluación locales no necesitan API key. Instala `pip install '.[translate]'` para traducción PDF real; no hay servicio asíncrono de la aplicación.
+
+La opción global `--workspace` usa el directorio actual por defecto. Las rutas relativas de configuración, modelos, datos, snapshots y salidas se resuelven desde ese espacio; las absolutas no cambian. Desde otro directorio, coloca `agentic-arxiv --workspace /espacio/real` antes del subcomando. No se buscan entradas ausentes en el código fuente. `.env` se lee del espacio solo al ejecutar una operación; la ayuda no lee credenciales ni crea logs. El [documento de migración de arquitectura](docs/architecture_migration.md) recoge el mapa de entradas antiguas a nuevas.
 
 ```bash
 # Ejecución futura con modelo local y snapshot existentes; no se ejecutó aquí
-python -m AgenticArxiv.rl.rollout \
-  --task_id=search_01 --output_dir=traces/react_messages \
-  --model=outputs/sft_qlora/final --offline=True \
-  --snapshot=data/mock_arxiv_snapshot.json --max_iterations=6
+agentic-arxiv evaluate rollout \
+  --task-id search_01 --output-dir traces/react_messages \
+  --model outputs/sft_qlora/final --offline \
+  --snapshot data/mock_arxiv_snapshot.json --max-iterations 6
 ```
 
-main usa API/live por defecto. Rollout usa offline=True; False explícito activa herramientas live. El modo de herramientas es independiente del backend del modelo; véase el [contrato de ejecución](docs/react_runtime.md).
+`run` usa API/live por defecto. `evaluate rollout` usa offline por defecto; `--no-offline` explícito activa herramientas live. El modo de herramientas es independiente del backend del modelo; véase el [contrato de ejecución](docs/react_runtime.md).
 
 Ejecutar tareas requiere un modelo existente o una API disponible. Las herramientas offline necesitan un snapshot existente y no descargan entradas ausentes. Verificar la instalación o la ayuda no equivale a ejecutar tareas; este cambio no llamó a APIs externas, entrenó modelos ni evaluó su rendimiento.
 
@@ -89,7 +91,7 @@ Ejecutar tareas requiere un modelo existente o una API disponible. Las herramien
 
 ### Verifiable Reward (cinco componentes)
 
-**Recompensa verificable multigranular** (`rl/reward.py`). Los cinco componentes se normalizan a `[-1, 1]`; además hay componentes de diagnóstico y un techo de fallo no compensable:
+**Recompensa verificable multigranular** (`src/agentic_arxiv/scoring/reward.py`). Los cinco componentes se normalizan a `[-1, 1]`; además hay componentes de diagnóstico y un techo de fallo no compensable:
 
 | Componente | Peso por defecto | Señal |
 |------|:---:|------|
@@ -100,7 +102,7 @@ Ejecutar tareas requiere un modelo existente o una API disponible. Las herramien
 | `outcome` | 3 | Completado correcto +1, completado con ruta errónea +0.25, parada forzada −0.5, error −1 |
 | `result_quality` / `efficiency` | gate de diagnóstico | Si la observation representa un éxito real; la redundancia grave activa un techo de reward |
 
-- **Currículo**: el código conserva el escalado por 1/3 de `tool`/`argument`/`outcome` durante los primeros 30 pasos (`RewardCalculator.schedule`); la limpieza no lo cambió a 0. El registro histórico indica format 0.983 al inicio SFT y brazos indistinguibles. Una futura opción explícita `--reward_curriculum_steps 0` debe registrarse en el manifest y no describirse como valor predeterminado conservado.
+- **Currículo**: el código conserva el escalado por 1/3 de `tool`/`argument`/`outcome` durante los primeros 30 pasos (`RewardCalculator.schedule`); la limpieza no lo cambió a 0. El registro histórico indica format 0.983 al inicio SFT y brazos indistinguibles. Una futura opción explícita `--reward-curriculum-steps 0` debe registrarse en el manifest y no describirse como valor predeterminado conservado.
 - **Fallos no compensables**: un fallo de parseo, un fallo de ejecución o un FINISH falso reciben como mucho recompensa negativa y no pueden compensarse con puntos de formato; si `analyze_figure` no aporta una respuesta válida, la recompensa total queda limitada a −0.75.
 - Toda recompensa es **verificable por reglas** (RLVR) y cada trayectoria registra el desglose de `reward_components` para facilitar la auditoría. Los criterios detallados están en la [documentación de la recompensa multigranular](docs/multigranular_rl.md).
 
@@ -120,27 +122,26 @@ No se declaran compatibles automáticamente datos antiguos/desconocidos ni artef
 
 Estos comandos corresponden a una ejecución futura separada, no a la aceptación de ingeniería. Requieren datos SFT del protocolo nuevo y su manifest, modelo base/recursos de entrenamiento y un snapshot offline existente. Este cambio no generó esas entradas ni ejecutó entrenamiento.
 
+Primero instala `pip install '.[train]'`. La configuración predeterminada es el recurso del paquete `agentic_arxiv/resources/mainline.json`, con contenido sin cambios; ya no se necesita la ruta antigua del código fuente. Un `--config` explícito sustituye el recurso predeterminado y los argumentos CLI explícitos prevalecen sobre esa configuración.
+
 ```bash
 # QLoRA por defecto: GRPO carga el adaptador SFT y sus metadatos de modelo base
-python -m AgenticArxiv.rl.train_sft \
-  --config configs/training/mainline.json \
+agentic-arxiv train sft \
   --data data/sft/sft_react_messages_v3_train_mix.jsonl \
-  --output_dir outputs/sft_qlora
-python -m AgenticArxiv.rl.train_grpo \
-  --config configs/training/mainline.json \
+  --output-dir outputs/sft_qlora
+agentic-arxiv train grpo \
   --model outputs/sft_qlora/final \
-  --task_set expanded --split data/splits/v7_86.json:train \
-  --snapshot data/mock_arxiv_snapshot.json --max_turns 6
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
 
 # Todos los parámetros explícitamente; no usar un directorio de adaptador como modelo completo
-python -m AgenticArxiv.rl.train_sft \
-  --config configs/training/mainline.json \
+agentic-arxiv train sft \
   --data data/sft/sft_react_messages_v3_train_mix.jsonl \
-  --no-qlora --output_dir outputs/sft_full
-python -m AgenticArxiv.rl.train_grpo \
-  --config configs/training/mainline.json --model outputs/sft_full/final \
-  --no-qlora --task_set expanded --split data/splits/v7_86.json:train \
-  --snapshot data/mock_arxiv_snapshot.json --max_turns 6
+  --no-qlora --output-dir outputs/sft_full
+agentic-arxiv train grpo \
+  --model outputs/sft_full/final \
+  --no-qlora --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
 ```
 
 GRPO formal vincula explícitamente un conjunto de tareas y una partición de entrenamiento `FILE:NAME`. `--smoke` selecciona las 8 tareas smoke; las 86 tareas nunca se usan implícitamente todas para entrenar. Las 33 tareas históricas de `v6_grpo_train.json:rl_train` no son las 55 de `v7_86.json:train`.
@@ -183,15 +184,15 @@ Todos se alojan en ModelScope (`Algorineko/AgenticArXiv-RL-*`); las model cards 
 
 ## 🧪 Conjunto de Tareas y Evaluación
 
-- **Conjunto de humo** (`benchmark/tasks.py`): 8 tareas (search / download / translate / cache / composite)
-- **Conjunto ampliado** (`benchmark/tasks_expanded.py`): 86 tareas y catorce familias de plantillas (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**); se activa con `run_benchmark.py --task-set expanded`. Ambos conjuntos pasan por el mismo `TaskSpec`: `expected_tools` / `expected_tool_args` se derivan de una única fuente `steps`, de modo que nunca hay dos listas escritas a mano que diverjan.
+- **Conjunto de humo** (`src/agentic_arxiv/tasks/tasks.py`): 8 tareas (search / download / translate / cache / composite)
+- **Conjunto ampliado** (`src/agentic_arxiv/tasks/tasks_expanded.py`): 86 tareas y catorce familias de plantillas (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**); se activa con `agentic-arxiv evaluate run --task-set expanded`. Ambos conjuntos pasan por el mismo `TaskSpec`: `expected_tools` / `expected_tool_args` se derivan de una única fuente `steps`, de modo que nunca hay dos listas escritas a mano que diverjan.
 - **Particiones**: `data/splits/v7_86.json` contiene train 55 / dev 8 / iid_test 19 / ood_test 4. Las 33 tareas históricas de `v6_grpo_train.json:rl_train` proceden de otra partición. Una futura selección de señal usa solo train declarado y escribe un archivo nuevo; dev/iid/ood no entran en entrenamiento y aquí no se volvieron a medir las rates.
 - **Criterios de evaluación (cifras históricas)**: fiabilidad `pass^k` (convención tau-bench), `false_finish` (la política degradada `always_finish` alcanza un 91.5% frente al 0% de `reference`), `ref_score` (compara el `paper_id` y no la forma literal del `ref`), coste normalizado por número de aciertos.
-- **Puertas de discriminación (estadísticas históricas)** (`run_baselines.py`): políticas degradadas deterministas con umbral por categoría — «buscar siempre cs.AI» baja de 0.833 a 0.446 en la categoría de búsqueda, y «llamar a herramientas cuando no tocaba» pasa de +0.165 a −0.235.
-- **Replay de casos malos** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`, 17 casos): cada trayectoria fallida se congela como caso de regresión permanente; el replay ejecuta solo el evaluador y el propio `pytest` hace de puerta. `hack/*` documenta formas de engañar la puntuación con aserciones de umbral y sirve además de biblioteca de casos de reward hacking.
+- **Puertas de discriminación (estadísticas históricas)** (entrada actual `agentic-arxiv evaluate baselines`): políticas degradadas deterministas con umbral por categoría — «buscar siempre cs.AI» baja de 0.833 a 0.446 en la categoría de búsqueda, y «llamar a herramientas cuando no tocaba» pasa de +0.165 a −0.235.
+- **Replay de casos malos** (`agentic-arxiv evaluate badcases replay` + `eval/eval_cases.jsonl`, 17 casos): cada trayectoria fallida se congela como caso de regresión permanente; el replay ejecuta solo el evaluador y el propio `pytest` hace de puerta. `hack/*` documenta formas de engañar la puntuación con aserciones de umbral y sirve además de biblioteca de casos de reward hacking.
 
 ```bash
-python -m AgenticArxiv.benchmark.run_benchmark \
+agentic-arxiv evaluate run \
   --backend transformers --model outputs/grpo/final \
   --task-set expanded --split data/splits/v7_86.json:iid_test \
   --offline --snapshot data/mock_arxiv_snapshot.json \
@@ -202,9 +203,15 @@ python -m AgenticArxiv.benchmark.run_benchmark \
 
 ## Dependencias
 
-[requirements.txt](AgenticArxiv/requirements.txt) declara las bibliotecas de entrenamiento y `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic`, `fire`, PyMuPDF y Pillow. Se conservan las versiones declaradas y los controles de interfaz, sin actualizar ni degradar bibliotecas. Las notas históricas de validación no prueban una integración real actual.
+La única declaración de dependencias es [pyproject.toml](pyproject.toml); el [documento de migración de arquitectura](docs/architecture_migration.md) explica instalación y entradas retiradas. La base `pip install .` incluye `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic`, PyMuPDF y Pillow, sin bibliotecas de entrenamiento.
 
-[requirements-extra.txt](AgenticArxiv/requirements-extra.txt) conserva `pdf2zh` para traducción real y `tensorboard` para curvas; `wandb` puede instalarse por separado. Los backends de figuras/resumen necesitan modelos locales explícitos. Una dependencia opcional ausente falla al usar su función, sin reducir las 10 herramientas. Web, bases de datos y otros agentes ya no son opciones de instalación.
+- `pip install '.[local]'`: torch, transformers, accelerate y peft para inferencia, adaptadores LoRA predeterminados y herramientas con modelo local, sin entrenadores.
+- `pip install '.[train]'`: las mismas restricciones local, más trl, datasets, bitsandbytes y packaging.
+- `pip install '.[translate]'`: pdf2zh para traducción PDF real.
+- `pip install '.[logging]'`: tensorboard para curvas; wandb se instala por separado y se activa explícitamente.
+- `pip install '.[dev]'`: pytest, cobertura, flake8, construcción y comprobación de metadatos, sin instalar train implícitamente.
+
+Se mantienen restricciones de versiones y controles de interfaz; Fire está retirado. Los backends de figuras/resumen necesitan modelos locales explícitos. Las dependencias opcionales ausentes fallan al usarse, sin reducir el registro completo de 10 herramientas. La ayuda no carga tokenizers, modelos ni entrenadores reales, ni verifica su integración. Web, bases de datos y otros agentes no son opciones de instalación.
 
 ---
 
@@ -218,7 +225,7 @@ python -m AgenticArxiv.benchmark.run_benchmark \
 
 ## 🤝 Contribuir
 
-¡Issues y PRs son bienvenidos! El flujo es: Fork → rama feature → `pytest AgenticArxiv/tests/` → commits con prefijo `feat:` → PR. Más detalles en [CONTRIBUTING.md](CONTRIBUTING.md).
+¡Issues y PRs son bienvenidos! El flujo es: Fork → rama feature → `pip install -e '.[dev]'` → `pytest tests/` → commits con prefijo `feat:` → PR. Las regresiones de entrenamiento sin modelos también requieren train; véase [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 📄 Licencia
 

@@ -1,0 +1,252 @@
+"""S0 三入口行为冻结：合成快照与脚本输出，不是模型评测或 86 任务回放。
+
+可直接用 unittest 执行；所有产物和 store 都隔离，禁止任何 socket 连接。
+fixture 只规范化随机 session、耗时等非语义字段，不修改既有路径差异。
+"""
+
+import copy
+import hashlib
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+import unittest
+from contextlib import ExitStack
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "AgenticArxiv"))
+os.environ.setdefault("STORE_BACKEND", "memory")
+
+FIXTURE = ROOT / "artifacts/mainline_baseline/behavior.json"
+PAPER = {
+    "id": "2601.00001", "title": "合成论文：ReAct 状态冻结",
+    "authors": ["Synthetic Author"], "summary": "仅供离线契约测试",
+    "published": "2026-01-01T00:00:00Z", "primary_category": "cs.AI",
+    "pdf_url": "https://example.invalid/2601.00001.pdf",
+}
+SEARCH_ARGS = {"aspect": "AI", "days": 7, "max_results": 1}
+ACTION_STEPS = [
+    ("get_recently_submitted_cs_papers", SEARCH_ARGS),
+    ("translate_arxiv_pdf", {"ref": 1}),
+    ("get_paper_cache_status", {"ref": None}),
+]
+RESPONSES = [
+    "Thought: " + f"需要调用 {name} 来处理任务步骤 {index + 1}"
+    + "\nAction: " + json.dumps({"name": name, "args": args}, ensure_ascii=False)
+    for index, (name, args) in enumerate(ACTION_STEPS)
+] + ["Thought: 所有步骤均已成功执行，任务已完成\nAction: FINISH"]
+MALFORMED = "Thought: 我先想想该怎么做"
+
+
+def input_fingerprint():
+    inputs = {"paper": PAPER, "action_steps": ACTION_STEPS,
+              "responses": RESPONSES, "malformed": MALFORMED}
+    return hashlib.sha256(json.dumps(
+        inputs, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def _forbid_network(*args, **kwargs):
+    raise AssertionError("S0 合成回放禁止联网")
+
+
+def _state(store, session, environment=None):
+    return {
+        "candidate_ids": [paper.id for paper in store.get_last_papers(session)],
+        "last_active_paper_id": store.get_last_active_paper_id(session),
+        "pdf_asset_status": (asset.status if (asset := store.get_pdf_asset(PAPER["id"])) else None),
+        "translate_asset_status": (asset.status if (asset := store.get_translate_asset(PAPER["id"])) else None),
+        "downloaded": sorted(environment._downloaded) if environment else [],
+        "translated": sorted(environment._translated) if environment else [],
+    }
+
+
+class ScriptedClient:
+    def __init__(self, responses):
+        self.responses = iter(responses)
+        self.messages = []
+
+    def chat_completions(self, **kwargs):
+        self.messages.append(copy.deepcopy(kwargs["messages"]))
+        return {"choices": [{"message": {"content": next(self.responses)}}]}
+
+
+class CharacterTokenizer:
+    """合成字符 token，不代表发布模型 tokenizer 或 chat template。"""
+    def __call__(self, text, **kwargs):
+        return {"input_ids": [ord(char) for char in text]}
+
+    def decode(self, ids, **kwargs):
+        return "".join(chr(token) for token in ids)
+
+
+class ScriptedTrainer:
+    processing_class = CharacterTokenizer()
+    max_completion_length = 10000
+
+    def __init__(self, responses):
+        self.responses = iter(responses)
+        self.inputs = []
+
+    def _generate_single_turn(self, prompt_ids, images, fields):
+        self.inputs.extend([self.processing_class.decode(ids) for ids in prompt_ids])
+        return [[ord(char) for char in next(self.responses)]], None, {}
+
+
+def capture_baseline():
+    """实际执行三条既有代码路径，返回可与冻结 JSON 精确比较的证据。"""
+    with tempfile.TemporaryDirectory(prefix="mainline-s0-") as scratch, ExitStack() as stack:
+        from config import settings
+        for name in ("pdf_raw_path", "pdf_translated_path", "pdf_translated_log_path",
+                     "pdf_cache_path", "translate_cache_path", "figures_path"):
+            if hasattr(settings, name):
+                path = Path(scratch) / name
+                path.mkdir()
+                stack.enter_context(patch.dict(settings.__dict__, {name: str(path)}))
+        stack.enter_context(patch("socket.socket.connect", _forbid_network))
+        stack.enter_context(patch("socket.create_connection", _forbid_network))
+        stack.enter_context(patch("socket.getaddrinfo", _forbid_network))
+
+        from agents.agent_engine import ReActAgent
+        from agents.side_effects import LocalSideEffectManager
+        from benchmark.task_spec import Step, TaskSpec
+        from models import store as store_module
+        from models.store_memory import MemoryStore
+        from rl.env import MockArxivEnv
+        from rl import grpo_reward
+        from rl.multiturn_env import AgenticArxivMultiTurnEnv
+        from rl.reward import RewardCalculator
+        from tools.bootstrap import register_all_tools
+        register_all_tools()
+        stack.enter_context(patch.object(store_module, "_backend", MemoryStore()))
+        stack.enter_context(patch.object(grpo_reward, "require_rollout_func_support", lambda: None))
+        module_spec = importlib.util.spec_from_file_location(
+            "s0_expert_generator", ROOT / "scripts/generate_sft_data.py")
+        expert = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(expert)
+
+        snapshot = {
+            "get_recently_submitted_cs_papers": {
+                MockArxivEnv._make_key(SEARCH_ARGS): {"args": SEARCH_ARGS, "result": [PAPER]}
+            }
+        }
+        snapshot_path = Path(scratch) / "synthetic_snapshot.json"
+        snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+        sentinel = Path(settings.pdf_raw_path) / "shared-sentinel"
+        sentinel.write_text("不得清除", encoding="utf-8")
+        spec = TaskSpec(
+            id="synthetic_s0_translation_cache", task="检索一篇 AI 论文，翻译第一篇，然后查询缓存。",
+            steps=tuple(Step(name, dict(args)) for name, args in ACTION_STEPS),
+        )
+        task = spec.to_task()
+        calculator = RewardCalculator(curriculum_steps=0)
+        paths = {}
+
+        def evidence(result, states):
+            reward, metrics = calculator.compute_reward_breakdown(task, result)
+            return {"history": result["history"], "states_after_tools": states,
+                    "reward": reward.to_dict(), "termination": metrics.termination_type}
+
+        for case, responses in (("translation_cache", RESPONSES), ("malformed", [MALFORMED])):
+            store_module.use_memory_store(reset=True)
+            backend = MockArxivEnv(snapshot_path, mode="replay")
+            client = ScriptedClient(responses)
+            agent = ReActAgent(client, env=backend, tool_router=None,
+                               side_effect_mgr=LocalSideEffectManager(), max_iterations=4)
+            states = []
+            original = agent._execute_with_side_effects
+
+            def execute(action):
+                observation = original(action)
+                states.append(_state(store_module.store, "fixed_session"))
+                return observation
+
+            with patch.object(agent, "_execute_with_side_effects", execute):
+                result = agent.run(spec.task, session_id="fixed_session", agent_model="scripted")
+            paths[f"ordinary_{case}"] = evidence(result, states)
+            paths[f"ordinary_{case}"]["model_messages_sha256"] = [
+                hashlib.sha256(json.dumps(messages, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+                for messages in client.messages]
+
+            states = []
+            environments = []
+
+            def factory():
+                environment = AgenticArxivMultiTurnEnv(snapshot_path)
+                environments.append(environment)
+                return environment
+
+            dispatch = grpo_reward._dispatch_environment_tool
+
+            def dispatch_and_capture(environment, name, args):
+                result = dispatch(environment, name, args)
+                states.append(_state(environment.store, environment.session_id, environment))
+                return result
+
+            trainer = ScriptedTrainer(responses)
+            with patch.object(grpo_reward, "_dispatch_environment_tool", dispatch_and_capture):
+                output = grpo_reward.make_multiturn_rollout_func(factory, max_turns=4)([spec.task], trainer)
+            result = output["trajectory_results"][0]
+            paths[f"grpo_{case}"] = evidence(result, states)
+            paths[f"grpo_{case}"].update({
+                "raw_assistant_turns": result["raw_assistant_turns"],
+                "clipped": result["clipped"], "reached_max_turns": result["reached_max_turns"],
+                "policy_token_count": sum(output["env_mask"][0]),
+                "environment_token_count": output["env_mask"][0].count(0),
+                "sampled_policy_sha256": hashlib.sha256(json.dumps([
+                    token for token, mask in zip(output["completion_ids"][0], output["env_mask"][0])
+                    if mask]).encode()).hexdigest(),
+            })
+
+        states = []
+        histories = []
+        execute_expert = expert.execute_expert_tool
+        extract_metrics = expert.extract_metrics
+
+        def execute_and_capture(env, effects, name, args, session):
+            result = execute_expert(env, effects, name, args, session)
+            states.append(_state(store_module.store, session))
+            return result
+
+        def capture_metrics(task_def, result, **kwargs):
+            histories.append(copy.deepcopy(result))
+            return extract_metrics(task_def, result, **kwargs)
+
+        with patch.object(expert, "execute_expert_tool", execute_and_capture), \
+                patch.object(expert, "extract_metrics", capture_metrics):
+            samples = expert.generate_deterministic_trajectories(
+                [spec], MockArxivEnv(snapshot_path, mode="replay"), "固定工具描述")
+        paths["expert_translation_cache"] = evidence(histories[0], states)
+        paths["expert_translation_cache"]["samples_sha256"] = hashlib.sha256(
+            json.dumps(samples, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+        paths["expert_translation_cache"]["sample_count"] = len(samples)
+        assert sentinel.read_text(encoding="utf-8") == "不得清除"
+        return paths
+
+
+class TestMainlineBehaviorBaseline(unittest.TestCase):
+    def test_three_paths_match_frozen_synthetic_behavior(self):
+        frozen = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(capture_baseline(), frozen["paths"])
+
+    def test_repeated_replay_is_stable(self):
+        self.assertEqual(capture_baseline(), capture_baseline())
+
+    def test_fixture_declares_limits_and_preserves_differences(self):
+        frozen = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(input_fingerprint(), frozen["provenance"]["input_sha256"])
+        self.assertFalse(frozen["coverage"]["full_86_tasks"])
+        self.assertFalse(frozen["coverage"]["real_model_or_training"])
+        paths = frozen["paths"]
+        self.assertEqual(paths["ordinary_malformed"]["history"][-1]["action"], "FINISH")
+        self.assertEqual(paths["grpo_malformed"]["history"][-1]["action"], "PARSE_ERROR")
+        self.assertIn("PENDING", paths["ordinary_translation_cache"]["history"][1]["observation"])
+        self.assertIn("READY", paths["grpo_translation_cache"]["history"][1]["observation"])
+        self.assertNotEqual(paths["ordinary_translation_cache"]["history"][0]["observation"],
+                            paths["expert_translation_cache"]["history"][0]["observation"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,408 @@
+{
+  "schema_version": 1,
+  "phase": "S0",
+  "description": "既有普通推理、GRPO 多轮采样适配器和确定性专家生成器的脚本化行为冻结；不提前修正差异。",
+  "provenance": {
+    "source_commit": "ad0c067e8c5584b32bd7d697cb38f299bdbddf2e",
+    "date": "2026-10-14",
+    "input_source": "测试文件内明确声明的合成论文、快照与固定响应；不是发布研究数据。",
+    "input_sha256": "a10a47f44deea53d8cf367b63f88178ca437c5bc726a52e204bf532484a1ad5d",
+    "entrypoints": [
+      "agents.agent_engine.ReActAgent.run",
+      "rl.grpo_reward.make_multiturn_rollout_func",
+      "scripts.generate_sft_data.generate_deterministic_trajectories"
+    ],
+    "sources_sha256": {
+      "AgenticArxiv/agents/agent_engine.py": "16c7dbe2aa7fccee8f7a8456734df79f1da3df682bee30c7924e0ab108383a0f",
+      "AgenticArxiv/agents/base_agent.py": "59e938dc288ab9a8f1b92825b6ccf52473dab323616e0a9fceb1e926b310a974",
+      "AgenticArxiv/agents/side_effects.py": "0dc5be659d033d8a6ce65e39141d4914d312739cd2567d8ebbe0a2cdad980feb",
+      "AgenticArxiv/rl/grpo_reward.py": "2880fc88cc5d2d03bcba89c0302c9c94dedb2e8652fc749be9ba6b8848214753",
+      "AgenticArxiv/rl/multiturn_env.py": "9b355c2b07fcf2f202db0c9c0bc1aa1069b671473e6aa4125b9ddd9235045a05",
+      "AgenticArxiv/rl/reward.py": "4754188689b94a970db4245236ea099804d182bb7cd60810bb560ce29b8cfa49",
+      "scripts/generate_sft_data.py": "5661459ccf478cda8bebad18a22cc908a8df9f99f9e79cfefa8ccdc35da1e445"
+    }
+  },
+  "coverage": {
+    "full_86_tasks": false,
+    "real_model_or_training": false,
+    "real_translation": false,
+    "published_tokenizer": false,
+    "scenario_count": 2,
+    "path_count": 5,
+    "executed": "三个生产入口真实执行；GRPO 只替换采样器和 tokenizer，工具搜索使用实际 MockArxivEnv replay，缓存执行真实本地工具。",
+    "missing": "默认真实快照、固定发布 tokenizer 与发布训练资产未用于此检查；不代替 S2/S3 完整回放验收。"
+  },
+  "configuration": {
+    "max_turns": 4,
+    "reward_curriculum_steps": 0,
+    "reward_configuration_note": "这里只显式固定旧评分函数的检查输入，不宣称发布配方已冻结。",
+    "store_backend": "memory",
+    "snapshot_mode": "replay",
+    "scripted_tokenizer": "按 Unicode 字符编码；仅验证适配器契约。"
+  },
+  "normalization": [
+    "只投影业务相关会话状态，忽略随机 session ID、datetime、耗时与 msg_id。",
+    "普通路径使用固定 fixed_session；专家路径使用标准 sft_spec_<id>；GRPO 随机会话只影响内部状态标识，不进入冻结结果。",
+    "普通/专家观测、GRPO token 数与原始响应、各入口动作及奖励分量原样保留。",
+    "模型消息与 SFT 样本只保存规范化 SHA-256，避免重复存放大段 prompt。"
+  ],
+  "differences": [
+    {
+      "id": "搜索观测",
+      "ordinary": "显示论文标题",
+      "grpo": "使用完整列表的 str(result)",
+      "expert": "仅显示数量",
+      "status": "既有差异，未修正"
+    },
+    {
+      "id": "翻译及缓存",
+      "ordinary": "模拟 enqueue 返回 PENDING；缓存资产仍为空",
+      "grpo": "模拟同步 READY，局部 downloaded/translated 集合变为 READY",
+      "expert": "模拟 enqueue 返回 PENDING 字典；缓存资产仍为空",
+      "status": "既有差异，未修正"
+    },
+    {
+      "id": "缺少 Action",
+      "ordinary": "解析返回 None，循环记录 FINISH",
+      "grpo": "明确记录 PARSE_ERROR，指标终止类型为 INCOMPLETE",
+      "expert": "确定性生成没有模型动作解析环节，不构造伪造坏格式专家输入",
+      "status": "既有差异，未修正"
+    },
+    {
+      "id": "奖励与实际翻译状态",
+      "ordinary": "PENDING 轨迹既有奖励仍为 1.0",
+      "grpo": "READY 轨迹既有奖励为 1.0",
+      "expert": "PENDING 轨迹既有奖励仍为 1.0",
+      "status": "仅记录既有评分，不修改公式或上限"
+    }
+  ],
+  "paths": {
+    "ordinary_translation_cache": {
+      "history": [
+        {
+          "thought": "需要调用 get_recently_submitted_cs_papers 来处理任务步骤 1",
+          "action": "{\"name\": \"get_recently_submitted_cs_papers\", \"args\": {\"aspect\": \"AI\", \"days\": 7, \"max_results\": 1}}",
+          "observation": "成功获取 1 篇论文:\n  - 合成论文：ReAct 状态冻结"
+        },
+        {
+          "thought": "需要调用 translate_arxiv_pdf 来处理任务步骤 2",
+          "action": "{\"name\": \"translate_arxiv_pdf\", \"args\": {\"ref\": 1}}",
+          "observation": "已创建翻译任务 task_id=mocktask0001, paper_id=2601.00001，状态=PENDING。前端可订阅 SSE: /events?session_id=fixed_session，任务完成后刷新 /translate/assets 或 /pdf/assets。"
+        },
+        {
+          "thought": "需要调用 get_paper_cache_status 来处理任务步骤 3",
+          "action": "{\"name\": \"get_paper_cache_status\", \"args\": {\"ref\": null}}",
+          "observation": "{'paper_id': '2601.00001', 'pdf': None, 'translate': None, 'pdf_ready': False, 'translated_ready': False}"
+        },
+        {
+          "thought": "所有步骤均已成功执行，任务已完成",
+          "action": "FINISH",
+          "observation": "任务完成"
+        }
+      ],
+      "states_after_tools": [
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": null,
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        },
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": "2601.00001",
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        },
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": "2601.00001",
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        }
+      ],
+      "reward": {
+        "total": 1,
+        "format": 1,
+        "tool": 1,
+        "argument": 1,
+        "process": 1,
+        "outcome": 1,
+        "weights": {
+          "format": 1,
+          "tool": 3,
+          "argument": 2,
+          "process": 1,
+          "outcome": 3,
+          "result_quality": 0,
+          "efficiency": 0
+        },
+        "result_quality": 1,
+        "efficiency": 1
+      },
+      "termination": "FINISH",
+      "model_messages_sha256": [
+        "faf19000b0d1c2e5ec6e7182078781ce7d637240022cd9d5ef25518f21da2e03",
+        "fcc5a48654162ee3bc1432e029686d4160f3ea6aab914181f0aaf8e14adb509e",
+        "01132eca106cadf41159eab94db1ef0c9d3de591fc7c0558336060aaada60a5f",
+        "41ca63e92821947bca0c4f8b95fc56f12e49887880729b5b6a254592a8857fa6"
+      ]
+    },
+    "grpo_translation_cache": {
+      "history": [
+        {
+          "thought": "需要调用 get_recently_submitted_cs_papers 来处理任务步骤 1",
+          "action": "{\"name\": \"get_recently_submitted_cs_papers\", \"args\": {\"aspect\": \"AI\", \"days\": 7, \"max_results\": 1}}",
+          "observation": "[{'id': '2601.00001', 'title': '合成论文：ReAct 状态冻结', 'authors': ['Synthetic Author'], 'summary': '仅供离线契约测试', 'published': '2026-01-01T00:00:00Z', 'primary_category': 'cs.AI', 'pdf_url': 'https://example.invalid/2601.00001.pdf'}]"
+        },
+        {
+          "thought": "需要调用 translate_arxiv_pdf 来处理任务步骤 2",
+          "action": "{\"name\": \"translate_arxiv_pdf\", \"args\": {\"ref\": 1}}",
+          "observation": "{'paper_id': '2601.00001', 'status': 'READY', 'offline': True, 'force': False, 'service': None, 'threads': None, 'keep_dual': False, 'pdf_url': None, 'input_pdf_path': None}"
+        },
+        {
+          "thought": "需要调用 get_paper_cache_status 来处理任务步骤 3",
+          "action": "{\"name\": \"get_paper_cache_status\", \"args\": {\"ref\": null}}",
+          "observation": "{'paper_id': '2601.00001', 'pdf': {'status': 'READY'}, 'translate': {'status': 'READY'}, 'pdf_ready': True, 'translated_ready': True}"
+        },
+        {
+          "thought": "所有步骤均已成功执行，任务已完成",
+          "action": "FINISH",
+          "observation": "任务完成"
+        }
+      ],
+      "states_after_tools": [
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": null,
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        },
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": "2601.00001",
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [
+            "2601.00001"
+          ],
+          "translated": [
+            "2601.00001"
+          ]
+        },
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": "2601.00001",
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [
+            "2601.00001"
+          ],
+          "translated": [
+            "2601.00001"
+          ]
+        }
+      ],
+      "reward": {
+        "total": 1,
+        "format": 1,
+        "tool": 1,
+        "argument": 1,
+        "process": 1,
+        "outcome": 1,
+        "weights": {
+          "format": 1,
+          "tool": 3,
+          "argument": 2,
+          "process": 1,
+          "outcome": 3,
+          "result_quality": 0,
+          "efficiency": 0
+        },
+        "result_quality": 1,
+        "efficiency": 1
+      },
+      "termination": "FINISH",
+      "raw_assistant_turns": [
+        "Thought: 需要调用 get_recently_submitted_cs_papers 来处理任务步骤 1\nAction: {\"name\": \"get_recently_submitted_cs_papers\", \"args\": {\"aspect\": \"AI\", \"days\": 7, \"max_results\": 1}}",
+        "Thought: 需要调用 translate_arxiv_pdf 来处理任务步骤 2\nAction: {\"name\": \"translate_arxiv_pdf\", \"args\": {\"ref\": 1}}",
+        "Thought: 需要调用 get_paper_cache_status 来处理任务步骤 3\nAction: {\"name\": \"get_paper_cache_status\", \"args\": {\"ref\": null}}",
+        "Thought: 所有步骤均已成功执行，任务已完成\nAction: FINISH"
+      ],
+      "clipped": false,
+      "reached_max_turns": false,
+      "policy_token_count": 419,
+      "environment_token_count": 600,
+      "sampled_policy_sha256": "40f36b696004ce4ae025e922a11e3e83a3de624d65f336264c970b38f7a7edac"
+    },
+    "ordinary_malformed": {
+      "history": [
+        {
+          "thought": "我先想想该怎么做",
+          "action": "FINISH",
+          "observation": "任务完成"
+        }
+      ],
+      "states_after_tools": [],
+      "reward": {
+        "total": -0.75,
+        "format": 1,
+        "tool": -1,
+        "argument": -1,
+        "process": 1,
+        "outcome": 0.25,
+        "weights": {
+          "format": 1,
+          "tool": 3,
+          "argument": 2,
+          "process": 1,
+          "outcome": 3,
+          "result_quality": 0,
+          "efficiency": 0
+        },
+        "result_quality": -1,
+        "efficiency": 1
+      },
+      "termination": "FINISH",
+      "model_messages_sha256": [
+        "faf19000b0d1c2e5ec6e7182078781ce7d637240022cd9d5ef25518f21da2e03"
+      ]
+    },
+    "grpo_malformed": {
+      "history": [
+        {
+          "thought": "我先想想该怎么做",
+          "action": "PARSE_ERROR",
+          "observation": "无法解析 Action",
+          "parse_failed": true
+        }
+      ],
+      "states_after_tools": [],
+      "reward": {
+        "total": -0.775,
+        "format": -1,
+        "tool": -1,
+        "argument": -1,
+        "process": -1,
+        "outcome": -0.25,
+        "weights": {
+          "format": 1,
+          "tool": 3,
+          "argument": 2,
+          "process": 1,
+          "outcome": 3,
+          "result_quality": 0,
+          "efficiency": 0
+        },
+        "result_quality": -1,
+        "efficiency": 0.5
+      },
+      "termination": "INCOMPLETE",
+      "raw_assistant_turns": [
+        "Thought: 我先想想该怎么做"
+      ],
+      "clipped": false,
+      "reached_max_turns": false,
+      "policy_token_count": 17,
+      "environment_token_count": 0,
+      "sampled_policy_sha256": "7bf78ae0c1c08652517f9ddea4c75b9086244b223acf0edd89c675434767190c"
+    },
+    "expert_translation_cache": {
+      "history": [
+        {
+          "thought": "需要调用 get_recently_submitted_cs_papers 来处理任务步骤 1",
+          "action": "{\"name\": \"get_recently_submitted_cs_papers\", \"args\": {\"aspect\": \"AI\", \"days\": 7, \"max_results\": 1}}",
+          "observation": "成功获取 1 篇论文"
+        },
+        {
+          "thought": "需要调用 translate_arxiv_pdf 来处理任务步骤 2",
+          "action": "{\"name\": \"translate_arxiv_pdf\", \"args\": {\"ref\": 1}}",
+          "observation": "{'task_id': 'mocktask0001', 'paper_id': '2601.00001', 'status': 'PENDING'}"
+        },
+        {
+          "thought": "需要调用 get_paper_cache_status 来处理任务步骤 3",
+          "action": "{\"name\": \"get_paper_cache_status\", \"args\": {\"ref\": null}}",
+          "observation": "{'paper_id': '2601.00001', 'pdf': None, 'translate': None, 'pdf_ready': False, 'translated_ready': False}"
+        },
+        {
+          "thought": "所有步骤均已成功执行，任务已完成",
+          "action": "FINISH",
+          "observation": "任务完成"
+        }
+      ],
+      "states_after_tools": [
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": null,
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        },
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": "2601.00001",
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        },
+        {
+          "candidate_ids": [
+            "2601.00001"
+          ],
+          "last_active_paper_id": "2601.00001",
+          "pdf_asset_status": null,
+          "translate_asset_status": null,
+          "downloaded": [],
+          "translated": []
+        }
+      ],
+      "reward": {
+        "total": 1,
+        "format": 1,
+        "tool": 1,
+        "argument": 1,
+        "process": 1,
+        "outcome": 1,
+        "weights": {
+          "format": 1,
+          "tool": 3,
+          "argument": 2,
+          "process": 1,
+          "outcome": 3,
+          "result_quality": 0,
+          "efficiency": 0
+        },
+        "result_quality": 1,
+        "efficiency": 1
+      },
+      "termination": "FINISH",
+      "samples_sha256": "1475e4eb0bd5cb0d703401ad992f805a784a927aaa0a0b8da8ac815c127607fc",
+      "sample_count": 4
+    }
+  }
+}

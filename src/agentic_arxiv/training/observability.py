@@ -1,0 +1,279 @@
+"""训练可观测性：把奖励曲线从 console scrollback 搬到 TensorBoard / wandb。
+
+三个训练脚本此前的日志后端是不一致的，而且两种方式都不对：
+
+  - train_grpo.py 写死 ``report_to=[]``，任何后端都进不去；
+  - train_sft.py / train_dpo.py 根本不设 ``report_to``，HF 会解析成 "all"，
+    也就是「装了什么就启用什么」—— 同一份代码在本机和集群上行为不同，
+    集群上恰好装了 wandb 就会在训练开始时卡住等 API key。
+
+这里给三个阶段统一一个显式的 ``--report-to``，并且在后端没装时**直接报错**，
+而不是静默地什么都不记（静默失败正是这个仓库反复踩过的坑）。
+
+除了 TRL 自带的 reward / kl / grad_norm，本模块还负责把五个奖励分量单独记出来。
+这不是锦上添花：``RewardCalculator`` 带一个 30 步的课程，前期把 tool/argument/
+outcome 的权重压到 1/3，之后恢复满权重。也就是说**只看 total reward 无法判断
+曲线上升是策略变强还是权重表在动**。五个分量各自恒在 [-1, 1] 且与权重无关，
+配合同时记录的当前权重，才能把这两件事分开。
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional, Sequence
+from agentic_arxiv.scoring.health import trajectory_health
+
+# HF 的集成名 -> 需要装的包名。用于在启用前给出可操作的报错。
+_BACKEND_REQUIREMENTS = {
+    "tensorboard": "tensorboard",
+    "wandb": "wandb",
+    "mlflow": "mlflow",
+    "comet_ml": "comet_ml",
+    "neptune": "neptune",
+    "clearml": "clearml",
+    "dvclive": "dvclive",
+    "swanlab": "swanlab",
+    "trackio": "trackio",
+}
+
+
+def safe_print(msg: str) -> None:
+    """Print with fallback encoding protection on platforms with limited charsets (e.g. Windows GBK)."""
+    import sys
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        safe_msg = msg.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
+            sys.stdout.encoding or "utf-8"
+        )
+        print(safe_msg)
+
+
+def resolve_report_to(value: Optional[str]) -> List[str]:
+    """把 ``--report-to`` 的取值规范成 HF 认识的列表，并校验后端可用。
+
+    与 HF 的默认行为有意不同：HF 在 ``report_to=None`` 时解析成 "all"，
+    等于「装了什么用什么」。这里要求显式声明，且——
+
+      - ``"none"`` / ``""``  -> ``[]``，明确表示不记录；
+      - ``"auto"``          -> 装了 tensorboard 就用，没装则退回 ``[]`` 并提示；
+      - 具体后端名           -> 没装就抛错，不静默降级。
+
+    Returns:
+        传给 ``TrainingArguments.report_to`` 的列表。
+    """
+    raw = (value or "none").strip().lower()
+    if raw in ("none", "no", "off", ""):
+        return []
+
+    if raw == "auto":
+        if _backend_available("tensorboard"):
+            return ["tensorboard"]
+        safe_print(
+            "ℹ️  --report-to auto：未安装 tensorboard，本次不记录训练曲线。"
+            "   需要曲线请先 pip install tensorboard"
+        )
+        return []
+
+    names = [name.strip() for name in raw.split(",") if name.strip()]
+    for name in names:
+        if name not in _BACKEND_REQUIREMENTS:
+            raise SystemExit(
+                f"❌ 未知的 --report-to 后端: {name}\n"
+                f"   可选: none / auto / {' / '.join(sorted(_BACKEND_REQUIREMENTS))}"
+            )
+        if not _backend_available(name):
+            package = _BACKEND_REQUIREMENTS[name]
+            raise SystemExit(
+                f"❌ --report-to {name} 需要先安装 {package}: pip install {package}\n"
+                "   （这里选择直接失败而不是静默跳过：训练跑完却没有任何曲线，"
+                "比启动时报错难查得多）"
+            )
+    return names
+
+
+def _backend_available(name: str) -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec(_BACKEND_REQUIREMENTS.get(name, name)) is not None
+
+
+class RewardComponentTracker:
+    """收集每条 rollout 的奖励分量与轨迹健康度，汇总进训练日志。
+
+    走 TRL ``GRPOTrainer._metrics`` 这个口子：TRL 在 ``log()`` 里会把它按 key
+    取均值、并进 ``logs``、再分发给所有 report_to 后端，最后清空。也就是说
+    这里只管 append，聚合与清空都由 TRL 负责，梯度累积下的多次调用会被正确
+    平均成一个点。
+
+    ``bind`` 失败（TRL 改了内部结构）时对象退化成 no-op —— 训练不该因为
+    日志记不了就崩，但会打印一次提示，避免变成又一处静默失效。
+    """
+
+    #: 与 RewardBreakdown 对齐的可审计分量。result_quality / efficiency
+    #: 是非补偿性 gate 的诊断信号，不直接替代旧的课程权重曲线。
+    COMPONENTS = (
+        "format", "tool", "argument", "process", "outcome",
+        "result_quality", "efficiency",
+    )
+
+    def __init__(self) -> None:
+        self._sink: Optional[Dict[str, List[float]]] = None
+        self._pending: Dict[str, List[float]] = {}
+        self.bound = False
+        # ``_metrics`` 会在每次 TRL log 后清空，因此另存累计统计，供训练结束
+        # 后输出逐任务报告。否则只能看到某一步的均值，无法判断哪些任务长期
+        # 有组内方差、真正能给 GRPO 提供梯度。
+        self._task_rewards: Dict[str, List[float]] = {}
+        self._task_group_stds: Dict[str, List[float]] = {}
+
+    # --- 接线 -------------------------------------------------------------
+    def bind(self, trainer: Any) -> bool:
+        """接到 trainer 的指标缓冲区。返回是否接上。"""
+        metrics = getattr(trainer, "_metrics", None)
+        if not isinstance(metrics, Mapping) or "train" not in metrics:
+            safe_print(
+                "⚠️  当前 TRL 版本没有可用的 _metrics 缓冲区，"
+                "奖励分量曲线本次不会被记录（训练本身不受影响）"
+            )
+            return False
+        self._sink = metrics["train"]
+        self.bound = True
+        # bind 之前 record 的数据不丢
+        for key, values in self._pending.items():
+            self._sink[key].extend(values)
+        self._pending.clear()
+        return True
+
+    def _emit(self, key: str, value: float) -> None:
+        if self.bound:
+            self._sink[key].append(float(value))
+        else:
+            self._pending.setdefault(key, []).append(float(value))
+
+    # --- 采集 -------------------------------------------------------------
+    def record(self, breakdown: Any, trajectory: Optional[Mapping[str, Any]] = None) -> None:
+        """记录一条 rollout 的奖励分量、当前课程权重与轨迹健康度。"""
+        for name in self.COMPONENTS:
+            value = getattr(breakdown, name, None)
+            if value is not None:
+                self._emit(f"reward_components/{name}", value)
+
+        weights = getattr(breakdown, "weights", None)
+        if weights is not None:
+            # 同时记权重，否则无法区分「策略变强」与「课程把权重放开了」
+            for name, weight in asdict(weights).items():
+                self._emit(f"reward_weights/{name}", weight)
+
+        if trajectory is not None:
+            self._record_trajectory(trajectory)
+
+    def record_group(
+        self,
+        task_ids: Sequence[Optional[str]],
+        rewards: Sequence[float],
+    ) -> None:
+        """记录同一 prompt 各 generation 的组内奖励分布。
+
+        GRPO 的 advantage 是在同一 prompt 的 generations 内归一化得到的。
+        不同任务之间的 reward 即使差异很大，也不能替代组内方差；同一任务
+        的所有 generation 奖励相同时，这一组基本不产生策略梯度。
+        """
+        grouped: Dict[str, List[float]] = {}
+        for task_id, reward in zip(task_ids, rewards):
+            if task_id is None:
+                continue
+            tid = str(task_id)
+            grouped.setdefault(tid, []).append(float(reward))
+
+        for tid, values in grouped.items():
+            mean = sum(values) / len(values)
+            variance = sum((value - mean) ** 2 for value in values) / len(values)
+            std = math.sqrt(variance)
+            zero_std = 1.0 if std <= 1e-12 else 0.0
+
+            self._task_rewards.setdefault(tid, []).extend(values)
+            self._task_group_stds.setdefault(tid, []).append(std)
+
+            # 当前任务 ID 均由字母、数字和下划线组成；仍做一次清洗，避免未来
+            # 扩充数据时斜杠等字符破坏 TensorBoard 的指标层级。
+            metric_tid = "".join(
+                ch if ch.isalnum() or ch in "_-" else "_" for ch in tid
+            )
+            self._emit(f"reward_by_task/{metric_tid}/mean", mean)
+            self._emit(f"reward_by_task/{metric_tid}/std", std)
+            self._emit(f"reward_by_task/{metric_tid}/zero_std", zero_std)
+
+    def task_summary(self) -> Dict[str, Any]:
+        """返回整个训练期间累计的逐任务奖励与组内方差统计。"""
+        tasks: Dict[str, Dict[str, Any]] = {}
+        task_ids = sorted(set(self._task_rewards) | set(self._task_group_stds))
+        for tid in task_ids:
+            rewards = self._task_rewards.get(tid, [])
+            group_stds = self._task_group_stds.get(tid, [])
+            group_count = len(group_stds)
+            zero_groups = sum(std <= 1e-12 for std in group_stds)
+
+            tasks[tid] = {
+                "sample_count": len(rewards),
+                "group_count": group_count,
+                "mean_reward": sum(rewards) / len(rewards) if rewards else None,
+                "min_reward": min(rewards) if rewards else None,
+                "max_reward": max(rewards) if rewards else None,
+                "mean_group_std": (
+                    sum(group_stds) / group_count if group_count else None
+                ),
+                "zero_std_fraction": (
+                    zero_groups / group_count if group_count else None
+                ),
+                "informative_group_fraction": (
+                    1.0 - zero_groups / group_count if group_count else None
+                ),
+            }
+
+        return {"task_count": len(tasks), "tasks": tasks}
+
+    def save_task_summary(
+        self, path: Any, *, protocol_metadata: Optional[Mapping[str, Any]] = None,
+        training_metadata: Optional[Mapping[str, Any]] = None,
+    ) -> Path:
+        """持久化逐任务统计，并返回输出路径。"""
+        from agentic_arxiv.provenance import (
+            evaluation_protocol_relation, read_protocol_metadata, with_protocol_metadata,
+        )
+
+        summary = with_protocol_metadata(self.task_summary(), protocol_metadata)
+        summary["training_protocol_metadata"] = read_protocol_metadata(training_metadata)
+        summary["protocol_relation"] = evaluation_protocol_relation(training_metadata, protocol_metadata)
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return output_path
+
+    def _record_trajectory(self, trajectory: Mapping[str, Any]) -> None:
+        history = trajectory.get("history") or []
+        if not history:
+            return
+        stats = trajectory_health(history)
+        for key, value in stats.items():
+            self._emit(f"rollout/{key}", value)
+
+
+def describe_logging(report_to: Sequence[str], logging_dir: Optional[str]) -> str:
+    """训练启动时打印一行人能看懂的说明（含查看命令）。"""
+    if not report_to:
+        return (
+            "📋 未启用外部曲线后端（--report-to none）；"
+            "reward / kl / 各奖励分量仍会输出到控制台。"
+            "需要持久化曲线时使用 --report-to tensorboard"
+        )
+    if "tensorboard" in report_to and logging_dir:
+        return (f"📈 训练曲线 -> {report_to}，日志目录 {logging_dir}\n"
+                f"   查看: tensorboard --logdir {logging_dir}")
+    return f"📈 训练曲线 -> {report_to}"

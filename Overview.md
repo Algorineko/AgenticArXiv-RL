@@ -6,35 +6,43 @@
 
 | 入口 | 职责 |
 | --- | --- |
-| `AgenticArxiv/main.py` | 普通文本 ReAct 推理，保留外部 LLM API |
-| `AgenticArxiv/rl/rollout.py` | 执行任务并记录实际轨迹与奖励 |
-| `AgenticArxiv/benchmark/run_benchmark.py` | 指定任务集、切分及重复次数的评测 |
-| `scripts/generate_sft_data.py` | 按声明的 train 切分执行专家步骤，未来生成 SFT 数据 |
-| `scripts/generate_parametric_sft_data.py` | train 父任务的参数化派生与来源审计 |
-| `AgenticArxiv/rl/train_sft.py` | SFT，默认 QLoRA，也支持全参 |
-| `AgenticArxiv/rl/train_grpo.py` | 直接加载 SFT 产物的多轮 GRPO |
-| `AgenticArxiv/rl/reward.py` | 五分量评分、失败上限与诊断 |
-| `AgenticArxiv/models/store_memory.py` | 本地会话、论文及 PDF/译文资产状态 |
+| `agentic-arxiv run` | 普通文本 ReAct 推理，保留外部 LLM API |
+| `agentic-arxiv evaluate rollout` | 执行任务并记录实际轨迹与奖励 |
+| `agentic-arxiv evaluate run` | 指定任务集、切分及重复次数的评测 |
+| `agentic-arxiv data sft generate` | 按声明的 train 切分执行专家步骤，未来生成 SFT 数据 |
+| `agentic-arxiv data sft generate-parametric` | train 父任务的参数化派生与来源审计 |
+| `agentic-arxiv train sft` | SFT，默认 QLoRA，也支持全参 |
+| `agentic-arxiv train grpo` | 直接加载 SFT 产物的多轮 GRPO |
+| `agentic_arxiv.scoring` | 五分量评分、失败上限与纯诊断 |
+| `agentic_arxiv.state` | 本地会话、论文及 PDF/译文资产状态 |
 
-工具注册来自 `tools/bootstrap.py` 和 `tools/tool_registry.py`。业务能力包括检索、下载、同步翻译、缓存查询、正文读取、总结、抽图、图表分析和译文读取；可选依赖缺失不能让工具注册静默缩水。
+包位于 `src/agentic_arxiv/`，工具注册来自包内 `tools/bootstrap.py` 和 `tools/tool_registry.py`。业务能力包括检索、下载、同步翻译、缓存查询、正文读取、总结、抽图、图表分析和译文读取；可选依赖缺失不能让工具注册静默缩水。旧导入命名空间、直接脚本入口和路径注入退出，不保留转发层。
+
+`tasks` 纯编译依赖/setup 计划，`runtime` 只执行计划并产生实际可见状态；独立 `tasks.reference` 显式 replay 准备参考答案，参考不进入模型上下文。`scoring` 只消费已有轨迹和已提供参考数据，不执行工具/文件 I/O；`evaluation` 组织评测而不导入训练 callback，`training` 保留停止策略、writer 与原始 token/mask 适配。
 
 ## 安装与检查
 
-以下命令从仓库根目录执行：
+以下安装命令以仓库目录为安装来源，安装后可从任意目录使用：
 
 ```bash
-make install
+python3 -m venv .venv
 source .venv/bin/activate
-# 按需安装真实 PDF 翻译和训练曲线后端
-make install-extra
+python -m pip install .
+# 按需安装；dev 不隐含训练依赖
+python -m pip install '.[local]'
+python -m pip install '.[train]'
+python -m pip install '.[translate,logging]'
+python -m pip install '.[dev]'
 
-python -m AgenticArxiv.rl.rollout --help
-python -m AgenticArxiv.benchmark.run_benchmark --help
-python -m AgenticArxiv.main --help
-python -m pytest AgenticArxiv/tests/
+agentic-arxiv evaluate rollout --help
+agentic-arxiv evaluate run --help
+agentic-arxiv run --help
+python -m pytest tests/
 ```
 
-测试命令另外需要 pytest，核心运行依赖不包含它；可运行范围与当前环境限制以迁移记录为准，不能把这条示例当作已执行的完整测试结果。
+依赖由 [pyproject.toml](pyproject.toml) 分层声明：基础 API/历史评分、local 本地推理、train 含 local 的 SFT/GRPO、translate、logging 和 dev。基础不强制训练栈，local 不强制训练器，dev 不隐含 train；测试需 dev。版本约束和训练保护保留，可运行范围与环境限制以工程报告为准，不能把示例当作已执行的完整测试结果。
+
+全局 `--workspace PATH` 默认当前工作目录，相对输入/输出/显式配置相对工作区，绝对路径不变。包内唯一 `resources/mainline.json` 为默认训练配置，显式 `--config` 覆盖默认，显式 CLI 字段再覆盖配置。帮助不读取 `.env`、写日志或加载模型；缺资产不自动查找其他仓库或下载。
 
 使用 API 后端时，显式配置 `LLM_BASE_URL`、`LLM_API_KEY` 与 `MODEL`；不要提交真实 `.env` 或凭据。使用本地训练模型不要求 API key。真实 PDF 翻译使用可选 `pdf2zh`，PDF/图像处理所需 PyMuPDF 与 Pillow 保留在核心依赖中。
 
@@ -54,13 +62,14 @@ python -m pytest AgenticArxiv/tests/
 
 DPO、OPD、PPO、GRPO 变体选择、自进化编排、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL 和 SSE 的活动入口已退出。图表工具的既有推理后端、快照构建、T5 backfill 和外部 LLM API 保留。旧算法对照和架构设计只作历史记录，不是当前运行方式。
 
-本次工程重构不生成数据、不运行训练、不下载研究资产，不执行完整 86 任务、真实 tokenizer 集成或模型性能对照。帮助/源码核对、现有测试、历史记录读取和资产定义核对各自有独立证据，不能互相替代；实际结果与未验证路径见 [迁移记录](docs/mainline_migration.md)。
+本次工程重构不生成数据、不运行训练、不下载研究资产，不执行完整 86 任务、真实 tokenizer 集成或模型性能对照。帮助/源码核对、现有测试、历史记录读取和资产定义核对各自有独立证据，不能互相替代；安装接口、来源保全和未验证边界见 [架构迁移说明](docs/architecture_migration.md)。[旧迁移记录](docs/mainline_migration.md) 保留原文，历史来源字段不回填。
 
 ## 文档
 
 - [三语 README](README.md)：安装、主线命令与历史发布记录。
-- [后端说明](AgenticArxiv/readme.md)：文本 ReAct、工具与本地状态。
-- [benchmark 说明](AgenticArxiv/benchmark/readme.md)：切分、评分、报告与历史读取。
+- [Python 主线](docs/python_mainline.md)：文本 ReAct、工具与本地状态。
+- [评测指南](docs/evaluation.md)：切分、评分、报告与历史读取。
 - [主线指南](docs/rl_building.md)：配置、SFT 到 GRPO 与未来执行边界。
 - [坏例说明](eval/readme.md)：既有轨迹重评分与模型执行的区别。
 - [运行时契约](docs/react_runtime.md)：初始化、模式、解析、同步翻译及轨迹边界。
+- [架构迁移说明](docs/architecture_migration.md)：全部命令映射、安装分层、工作区与历史来源规则。

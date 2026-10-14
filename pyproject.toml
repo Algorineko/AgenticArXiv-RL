@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-arxiv"
+version = "0.1.0"
+description = "Text ReAct research workflows with SFT and GRPO training"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "arxiv",
+    "requests",
+    "python-dotenv",
+    "loguru",
+    "pydantic>=2.0",
+    "PyMuPDF>=1.24.0",
+    "Pillow",
+]
+
+[project.optional-dependencies]
+local = [
+    "torch>=2.0.0",
+    "transformers>=4.45.0",
+    "accelerate>=0.25.0",
+    # Local inference also loads the default SFT/GRPO LoRA adapters.
+    "peft>=0.17.1",
+]
+train = [
+    "torch>=2.0.0",
+    "transformers>=4.45.0",
+    "accelerate>=0.25.0",
+    # The non-vLLM multi-turn rollout_func requires TRL >=0.28.0.
+    "trl>=0.28.0",
+    "datasets>=2.14.0",
+    "peft>=0.17.1",
+    "bitsandbytes>=0.45.5",
+    # GRPO's version guard imports packaging.version directly.
+    "packaging",
+]
+translate = ["pdf2zh"]
+logging = ["tensorboard"]
+dev = ["pytest", "pytest-cov", "flake8", "build", "packaging"]
+
+[project.scripts]
+agentic-arxiv = "agentic_arxiv.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["agentic_arxiv*"]
+
+[tool.setuptools.package-data]
+agentic_arxiv = ["resources/mainline.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".git", ".venv", "docs", "artifacts", "data", "outputs"]
+markers = [
+    "network: manual integration check requiring real network access",
+    "local: no-model regression requiring local inference dependencies",
+    "train: no-model regression requiring training dependencies",
+]

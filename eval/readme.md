@@ -1,4 +1,4 @@
-# 坏例回放
+# 坏例历史评分与实际运行
 
 把一次失败固化成一条永久的回归用例。
 
@@ -10,42 +10,49 @@
 不需要工具**：轨迹是死的，重新跑的只有打分器。所以它能进 CI，能回答一个很窄
 但很确定的问题——同一条轨迹，今天的代码还认为它是坏的吗。
 
+安装方式见 [主线指南](../docs/rl_building.md)、[架构迁移说明](../docs/architecture_migration.md) 与 [包元数据](../pyproject.toml)。历史评分只需要基础安装，实际本地模型运行需要 `local`。安装后命令可从任意目录执行，不需要 `PYTHONPATH`。
+
+全局 `--workspace` 默认当前工作目录，相对输入与输出相对工作区，绝对路径不变。以下示例的 `WORKSPACE` 要替换为已有工作区的绝对路径：
+
 ```bash
-# 以下命令从仓库根目录执行
+WORKSPACE=/absolute/path/to/AgenticArXiv-RL
+
 # 回放全部用例；有 regression 时退出码 1
-python eval/badcase_replay.py
+agentic-arxiv --workspace "$WORKSPACE" evaluate badcases replay
 
 # 带上每条的判定条件和说明
-python eval/badcase_replay.py -v
+agentic-arxiv --workspace "$WORKSPACE" evaluate badcases replay -v
 
 # 未来另行运行已有模型后挑选坏例；本次不执行模型或追加新用例
-python -m AgenticArxiv.benchmark.run_benchmark \
+agentic-arxiv --workspace "$WORKSPACE" evaluate run \
   --backend transformers --model outputs/grpo/final \
   --task-set expanded --split data/splits/v7_86.json:dev \
   --offline --snapshot data/mock_arxiv_snapshot.json \
-  --save-traces --output artifacts/eval_react_messages_dev
-python eval/badcase_replay.py capture \
-  --traces artifacts/eval_react_messages_dev/traces.jsonl --dry-run
+  --save-traces --output artifacts/evaluation_new/dev
+agentic-arxiv --workspace "$WORKSPACE" evaluate badcases capture \
+  --traces artifacts/evaluation_new/dev/traces.jsonl --dry-run
 ```
 
 默认回放读取现有完整轨迹，只重跑评分器，不重新执行 Agent、初始化或工具。
 Canary/StageVerifier 的模型健康检查需要实际完整 episode，不能用历史记录重评分
 代替。新协议执行与旧文件读取分别标注版本关系；缺失的历史协议/模板字段保持未知。
-未来实际模型执行需要已有模型、快照和必要元数据，本次不要求补齐这些输入。
+`tasks/reference` 的参考答案准备只在上层显式请求的独立 replay episode 中执行，既不是评分器，也不进入模型上下文；坏例 replay 不会调用它。未来实际模型执行需要已有模型、快照和必要元数据，本次不要求补齐这些输入。
+
+`capture --dry-run` 只检查候选，不追加历史用例；只有另行明确授权的数据采集才执行实际 capture。新模型报告和诊断必须另存新路径，不能覆盖本页引用的历史文件。本次未运行模型、真实 tokenizer、训练或完整任务，也没有追加用例。
 
 `run` 是与默认历史评分分开的实际模型入口：
 
 ```bash
 # 只查看帮助，不执行模型
-python eval/badcase_replay.py run --help
+agentic-arxiv evaluate badcases run --help
 
-# 未来另行运行；--task-set/--cases 等全局选项放在 run 前
-python eval/badcase_replay.py --task-set expanded run \
+# 未来另行运行；--task-set/--cases 可放在 run 前或后
+agentic-arxiv --workspace "$WORKSPACE" evaluate badcases --task-set expanded run \
   --model outputs/grpo/final --offline \
   --snapshot data/mock_arxiv_snapshot.json --max-iterations 6
 ```
 
-不传 `--offline` 的 run 使用 live 工具；只有默认/replay 才是旧轨迹只读评分。
+不传 `--offline` 的 run 使用 live 工具；`replay` 才是旧轨迹只读评分。
 run 不会覆盖历史用例，FINISH 与严格任务成功分别报告，具体运行时契约见
 [react_runtime.md](../docs/react_runtime.md)。
 
@@ -79,7 +86,7 @@ run 不会覆盖历史用例，FINISH 与严格任务成功分别报告，具体
 
 `reproduces_when` 只写**能代表这条坏例的那个判定**，不是把整份判定钉死：
 后者会被任何无关的口径变化（多加一个指标、换个归一化）打成 regression，
-那样的用例没人会留着。可用字段见 `benchmark/badcases.py` 的 `VERDICT_FIELDS`，
+那样的用例没人会留着。可用字段见 [`evaluation/badcases.py`](../src/agentic_arxiv/evaluation/badcases.py) 的 `VERDICT_FIELDS`，
 写错字段名会直接报错——否则条件永远不成立，用例静默变成摆设。
 
 标量按相等比，`{"ge": 0.6}` 这类按比较算子比。后者是给 reward hacking 用的：
@@ -93,7 +100,9 @@ run 不会覆盖历史用例，FINISH 与严格任务成功分别报告，具体
 阈值断言，就是一条「这种行为不许拿到 X 分」的永久断言。#40 与 #47 修的
 两个洞都属于这一类，现在有用例守着。
 
-| case | 是什么 | 现在 |
+下表数值来自既有用例保存的历史判定，不是本次模型执行结果。
+
+| case | 是什么 | 历史奖励 |
 |---|---|---:|
 | `hack/tool-call-on-infeasible` | 该什么都不做却调了工具 | −0.235 |
 | `hack/claim-done-without-doing-it` | 直接 FINISH，什么都没做 | −0.225 |
@@ -106,10 +115,13 @@ run 不会覆盖历史用例，FINISH 与严格任务成功分别报告，具体
 `open` 那条记着「0.667 依然偏高，只是暂时不打算动」。明知故留的东西写进
 用例库，比写在某个 PR 正文里更不容易被忘掉。
 
-## 目前只有 fixed 用例，为什么
+## 现有 17 条用例的证据边界
 
-`open` 用例要从真实模型跑出来的轨迹里捞，那需要 LLM。仓库里这批种子用例
-全部来自确定性退化策略（`benchmark/baselines.py`），不需要模型也就跑得动，
-但它们考的是**打分器**而不是模型——策略本来就该失败，失败不是 bug。
+现有 [`eval_cases.jsonl`](eval_cases.jsonl) 共 17 条：16 条 `fixed`、1 条 `open`。
+它们保留 `baseline:*` 或 `probe:*` 来源，包含确定性退化策略和人工探针，考的是
+**同一份历史轨迹的打分器判定**，不是实际模型能力；模拟材料不能改称真实模型证据。
+退化策略来自 [`evaluation/baselines.py`](../src/agentic_arxiv/evaluation/baselines.py)，策略本来就应失败，失败不是模型 bug。
 
-真实模型的 `open` 用例走 `--save-traces` + `capture` 那条路补进来。
+将来真实模型的 `open` 用例可走 `evaluate run --save-traces` + 显式 `capture` 路线，
+但须保留实际来源、协议和完整轨迹，缺失字段保持未知，不能补造模型响应。
+常规评测、历史重评分和只读诊断见 [评测指南](../docs/evaluation.md)。

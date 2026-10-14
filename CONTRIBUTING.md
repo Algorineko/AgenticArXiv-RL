@@ -7,8 +7,8 @@ Thank you for your interest in contributing to AgenticArXiv-RL! This document ou
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/your-username/AgenticArXiv-RL.git`
 3. Create a feature branch: `git checkout -b feature/your-feature-name`
-4. Make your changes
-5. Run tests: `pytest AgenticArxiv/tests/`
+4. Create a virtual environment, install `pip install -e '.[dev]'`, and make your changes
+5. Run tests: `pytest tests/`
 6. Commit your changes: `git commit -m "feat: your feature description"`
 7. Push to your fork: `git push origin feature/your-feature-name`
 8. Open a Pull Request
@@ -19,12 +19,24 @@ Thank you for your interest in contributing to AgenticArXiv-RL! This document ou
 - Use type hints for function signatures
 - Write docstrings for public functions and classes
 - Keep functions focused and reasonably sized
+- Use the installed `agentic_arxiv` package; do not add `PYTHONPATH`, `sys.path` injection, or aliases for the retired `AgenticArxiv` namespace
+- Keep runtime independent of task catalogs, scoring free of tool/file execution, and evaluation independent of training callbacks
+
+## Installation and Commands
+
+Dependencies and extras are declared only in [pyproject.toml](pyproject.toml). Base `pip install .` supports API workflows without local-model or training dependencies. Add `pip install '.[local]'` for local inference, `pip install '.[train]'` for SFT/GRPO and training-side regressions, `pip install '.[translate]'` for pdf2zh, or `pip install '.[logging]'` for tensorboard. The dev extra does not implicitly install train.
+
+Use `agentic-arxiv` or the same CLI through `python -m agentic_arxiv`. Root and subcommand `--help` must remain usable without training dependencies, model loading, API calls, credentials, or log creation. Global `--workspace` precedes the subcommand and defaults to the current directory; relative input/output paths resolve against that workspace. Default training configuration is a package resource, not a path into the source checkout. See [the architecture migration guide](docs/architecture_migration.md) for command and source mappings.
 
 ## Testing
 
 - All new features must include tests
-- Run the full test suite before submitting: `pytest AgenticArxiv/tests/`
+- Run the applicable suite before submitting: `pytest tests/`; report missing optional dependencies and which training-side checks were not run
 - Tests should be deterministic and not require external API keys
+- Test discovery is rooted at `tests/`; archived behavior baselines are not active tests or acceptance evidence
+- Verify both editable and normal wheel installs outside the source directory for packaging or CLI changes; a complete development environment does not prove base-install isolation
+- Do not generate research data, call real APIs, load tokenizers/models, or launch training merely to validate architecture changes; keep those unverified integration scopes explicit
+- Preserve historical manifests, snapshots, trajectories, reports, and archived OpenSpec text at their original paths and contents. Record source migrations separately rather than rewriting old fingerprints or commands
 
 ## Pull Request Process
 

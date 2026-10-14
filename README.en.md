@@ -28,31 +28,33 @@ This project turns arXiv paper retrieval/download/translation/interpretation tas
 
 ## Quick Start
 
-Run commands from the repository root, using `.venv`. Installation has no frontend or database steps.
+Run installation commands from the repository root, using `.venv`. Installation has no frontend or database steps. Once installed, `agentic-arxiv` works from any directory without `PYTHONPATH`.
 
 ```bash
 git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r AgenticArxiv/requirements.txt
+pip install .
 
-python -m AgenticArxiv.rl.rollout --help
-python -m AgenticArxiv.benchmark.run_benchmark --help
-python -m AgenticArxiv.main --help
+agentic-arxiv evaluate rollout --help
+agentic-arxiv evaluate run --help
+agentic-arxiv run --help
 ```
 
-For API inference, explicitly set `LLM_BASE_URL`, `LLM_API_KEY`, and `MODEL`; never commit credentials or a real `.env`. Local training/evaluation does not require an API key. Install `AgenticArxiv/requirements-extra.txt` only when real PDF translation or curve logging is needed; no asynchronous application service is required.
+The base install supports external APIs and historical-record reading without local-model or training dependencies. Install `pip install '.[local]'` for local inference/evaluation or `pip install '.[train]'` for SFT/GRPO. For API inference, explicitly set `LLM_BASE_URL`, `LLM_API_KEY`, and `MODEL`; never commit credentials or a real `.env`. Local training/evaluation does not require an API key. Install `pip install '.[translate]'` for real PDF translation; no asynchronous application service is required.
+
+Global `--workspace` defaults to the current directory. Relative configuration, model, data, snapshot, and output paths are workspace-relative; absolute paths are unchanged. To use existing research inputs from elsewhere, place `agentic-arxiv --workspace /actual/workspace` before the subcommand. Missing inputs do not fall back to the source tree. `.env` is read from the workspace only for an actual operation; help does not read credentials or create logs. See the [architecture migration guide](docs/architecture_migration.md) for old-to-new entry mappings.
 
 ```bash
 # A separate future run with an existing local model and snapshot; not executed here
-python -m AgenticArxiv.rl.rollout \
-  --task_id=search_01 --output_dir=traces/react_messages \
-  --model=outputs/sft_qlora/final --offline=True \
-  --snapshot=data/mock_arxiv_snapshot.json --max_iterations=6
+agentic-arxiv evaluate rollout \
+  --task-id search_01 --output-dir traces/react_messages \
+  --model outputs/sft_qlora/final --offline \
+  --snapshot data/mock_arxiv_snapshot.json --max-iterations 6
 ```
 
-Ordinary main defaults to API/live. Rollout defaults to offline=True; explicit False enables live tools. Tool mode and model backend are separate choices; see the [runtime contract](docs/react_runtime.md).
+Ordinary `run` defaults to API/live. `evaluate rollout` defaults to offline; explicit `--no-offline` enables live tools. Tool mode and model backend are separate choices; see the [runtime contract](docs/react_runtime.md).
 
 Task execution needs an existing model or available API. Offline tools require an existing snapshot and do not fetch missing inputs. Installation/help checks are not task execution; this engineering change did not call external APIs, train models, or evaluate model performance.
 
@@ -89,7 +91,7 @@ Task execution needs an existing model or available API. Offline tools require a
 
 ### Verifiable Reward (Five Components)
 
-**Multi-granular verifiable reward** (`rl/reward.py`). Five components normalized to `[-1, 1]`, plus diagnostic components and non-compensable failure caps:
+**Multi-granular verifiable reward** (`src/agentic_arxiv/scoring/reward.py`). Five components normalized to `[-1, 1]`, plus diagnostic components and non-compensable failure caps:
 
 | Component | Default weight | Signal |
 |------|:---:|------|
@@ -100,7 +102,7 @@ Task execution needs an existing model or available API. Offline tools require a
 | `outcome` | 3 | Correct completion +1, wrong-path completion +0.25, forced stop −0.5, error −1 |
 | `result_quality` / `efficiency` | Diagnostic gate | Whether the observation genuinely succeeded; severe redundancy caps the reward |
 
-- **Curriculum learning**: the source default still scales `tool`/`argument`/`outcome` by 1/3 for the first 30 steps (`RewardCalculator.schedule`); cleanup did not change it to 0. Historical findings report format 0.983 at the SFT start and no distinguishable difference between curriculum arms. A future explicit `--reward_curriculum_steps 0` override must be recorded in the manifest, not described as preserving the default.
+- **Curriculum learning**: the source default still scales `tool`/`argument`/`outcome` by 1/3 for the first 30 steps (`RewardCalculator.schedule`); cleanup did not change it to 0. Historical findings report format 0.983 at the SFT start and no distinguishable difference between curriculum arms. A future explicit `--reward-curriculum-steps 0` override must be recorded in the manifest, not described as preserving the default.
 - **Non-compensable failures**: parse failures, execution failures, and fake FINISH can only earn negative rewards and cannot be offset by format points; when `analyze_figure` lacks a valid answer, the total reward is capped at −0.75.
 - All rewards are **rule-based and verifiable** (RLVR); every trajectory logs `reward_components` in detail for auditing. See the [multi-granular reward doc](docs/multigranular_rl.md) for the exact scoring rules.
 
@@ -120,27 +122,26 @@ Old/unknown data or trained artifacts cannot be silently labeled compatible, and
 
 These are commands for a separate future run, not engineering acceptance steps. They need new-protocol SFT data and its manifest, base-model/training resources, and an existing offline snapshot. None of these inputs were generated, and no training was run in this change.
 
+First install `pip install '.[train]'`. The default training configuration is the package resource `agentic_arxiv/resources/mainline.json`, with unchanged content; the old source-tree configuration path is no longer needed. An explicit `--config` overrides the package default, and explicit CLI arguments override that configuration.
+
 ```bash
 # Default QLoRA: GRPO directly loads the SFT adapter and base-model metadata
-python -m AgenticArxiv.rl.train_sft \
-  --config configs/training/mainline.json \
+agentic-arxiv train sft \
   --data data/sft/sft_react_messages_v3_train_mix.jsonl \
-  --output_dir outputs/sft_qlora
-python -m AgenticArxiv.rl.train_grpo \
-  --config configs/training/mainline.json \
+  --output-dir outputs/sft_qlora
+agentic-arxiv train grpo \
   --model outputs/sft_qlora/final \
-  --task_set expanded --split data/splits/v7_86.json:train \
-  --snapshot data/mock_arxiv_snapshot.json --max_turns 6
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
 
 # Explicit full-parameter path, not an adapter directory
-python -m AgenticArxiv.rl.train_sft \
-  --config configs/training/mainline.json \
+agentic-arxiv train sft \
   --data data/sft/sft_react_messages_v3_train_mix.jsonl \
-  --no-qlora --output_dir outputs/sft_full
-python -m AgenticArxiv.rl.train_grpo \
-  --config configs/training/mainline.json --model outputs/sft_full/final \
-  --no-qlora --task_set expanded --split data/splits/v7_86.json:train \
-  --snapshot data/mock_arxiv_snapshot.json --max_turns 6
+  --no-qlora --output-dir outputs/sft_full
+agentic-arxiv train grpo \
+  --model outputs/sft_full/final \
+  --no-qlora --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
 ```
 
 Formal GRPO explicitly binds a task set and a `FILE:NAME` training split. `--smoke` selects the 8 smoke tasks; the 86-task set is never implicitly all used for training. The historical 33 tasks in `v6_grpo_train.json:rl_train` are not the 55 tasks in `v7_86.json:train`.
@@ -183,15 +184,15 @@ All models are hosted on ModelScope (`Algorineko/AgenticArXiv-RL-*`); each model
 
 ## 🧪 Task Suite and Evaluation
 
-- **Smoke set** (`benchmark/tasks.py`): 8 tasks (search / download / translate / cache / composite)
-- **Expanded set** (`benchmark/tasks_expanded.py`): 86 tasks across fourteen template categories (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**), enabled with `run_benchmark.py --task-set expanded`. Both task sets go through the same `TaskSpec`: `expected_tools` / `expected_tool_args` are derived from the same `steps`, so two hand-written lists can never drift apart.
+- **Smoke set** (`src/agentic_arxiv/tasks/tasks.py`): 8 tasks (search / download / translate / cache / composite)
+- **Expanded set** (`src/agentic_arxiv/tasks/tasks_expanded.py`): 86 tasks across fourteen template categories (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**), enabled with `agentic-arxiv evaluate run --task-set expanded`. Both task sets go through the same `TaskSpec`: `expected_tools` / `expected_tool_args` are derived from the same `steps`, so two hand-written lists can never drift apart.
 - **Splits**: `data/splits/v7_86.json` has train 55 / dev 8 / iid_test 19 / ood_test 4. The historical `v6_grpo_train.json:rl_train` has 33 tasks and is a different source. Future signal selection writes a new file using declared train members only; dev/iid/ood never enter training, and no rates were remeasured here.
 - **Evaluation metrics (historical numbers)**: `pass^k` reliability (tau-bench convention), `false_finish` (the degenerate `always_finish` policy scores 91.5% vs `reference` 0%), `ref_score` (compares the `paper_id` rather than the `ref` spelling), and cost normalized by successful runs.
-- **Discrimination gate (historical statistics)** (`run_baselines.py`): deterministic degenerate policies must clear per-category thresholds — "always search cs.AI" scores 0.833→0.446 on retrieval categories, and "calling tools when none are needed" moves +0.165→−0.235.
-- **Bad-case replay** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`, 17 cases): failed trajectories are frozen into permanent regression cases; replay runs only the scorers, and `pytest` is the gate; `hack/*` records reward-hacking patterns with threshold assertions, doubling as a reward-hacking case library.
+- **Discrimination gate (historical statistics)** (current entry `agentic-arxiv evaluate baselines`): deterministic degenerate policies must clear per-category thresholds — "always search cs.AI" scores 0.833→0.446 on retrieval categories, and "calling tools when none are needed" moves +0.165→−0.235.
+- **Bad-case replay** (`agentic-arxiv evaluate badcases replay` + `eval/eval_cases.jsonl`, 17 cases): failed trajectories are frozen into permanent regression cases; replay runs only the scorers, and `pytest` is the gate; `hack/*` records reward-hacking patterns with threshold assertions, doubling as a reward-hacking case library.
 
 ```bash
-python -m AgenticArxiv.benchmark.run_benchmark \
+agentic-arxiv evaluate run \
   --backend transformers --model outputs/grpo/final \
   --task-set expanded --split data/splits/v7_86.json:iid_test \
   --offline --snapshot data/mock_arxiv_snapshot.json \
@@ -202,9 +203,15 @@ python -m AgenticArxiv.benchmark.run_benchmark \
 
 ## Dependencies
 
-[requirements.txt](AgenticArxiv/requirements.txt) declares the training stack plus `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic`, `fire`, PyMuPDF, and Pillow. Library declarations and interface guards are retained without upgrading/downgrading the stack. Historical validation comments are not proof of current real-stack integration.
+The sole dependency declaration is [pyproject.toml](pyproject.toml); see the [architecture migration guide](docs/architecture_migration.md) for installation and retired entry mappings. Base `pip install .` includes `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic`, PyMuPDF, and Pillow, without the training stack.
 
-[requirements-extra.txt](AgenticArxiv/requirements-extra.txt) retains `pdf2zh` for real PDF translation and `tensorboard` for curves; `wandb` can be installed separately. Figure/summary model backends require explicit local models. Missing optional dependencies fail when their feature is used, without shrinking the 10-tool registry. Web/database/alternate-agent dependencies are no longer installation options.
+- `pip install '.[local]'`: torch, transformers, accelerate, and peft for local inference, default LoRA adapters, and optional model tools, without trainers.
+- `pip install '.[train]'`: the same local constraints, plus trl, datasets, bitsandbytes, and packaging.
+- `pip install '.[translate]'`: pdf2zh for real PDF translation.
+- `pip install '.[logging]'`: tensorboard for training curves; wandb remains separately installed and explicitly enabled.
+- `pip install '.[dev]'`: pytest, coverage, flake8, build, and metadata checks, without implicitly installing train.
+
+Library constraints and interface guards remain unchanged; Fire is retired. Figure/summary backends need explicit local models. Missing optional dependencies fail when used, without shrinking the complete 10-tool registry. Help does not load real tokenizers, models, or trainers, and does not prove their integration behavior. Web/database/alternate-agent dependencies are not installation options.
 
 ---
 
@@ -218,7 +225,7 @@ python -m AgenticArxiv.benchmark.run_benchmark \
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome! Workflow: Fork → feature branch → `pytest AgenticArxiv/tests/` → `feat:`-prefixed commits → PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Issues and PRs are welcome! Workflow: Fork → feature branch → `pip install -e '.[dev]'` → `pytest tests/` → `feat:`-prefixed commits → PR. Model-free training regressions also need train dependencies; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 📄 License
 
