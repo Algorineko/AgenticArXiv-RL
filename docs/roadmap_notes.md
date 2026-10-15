@@ -60,7 +60,7 @@
 | 5 freeze | `artifacts/self_evolve/round_N/manifest.json`：每个输入/输出的 SHA256、git revision、选择结果；`lineage_sha256` 可审计 | 与 SFT manifest 同款哈希约定 |
 | 6 gate | 新旧四切分 strict pass³ 不回退：iid / ood 永远严格（容差 0），只有 dev（n=8，噪声大）可显式给 `--dev-tolerance`（如 0.125 = 一题）且记入 `gate_result.json`；坏例数只增不减；留出切分文件与冻结哈希逐字节一致。任一不满足则本轮拒绝、不晋升 | `report.py` 的 pass^k 定义（组合数口径，试验数 < k 的任务跳过） |
 
-gate 在比较分数前要求每个留出切分的新旧评测覆盖相同的非空任务集合，且每个任务均至少有 k 次试验；任务缺失、新增、替换或试验不足都会拒绝晋升，并在 `gate_result.json` 中记录原因。`--dev-tolerance` 不放宽覆盖检查。报告层仍沿用试验不足时跳过任务的统计约定。该检查只保证新旧评测之间的覆盖一致性，不验证二者是否均覆盖 split 文件中的全部预期任务。
+round manifest 冻结的文件包括：评测 summary、split、snapshot、参数化 seed manifest、诊断报告和父任务选择结果；提供 traces 时还记录原始 traces 与本轮坏例文件，执行定向派生时记录生成数据及其 manifest。各文件均记录路径、字节数和 SHA256，并参与 `lineage_sha256`；未执行的可选步骤不加入对应文件。记录哈希不等于自动验证文件，后续 gate 仍只检查冻结的 split 哈希。
 
 ```bash
 # 诊断（可单独跑）
