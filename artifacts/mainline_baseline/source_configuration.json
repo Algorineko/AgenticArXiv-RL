@@ -1,0 +1,4338 @@
+{
+  "schema_version": 1,
+  "change": "simplify-sft-grpo-react-mainline",
+  "task": "1.1",
+  "status": "recorded",
+  "audit_date": "2026-10-14",
+  "source_revision": "ad676bfb6dd51d0763b37e7fa081e663fc3af060",
+  "initial_uncommitted_files": [
+    "?? AgenticArxiv/tests/test_mainline_assets.py",
+    "?? AgenticArxiv/tests/test_mainline_behavior_baseline.py",
+    "?? artifacts/mainline_baseline/assets.json",
+    "?? artifacts/mainline_baseline/behavior.json",
+    "?? artifacts/mainline_baseline/input_inventory.json",
+    "?? artifacts/mainline_baseline/recipe_evidence.json",
+    "?? scripts/freeze_mainline_assets.py"
+  ],
+  "scope": "依据当前修订后的规划记录仓库源码配置，不要求历史配方冻结；只读提取配置/默认/传递条件并计算来源哈希，不运行训练、inspect_only、生成器或模型/tokenizer加载，不合成数据。",
+  "historical_equivalence_verified": false,
+  "runtime_effective_values_obtained": false,
+  "reference_contract": "sources 的键是仓库相对路径，sha256 对应该时点原文件字节；所有 source.line_range 为一基行号，表达式是 AST 还原的源码表达式。JSON pointer 只指向相应历史原文件。",
+  "sources": {
+    "AgenticArxiv/rl/train_sft.py": {
+      "sha256": "3b5f46407ee6644f9f21d4dfdf8ac06c02a5f3d613eee6af9727b2e7328a6060",
+      "line_count": 609
+    },
+    "AgenticArxiv/rl/train_grpo.py": {
+      "sha256": "f764780b87d3f5534aeeb40f96b021ee65dba9fb78e6793902bbfbf122e4d436",
+      "line_count": 1068
+    },
+    "AgenticArxiv/rl/precision.py": {
+      "sha256": "a09c7b8f05c87dfde7dbe9e97629cf8291ad1d9e2deccf2d937e06edf34b21fe",
+      "line_count": 144
+    },
+    "AgenticArxiv/rl/observability.py": {
+      "sha256": "e08ed5d9e00794d258b5b7fb19e705ff4fc7a73bc2a788dd5fedbe57ee3f813f",
+      "line_count": 306
+    },
+    "AgenticArxiv/rl/trl_compat.py": {
+      "sha256": "bc7080507467a05e8f4ed97dc8ce6a81c38a4079b9708437b511611bd9985382",
+      "line_count": 55
+    },
+    "AgenticArxiv/rl/canary.py": {
+      "sha256": "1a0dd182bb85f363c2bede6ab5201869b340703219c42a93d9cfffcc72b345b8",
+      "line_count": 270
+    },
+    "AgenticArxiv/rl/stage_verifier.py": {
+      "sha256": "edac47dbe2026d514348326eeea1c36d955b282b9c0fd59a14c20ed4f241f9f3",
+      "line_count": 410
+    },
+    "AgenticArxiv/rl/reward.py": {
+      "sha256": "4754188689b94a970db4245236ea099804d182bb7cd60810bb560ce29b8cfa49",
+      "line_count": 555
+    },
+    "AgenticArxiv/benchmark/splits.py": {
+      "sha256": "fa1f3bd8237a3cc525bf92007beb1bad141da89b8800ca9026c863bfad9ed026",
+      "line_count": 178
+    },
+    "AgenticArxiv/benchmark/task_io.py": {
+      "sha256": "a9aec7ce96679f33b60776aee9c3673ec61c0d4606a83b12ad5000ca1fbdaf96",
+      "line_count": 51
+    },
+    "AgenticArxiv/requirements.txt": {
+      "sha256": "7c047a53645423330dd81bc919c74d8048cb1ca4161968568f15484b9dc079fe",
+      "line_count": 31
+    },
+    "AgenticArxiv/requirements-extra.txt": {
+      "sha256": "6740c3a9d3239332fbb0a0bc76b732417b24ecd0f1b4d9e5a316c516fb9bf327",
+      "line_count": 11
+    },
+    "data/splits/v6_grpo_train.json": {
+      "sha256": "283a05b0ab689055e0e1f662b199573a5becf0045fdc026ad8289626905560c7",
+      "line_count": 734
+    },
+    "AgenticArxiv/rl/grpo_reward.py": {
+      "sha256": "2880fc88cc5d2d03bcba89c0302c9c94dedb2e8652fc749be9ba6b8848214753",
+      "line_count": 717
+    }
+  },
+  "stages": {
+    "sft": {
+      "function_defaults": [
+        {
+          "field": "model",
+          "default": "Qwen/Qwen2.5-1.5B-Instruct",
+          "default_expression": "'Qwen/Qwen2.5-1.5B-Instruct'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              273,
+              273
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "输入模型身份；先按路径/仓库标识解析后用于 tokenizer 与策略加载，不直接传入训练配置。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "data",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              274,
+              274
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "未指定或空值时使用 data/sft/sft_v3_train_mix.jsonl；指定时直接 Path(data)，不存在则失败。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "data_manifest",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              275,
+              275
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "非空值转为 Path；None 由 _verify_data_manifest 推导 data 文件名加 .manifest.json。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "output_dir",
+          "default": "outputs/sft_qlora",
+          "default_expression": "'outputs/sft_qlora'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              276,
+              276
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "输出目录用于训练配置、日志名称和最终产物路径；SFT 对绝对/相对路径显式分支。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "epochs",
+          "default": 3,
+          "default_expression": "3",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              277,
+              277
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 num_train_epochs；max_steps 同时显式传递，由训练库处理二者关系。",
+          "configuration_destinations": [
+            {
+              "field": "num_train_epochs",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  409,
+                  409
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "batch_size",
+          "default": 1,
+          "default_expression": "1",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              278,
+              278
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 per_device_train_batch_size；GRPO 不能被 G 整除时会改写为 G。",
+          "configuration_destinations": [
+            {
+              "field": "per_device_train_batch_size",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  410,
+                  410
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "grad_accum",
+          "default": 8,
+          "default_expression": "8",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              279,
+              279
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 gradient_accumulation_steps，不按当前硬件猜算历史累积。",
+          "configuration_destinations": [
+            {
+              "field": "gradient_accumulation_steps",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  411,
+                  411
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "lr",
+          "default": 0.0001,
+          "default_expression": "0.0001",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              280,
+              280
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 learning_rate；GRPO lr==0.0 仅作为 frozen_policy_probe 标记。",
+          "configuration_destinations": [
+            {
+              "field": "learning_rate",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  412,
+                  412
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "max_length",
+          "default": 4096,
+          "default_expression": "4096",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              281,
+              281
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "显式传入 SFTConfig；训练前超过该长度的样本占比大于 1% 时失败，少量超长仅告警。",
+          "configuration_destinations": [
+            {
+              "field": "max_length",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  413,
+                  413
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "max_steps",
+          "default": -1,
+          "default_expression": "-1",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              282,
+              282
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "显式映射到 max_steps；-1 的源码语义是按 epochs 训练，不是历史实际步数。",
+          "configuration_destinations": [
+            {
+              "field": "max_steps",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  415,
+                  415
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "qlora",
+          "default": true,
+          "default_expression": "True",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              283,
+              283
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "选择量化/适配器资源加载路径，不是独立训练算法；开启时检查单进程及量化环境。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "lora_r",
+          "default": 16,
+          "default_expression": "16",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              284,
+              284
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "仅新建 LoRA 配置时传入 LoraConfig.r；已有 GRPO adapter 优先加载其自身配置。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "lora_alpha",
+          "default": 32,
+          "default_expression": "32",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              285,
+              285
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "仅新建 LoRA 配置时传入 LoraConfig.lora_alpha；已有 adapter 不被该默认值重建。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "lora_dropout",
+          "default": 0.05,
+          "default_expression": "0.05",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              286,
+              286
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "仅新建 LoRA 配置时传入 LoraConfig.lora_dropout；已有 adapter 不被该默认值重建。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "gradient_checkpointing",
+          "default": true,
+          "default_expression": "True",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              287,
+              287
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "显式传入配置；gradient_checkpointing_kwargs 开启时为 use_reentrant=False，关闭时仍传 None，不属于省略。",
+          "configuration_destinations": [
+            {
+              "field": "gradient_checkpointing",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  423,
+                  423
+                ]
+              }
+            },
+            {
+              "field": "gradient_checkpointing_kwargs",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  425,
+                  425
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "optim",
+          "default": "paged_adamw_8bit",
+          "default_expression": "'paged_adamw_8bit'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              288,
+              288
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "QLoRA 传入 optim；全参 SFT 仅将默认 paged_adamw_8bit 转为 adamw_torch_fused；全参 GRPO 总是传 adamw_torch_fused。",
+          "configuration_destinations": [
+            {
+              "field": "optim",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  422,
+                  422
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "inspect_only",
+          "default": false,
+          "default_expression": "False",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              289,
+              289
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "完成数据、manifest 与 token 长度检查后返回，不加载策略或启动训练；本审计未运行此入口。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "skip_data_manifest_check",
+          "default": false,
+          "default_expression": "False",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              290,
+              290
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "默认 false 即执行数据来源/哈希/行数/去重核对；开启时跳过但声明非正式可复现实验。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "seed",
+          "default": 42,
+          "default_expression": "42",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              291,
+              291
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "同时映射到 seed 和 data_seed；保留随机种子传递。",
+          "configuration_destinations": [
+            {
+              "field": "seed",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  427,
+                  427
+                ]
+              }
+            },
+            {
+              "field": "data_seed",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  428,
+                  428
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "verify",
+          "default": true,
+          "default_expression": "True",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              292,
+              292
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "仅控制训练结束后的阶段验证；不作为训练配置字段。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "min_parse_rate",
+          "default": 0.3,
+          "default_expression": "0.3",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              293,
+              293
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "传入 StageVerifier.sft_min_parse_rate，默认 0.3。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "report_to",
+          "default": "none",
+          "default_expression": "'none'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              294,
+              294
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "经 resolve_report_to 解析为后端列表；none/no/off/空/None 返回 []，auto 按已安装后端决定，显式无效或缺依赖直接失败。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "run_name",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              295,
+              295
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "未设置或空值时使用输出目录末段；不是省略 run_name 参数。",
+          "configuration_destinations": [
+            {
+              "field": "run_name",
+              "source": {
+                "path": "AgenticArxiv/rl/train_sft.py",
+                "line_range": [
+                  433,
+                  433
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "cli": [
+        {
+          "flags": [
+            "--model"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              556,
+              556
+            ]
+          },
+          "default": "Qwen/Qwen2.5-1.5B-Instruct"
+        },
+        {
+          "flags": [
+            "--data"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              557,
+              557
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--data_manifest"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              558,
+              558
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--output_dir"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              559,
+              559
+            ]
+          },
+          "default": "outputs/sft_qlora"
+        },
+        {
+          "flags": [
+            "--epochs"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              560,
+              560
+            ]
+          },
+          "type": "int",
+          "default": 3
+        },
+        {
+          "flags": [
+            "--batch_size"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              561,
+              561
+            ]
+          },
+          "type": "int",
+          "default": 1
+        },
+        {
+          "flags": [
+            "--grad_accum"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              562,
+              562
+            ]
+          },
+          "type": "int",
+          "default": 8
+        },
+        {
+          "flags": [
+            "--lr"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              563,
+              563
+            ]
+          },
+          "type": "float",
+          "default": 0.0001
+        },
+        {
+          "flags": [
+            "--max_length"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              564,
+              568
+            ]
+          },
+          "type": "int",
+          "default": 4096
+        },
+        {
+          "flags": [
+            "--max_steps"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              569,
+              572
+            ]
+          },
+          "type": "int",
+          "default": -1
+        },
+        {
+          "flags": [
+            "--qlora"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              573,
+              576
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": true
+        },
+        {
+          "flags": [
+            "--lora_r"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              577,
+              577
+            ]
+          },
+          "type": "int",
+          "default": 16
+        },
+        {
+          "flags": [
+            "--lora_alpha"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              578,
+              578
+            ]
+          },
+          "type": "int",
+          "default": 32
+        },
+        {
+          "flags": [
+            "--lora_dropout"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              579,
+              579
+            ]
+          },
+          "type": "float",
+          "default": 0.05
+        },
+        {
+          "flags": [
+            "--gradient_checkpointing"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              580,
+              582
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": true
+        },
+        {
+          "flags": [
+            "--optim"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              583,
+              583
+            ]
+          },
+          "default": "paged_adamw_8bit"
+        },
+        {
+          "flags": [
+            "--inspect_only"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              584,
+              587
+            ]
+          },
+          "action": "store_true",
+          "default": false
+        },
+        {
+          "flags": [
+            "--skip_data_manifest_check"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              588,
+              591
+            ]
+          },
+          "action": "store_true",
+          "default": false
+        },
+        {
+          "flags": [
+            "--seed"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              592,
+              592
+            ]
+          },
+          "type": "int",
+          "default": 42
+        },
+        {
+          "flags": [
+            "--verify"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              593,
+              596
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": true
+        },
+        {
+          "flags": [
+            "--min_parse_rate"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              597,
+              600
+            ]
+          },
+          "type": "float",
+          "default": 0.3
+        },
+        {
+          "flags": [
+            "--report_to"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              601,
+              604
+            ]
+          },
+          "default": "none"
+        },
+        {
+          "flags": [
+            "--run_name"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              605,
+              608
+            ]
+          },
+          "default": null
+        }
+      ],
+      "config_and_manifest_mappings": [
+        {
+          "target_container": "config_kwargs",
+          "field": "output_dir",
+          "expression": "str(out_path)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              408,
+              408
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "num_train_epochs",
+          "expression": "epochs",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              409,
+              409
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "per_device_train_batch_size",
+          "expression": "batch_size",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              410,
+              410
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "gradient_accumulation_steps",
+          "expression": "grad_accum",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              411,
+              411
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "learning_rate",
+          "expression": "lr",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              412,
+              412
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "max_length",
+          "expression": "max_length",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              413,
+              413
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "completion_only_loss",
+          "expression": "True",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              414,
+              414
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "max_steps",
+          "expression": "max_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              415,
+              415
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "logging_steps",
+          "expression": "1",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              416,
+              416
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "logging_first_step",
+          "expression": "True",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              417,
+              417
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "save_steps",
+          "expression": "50",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              418,
+              418
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "save_total_limit",
+          "expression": "3",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              419,
+              419
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "warmup_ratio",
+          "expression": "0.03",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              420,
+              420
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "lr_scheduler_type",
+          "expression": "'cosine'",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              421,
+              421
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "optim",
+          "expression": "optim",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              422,
+              422
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "gradient_checkpointing",
+          "expression": "gradient_checkpointing",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              423,
+              423
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "gradient_checkpointing_kwargs",
+          "expression": "{'use_reentrant': False} if gradient_checkpointing else None",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              425,
+              425
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "seed",
+          "expression": "seed",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              427,
+              427
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "data_seed",
+          "expression": "seed",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              428,
+              428
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "dataloader_num_workers",
+          "expression": "0",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              429,
+              429
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "dataset_num_proc",
+          "expression": "1",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              430,
+              430
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "packing",
+          "expression": "False",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              431,
+              431
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "report_to",
+          "expression": "backends",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              432,
+              432
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "run_name",
+          "expression": "run_name or out_path.name",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              433,
+              433
+            ]
+          }
+        },
+        {
+          "target_container": "config_kwargs",
+          "field": "**",
+          "expression": "_precision_flags()",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              434,
+              434
+            ]
+          }
+        },
+        {
+          "target_container": "trainer_kwargs",
+          "field": "model",
+          "expression": "policy",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              455,
+              455
+            ]
+          }
+        },
+        {
+          "target_container": "trainer_kwargs",
+          "field": "args",
+          "expression": "config",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              456,
+              456
+            ]
+          }
+        },
+        {
+          "target_container": "trainer_kwargs",
+          "field": "train_dataset",
+          "expression": "train_dataset",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              457,
+              457
+            ]
+          }
+        },
+        {
+          "target_container": "trainer_kwargs",
+          "field": "processing_class",
+          "expression": "tokenizer",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              458,
+              458
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "stage",
+          "expression": "'sft_qlora' if qlora else 'sft_full'",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              493,
+              493
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "base_model",
+          "expression": "resolved_model",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              494,
+              494
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "data",
+          "expression": "str(train_data_path)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              495,
+              495
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "data_sha256",
+          "expression": "_sha256_file(train_data_path)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              496,
+              496
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "data_manifest_kind",
+          "expression": "manifest.get('kind') if manifest else None",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              497,
+              497
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "output",
+          "expression": "str(final_output_dir)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              498,
+              498
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "max_steps",
+          "expression": "max_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              499,
+              499
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "epochs",
+          "expression": "epochs",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              500,
+              500
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "batch_size",
+          "expression": "batch_size",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              501,
+              501
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "gradient_accumulation_steps",
+          "expression": "grad_accum",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              502,
+              502
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "effective_batch_size",
+          "expression": "effective_batch",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              503,
+              503
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "learning_rate",
+          "expression": "lr",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              504,
+              504
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "max_length",
+          "expression": "max_length",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              505,
+              505
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "optimizer",
+          "expression": "optim",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              506,
+              506
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "seed",
+          "expression": "seed",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              507,
+              507
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "train_loss",
+          "expression": "train_loss",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              508,
+              508
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "trainable_parameters",
+          "expression": "trainable",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              509,
+              509
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "model_parameters_seen_by_trainer",
+          "expression": "total",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              510,
+              510
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "trainable_ratio_percent",
+          "expression": "ratio",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              511,
+              511
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "peak_vram_gib",
+          "expression": "peak_vram",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              512,
+              512
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "qlora",
+          "expression": "{'load_in_4bit': qlora, 'quant_type': 'nf4' if qlora else None, 'double_quant': qlora, 'compute_dtype': 'bfloat16' if qlora else None, 'r': lora_r if qlora else None, 'alpha': lora_alpha if qlora else None, 'dropout': lora_dropout if qlora else None, 'target_modules': list(QLORA_TARGET_MODULES) if qlora else []}",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              513,
+              522
+            ]
+          }
+        },
+        {
+          "target_container": "training_manifest",
+          "field": "versions",
+          "expression": "{package: version(package) for package in ('torch', 'transformers', 'trl', 'peft', 'bitsandbytes') if qlora or package not in ('peft', 'bitsandbytes')}",
+          "source": {
+            "path": "AgenticArxiv/rl/train_sft.py",
+            "line_range": [
+              523,
+              527
+            ]
+          }
+        }
+      ],
+      "optional_configuration_assignments": [],
+      "source": "AgenticArxiv/rl/train_sft.py",
+      "configuration_dictionary_semantics": "表达式来自源文件 AST，只记录构造时的请求值，不执行训练库、不声称已得到解析/派生有效值。** 精度字典由 precision_flags 提供。"
+    },
+    "grpo": {
+      "function_defaults": [
+        {
+          "field": "model",
+          "default": "outputs/dpo/final",
+          "default_expression": "'outputs/dpo/final'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              363,
+              363
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "输入模型身份；先按路径/仓库标识解析后用于 tokenizer 与策略加载，不直接传入训练配置。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "output_dir",
+          "default": "outputs/grpo",
+          "default_expression": "'outputs/grpo'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              364,
+              364
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "输出目录用于训练配置、日志名称和最终产物路径；SFT 对绝对/相对路径显式分支。",
+          "configuration_destinations": [
+            {
+              "field": "output_dir",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  637,
+                  637
+                ]
+              }
+            },
+            {
+              "field": "run_name",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  660,
+                  660
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "epochs",
+          "default": 1,
+          "default_expression": "1",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              365,
+              365
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 num_train_epochs；max_steps 同时显式传递，由训练库处理二者关系。",
+          "configuration_destinations": [
+            {
+              "field": "num_train_epochs",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  638,
+                  638
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "max_steps",
+          "default": -1,
+          "default_expression": "-1",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              366,
+              366
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "显式映射到 max_steps；-1 的源码语义是按 epochs 训练，不是历史实际步数。",
+          "configuration_destinations": [
+            {
+              "field": "max_steps",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  639,
+                  639
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "batch_size",
+          "default": 4,
+          "default_expression": "4",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              367,
+              367
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 per_device_train_batch_size；GRPO 不能被 G 整除时会改写为 G。",
+          "configuration_destinations": [
+            {
+              "field": "per_device_train_batch_size",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  640,
+                  640
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "grad_accum",
+          "default": 1,
+          "default_expression": "1",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              368,
+              368
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 gradient_accumulation_steps，不按当前硬件猜算历史累积。",
+          "configuration_destinations": [
+            {
+              "field": "gradient_accumulation_steps",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  641,
+                  641
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "lr",
+          "default": 0.00001,
+          "default_expression": "1e-05",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              369,
+              369
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "映射到 learning_rate；GRPO lr==0.0 仅作为 frozen_policy_probe 标记。",
+          "configuration_destinations": [
+            {
+              "field": "learning_rate",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  642,
+                  642
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "beta",
+          "default": 0.04,
+          "default_expression": "DEFAULT_BETA",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              370,
+              370
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "直接传入 GRPOConfig.beta；普通路径 dapo=False 时保持 0.04，不采用 v6 的历史 0.1 替换。",
+          "configuration_destinations": [
+            {
+              "field": "beta",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  643,
+                  643
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "reward_curriculum_steps",
+          "default": 30,
+          "default_expression": "30",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              371,
+              371
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "传入 RewardCalculator(curriculum_steps=...)；负值失败，默认 30，不采用 v6 的历史 0 替换。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "num_generations",
+          "default": 4,
+          "default_expression": "4",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              372,
+              372
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "直接传入 GRPOConfig 与 Canary/审计器；rollout 接收已展开 prompts，不再次按 G 扩增。",
+          "configuration_destinations": [
+            {
+              "field": "num_generations",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  644,
+                  644
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "max_completion_length",
+          "default": 256,
+          "default_expression": "256",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              373,
+              373
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "直接传入 GRPOConfig、Canary.max_new_tokens；标准动作长度不足时失败；策略和环境 token 共同占用此累计完成预算。",
+          "configuration_destinations": [
+            {
+              "field": "max_completion_length",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  645,
+                  645
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "max_turns",
+          "default": 4,
+          "default_expression": "4",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              374,
+              374
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "只传入 make_multiturn_rollout_func；按任务标准链长度加 FINISH 校验，不传入 GRPOConfig。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "temperature",
+          "default": 1,
+          "default_expression": "1.0",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              375,
+              375
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "直接传入 GRPOConfig 与训练 Canary，不在本项目另设 top_p/top_k 默认值。",
+          "configuration_destinations": [
+            {
+              "field": "temperature",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  646,
+                  646
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "loss_type",
+          "default": null,
+          "default_expression": "None",
+          "fate": "选择入口退出，保留基线路径的未设置/省略语义",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              376,
+              376
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "默认 None，在 dapo=False 时保持；仅非 None 时加入 cfg_kwargs。删除算法选择入口不能将它猜填为 grpo/dapo 或把 None 记作有效值。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "epsilon_high",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              377,
+              377
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "默认 None，在普通路径仅非 None 时加入 cfg_kwargs；None 是省略而非显式传 null。训练库最终上界未知。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "mask_truncated_completions",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              378,
+              378
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "默认 None，在普通路径仅非 None 时加入 cfg_kwargs；显式 False 仍会传入，不能用真值判断替代。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "importance_sampling_level",
+          "default": null,
+          "default_expression": "None",
+          "fate": "选择入口退出，保留基线路径的未设置/省略语义",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              379,
+              379
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "默认 None，非 None 才传入 cfg_kwargs；token/sequence 是起点 CLI choices，不代表当前库已解析值。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "scale_rewards",
+          "default": null,
+          "default_expression": "None",
+          "fate": "选择入口退出，保留基线路径的未设置/省略语义",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              380,
+              380
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "默认 None，非 None 才传入 cfg_kwargs；group/none/batch 是起点 CLI choices，不代表库有效值。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "dapo",
+          "default": false,
+          "default_expression": "False",
+          "fate": "退出分支参数，仅保留起点记录",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              381,
+              381
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "退出的预设入口；普通路径默认 False 时 resolve_dapo_options 原样返回五项输入，不改写基线。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "dynamic_sampling",
+          "default": null,
+          "default_expression": "None",
+          "fate": "退出分支参数，仅保留起点记录",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              382,
+              382
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "退出的重采样入口；默认 None 且 dapo=False 解析为 False，因此保留路径不包装重采样函数。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "dynamic_sampling_std_threshold",
+          "default": 0,
+          "default_expression": "0.0",
+          "fate": "退出分支参数，仅保留起点记录",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              383,
+              383
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "退出分支参数；起点仍校验有限且非负，默认 0。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "dynamic_sampling_max_resamples",
+          "default": 32,
+          "default_expression": "32",
+          "fate": "退出分支参数，仅保留起点记录",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              384,
+              384
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "退出分支参数；起点仍校验非负，默认 32。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "seed",
+          "default": 42,
+          "default_expression": "42",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              385,
+              385
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "同时映射到 seed 和 data_seed；保留随机种子传递。",
+          "configuration_destinations": [
+            {
+              "field": "seed",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  647,
+                  647
+                ]
+              }
+            },
+            {
+              "field": "data_seed",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  648,
+                  648
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "snapshot",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              386,
+              386
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "未指定或空值时使用 REPO_ROOT/data/mock_arxiv_snapshot.json；文件缺失在模型加载前失败。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "task_set",
+          "default": "default",
+          "default_expression": "'default'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              387,
+              387
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "当前默认 default 选择 8 条冒烟任务；expanded 才读取完整任务定义。正式任务绑定属于单独入口修正。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "split",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              388,
+              388
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "未指定或空值时不筛选任务；指定时使用 load_split，缺成员失败；只有名称时默认文件为 data/splits/v1.json。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "allow_zero_variance",
+          "default": false,
+          "default_expression": "False",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              389,
+              389
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "False 时创建 RewardVarianceGuard()；True 时仅禁用早停 guard，不等于停止奖励/组信息诊断。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "canary_steps",
+          "default": 50,
+          "default_expression": "50",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              390,
+              390
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "大于 0 才创建 CanaryEvaluator/CanaryCallback；默认每 50 步评估，0 禁用整个评估回调。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "min_canary_reward",
+          "default": -1,
+          "default_expression": "-1.0",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              391,
+              391
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "传入 CanaryCallback.min_reward；值 <= -1.0 禁用阈值早停，但不取消每 50 步评估。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "canary_patience",
+          "default": 3,
+          "default_expression": "3",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              392,
+              392
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "传入 CanaryCallback.patience，默认连续 3 次低于阈值才停。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "verify",
+          "default": true,
+          "default_expression": "True",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              393,
+              393
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "仅控制训练结束后的阶段验证；不作为训练配置字段。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "report_to",
+          "default": "none",
+          "default_expression": "'none'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              394,
+              394
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "经 resolve_report_to 解析为后端列表；none/no/off/空/None 返回 []，auto 按已安装后端决定，显式无效或缺依赖直接失败。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "run_name",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              395,
+              395
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "未设置或空值时使用输出目录末段；不是省略 run_name 参数。",
+          "configuration_destinations": [
+            {
+              "field": "run_name",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  660,
+                  660
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "qlora",
+          "default": true,
+          "default_expression": "True",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              396,
+              396
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "选择量化/适配器资源加载路径，不是独立训练算法；开启时检查单进程及量化环境。",
+          "configuration_destinations": [
+            {
+              "field": "optim",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  654,
+                  654
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "base_model",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              397,
+              397
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "只有 QLoRA 策略加载分支使用；已有 adapter 优先显式 override，否则读取 adapter_config.base_model_name_or_path。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "lora_r",
+          "default": 16,
+          "default_expression": "16",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              398,
+              398
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "仅新建 LoRA 配置时传入 LoraConfig.r；已有 GRPO adapter 优先加载其自身配置。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "lora_alpha",
+          "default": 32,
+          "default_expression": "32",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              399,
+              399
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "仅新建 LoRA 配置时传入 LoraConfig.lora_alpha；已有 adapter 不被该默认值重建。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "lora_dropout",
+          "default": 0.05,
+          "default_expression": "0.05",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              400,
+              400
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "仅新建 LoRA 配置时传入 LoraConfig.lora_dropout；已有 adapter 不被该默认值重建。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "gradient_checkpointing",
+          "default": true,
+          "default_expression": "True",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              401,
+              401
+            ]
+          },
+          "category": "资源/模型加载",
+          "transmission": "显式传入配置；gradient_checkpointing_kwargs 开启时为 use_reentrant=False，关闭时仍传 None，不属于省略。",
+          "configuration_destinations": [
+            {
+              "field": "gradient_checkpointing",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  655,
+                  655
+                ]
+              }
+            },
+            {
+              "field": "gradient_checkpointing_kwargs",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  657,
+                  657
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "optim",
+          "default": "paged_adamw_8bit",
+          "default_expression": "'paged_adamw_8bit'",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              402,
+              402
+            ]
+          },
+          "category": "算法/采样/优化",
+          "transmission": "QLoRA 传入 optim；全参 SFT 仅将默认 paged_adamw_8bit 转为 adamw_torch_fused；全参 GRPO 总是传 adamw_torch_fused。",
+          "configuration_destinations": [
+            {
+              "field": "optim",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  654,
+                  654
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "save_steps",
+          "default": 0,
+          "default_expression": "0",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              403,
+              403
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "0 时 save_strategy=no 且配置内部 save_steps=500；大于 0 时 save_strategy=steps 并传该值；负数失败。",
+          "configuration_destinations": [
+            {
+              "field": "save_strategy",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  651,
+                  651
+                ]
+              }
+            },
+            {
+              "field": "save_steps",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  652,
+                  652
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "save_total_limit",
+          "default": 2,
+          "default_expression": "2",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              404,
+              404
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "始终传入 GRPOConfig；save_steps>0 时必须 >=1；manifest 在周期保存关闭时记 None，不能混同配置传入值。",
+          "configuration_destinations": [
+            {
+              "field": "save_total_limit",
+              "source": {
+                "path": "AgenticArxiv/rl/train_grpo.py",
+                "line_range": [
+                  653,
+                  653
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "field": "resume_from_checkpoint",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              405,
+              405
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "非空才校验并解析 REPO_ROOT 相对路径；trainer.train 始终收到解析路径或显式 None。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "save_rollout_traces",
+          "default": false,
+          "default_expression": "False",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              406,
+              406
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "True 或 rollout_trace_path 非空才创建审计器；不传入 GRPOConfig。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "rollout_trace_path",
+          "default": null,
+          "default_expression": "None",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              407,
+              407
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "非空时自动启用审计；否则开启审计时使用 output_dir/rollout_traces.jsonl。",
+          "configuration_destinations": []
+        },
+        {
+          "field": "rollout_trace_max_samples",
+          "default": 0,
+          "default_expression": "0",
+          "fate": "保留主线字段",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              408,
+              408
+            ]
+          },
+          "category": "运行/输入/保护/记录",
+          "transmission": "传入 RolloutAuditWriter.max_samples；0 表示不限，负值失败。",
+          "configuration_destinations": []
+        }
+      ],
+      "cli": [
+        {
+          "flags": [
+            "--model"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              904,
+              904
+            ]
+          },
+          "default": "outputs/dpo/final"
+        },
+        {
+          "flags": [
+            "--output_dir"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              905,
+              905
+            ]
+          },
+          "default": "outputs/grpo"
+        },
+        {
+          "flags": [
+            "--epochs"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              906,
+              906
+            ]
+          },
+          "type": "int",
+          "default": 1
+        },
+        {
+          "flags": [
+            "--max_steps"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              907,
+              907
+            ]
+          },
+          "type": "int",
+          "default": -1
+        },
+        {
+          "flags": [
+            "--batch_size"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              908,
+              908
+            ]
+          },
+          "type": "int",
+          "default": 4
+        },
+        {
+          "flags": [
+            "--grad_accum"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              909,
+              909
+            ]
+          },
+          "type": "int",
+          "default": 1
+        },
+        {
+          "flags": [
+            "--lr"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              910,
+              910
+            ]
+          },
+          "type": "float",
+          "default": 0.00001
+        },
+        {
+          "flags": [
+            "--beta"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              911,
+              911
+            ]
+          },
+          "type": "float",
+          "default": 0.04
+        },
+        {
+          "flags": [
+            "--reward_curriculum_steps"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              912,
+              916
+            ]
+          },
+          "type": "int",
+          "default": 30
+        },
+        {
+          "flags": [
+            "--num_generations"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              917,
+              917
+            ]
+          },
+          "type": "int",
+          "default": 4
+        },
+        {
+          "flags": [
+            "--allow_zero_variance"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              918,
+              922
+            ]
+          },
+          "action": "store_true",
+          "default": false
+        },
+        {
+          "flags": [
+            "--max_completion_length"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              923,
+              923
+            ]
+          },
+          "type": "int",
+          "default": 256
+        },
+        {
+          "flags": [
+            "--max_turns"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              924,
+              927
+            ]
+          },
+          "type": "int",
+          "default": 4
+        },
+        {
+          "flags": [
+            "--temperature"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              928,
+              928
+            ]
+          },
+          "type": "float",
+          "default": 1
+        },
+        {
+          "flags": [
+            "--loss_type"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              929,
+              934
+            ]
+          },
+          "default": null,
+          "choices": [
+            "grpo",
+            "dapo",
+            "bnpo",
+            "dr_grpo",
+            "cispo",
+            "sapo",
+            "luspo"
+          ]
+        },
+        {
+          "flags": [
+            "--epsilon_high"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              935,
+              939
+            ]
+          },
+          "type": "float",
+          "default": null
+        },
+        {
+          "flags": [
+            "--mask_truncated_completions"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              940,
+              945
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": null
+        },
+        {
+          "flags": [
+            "--importance_sampling_level"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              946,
+              952
+            ]
+          },
+          "choices": [
+            "token",
+            "sequence"
+          ],
+          "default": null
+        },
+        {
+          "flags": [
+            "--scale_rewards"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              953,
+              959
+            ]
+          },
+          "choices": [
+            "group",
+            "none",
+            "batch"
+          ],
+          "default": null
+        },
+        {
+          "flags": [
+            "--dapo"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              960,
+              965
+            ]
+          },
+          "action": "store_true",
+          "default": false
+        },
+        {
+          "flags": [
+            "--dynamic_sampling"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              966,
+              972
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": null
+        },
+        {
+          "flags": [
+            "--dynamic_sampling_std_threshold"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              973,
+              978
+            ]
+          },
+          "type": "float",
+          "default": 0
+        },
+        {
+          "flags": [
+            "--dynamic_sampling_max_resamples"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              979,
+              984
+            ]
+          },
+          "type": "int",
+          "default": 32
+        },
+        {
+          "flags": [
+            "--seed"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              985,
+              988
+            ]
+          },
+          "type": "int",
+          "default": 42
+        },
+        {
+          "flags": [
+            "--qlora"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              989,
+              992
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": true
+        },
+        {
+          "flags": [
+            "--base_model"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              993,
+              996
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--lora_r"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              997,
+              997
+            ]
+          },
+          "type": "int",
+          "default": 16
+        },
+        {
+          "flags": [
+            "--lora_alpha"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              998,
+              998
+            ]
+          },
+          "type": "int",
+          "default": 32
+        },
+        {
+          "flags": [
+            "--lora_dropout"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              999,
+              999
+            ]
+          },
+          "type": "float",
+          "default": 0.05
+        },
+        {
+          "flags": [
+            "--gradient_checkpointing"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1000,
+              1002
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": true
+        },
+        {
+          "flags": [
+            "--optim"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1003,
+              1003
+            ]
+          },
+          "default": "paged_adamw_8bit"
+        },
+        {
+          "flags": [
+            "--save_steps"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1004,
+              1007
+            ]
+          },
+          "type": "int",
+          "default": 0
+        },
+        {
+          "flags": [
+            "--save_total_limit"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1008,
+              1011
+            ]
+          },
+          "type": "int",
+          "default": 2
+        },
+        {
+          "flags": [
+            "--resume_from_checkpoint"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1012,
+              1015
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--snapshot"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1016,
+              1016
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--task_set"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1017,
+              1021
+            ]
+          },
+          "choices": [
+            "default",
+            "expanded"
+          ],
+          "default": "default"
+        },
+        {
+          "flags": [
+            "--split"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1022,
+              1027
+            ]
+          },
+          "default": null,
+          "metavar": "[FILE:]NAME"
+        },
+        {
+          "flags": [
+            "--canary_steps"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1028,
+              1031
+            ]
+          },
+          "type": "int",
+          "default": 50
+        },
+        {
+          "flags": [
+            "--min_canary_reward"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1032,
+              1036
+            ]
+          },
+          "type": "float",
+          "default": -1
+        },
+        {
+          "flags": [
+            "--canary_patience"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1037,
+              1040
+            ]
+          },
+          "type": "int",
+          "default": 3
+        },
+        {
+          "flags": [
+            "--verify"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1041,
+              1044
+            ]
+          },
+          "action": "argparse.BooleanOptionalAction",
+          "default": true
+        },
+        {
+          "flags": [
+            "--report_to"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1045,
+              1050
+            ]
+          },
+          "default": "none"
+        },
+        {
+          "flags": [
+            "--run_name"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1051,
+              1054
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--save_rollout_traces"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1055,
+              1059
+            ]
+          },
+          "action": "store_true",
+          "default": false
+        },
+        {
+          "flags": [
+            "--rollout_trace_path"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1060,
+              1063
+            ]
+          },
+          "default": null
+        },
+        {
+          "flags": [
+            "--rollout_trace_max_samples"
+          ],
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              1064,
+              1067
+            ]
+          },
+          "type": "int",
+          "default": 0
+        }
+      ],
+      "config_and_manifest_mappings": [
+        {
+          "target_container": "cfg_kwargs",
+          "field": "output_dir",
+          "expression": "str(REPO_ROOT / output_dir)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              637,
+              637
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "num_train_epochs",
+          "expression": "epochs",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              638,
+              638
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "max_steps",
+          "expression": "max_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              639,
+              639
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "per_device_train_batch_size",
+          "expression": "batch_size",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              640,
+              640
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "gradient_accumulation_steps",
+          "expression": "grad_accum",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              641,
+              641
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "learning_rate",
+          "expression": "lr",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              642,
+              642
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "beta",
+          "expression": "beta",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              643,
+              643
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "num_generations",
+          "expression": "num_generations",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              644,
+              644
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "max_completion_length",
+          "expression": "max_completion_length",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              645,
+              645
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "temperature",
+          "expression": "temperature",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              646,
+              646
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "seed",
+          "expression": "seed",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              647,
+              647
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "data_seed",
+          "expression": "seed",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              648,
+              648
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "logging_steps",
+          "expression": "1",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              649,
+              649
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "logging_first_step",
+          "expression": "True",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              650,
+              650
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "save_strategy",
+          "expression": "'steps' if save_steps > 0 else 'no'",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              651,
+              651
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "save_steps",
+          "expression": "save_steps if save_steps > 0 else 500",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              652,
+              652
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "save_total_limit",
+          "expression": "save_total_limit",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              653,
+              653
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "optim",
+          "expression": "optim if qlora else 'adamw_torch_fused'",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              654,
+              654
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "gradient_checkpointing",
+          "expression": "gradient_checkpointing",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              655,
+              655
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "gradient_checkpointing_kwargs",
+          "expression": "{'use_reentrant': False} if gradient_checkpointing else None",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              657,
+              657
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "report_to",
+          "expression": "backends",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              659,
+              659
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "run_name",
+          "expression": "run_name or Path(output_dir).name",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              660,
+              660
+            ]
+          }
+        },
+        {
+          "target_container": "cfg_kwargs",
+          "field": "**",
+          "expression": "_precision_flags()",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              661,
+              661
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "stage",
+          "expression": "'grpo_qlora' if qlora else 'grpo_full'",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              804,
+              804
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "source_model",
+          "expression": "resolved",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              805,
+              805
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "base_model",
+          "expression": "base_model",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              806,
+              806
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "task_set",
+          "expression": "task_set",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              807,
+              807
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "split",
+          "expression": "split",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              808,
+              808
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "task_count",
+          "expression": "len(tasks)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              809,
+              809
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "train_loss",
+          "expression": "float(train_result.training_loss)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              810,
+              810
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "learning_rate",
+          "expression": "lr",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              811,
+              811
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "beta",
+          "expression": "beta",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              812,
+              812
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "dapo",
+          "expression": "dapo",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              813,
+              813
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "loss_type",
+          "expression": "loss_type",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              814,
+              814
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "epsilon_high",
+          "expression": "epsilon_high",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              815,
+              815
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "mask_truncated_completions",
+          "expression": "mask_truncated_completions",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              816,
+              816
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "importance_sampling_level",
+          "expression": "importance_sampling_level",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              817,
+              817
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "scale_rewards",
+          "expression": "scale_rewards",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              818,
+              818
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "dynamic_sampling",
+          "expression": "{'enabled': dynamic_sampling, 'reward_std_threshold': dynamic_sampling_std_threshold, 'max_resample_attempts': dynamic_sampling_max_resamples, 'single_process_only': True}",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              819,
+              824
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "batch_size",
+          "expression": "batch_size",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              825,
+              825
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "gradient_accumulation_steps",
+          "expression": "grad_accum",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              826,
+              826
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "temperature",
+          "expression": "temperature",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              827,
+              827
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "frozen_policy_probe",
+          "expression": "lr == 0.0",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              828,
+              828
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "max_steps",
+          "expression": "max_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              829,
+              829
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "requested_max_steps",
+          "expression": "max_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              830,
+              830
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "actual_steps",
+          "expression": "actual_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              831,
+              831
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "stopped_early",
+          "expression": "stopped_early",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              832,
+              832
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "stop_reason",
+          "expression": "stop_reason",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              833,
+              833
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "reward_variance_guard",
+          "expression": "{'enabled': True, 'converged': guard.converged, 'tripped': guard.tripped, 'patience': guard.patience, 'grace_steps': guard.grace_steps, 'stop_step': guard.stop_step} if guard is not None else {'enabled': False}",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              835,
+              844
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "reward_curriculum_steps",
+          "expression": "reward_curriculum_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              846,
+              846
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "initial_reward_weights",
+          "expression": "dataclasses.asdict(initial_weights)",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              847,
+              847
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "rollout_audit",
+          "expression": "{'trace_path': str(resolved_trace_path), 'summary_path': str(rollout_audit_summary_path), 'seen_samples': rollout_audit_summary['seen_samples'], 'saved_samples': rollout_audit_summary['saved_samples'], 'anomalous_samples': rollout_audit_summary['anomalous_samples']} if rollout_audit_summary is not None else None",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              849,
+              857
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "num_generations",
+          "expression": "num_generations",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              859,
+              859
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "max_turns",
+          "expression": "max_turns",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              860,
+              860
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "max_completion_length",
+          "expression": "max_completion_length",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              861,
+              861
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "seed",
+          "expression": "seed",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              862,
+              862
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "save_steps",
+          "expression": "save_steps",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              863,
+              863
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "save_total_limit",
+          "expression": "save_total_limit if save_steps > 0 else None",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              864,
+              864
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "resumed_from_checkpoint",
+          "expression": "resolved_resume_checkpoint",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              865,
+              865
+            ]
+          }
+        },
+        {
+          "target_container": "manifest",
+          "field": "peak_vram_gib",
+          "expression": "torch.cuda.max_memory_allocated() / 2 ** 30 if torch.cuda.is_available() else 0.0",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              867,
+              867
+            ]
+          }
+        }
+      ],
+      "optional_configuration_assignments": [
+        {
+          "condition": "loss_type is not None",
+          "assignment": "cfg_kwargs['loss_type'] = loss_type",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              672,
+              673
+            ]
+          }
+        },
+        {
+          "condition": "epsilon_high is not None",
+          "assignment": "cfg_kwargs['epsilon_high'] = epsilon_high",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              674,
+              675
+            ]
+          }
+        },
+        {
+          "condition": "mask_truncated_completions is not None",
+          "assignment": "cfg_kwargs['mask_truncated_completions'] = mask_truncated_completions",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              676,
+              677
+            ]
+          }
+        },
+        {
+          "condition": "importance_sampling_level is not None",
+          "assignment": "cfg_kwargs['importance_sampling_level'] = importance_sampling_level",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              683,
+              684
+            ]
+          }
+        },
+        {
+          "condition": "scale_rewards is not None",
+          "assignment": "cfg_kwargs['scale_rewards'] = scale_rewards",
+          "source": {
+            "path": "AgenticArxiv/rl/train_grpo.py",
+            "line_range": [
+              685,
+              686
+            ]
+          }
+        }
+      ],
+      "source": "AgenticArxiv/rl/train_grpo.py",
+      "configuration_dictionary_semantics": "表达式来自源文件 AST，只记录构造时的请求值，不执行训练库、不声称已得到解析/派生有效值。** 精度字典由 precision_flags 提供。"
+    }
+  },
+  "retained_none_omission_semantics": {
+    "source": {
+      "path": "AgenticArxiv/rl/train_grpo.py",
+      "line_range": [
+        669,
+        691
+      ]
+    },
+    "fields": [
+      "loss_type",
+      "epsilon_high",
+      "mask_truncated_completions",
+      "importance_sampling_level",
+      "scale_rewards"
+    ],
+    "condition": "每项仅在 is not None 时加入 cfg_kwargs；普通路径 dapo=False 不改写其 None。",
+    "unset_meaning": "省略相应构造参数，委托未来实际安装的 GRPOConfig/GRPOTrainer 解析；None 不是已解析算法值。",
+    "effective_values": "未知；未运行训练库配置解析，不将文档对默认值的描述或当前安装版本的行为追认成历史事实。",
+    "not_omitted_null_examples": [
+      {
+        "field": "gradient_checkpointing_kwargs",
+        "condition": "gradient_checkpointing=False",
+        "meaning": "SFT/GRPO 配置字典仍包含该键且值为 None，与上述五项省略不同。"
+      },
+      {
+        "field": "resume_from_checkpoint",
+        "condition": "未指定",
+        "meaning": "trainer.train 收到显式 None，不是省略训练函数实参。"
+      }
+    ]
+  },
+  "configuration_filter_baseline": [
+    {
+      "stage": "sft",
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          45,
+          53
+        ]
+      },
+      "meaning": "当前起点按 SFTConfig dataclass 字段过滤所有配置键；不支持键只告警。此处记录既有风险，不承诺关键字段已安全保全。"
+    },
+    {
+      "stage": "grpo",
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          692,
+          698
+        ]
+      },
+      "meaning": "当前起点按 GRPOConfig dataclass 字段过滤所有配置键；不支持键只提示后丢弃。修订任务 2.1 要求显式关键字段不得静默过滤，应另行实现保护。"
+    }
+  ],
+  "resource_and_policy_configuration": [
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          126,
+          146
+        ]
+      },
+      "fields": {
+        "load_in_4bit": true,
+        "bnb_4bit_quant_type": "nf4",
+        "bnb_4bit_compute_dtype": "torch.bfloat16",
+        "bnb_4bit_use_double_quant": true,
+        "bias": "none",
+        "task_type": "CAUSAL_LM",
+        "target_modules": [
+          "q_proj",
+          "k_proj",
+          "v_proj",
+          "o_proj",
+          "gate_proj",
+          "up_proj",
+          "down_proj"
+        ]
+      },
+      "meaning": "SFT/GRPO 共用新建量化和 LoRA 配置；r/alpha/dropout 来自上述入口参数。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          365,
+          406
+        ]
+      },
+      "meaning": "QLoRA 使用 device_map={'':0}、dtype=torch.bfloat16、low_cpu_mem_usage=True，prepare_model_for_kbit_training(use_gradient_checkpointing=False) 后只包装一次 LoRA；全参使用 trainable_model_load_kwargs。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          175,
+          237
+        ]
+      },
+      "meaning": "全参起点 from_pretrained 未显式指定 dtype；QLoRA 量化加载，已有 adapter 使用 PeftModel.from_pretrained(is_trainable=True)，新策略才调用 get_peft_model。保留这些起点差异，不误称两入口已完全相同。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/precision.py",
+        "line_range": [
+          39,
+          91
+        ]
+      },
+      "meaning": "无 CUDA 的训练配置传 use_cpu=True；原生 BF16 可用则 bf16=True，否则 fp16=True。全参 SFT 权重在 BF16 分支为 bfloat16，其他为 float32；加载器接受 dtype 时用 dtype，否则用 torch_dtype。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/precision.py",
+        "line_range": [
+          94,
+          144
+        ]
+      },
+      "meaning": "存在 LOCAL_RANK 或 RANK 视为多进程启动；QLoRA 直接拒绝；非多进程将 config._n_gpu=1。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          97,
+          123
+        ]
+      },
+      "meaning": "QLoRA guard 要求 CUDA、原生 BF16、依赖包存在、至少 20GiB 显存；源码 required 字典列示 transformers 4.57.6/trl 0.29.1/peft 0.17.1/bitsandbytes 0.45.5，但当前只查询并打印版本，没有执行版本等于该字典值的校验。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          400,
+          410
+        ]
+      },
+      "meaning": "策略模型 use_cache=False；不是 SFTConfig 字段。GRPO _load_policy 也将策略 use_cache=False。"
+    }
+  ],
+  "runtime_guards_and_sampling": [
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          64,
+          94
+        ]
+      },
+      "meaning": "默认数据 manifest 必须存在，kind=qlora_sft_train_mix、output_sha256、output_rows、unique_sample_fingerprints 与文件匹配；不是只检查路径。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_sft.py",
+        "line_range": [
+          245,
+          269
+        ]
+      },
+      "meaning": "超过 max_length 的比例严格大于 1% 则失败；有少量超长仅告警；零样本失败。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          409,
+          503
+        ]
+      },
+      "meaning": "默认完整工具注册检查；模型、本地快照、任务/语义答案、标准链所需 max_turns、隐藏 task_id 转换均先校验；没有输入时失败，不作为本次补资产要求。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          553,
+          630
+        ]
+      },
+      "meaning": "生成长度必须容纳标准动作；奖励与多轮 sampler 共用每轨迹环境。dapo=False 且 dynamic_sampling=None 不使用动态 wrapper。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          631,
+          699
+        ]
+      },
+      "meaning": "batch_size%num_generations!=0 时将 batch_size 改为 G，再构造训练配置；optim 在全参 GRPO 分支无条件为 adamw_torch_fused。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          720,
+          749
+        ]
+      },
+      "meaning": "训练 Canary 使用同一 reward_calc、G、max_completion_length 与温度；50步创建评估回调。allow_zero_variance=False 时创建方差 guard。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/train_grpo.py",
+        "line_range": [
+          253,
+          312
+        ]
+      },
+      "meaning": "RewardVarianceGuard 默认 patience=5、grace_steps=20；frac_reward_zero_std>=1.0 或仅有 reward_std 且为0判定零方差。连续5次将停止；step>20标记局部窗口饱和，否则标记故障；非零方差会清空 streak。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/canary.py",
+        "line_range": [
+          198,
+          270
+        ]
+      },
+      "meaning": "Canary 步数整除时先评估；min_reward<=-1.0 只禁用阈值检查。严格低于阈值连续 patience 次才触发停止，达到/高于阈值重置计数。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/stage_verifier.py",
+        "line_range": [
+          94,
+          104
+        ]
+      },
+      "meaning": "SFT parse_rate阈值默认0.3，GRPO mean_reward阈值默认-0.2；DPO阈值不属于保留主线。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/stage_verifier.py",
+        "line_range": [
+          327,
+          410
+        ]
+      },
+      "meaning": "起点 SFT 阶段验证独立生成默认 max_new_tokens=256、temperature=0.3、do_sample=True、每提示2条；GRPO 阶段验证默认G=4并新建RewardCalculator，未复用训练的课程参数。记录此既有差异，不冒充已统一。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/grpo_reward.py",
+        "line_range": [
+          471,
+          655
+        ]
+      },
+      "meaning": "每轮调用 trainer._generate_single_turn，由训练器承接采样配置；本项目未显式设 top_p/top_k。已展开 prompts 不再乘 G；模型原始 token mask=1、环境插入 token mask=0；总完成预算使用 trainer.max_completion_length，环境文本起点截断为1000字符。"
+    }
+  ],
+  "reward_configuration": [
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/reward.py",
+        "line_range": [
+          112,
+          144
+        ]
+      },
+      "fields": {
+        "curriculum_steps": 30,
+        "early_correctness_scale_expression": "1.0 / 3.0",
+        "weights": {
+          "format": 1,
+          "tool": 3,
+          "argument": 2,
+          "process": 1,
+          "outcome": 3
+        }
+      },
+      "meaning": "GRPO 入口仅覆盖 curriculum_steps；早期缩放只作用于 tool/argument/outcome，其他权重不变。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/reward.py",
+        "line_range": [
+          463,
+          497
+        ]
+      },
+      "meaning": "严重错误/解析失败/工具执行失败/无效图表答案总分上限-0.75；false_finish 上限-0.25；严重低效上限-0.25；不因本次清理修改。"
+    },
+    {
+      "source": {
+        "path": "AgenticArxiv/rl/observability.py",
+        "line_range": [
+          173,
+          236
+        ]
+      },
+      "meaning": "逐任务组信息诊断使用总体标准差并以<=1e-12标记零方差；只是诊断，不对训练奖励再执行一次组内优势归一化。"
+    }
+  ],
+  "existing_historical_record": {
+    "source": {
+      "path": "data/splits/v6_grpo_train.json",
+      "json_pointer": "/formal_run"
+    },
+    "values": {
+      "output_dir": "outputs/grpo_release_v2",
+      "source_model": "outputs/sft/final",
+      "num_generations": 4,
+      "beta": 0.1,
+      "learning_rate": 0.000005,
+      "batch_size": 16,
+      "max_turns": 6,
+      "reward_curriculum_steps": 0,
+      "max_steps": 60,
+      "actual_steps": 60,
+      "seed": 42,
+      "train_loss": 0.019448589896880246,
+      "peak_vram_gib": 34.79,
+      "reward_variance_guard": {
+        "enabled": false,
+        "reason": "33 条混合难度任务下每步只抽 1-4 个 prompt，连续 5 步零方差多为采样噪声而非故障；改为固定预算，训练后用 reward_probe_summary 的组信息率复盘"
+      },
+      "verification": {
+        "stage": "grpo",
+        "passed": true,
+        "mean_reward": 0.2946,
+        "threshold": -0.2,
+        "canary_tasks": [
+          "search_01",
+          "composite_01"
+        ],
+        "sft_reference_mean_reward": 0.1071
+      },
+      "note": "更激进的配方（lr 1e-5 / beta 0.04 / 每步 1 prompt / 240 步）实测策略塌缩：约第 60 步后组内方差归零、组奖励跌回 -0.75 失败地板。本配方为收敛更稳的档位。"
+    },
+    "split_member_count": 33,
+    "derived_from": [
+      "data/splits/v3_81.json:train",
+      "outputs/grpo_frozen_probe/reward_probe_summary.json"
+    ],
+    "meaning": "原仓库已有历史摘要，只保留其记录及来源，不覆盖当前入口默认值、不补造原训练 manifest。历史有效损失、采样、优化、版本等缺项继续未知，不再阻止本次源码基线任务。"
+  },
+  "library_delegation": {
+    "fields": [
+      "loss_type",
+      "importance_sampling_level",
+      "scale_rewards",
+      "epsilon",
+      "epsilon_high_effective",
+      "mask_truncated_completions",
+      "max_prompt_length",
+      "top_p",
+      "top_k",
+      "min_p",
+      "optimizer_parameters_not_explicit_in_source",
+      "grpo_scheduler_and_warmup_not_explicit_in_source",
+      "grpo_weight_decay_and_max_grad_norm_not_explicit_in_source"
+    ],
+    "meaning": "上述未显式或条件省略字段的最终有效值属于运行时训练库/模型生成配置；本次静态记录不猜填，也不将当前依赖声明当发布运行版本。SFT 已显式设置 cosine/warmup_ratio=.03 等字段见配置映射。",
+    "dependency_declarations": {
+      "torch": ">=2.0.0",
+      "transformers": ">=4.45.0",
+      "trl": ">=0.28.0",
+      "datasets": ">=2.14.0",
+      "accelerate": ">=0.25.0",
+      "peft": ">=0.17.1",
+      "bitsandbytes": ">=0.45.5"
+    },
+    "source": {
+      "path": "AgenticArxiv/requirements.txt",
+      "line_range": [
+        1,
+        13
+      ]
+    }
+  },
+  "explicitly_separate_entry_corrections": [
+    {
+      "fields": [
+        "sft.output_dir",
+        "grpo.model"
+      ],
+      "meaning": "当前分别为 outputs/sft_qlora 与 outputs/dpo/final；SFT->GRPO 直接交接路径修正属于任务2.2，不能称全部默认值未变。"
+    },
+    {
+      "fields": [
+        "grpo.task_set",
+        "grpo.split"
+      ],
+      "meaning": "当前 default/None 使用8条冒烟任务且不筛选；正式命令绑定已有训练切分属于任务2.3，历史v6的33条与v7的55条不可混称。"
+    },
+    {
+      "fields": [
+        "grpo.max_turns"
+      ],
+      "meaning": "当前4；默认完整任务预算至少6轮的修正属于任务2.3，FINISH计一轮。"
+    }
+  ],
+  "validation": {
+    "method": "以 Python 标准库 AST 解析源文件，未导入训练模块；提取 main 默认、CLI选项、配置/manifest字典与五项条件传参。核对每项行号与来源SHA256。",
+    "function_default_counts": {
+      "sft": 23,
+      "grpo": 46
+    },
+    "configuration_and_manifest_mapping_counts": {
+      "sft": 51,
+      "grpo": 60
+    },
+    "not_executed": [
+      "训练",
+      "inspect_only",
+      "数据生成器",
+      "模型/真实tokenizer加载",
+      "真实库有效配置解析",
+      "完整86任务执行"
+    ],
+    "completion_boundary": "当前任务1.1的源码事实与省略语义已记录；历史未知值、外部资产和训练效果不作为本次完成关口，仍不宣称已验证。"
+  }
+}

@@ -1,287 +1,79 @@
-# AgenticArxiv
+# AgenticArXiv-RL 工程概览
 
-## 项目概览
+默认活动主线是 **SFT → GRPO → 文本 ReAct 评测**，显式可选 **SFT → DPO → GRPO**。不选择 DPO 不触发中间阶段，GRPO 默认仍为 `outputs/sft_qlora/final`。普通 CLI、数据生成、训练采样和评测使用同一套 10 工具及任务资产，不再选择其他 Agent 架构或启动应用服务。
 
-ReAct Agent + arXiv 论文管理系统。支持三种 Agent 架构（ReAct、MCP、Skill/CLI），通过简单配置切换。核心特色：
+## 入口与模块
 
-- 🤖 **可扩展 Agent 框架**：三层架构（BaseAgent 通用循环 → 三种实现 → 工具执行）
-- 🔄 **实时 SSE 推送**：Agent 思考步骤、翻译进度实时更新
-- 💾 **自动化数据初始化**：FastAPI 启动时自动创建 7 张表，无需手动迁移
-- 🎨 **现代化前端**：Vue 3 + TypeScript，5 页面布局（KeepAlive 状态保留）
+| 入口 | 职责 |
+| --- | --- |
+| `agentic-arxiv run` | 普通文本 ReAct 推理，保留外部 LLM API |
+| `agentic-arxiv evaluate rollout` | 执行任务并记录实际轨迹与奖励 |
+| `agentic-arxiv evaluate run` | 指定任务集、切分及重复次数的评测 |
+| `agentic-arxiv data sft generate` | 按声明的 train 切分执行专家步骤，未来生成 SFT 数据 |
+| `agentic-arxiv data sft generate-parametric` | train 父任务的参数化派生与来源审计 |
+| `agentic-arxiv train sft` | SFT，默认 QLoRA，也支持全参 |
+| `agentic-arxiv data dpo generate` | 显式本地 SFT + expanded 版本化 train + 已有快照的实际轨迹偏好 |
+| `agentic-arxiv train dpo` | 可选 DPO，支持 `--inspect-only`、默认多轮阶段验证 |
+| `agentic-arxiv train grpo` | 默认直接加载 SFT；显式 `--model` 可加载当前协议 DPO |
+| `agentic_arxiv.scoring` | 五分量评分、失败上限与纯诊断 |
+| `agentic_arxiv.state` | 本地会话、论文及 PDF/译文资产状态 |
 
-## 技术栈
+包位于 `src/agentic_arxiv/`，工具注册来自包内 `tools/bootstrap.py` 和 `tools/tool_registry.py`。业务能力包括检索、下载、同步翻译、缓存查询、正文读取、总结、抽图、图表分析和译文读取；可选依赖缺失不能让工具注册静默缩水。旧导入命名空间、直接脚本入口和路径注入退出，不保留转发层。
 
-- **后端**：FastAPI + uvicorn, SQLAlchemy 2.0 (pymysql), MySQL 8
-- **前端**：Vue 3 + TypeScript + Pinia + Vite
-- **Agent**：三种架构并存
-  - `regex`：正则解析 + 进程内调用（推荐默认，最快）
-  - `mcp`：MCP JSON-RPC 跨进程（标准、隔离）
-  - `skill_cli`：Skill 文档 + CLI 子进程（易理解）
+`tasks` 纯编译依赖/setup 计划，`runtime` 只执行计划并产生实际可见状态；独立 `tasks.reference` 显式 replay 准备参考答案，参考不进入模型上下文。`scoring` 只消费已有轨迹和已提供参考数据，不执行工具/文件 I/O；`evaluation` 组织评测而不导入训练 callback，`training` 保留停止策略、writer 与原始 token/mask 适配。
 
-## 关键架构设计
+## 安装与检查
 
-### Agent 三层架构
-
-```
-BaseAgent (通用执行循环)
-  ├─ ReActAgent (正则解析)
-  ├─ MCPAgent (MCP 跨进程)
-  └─ SkillAgent (CLI 命令)
-       └─ ToolRegistry (进程内函数)
-```
-
-### 工作流程
-
-1. **工具发现**：子类 `discover_tools()` 返回 `[{name, description, parameters}]`
-2. **Prompt 构建**：`build_messages()` 注入历史和工具列表
-3. **LLM 调用**：通过 `llm_client.chat_completions()`
-4. **响应解析**：`parse_response()` 提取 `thought` 和 `action_dict`
-5. **副作用处理**：`_execute_with_side_effects()` 统一处理 session、翻译异步、论文状态
-6. **工具执行**：`invoke_tool()` 调用底层工具
-7. **日志 + SSE**：`_log_step()` 记录数据库 + 实时推送到前端
-
-### 数据库初始化（关键）
-
-**完全自动化**，无需手动迁移脚本：
-
-```python
-# api/app.py 启动时执行（lifespan context manager）
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    log.info("Initializing database tables...")
-    init_db()  # ← 自动创建 7 张表
-    store.validate_local_paths()
-    yield
-
-# models/db.py
-def init_db():
-    import models.orm  # 导入 ORM 注册到 Base.metadata
-    Base.metadata.create_all(bind=engine)  # SQLAlchemy 自动创建
-```
-
-**特性**：
-
-- ✅ 幂等性（可安全重复调用）
-- ✅ 无需 Alembic/FlywayDB
-- ✅ 自动创建索引
-- 表修改需手动 ALTER（对学生项目无问题）
-
-## 目录结构
-
-```
-AgenticArxiv/                    # Python 后端
-  agents/                        # Agent 核心
-    ├─ base_agent.py            # 通用执行循环 + SSE + 日志（最重要）
-    ├─ agent_engine.py          # ReActAgent 实现
-    ├─ prompt_templates.py      # Prompt 模板
-    └─ context_manager.py       # 上下文管理
-  mcp_protocol/                 # MCP 方案
-    ├─ server.py                # MCP 服务器
-    └─ mcp_agent.py             # MCPAgent 实现
-  skill_cli/                    # Skill/CLI 方案
-    ├─ SKILL.md                 # 工具文档（LLM 读这个）
-    ├─ skill_agent.py           # SkillAgent 实现
-    └─ tool_cli.py              # CLI 入口
-  tools/                        # 工具实现
-    ├─ tool_registry.py         # 工具注册表
-    ├─ arxiv_tool.py            # arXiv 搜索
-    ├─ pdf_download_tool.py     # PDF 下载
-    ├─ pdf_translate_tool.py    # PDF 翻译
-    └─ cache_status_tool.py     # 缓存查询
-  models/                       # 数据层
-    ├─ db.py                    # SQLAlchemy 引擎 + init_db()（关键）
-    ├─ orm.py                   # ORM 定义（7 张表）
-    ├─ store.py                 # 业务逻辑
-    └─ schemas.py               # Pydantic 模型
-  services/                     # 服务层
-    ├─ log_service.py           # 日志记录
-    ├─ runtime.py               # 翻译 Runner + Event Bus
-    └─ event_bus.py             # SSE 事件管理
-  api/                          # FastAPI 应用
-    ├─ app.py                   # 应用入口 + lifespan（自动初始化数据库）
-    └─ endpoints.py             # 路由定义
-  config.py                     # 环境变量配置
-  requirements.txt
-
-AgenticArxivWeb/                 # Vue 3 前端
-  src/
-    ├─ components/              # 5 大页面组件
-    │   ├─ ChatPanel.vue        # 对话 + Agent 思考链
-    │   ├─ PapersPanel.vue      # 论文列表
-    │   ├─ AssetsPanel.vue      # PDF 缓存 + 翻译进度
-    │   ├─ LogsPanel.vue        # 执行日志
-    │   ├─ SettingsPanel.vue    # 设置 (Agent 模式、主题、会话)
-    │   └─ Sidebar.vue          # 导航
-    ├─ stores/
-    │   └─ appStore.ts          # Pinia 状态管理
-    ├─ api/
-    │   ├─ client.ts            # axios
-    │   ├─ sse.ts               # SSE 管理
-    │   └─ types.ts             # 类型定义
-    ├─ App.vue                  # 主容器 (Sidebar + KeepAlive)
-    └─ main.ts                  # 入口
-```
-
-## 开发指南
-
-### 快速开发命令
+以下安装命令以仓库目录为安装来源，安装后可从任意目录使用：
 
 ```bash
-# 全自动启动（一键）
-make                # 启动前后端
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+# 按需安装；dev 不隐含训练依赖
+python -m pip install '.[local]'
+python -m pip install '.[train]'
+python -m pip install '.[translate,logging]'
+python -m pip install '.[dev]'
 
-# 分别启动（调试）
-cd AgenticArxiv && uvicorn api.app:app --reload --port 8000
-cd AgenticArxivWeb && npm run dev -- --port 5173
+agentic-arxiv evaluate rollout --help
+agentic-arxiv evaluate run --help
+agentic-arxiv run --help
+python -m pytest tests/
 ```
 
-### 三种 Agent 模式的差异
+依赖由 [pyproject.toml](pyproject.toml) 分层声明：基础 API/历史评分、local 本地推理与 DPO 数据生成、train 含 local 的 SFT/DPO/GRPO、translate、logging 和 dev。基础不强制训练栈，local 不强制训练器，dev 不隐含 train；测试需 dev。版本约束和训练保护保留，可运行范围与环境限制以工程报告为准，本文示例未执行，不能当作已执行的完整测试结果。
 
-| 模式                | 解析方式 | 执行方式   | 优点       | 缺点          | 最佳用途 |
-| ------------------- | -------- | ---------- | ---------- | ------------- | -------- |
-| **regex**     | 正则     | 进程内     | 快、简、稳 | JSON 格式敏感 | 推荐默认 |
-| **mcp**       | 正则     | JSON-RPC   | 标准、隔离 | 延迟、复杂    | 团队开发 |
-| **skill_cli** | 正则     | subprocess | 易理解     | 子进程开销    | 学习研究 |
+全局 `--workspace PATH` 默认当前工作目录，相对输入/输出/显式配置相对工作区，绝对路径不变。包内唯一 `resources/mainline.json` 为默认训练配置，显式 `--config` 覆盖默认，显式 CLI 字段再覆盖配置。帮助不读取 `.env`、写日志或加载模型；缺资产不自动查找其他仓库或下载。
 
-**如何切换**？编辑 `.env`：
+使用 API 后端时，显式配置 `LLM_BASE_URL`、`LLM_API_KEY` 与 `MODEL`；不要提交真实 `.env` 或凭据。使用本地训练模型不要求 API key。真实 PDF 翻译使用可选 `pdf2zh`，PDF/图像处理所需 PyMuPDF 与 Pillow 保留在核心依赖中。
 
-```env
-AGENT_TYPE=regex  # 改为 mcp 或 skill_cli
-```
+## 任务、切分与研究边界
 
-### 常见修改
+- 8 条冒烟任务用于显式小范围检查，不代表全部任务执行。
+- 86 条扩展 TaskSpec 的身份、文本、标准步骤和初始化定义保留。
+- `data/splits/v7_86.json` 为 train 55、dev 8、iid_test 19、ood_test 4；完整任务集不等于训练集。
+- `data/splits/v6_grpo_train.json:rl_train` 是历史 33 条信号子集，来源为旧切分，不能报告为 v7 全量训练。
+- 历史数据、模型、报告和轨迹保持原样；历史字段缺失保持未知，不补写新协议事实。
 
-#### 增加新工具
+正式命令必须明确使用哪份切分。默认 QLoRA 的 SFT 输出为 `outputs/sft_qlora/final`，GRPO 直接加载该目录；可选 DPO 生成仅允许显式 expanded `FILE:train`，不接受留出集、裸 train 或历史信号子集。DPO 输出默认 `outputs/dpo/final`，只有显式指定才交给 GRPO；全参使用显式输出与模型目录。配置新增 DPO 节，原 SFT/GRPO 默认不变，旧配置缺该节时仅在内存补默认。配置、模型交接、资源策略及未执行示例见 [主线指南](docs/rl_building.md)。
 
-1. `tools/my_tool.py`：实现工具函数
-2. 调用 `register_tool()`
-3. Agent 自动发现
+当前唯一消息协议为 `react-runtime-v2` / `react-messages-v3`：初始任务后 assistant 与环境 user Observation 交替，SFT 只监督当前 completion，DPO 在真实完整上下文完全相同下只比较当前未截断 assistant，不补 FINISH，GRPO 保留原采样 ID、严格前缀与 policy/env 掩码边界。旧/未知训练产物不会自动升级成兼容；历史读取与跨协议评测分别标注来源。
 
-#### 增加新 Agent 方案
+DPO 以完整轨迹奖励排序而非证明单步因果优势，每任务最多一对，报告请求任务/组合两种分母。零对保留轨迹/失败报告并非零退出，低产出只报警。策略与冻结参考来自同一完整 SFT，两份独立模型增加显存；设计默认不是历史有效配方。`--inspect-only` 不加载策略权重，但需要实际本地 tokenizer；长度/模板不兼容失败，不截断。默认完整多轮 Canary 验证含严格成功、解析、虚假完成、终止、覆盖和协议关系，冒烟通过不代表优于 SFT；失败保留模型/报告并非零退出，`--no-verify` 记 skipped 而非 PASS，不自动启动 GRPO。本次未生成数据、训练或模型评测，真实 tokenizer、参考优化后冻结、GPU/DDP 和效果未验证。
 
-1. 继承 `BaseAgent`
-2. 实现 5 个抽象方法
-3. 在 `api/endpoints.py` 注册
+## 退出范围
 
-#### 修改 Prompt
+OPD、PPO、GRPO 变体选择、自进化编排、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL 和 SSE 活动入口仍退出。本次只恢复统一命令下的可选 DPO，不恢复旧脚本/导入或旧数据兼容。图表工具的既有推理后端、快照构建、T5 backfill 和外部 LLM API 保留。旧算法对照和架构设计只作历史记录，不是当前运行方式。
 
-编辑 `agents/prompt_templates.py` 中的 `REACT_PROMPT_TEMPLATE` 或 `skill_cli/SKILL.md`
+本次工程重构不生成数据、不运行训练、不下载研究资产，不执行完整 86 任务、真实 tokenizer 集成或模型性能对照。帮助/源码核对、现有测试、历史记录读取和资产定义核对各自有独立证据，不能互相替代；安装接口、来源保全和未验证边界见 [架构迁移说明](docs/architecture_migration.md)。[旧迁移记录](docs/mainline_migration.md) 保留原文，历史来源字段不回填。
 
-#### 修改数据库表
+## 文档
 
-编辑 `models/orm.py`，启动时自动创建
-
-### 调试技巧
-
-```bash
-# 1. SQL 日志
-# models/db.py
-engine = create_engine(..., echo=True)
-
-# 2. 查看 Agent 详细日志
-# utils/logger.py
-log.debug(f"详细信息: {content}")
-
-# 3. FastAPI Swagger
-http://localhost:8000/docs
-
-# 4. 前端浏览器控制台
-// SSE 连接状态、API 响应
-
-# 5. 查看数据库
-mysql -u arxiv -parxiv123 agentic_arxiv
-SHOW TABLES;
-SELECT * FROM chat_logs;
-SELECT * FROM agent_steps;
-```
-
-## 部署清单
-
-### 新 Linux 环境部署
-
-```bash
-# 1. MySQL 初始化（一次性）
-mysql -u root -p << EOF
-CREATE DATABASE IF NOT EXISTS agentic_arxiv DEFAULT CHARACTER SET utf8mb4;
-CREATE USER IF NOT EXISTS 'arxiv'@'localhost' IDENTIFIED BY 'arxiv123';
-GRANT ALL PRIVILEGES ON agentic_arxiv.* TO 'arxiv'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-
-# 2. 环境配置
-cat > AgenticArxiv/.env << EOF
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-xxxxxxxx
-MODEL=gpt-4-turbo
-MYSQL_URI=mysql+pymysql://arxiv:arxiv123@localhost:3306/agentic_arxiv?charset=utf8mb4
-AGENT_TYPE=regex
-EOF
-
-# 3. 依赖安装
-make install
-
-# 4. 启动（自动创建数据库表）
-make
-
-# ✅ 数据库表自动创建，无需额外步骤
-```
-
-### 生产部署（systemd）
-
-```bash
-sudo tee /etc/systemd/system/agentic-arxiv-api.service > /dev/null << 'EOF'
-[Unit]
-Description=Agentic Arxiv API
-After=network.target mysql.service
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=/opt/agentic-arxiv
-Environment="PATH=/opt/agentic-arxiv/.venv/bin"
-ExecStart=/opt/agentic-arxiv/.venv/bin/python -m uvicorn AgenticArxiv.api.app:app \
-  --host 0.0.0.0 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable agentic-arxiv-api
-sudo systemctl start agentic-arxiv-api
-```
-
-## 常见坑
-
-❌ **错误**：启动时表未创建 → 删除数据库，重新启动（`init_db()` 会自动创建）
-
-❌ **错误**：LLM 生成 JSON 格式错误（True/False/None）→ ReAct prompt 中有严格约束
-
-❌ **错误**：翻译进度卡住 → 检查后端日志，查看 SSE 连接是否正常
-
-❌ **错误**：Agent 重复搜索论文 → 会话上下文注入工作正常，LLM 有时会忽略
-
-❌ **错误**：启动时表未创建 → 确认 MySQL 已启动且 `.env` 中 `MYSQL_URI` 正确，然后重新启动（`init_db()` 会自动建表；若仍失败可重建空库 `agentic_arxiv` 后重启）
-
-## 文档位置
-
-- 📄 主 README：`README.md`（整体架构、快速开始、部署）
-- 📄 后端文档：`AgenticArxiv/readme.md`（三种 Agent 深入讲解）
-- 📄 前端文档：`AgenticArxivWeb/readme.md`（Vue 3 页面详解）
-- 📄 项目指南：此文件（Overview.md）
-
-## 关键代码位置
-
-| 功能           | 文件                          | 行号    |
-| -------------- | ----------------------------- | ------- |
-| Agent 执行循环 | `agents/base_agent.py`      | 66-173  |
-| 副作用处理     | `agents/base_agent.py`      | 192-277 |
-| 数据库初始化   | `api/app.py`                | 19-25   |
-| 数据库初始化   | `models/db.py`              | 27-30   |
-| ReAct 解析     | `agents/agent_engine.py`    | 58-121  |
-| MCP 工作流     | `mcp_protocol/mcp_agent.py` | 96-148  |
-| Skill 解析     | `skill_cli/skill_agent.py`  | 157-197 |
-| 工具注册       | `tools/tool_registry.py`    | -       |
-| 日志记录       | `services/log_service.py`   | -       |
-| SSE 推送       | `services/event_bus.py`     | -       |
+- [三语 README](README.md)：安装、主线命令与历史发布记录。
+- [Python 主线](docs/python_mainline.md)：文本 ReAct、工具与本地状态。
+- [评测指南](docs/evaluation.md)：切分、评分、报告与历史读取。
+- [主线指南](docs/rl_building.md)：配置、SFT 到 GRPO 与未来执行边界。
+- [坏例说明](eval/readme.md)：既有轨迹重评分与模型执行的区别。
+- [运行时契约](docs/react_runtime.md)：初始化、模式、解析、同步翻译及轨迹边界。
+- [架构迁移说明](docs/architecture_migration.md)：全部命令映射、安装分层、工作区与历史来源规则。

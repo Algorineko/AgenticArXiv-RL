@@ -1,0 +1,938 @@
+"""训练脚本的两个「把静默失败变成响亮失败」的守卫。
+
+两个失败模式都不会让训练崩：跑完、保存 checkpoint、日志看着正常，
+只是模型什么都没学到。
+"""
+
+import unittest
+import argparse
+from dataclasses import dataclass
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+
+from agentic_arxiv.tasks.splits import load_split
+from agentic_arxiv.tasks.tasks import get_all_tasks
+from agentic_arxiv.tasks.tasks_expanded import get_expanded_tasks
+from agentic_arxiv.training.precision import (
+    quantized_model_device_map,
+    cuda_supports_bf16,
+    is_distributed_launch,
+    pin_single_gpu,
+    precision_flags,
+    trainable_model_dtype,
+    trainable_model_load_kwargs,
+)
+from agentic_arxiv.training.grpo import (
+    DEFAULT_BETA,
+    RewardVarianceGuard,
+    _build_reward_calculator,
+    _load_tasks,
+)
+from agentic_arxiv.training.model_setup import (
+    QLORA_TARGET_MODULES,
+    _assert_lora_only_trainable,
+)
+from agentic_arxiv.training.sft import (
+    _check_lengths,
+    _filter_dataclass_kwargs,
+    _messages_of,
+    _sha256_file,
+    _to_prompt_completion,
+    _verify_data_manifest,
+)
+
+
+class ConfigCompatibilityTest(unittest.TestCase):
+    def test_filters_fields_missing_from_installed_dataclass_version(self):
+        @dataclass
+        class FakeConfig:
+            output_dir: str
+            max_length: int = 1024
+
+        filtered, dropped = _filter_dataclass_kwargs(
+            FakeConfig,
+            {"output_dir": "out", "max_length": 4096, "use_cache": False},
+        )
+
+        self.assertEqual(filtered, {"output_dir": "out", "max_length": 4096})
+        self.assertEqual(dropped, ["use_cache"])
+
+
+class RewardCurriculumConfigTest(unittest.TestCase):
+    def test_zero_steps_enables_full_semantic_weights_immediately(self):
+        weights = _build_reward_calculator(0).schedule(training_step=0)
+        self.assertEqual(
+            (weights.format, weights.tool, weights.argument, weights.process, weights.outcome),
+            (1.0, 3.0, 2.0, 1.0, 3.0),
+        )
+
+    def test_default_probe_schedule_keeps_early_scaled_weights(self):
+        weights = _build_reward_calculator(30).schedule(training_step=0)
+        self.assertEqual(
+            (weights.format, weights.tool, weights.argument, weights.process, weights.outcome),
+            (1.0, 1.0, 2.0 / 3.0, 1.0, 1.0),
+        )
+
+    def test_negative_curriculum_steps_fail_fast(self):
+        with self.assertRaisesRegex(SystemExit, "不能为负数"):
+            _build_reward_calculator(-1)
+
+
+class GrpoV4SplitTest(unittest.TestCase):
+    def test_formal_rl_split_is_train_only_and_matches_frozen_selection(self):
+        from pathlib import Path
+        import json
+
+        repo = Path(__file__).resolve().parents[1]
+        v2 = json.loads((repo / "data/splits/v2_62.json").read_text(encoding="utf-8"))
+        v4_path = repo / "data/splits/v4_grpo_train.json"
+        v4 = json.loads(v4_path.read_text(encoding="utf-8"))
+        selected = set(load_split(f"{v4_path}:rl_train"))
+
+        self.assertEqual(len(selected), 7)
+        self.assertTrue(selected <= set(v2["split"]["train"]))
+        heldout = set(v2["split"]["dev"] + v2["split"]["iid_test"] + v2["split"]["ood_test"])
+        self.assertFalse(selected & heldout)
+        self.assertEqual(
+            v4["split"]["excluded_low_variance"],
+            ["chain_lg10_dl_tr_last"],
+        )
+        for task_id in selected:
+            self.assertGreaterEqual(
+                v4["audit"][task_id]["informative_group_fraction"], 0.375
+            )
+
+
+class _FakeTokenizer:
+    """按字符数近似 token 数，够用来测长度守卫的分支。"""
+
+    def apply_chat_template(self, messages, tokenize=False):
+        return "".join(m.get("content", "") for m in messages)
+
+    def __call__(self, text):
+        return {"input_ids": list(range(len(text)))}
+
+
+def _row(n_prompt, n_completion):
+    return {
+        "prompt": [{"role": "user", "content": "p" * n_prompt}],
+        "completion": [{"role": "assistant", "content": "c" * n_completion}],
+    }
+
+
+class MessagesOfTest(unittest.TestCase):
+    def test_prompt_completion_format(self):
+        self.assertEqual(len(_messages_of(_row(3, 2))), 2)
+
+    def test_messages_format(self):
+        row = {"messages": [{"role": "user", "content": "x"}]}
+        self.assertEqual(_messages_of(row), row["messages"])
+
+
+class PromptCompletionConversionTest(unittest.TestCase):
+    def test_splits_last_assistant_message_from_prompt(self):
+        row = {
+            "messages": [
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+                {"role": "assistant", "content": '{"tool": "search"}'},
+            ]
+        }
+
+        converted = _to_prompt_completion(row)
+
+        self.assertEqual([m["role"] for m in converted["prompt"]], ["system", "user"])
+        self.assertEqual(converted["completion"], [row["messages"][-1]])
+
+    def test_rejects_sample_without_final_assistant_message(self):
+        row = {"messages": [{"role": "user", "content": "task"}]}
+        with self.assertRaisesRegex(ValueError, "assistant"):
+            _to_prompt_completion(row)
+
+
+class SftRowLoadingTest(unittest.TestCase):
+    """审计列不能把训练数据加载搞崩。
+
+    参数化 SFT 数据每行都带 `generation_parameters` 之类的溯源结构，它们的
+    形状逐行不同（检索行没有 section/style/max_words，解读行有）。`datasets`
+    为整个文件推断一套 Arrow schema，一行多一个键就会让整个数据集 cast 失败
+    —— 曾经就是这样：2436 条数据一条都加载不进来。
+    """
+
+    def setUp(self):
+        import tempfile
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "rows.jsonl"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, rows):
+        import json as _json
+
+        self.path.write_text(
+            "\n".join(_json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_keeps_only_the_training_columns(self):
+        from agentic_arxiv.training.sft import _load_sft_rows
+
+        self._write([{
+            "messages": [{"role": "user", "content": "t"}],
+            "generation_parameters": {"aspect": "AI"},
+            "sample_sha256": "abc",
+        }])
+
+        rows = _load_sft_rows(self.path)
+
+        self.assertEqual(rows, [{"messages": [{"role": "user", "content": "t"}]}])
+
+    def test_rows_with_different_provenance_still_load(self):
+        from agentic_arxiv.training.sft import _load_sft_rows
+
+        self._write([
+            {"messages": [{"role": "user", "content": "a"}],
+             "generation_parameters": {"aspect": "AI", "ref": 1}},
+            {"messages": [{"role": "user", "content": "b"}],
+             "generation_parameters": {"aspect": "CV", "ref": 2, "style": "tldr",
+                                       "max_words": 60, "section": None}},
+        ])
+
+        rows = _load_sft_rows(self.path)
+
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(set(r) == {"messages"} for r in rows))
+
+    def test_prompt_completion_rows_pass_through(self):
+        from agentic_arxiv.training.sft import _load_sft_rows
+
+        self._write([{
+            "prompt": [{"role": "user", "content": "t"}],
+            "completion": [{"role": "assistant", "content": "a"}],
+            "task_id": "x",
+        }])
+
+        rows = _load_sft_rows(self.path)
+
+        self.assertEqual(set(rows[0]), {"prompt", "completion"})
+
+    def test_blank_lines_are_ignored_and_empty_input_fails(self):
+        from agentic_arxiv.training.sft import _load_sft_rows
+
+        self.path.write_text("\n\n", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            _load_sft_rows(self.path)
+
+
+class CheckLengthsTest(unittest.TestCase):
+    def test_passes_when_everything_fits(self):
+        _check_lengths(_FakeTokenizer(), [_row(10, 5)] * 4, max_length=100)
+
+    def test_aborts_when_most_samples_overflow(self):
+        # 这是实测到的真实情形：207/207 超过 max_length=1024
+        with self.assertRaises(SystemExit) as ctx:
+            _check_lengths(_FakeTokenizer(), [_row(900, 80)] * 10, max_length=100)
+        self.assertIn("max_length", str(ctx.exception))
+
+    def test_suggests_a_length_that_actually_fits(self):
+        with self.assertRaises(SystemExit) as ctx:
+            _check_lengths(_FakeTokenizer(), [_row(200, 50)] * 10, max_length=100)
+        self.assertIn("314", str(ctx.exception))     # max 250 + 64
+
+    def test_tolerates_a_single_outlier(self):
+        rows = [_row(10, 5)] * 200 + [_row(900, 80)]
+        _check_lengths(_FakeTokenizer(), rows, max_length=100)   # <=1% 只告警
+
+    def test_empty_dataset_aborts(self):
+        with self.assertRaises(SystemExit):
+            _check_lengths(_FakeTokenizer(), [], max_length=100)
+
+
+class SftDataManifestTest(unittest.TestCase):
+    def test_accepts_matching_frozen_mix(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "train.jsonl"
+            data.write_text('{"messages": []}\n', encoding="utf-8")
+            manifest = data.with_suffix(data.suffix + ".manifest.json")
+            manifest.write_text(json.dumps({
+                "kind": "qlora_sft_train_mix",
+                "output_sha256": _sha256_file(data),
+                "output_rows": 1,
+                "unique_sample_fingerprints": 1,
+                "semantic_task_instances": 1,
+            }), encoding="utf-8")
+            self.assertEqual(_verify_data_manifest(data)["output_rows"], 1)
+
+    def test_rejects_data_changed_after_manifest(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "train.jsonl"
+            data.write_text('{"messages": []}\n', encoding="utf-8")
+            manifest = data.with_suffix(data.suffix + ".manifest.json")
+            manifest.write_text(json.dumps({
+                "kind": "qlora_sft_train_mix",
+                "output_sha256": _sha256_file(data),
+                "output_rows": 1,
+                "unique_sample_fingerprints": 1,
+            }), encoding="utf-8")
+            data.write_text('{"messages": [1]}\n', encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "SHA256"):
+                _verify_data_manifest(data)
+
+
+class QLoRAGuardTest(unittest.TestCase):
+    def test_qwen_attention_and_mlp_projections_are_targeted(self):
+        self.assertEqual(
+            set(QLORA_TARGET_MODULES),
+            {"q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"},
+        )
+
+    @pytest.mark.local
+    def test_rejects_model_that_is_not_actually_4bit(self):
+        torch = pytest.importorskip("torch")
+
+        class FakeModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.lora_weight = torch.nn.Parameter(torch.ones(1))
+                self.is_loaded_in_4bit = False
+
+        with self.assertRaisesRegex(SystemExit, "4-bit"):
+            _assert_lora_only_trainable(FakeModel())
+
+    @pytest.mark.local
+    def test_rejects_non_lora_trainable_parameter(self):
+        torch = pytest.importorskip("torch")
+
+        class FakeModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.base_weight = torch.nn.Parameter(torch.ones(1))
+                self.is_loaded_in_4bit = True
+
+        with self.assertRaisesRegex(SystemExit, "非LoRA"):
+            _assert_lora_only_trainable(FakeModel())
+
+
+class BooleanFlagContractTest(unittest.TestCase):
+    def test_verify_boolean_optional_action_accepts_both_forms(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--verify", action=argparse.BooleanOptionalAction, default=False
+        )
+        self.assertTrue(parser.parse_args(["--verify"]).verify)
+        self.assertFalse(parser.parse_args(["--no-verify"]).verify)
+        self.assertFalse(parser.parse_args([]).verify)
+
+
+class RewardVarianceGuardTest(unittest.TestCase):
+    def _fire(self, guard, n, step=1, **logs):
+        """step 现在会影响行为：开局零方差是故障，练久了是收敛。"""
+        control = SimpleNamespace(should_training_stop=False)
+        for _ in range(n):
+            guard.on_log(Mock(), SimpleNamespace(global_step=step), control,
+                         logs=dict(logs))
+        return control
+
+    def test_healthy_variance_never_stops(self):
+        guard = RewardVarianceGuard(patience=3)
+        control = self._fire(guard, 10, frac_reward_zero_std=0.0, reward_std=0.4)
+        self.assertFalse(control.should_training_stop)
+        self.assertFalse(guard.tripped)
+
+    def test_stops_after_patience_consecutive_dead_steps(self):
+        guard = RewardVarianceGuard(patience=3)
+        control = self._fire(guard, 3, frac_reward_zero_std=1.0, reward=-0.8393)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(guard.tripped)
+
+    def test_does_not_stop_before_patience(self):
+        guard = RewardVarianceGuard(patience=3)
+        control = self._fire(guard, 2, frac_reward_zero_std=1.0)
+        self.assertFalse(control.should_training_stop)
+
+    def test_streak_resets_on_a_healthy_step(self):
+        guard = RewardVarianceGuard(patience=3)
+        self._fire(guard, 2, frac_reward_zero_std=1.0)
+        self._fire(guard, 1, frac_reward_zero_std=0.0)
+        control = self._fire(guard, 2, frac_reward_zero_std=1.0)
+        self.assertFalse(control.should_training_stop)
+
+    def test_falls_back_to_reward_std_when_frac_absent(self):
+        guard = RewardVarianceGuard(patience=2)
+        control = self._fire(guard, 2, reward_std=0.0)
+        self.assertTrue(control.should_training_stop)
+
+    def test_ignores_logs_without_reward_fields(self):
+        guard = RewardVarianceGuard(patience=1)
+        control = self._fire(guard, 5, loss=0.1, epoch=1.0)
+        self.assertFalse(control.should_training_stop)
+
+    def test_zero_variance_after_the_grace_period_is_convergence_not_failure(self):
+        """练到没梯度 ≠ 开局就没梯度。
+
+        --split rl_train 只有十来条中间带任务，学会之后每组都是满分，
+        方差自然归零。把它判成故障会白扔一个已经练好的 checkpoint。
+        """
+        guard = RewardVarianceGuard(patience=3, grace_steps=20)
+        control = self._fire(guard, 3, step=50, frac_reward_zero_std=1.0, reward=1.0)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(guard.converged)
+        self.assertFalse(guard.tripped)      # 不以失败退出，checkpoint 保留
+        self.assertEqual(guard.stop_step, 50)
+
+    def test_zero_variance_inside_the_grace_period_is_still_a_failure(self):
+        """开局就零方差多半是基座还吐不出可解析动作，那是真故障。"""
+        guard = RewardVarianceGuard(patience=3, grace_steps=20)
+        control = self._fire(guard, 3, step=5, frac_reward_zero_std=1.0, reward=-0.84)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(guard.tripped)
+        self.assertFalse(guard.converged)
+
+    def test_the_boundary_step_still_counts_as_grace(self):
+        guard = RewardVarianceGuard(patience=1, grace_steps=20)
+        self._fire(guard, 1, step=20, frac_reward_zero_std=1.0)
+        self.assertTrue(guard.tripped)
+
+    def test_an_unusable_global_step_falls_back_to_failure(self):
+        """拿不到步数时按开局处理：宁可多报一次故障，也不要因它崩掉。"""
+        guard = RewardVarianceGuard(patience=1, grace_steps=20)
+        control = SimpleNamespace(should_training_stop=False)
+        guard.on_log(Mock(), Mock(), control, logs={"frac_reward_zero_std": 1.0})
+        self.assertTrue(guard.tripped)
+
+
+@pytest.mark.local
+class PrecisionFlagsTest(unittest.TestCase):
+    """fp16 的 GradScaler 不接受 bf16 梯度；在 bf16 权重的模型上会硬崩：
+    NotImplementedError: _amp_foreach_non_finite_check_and_unscale_cuda ... for 'BFloat16'
+    """
+
+    def _flags(self, cuda, bf16):
+        torch = pytest.importorskip("torch")
+        from unittest.mock import patch
+        with patch.object(torch.cuda, "is_available", return_value=cuda), \
+             patch.object(torch.cuda, "is_bf16_supported", return_value=bf16):
+            return precision_flags()
+
+    def test_no_mixed_precision_off_cuda(self):
+        self.assertEqual(self._flags(cuda=False, bf16=False), {"use_cpu": True})
+
+    def test_prefers_bf16_when_supported(self):
+        self.assertEqual(self._flags(cuda=True, bf16=True), {"bf16": True})
+
+    def test_never_sets_fp16_alongside_bf16(self):
+        # 同时置位会让 GradScaler 介入 bf16 梯度，正是崩溃的来源
+        self.assertNotIn("fp16", self._flags(cuda=True, bf16=True))
+
+
+    def test_falls_back_to_fp16_without_bf16(self):
+        self.assertEqual(self._flags(cuda=True, bf16=False), {"fp16": True})
+
+    def test_both_mainline_trainers_agree(self):
+        pytest.importorskip("torch")
+        from agentic_arxiv.training.grpo import _precision_flags as grpo
+        from agentic_arxiv.training.sft import _precision_flags as sft
+        self.assertEqual(sft(), grpo())
+
+
+@pytest.mark.local
+class CudaSupportsBf16Test(unittest.TestCase):
+    """torch>=2.3 的 is_bf16_supported() 默认把模拟也算上，T4 也返回 True；
+    训练要的是原生 bf16 计算，必须以 including_emulation=False 询问。"""
+
+    def test_asks_for_native_support_only(self):
+        torch = pytest.importorskip("torch")
+        from unittest.mock import patch
+
+        def strict(including_emulation=True):
+            return including_emulation  # emulated: True, native: False (a T4)
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", side_effect=strict):
+            self.assertFalse(cuda_supports_bf16())
+            self.assertEqual(precision_flags(), {"fp16": True})
+
+    def test_falls_back_to_plain_call_on_old_torch(self):
+        torch = pytest.importorskip("torch")
+        from unittest.mock import patch
+
+        def old_torch():  # no keyword before 2.3
+            return True
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", side_effect=old_torch):
+            self.assertTrue(cuda_supports_bf16())
+
+    def test_false_without_cuda(self):
+        torch = pytest.importorskip("torch")
+        from unittest.mock import patch
+        with patch.object(torch.cuda, "is_available", return_value=False):
+            self.assertFalse(cuda_supports_bf16())
+
+
+@pytest.mark.local
+class TrainableModelDtypeTest(unittest.TestCase):
+    """全精度训练路径的权重精度必须跟随 precision_flags。
+
+    不显式传 dtype 时 Transformers 5 按 checkpoint 原始精度（Qwen2.5 为 bf16）
+    加载；在 precision_flags 回退到 fp16 的 pre-Ampere 卡（T4 / V100）上，
+    第一步 matmul 就报 "gemm input type at::BFloat16 ... only supported for
+    CUDA devices with compute capability 8.0 or higher"。
+    """
+
+    def _dtype(self, cuda, bf16):
+        torch = pytest.importorskip("torch")
+        from unittest.mock import patch
+        with patch.object(torch.cuda, "is_available", return_value=cuda), \
+             patch.object(torch.cuda, "is_bf16_supported", return_value=bf16):
+            return trainable_model_dtype()
+
+    def test_bf16_trainer_gets_bf16_weights(self):
+        torch = pytest.importorskip("torch")
+        self.assertIs(self._dtype(cuda=True, bf16=True), torch.bfloat16)
+
+    def test_fp16_fallback_gets_fp32_master_weights(self):
+        torch = pytest.importorskip("torch")
+        self.assertIs(self._dtype(cuda=True, bf16=False), torch.float32)
+
+    def test_cpu_gets_fp32_weights(self):
+        torch = pytest.importorskip("torch")
+        self.assertIs(self._dtype(cuda=False, bf16=False), torch.float32)
+
+    def test_load_kwargs_follow_the_loader_signature(self):
+        torch = pytest.importorskip("torch")
+        from unittest.mock import patch
+
+        def new_loader(name, *, dtype=None):
+            return None
+
+        def old_loader(name, *, torch_dtype=None):
+            return None
+
+        with patch.object(torch.cuda, "is_available", return_value=True), \
+             patch.object(torch.cuda, "is_bf16_supported", return_value=False):
+            self.assertEqual(trainable_model_load_kwargs(new_loader), {"dtype": torch.float32})
+            self.assertEqual(trainable_model_load_kwargs(old_loader), {"torch_dtype": torch.float32})
+
+class DistributedLaunchGuardTest(unittest.TestCase):
+    """DDP 不强行钉单卡；量化模型使用进程已选择的本地 GPU。"""
+
+    def _env(self, **values):
+        import os
+        from unittest.mock import patch
+
+        return patch.dict(os.environ, values, clear=False)
+
+    def test_no_launch_marker_means_single_process(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("LOCAL_RANK", None)
+            self.assertFalse(is_distributed_launch())
+
+    def test_local_rank_marks_a_distributed_launch(self):
+        with self._env(LOCAL_RANK="1"):
+            self.assertTrue(is_distributed_launch())
+
+    def test_pin_single_gpu_is_skipped_under_launch(self):
+        config = SimpleNamespace()
+        with self._env(LOCAL_RANK="0"):
+            pin_single_gpu(config)
+        self.assertFalse(hasattr(config, "_n_gpu"))
+
+    def test_pin_single_gpu_applies_without_launch(self):
+        import os
+        from unittest.mock import patch
+
+        config = SimpleNamespace()
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("LOCAL_RANK", None)
+            os.environ.pop("RANK", None)
+            pin_single_gpu(config)
+        self.assertEqual(config._n_gpu, 1)
+
+    def test_quantized_model_uses_selected_device_not_cuda_zero(self):
+        from unittest.mock import patch
+        torch = pytest.importorskip("torch")
+        with patch.object(torch.cuda, "current_device", return_value=2):
+            self.assertEqual(quantized_model_device_map(), {"": 2})
+
+    def test_quantized_single_gpu_keeps_device_zero(self):
+        from unittest.mock import patch
+        torch = pytest.importorskip("torch")
+        with patch.object(torch.cuda, "current_device", return_value=0):
+            self.assertEqual(quantized_model_device_map(), {"": 0})
+
+
+class MainlineAlgorithmDefaultsTest(unittest.TestCase):
+    """保留源码明确的 KL 系数与未设置字段的库委托边界。"""
+
+    def test_defaults_remain_unset_without_a_variant_preset(self):
+        import inspect
+
+        from agentic_arxiv.training import grpo
+
+        sig = inspect.signature(grpo.main)
+        for name in (
+            "loss_type", "epsilon_high", "mask_truncated_completions",
+            "importance_sampling_level", "scale_rewards",
+        ):
+            with self.subTest(param=name):
+                self.assertIsNone(sig.parameters[name].default)
+        self.assertEqual(DEFAULT_BETA, 0.04)
+        self.assertEqual(sig.parameters["beta"].default, DEFAULT_BETA)
+
+
+class StageVerificationDefaultTest(unittest.TestCase):
+    """SFT 与 GRPO 的质量闸门都须默认开启，并允许显式跳过。"""
+
+    STAGES = ("sft", "grpo")
+
+    def _parser(self):
+        from agentic_arxiv.cli.training_arguments import register_commands
+
+        parser = argparse.ArgumentParser()
+        register_commands(parser, lambda subparsers, name, **kwargs: subparsers.add_parser(name, **kwargs))
+        return parser
+
+    def test_sources_declare_verify_defaulting_to_true(self):
+        for stage in self.STAGES:
+            with self.subTest(stage=stage):
+                arguments = self._parser().parse_args([stage])
+                self.assertIsNotNone(arguments.verify, f"{stage} 里找不到 --verify 的默认值")
+                self.assertEqual(
+                    arguments.verify,
+                    True,
+                    f"{stage} 的 --verify 默认关闭，阶段闸门对这一步形同不存在",
+                )
+
+    def test_every_stage_accepts_no_verify(self):
+        """「可跳过」要真的能跳过：必须是 BooleanOptionalAction。"""
+        for stage in self.STAGES:
+            with self.subTest(stage=stage):
+                self.assertFalse(self._parser().parse_args([stage, "--no-verify"]).verify)
+
+
+class ToolRegistrationCoverageTest(unittest.TestCase):
+    """所有训练入口都必须注册齐工具。
+
+    每个入口曾经各自手写一段 `import agentic_arxiv.tools.xxx  # 触发注册`，四行里只列了当时
+    存在的四个工具。后来加了 `search_arxiv_papers`、`get_paper_content`、
+    `summarize_paper`、`extract_paper_figures`，这些入口没有跟着更新 —— 后果不是
+    报错，而是 prompt 里的工具列表少了几个：策略根本不知道那些工具存在，对应的
+    任务永远做不成，日志上却什么都看不出来。现在统一走 tools/bootstrap.py。
+    """
+
+    ENTRY_POINTS = (
+        "agentic_arxiv.training.grpo",
+        "agentic_arxiv.training.stage_verifier",
+        "agentic_arxiv.data_pipeline.build_snapshot",
+    )
+
+    def test_every_entry_point_registers_the_full_tool_set(self):
+        from agentic_arxiv.tools.bootstrap import missing_tools, register_all_tools
+
+        # 先把注册表清干净不可行（注册是模块级副作用），所以改为逐个 import
+        # 入口模块后再整体核对：任何入口只要漏注册，这里就会看见缺项。
+        for module in self.ENTRY_POINTS:
+            with self.subTest(module=module):
+                __import__(module)
+
+        register_all_tools()
+        self.assertEqual(missing_tools(), [])
+
+    def test_entry_points_do_not_hand_list_tool_modules(self):
+        """手写模块清单本身就是这个 bug 的成因，别再长回来。"""
+        import importlib.util
+
+        for module in self.ENTRY_POINTS:
+            path = Path(importlib.util.find_spec(module).origin)
+            source = path.read_text(encoding="utf-8")
+            with self.subTest(module=module):
+                self.assertNotIn(
+                    "import agentic_arxiv.tools.pdf_download_tool",
+                    source,
+                    f"{module} 又在手写工具模块清单了，改用 agentic_arxiv.tools.bootstrap",
+                )
+
+
+@pytest.mark.local
+class VerificationModelDeviceTest(unittest.TestCase):
+    """阶段验证必须在训练设备上生成。
+
+    `StageVerifier` 原本用裸 `from_pretrained` 加载产物模型，
+    模型落在 CPU；`CanaryEvaluator` 又是从参数上读设备，于是整道闸门在 CPU 上
+    做生成。1.5B 模型跑 8×256 token 要几十分钟一个阶段 —— 闸门慢到这个程度就
+    没人愿意留着它，这正是它当初被默认关掉的原因之一。
+    """
+
+    def _loaded(self, cuda: bool):
+        from unittest.mock import MagicMock, patch
+
+        torch = pytest.importorskip("torch")
+        pytest.importorskip("transformers")
+        from agentic_arxiv.training import stage_verifier
+
+        model = MagicMock()
+        tokenizer = MagicMock()
+        tokenizer.pad_token = "</s>"
+        tokenizer.eos_token = "</s>"
+
+        with patch.object(torch.cuda, "is_available", return_value=cuda), \
+             patch("agentic_arxiv.llm.local.TransformersLLMClient",
+                   return_value=SimpleNamespace(model=model, tokenizer=tokenizer)) as client:
+            loaded_model, loaded_tokenizer = stage_verifier._load_verification_model(
+                "/tmp/fake-model"
+            )
+        return client, loaded_model, loaded_tokenizer
+
+    def test_model_is_moved_to_the_cuda_device_when_available(self):
+        client, _model, _tokenizer = self._loaded(cuda=True)
+        self.assertEqual(client.call_args.kwargs["device"], "cuda")
+
+    def test_cpu_only_environment_does_not_try_to_move(self):
+        client, _model, _tokenizer = self._loaded(cuda=False)
+        self.assertEqual(client.call_args.kwargs["device"], "cpu")
+
+    def test_model_loading_uses_explicit_artifact_protocol(self):
+        client, _model, _tokenizer = self._loaded(cuda=True)
+        self.assertIs(client.call_args.kwargs["artifact"], True)
+        self.assertEqual(client.call_args.kwargs["expected_protocol"]["context_version"], "react-messages-v3")
+
+    def test_artifact_rejection_becomes_a_failed_report(self):
+        from unittest.mock import patch
+        pytest.importorskip("torch")
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        with patch("agentic_arxiv.llm.local.TransformersLLMClient",
+                   side_effect=SystemExit("training_manifest 缺失")) as client:
+            report = StageVerifier().verify_dpo("/nonexistent/path/model")
+        self.assertFalse(report.passed)
+        self.assertIn("training_manifest 缺失", report.failures[0])
+        self.assertEqual(client.call_args.kwargs["allowed_stages"], {"dpo_full", "dpo_qlora"})
+
+
+class StageVerifierTest(unittest.TestCase):
+    """阶段验证器的逻辑测试（不需要真实模型）。"""
+
+    def test_report_passed_formatting(self):
+        from agentic_arxiv.training.stage_verifier import VerificationReport
+        report = VerificationReport(
+            stage="sft", model_path="/tmp/model",
+            passed=True, metrics={"parse_rate": 0.8},
+            thresholds={"parse_rate": 0.3},
+        )
+        summary = report.summary()
+        self.assertIn("PASS", summary)
+        self.assertIn("SFT", summary)
+        self.assertIn("0.8", summary)
+
+    def test_report_failed_formatting(self):
+        from agentic_arxiv.training.stage_verifier import VerificationReport
+        report = VerificationReport(
+            stage="grpo", model_path="/tmp/model",
+            passed=False, metrics={"mean_reward": -0.5},
+            thresholds={"mean_reward": -0.2},
+            failures=["mean_reward too low"],
+        )
+        summary = report.summary()
+        self.assertIn("FAIL", summary)
+        self.assertIn("GRPO", summary)
+        self.assertIn("too low", summary)
+
+    def test_thresholds_configurable(self):
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        v = StageVerifier(
+            sft_min_parse_rate=0.5,
+            grpo_min_reward=0.1,
+            dpo_min_reward=-0.1,
+        )
+        self.assertEqual(v.thresholds["sft"]["parse_rate"], 0.5)
+        self.assertEqual(v.thresholds["grpo"]["mean_reward"], 0.1)
+        self.assertEqual(v.thresholds["dpo"]["mean_reward"], -0.1)
+
+    def test_default_thresholds_preserve_existing_stages(self):
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        self.assertEqual(StageVerifier().thresholds, {
+            "sft": {"parse_rate": 0.3}, "grpo": {"mean_reward": -0.2},
+            "dpo": {"mean_reward": -0.3},
+        })
+
+    def test_verify_sft_model_load_failure(self):
+        """模型路径不存在时返回 failed report 而非抛异常。"""
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        v = StageVerifier()
+        from unittest.mock import patch
+
+        with patch("agentic_arxiv.training.stage_verifier._load_verification_model", side_effect=OSError("模型路径不存在")):
+            report = v.verify_sft(model_path="/nonexistent/path/model")
+        self.assertFalse(report.passed)
+        self.assertIn("模型加载失败", report.failures[0])
+
+    def test_verify_grpo_model_load_failure(self):
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        v = StageVerifier()
+        from unittest.mock import patch
+
+        for stage in ("grpo", "dpo"):
+            with self.subTest(stage=stage), patch("agentic_arxiv.training.stage_verifier._load_verification_model", side_effect=OSError("模型路径不存在")):
+                report = getattr(v, f"verify_{stage}")(model_path="/nonexistent/path/model")
+            self.assertFalse(report.passed)
+            self.assertIn("模型加载失败", report.failures[0])
+
+    def test_dpo_uses_existing_canary_and_reports_smoke_scope(self):
+        from unittest.mock import patch
+        from agentic_arxiv.training.canary import CanaryResult, DEFAULT_CANARY_TASK_IDS
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        # 只复用既有 Canary 元数据，不生成模型响应或轨迹。
+        result = CanaryResult(step=0, mean_reward=-0.8, task_completion_rate=0.0,
+                              per_task_rewards={"search_01": -0.8},
+                              task_ids=list(DEFAULT_CANARY_TASK_IDS))
+        with patch("agentic_arxiv.training.stage_verifier._load_verification_model", return_value=(None, None)), \
+             patch("agentic_arxiv.training.stage_verifier._check_episode_result", return_value=result) as evaluate:
+            report = StageVerifier().verify_dpo("/tmp/model")
+        self.assertFalse(report.passed)
+        self.assertEqual(report.stage, "dpo")
+        self.assertEqual(evaluate.call_args.kwargs["task_ids"], DEFAULT_CANARY_TASK_IDS)
+        self.assertEqual(evaluate.call_args.kwargs["max_iterations"], 6)
+        self.assertIs(evaluate.call_args.kwargs["artifact"], True)
+        self.assertEqual(report.metrics["false_finish_rate"], result.false_finish_rate)
+        self.assertEqual(report.coverage["scope"], "smoke-only")
+        self.assertEqual(report.coverage["scoring"], result.scoring)
+        self.assertIn("not held-out improvement", report.coverage["quality_claim"])
+
+    def test_dpo_artifact_mode_reaches_actual_canary_client(self):
+        from unittest.mock import patch
+        from agentic_arxiv.runtime.env import MockArxivEnv
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        # 在执行任何 episode 前截住调用，只检查模式透传，不生成响应或 token。
+        for stage in ("sft", "dpo", "grpo"):
+            with self.subTest(stage=stage):
+                model = SimpleNamespace(training=True, eval=Mock(), train=Mock())
+                tokenizer = object()
+                with patch("agentic_arxiv.training.stage_verifier._load_verification_model",
+                           return_value=(model, tokenizer)), \
+                     patch("agentic_arxiv.training.canary.evaluate_episodes",
+                           side_effect=RuntimeError("在采样前停止")) as evaluate:
+                    report = getattr(StageVerifier(), f"verify_{stage}")(
+                        "/nonexistent/path/model", env=MockArxivEnv(mode="replay"),
+                    )
+                client = evaluate.call_args.args[0]
+                self.assertIs(client._artifact_mode, stage == "dpo")
+                self.assertIs(client.model, model)
+                self.assertIs(client.tokenizer, tokenizer)
+                model.train.assert_called_once_with(True)
+                self.assertFalse(report.passed)
+                self.assertIn("在采样前停止", report.failures[0])
+
+    def test_dpo_episode_failure_is_not_pass(self):
+        from unittest.mock import patch
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        with patch("agentic_arxiv.training.stage_verifier._load_verification_model", return_value=(None, None)), \
+             patch("agentic_arxiv.training.stage_verifier._check_episode_result", side_effect=RuntimeError("既有失败路径")):
+            report = StageVerifier().verify_dpo("/tmp/model")
+        self.assertFalse(report.passed)
+        self.assertEqual(report.coverage["execution"], "failed")
+        self.assertIn("完整 episode 验证失败", report.failures[0])
+
+    def test_save_report_writes_file(self):
+        import tempfile
+        import json
+        from pathlib import Path
+        from agentic_arxiv.training.stage_verifier import StageVerifier, VerificationReport
+
+        report = VerificationReport(
+            stage="sft", model_path="/tmp/model",
+            passed=True, metrics={"parse_rate": 0.8},
+            thresholds={"parse_rate": 0.3},
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir)
+            StageVerifier.save_report(report, out)
+            report_path = out / "verification_report.json"
+            self.assertTrue(report_path.exists())
+            data = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["stage"], "sft")
+            self.assertTrue(data["passed"])
+            self.assertEqual(data["metrics"]["parse_rate"], 0.8)
+            self.assertEqual(data["coverage"], report.coverage)
+            self.assertEqual(data["protocol"], report.protocol)
+
+    def test_sft_prompts_use_chat_template_when_available(self):
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        class _ChatTokenizer:
+            chat_template = "fake-template"
+
+            def __init__(self):
+                self.calls = []
+
+            def apply_chat_template(self, messages, tokenize=False, add_generation_prompt=False):
+                self.calls.append((messages, tokenize, add_generation_prompt))
+                return "CHAT:" + messages[0]["content"]
+
+        tokenizer = _ChatTokenizer()
+        prompts = StageVerifier._sft_prompts(3, tokenizer)
+        self.assertEqual(len(prompts), 3)
+        self.assertEqual(len(tokenizer.calls), 3)
+        for prompt, (messages, tokenize, add_generation_prompt) in zip(prompts, tokenizer.calls):
+            self.assertTrue(prompt.startswith("CHAT:"))
+            self.assertIn("你是一个AI研究助手", prompt)
+            self.assertEqual(messages[0]["role"], "user")
+            self.assertIs(tokenize, False)
+            self.assertIs(add_generation_prompt, True)
+
+    def test_sft_prompts_without_tokenizer_fail_instead_of_falling_back(self):
+        """缺少 tokenizer 必须失败，不能回退成另一套裸文本上下文。"""
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        with self.assertRaises(ValueError):
+            StageVerifier._sft_prompts(2, None)
+
+
+class TrainingTaskSetTest(unittest.TestCase):
+    """正式 GRPO 显式绑定训练切分，8 条冒烟任务仅供显式冒烟模式。"""
+
+    def test_explicit_smoke_mode_uses_the_existing_subset(self):
+        self.assertEqual(len(_load_tasks("default", None, smoke=True)), len(get_all_tasks()))
+
+    def test_expanded_without_a_training_split_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            _load_tasks("expanded", None)
+
+    def test_rl_train_split_keeps_only_the_middle_band(self):
+        """两端的任务同一 prompt 采样出的奖励一致，组内方差为零，没有梯度。"""
+        chosen = {t["id"] for t in _load_tasks("expanded", "rl_train")}
+        self.assertEqual(chosen, set(load_split("rl_train")))
+        self.assertLess(len(chosen), len(get_expanded_tasks()))
+
+    def test_split_against_the_wrong_task_set_fails_loudly(self):
+        """切分按完整任务集划定；配上冒烟集会静默少掉大半训练数据。"""
+        with self.assertRaises(SystemExit) as ctx:
+            _load_tasks("default", "rl_train", smoke=True)
+        self.assertIn("不在当前任务集中", str(ctx.exception))
+
+    def test_task_ids_come_back_in_a_deterministic_order(self):
+        first = [t["id"] for t in _load_tasks("expanded", "train")]
+        self.assertEqual(first, sorted(first))
+        self.assertEqual(first, [t["id"] for t in _load_tasks("expanded", "train")])
+
+
+if __name__ == "__main__":
+    unittest.main()

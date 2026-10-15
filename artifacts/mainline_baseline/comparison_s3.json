@@ -1,0 +1,5185 @@
+{
+  "schema_version": 1,
+  "phase": "S3",
+  "description": "S0/S1/S2 与 S3 对原历史记录的只读解析/评分/报告投影比较；新增缺用量元信息单列，不是新协议动态回放。",
+  "sources": [
+    {
+      "path": "artifacts/mainline_baseline/historical_records.json",
+      "sha256": "bcd37cc1cec76a840b57d013914c300c6c3ff9df006a16a597db2ece4449557f"
+    },
+    {
+      "path": "artifacts/mainline_baseline/historical_records_s1.json",
+      "sha256": "306f61949e62244bbfa58ea15bfda27530f8b8262714e05ab3295b161b344dce"
+    },
+    {
+      "path": "artifacts/mainline_baseline/historical_records_s2.json",
+      "sha256": "8c71c25179abffa7993c3ddd73b833bb3fc46c3a0bbb3b823344d8a2920e5973"
+    },
+    {
+      "path": "artifacts/mainline_baseline/historical_records_s3.json",
+      "sha256": "c11614f9551a44e181ba1be6ab967284a9cf04e725dc1daa666a5110999ad0a7"
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": ".venv/bin/python scripts/audit_historical_records.py --phase S3 --json > artifacts/mainline_baseline/historical_records_s3.json",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python - > artifacts/mainline_baseline/comparison_s3.json （只读比较四阶段已有检查记录和原summary明确token均值，无工具/模型调用）",
+      "exit_code": 0
+    }
+  ],
+  "comparison_passed": true,
+  "scope": {
+    "indexed_existing_files": 299,
+    "trace_files": 53,
+    "historical_rows": 1865,
+    "historical_steps": 5075,
+    "parsed_recorded_actions": 3210,
+    "task_ids_seen": 77
+  },
+  "comparisons": [
+    {
+      "baseline_phase": "S0",
+      "current_phase": "S3",
+      "checks": {
+        "historical_input_inventory_equal": true,
+        "trace_members_equal": true,
+        "all_trace_content_comparisons_equal": true,
+        "all_loader_statuses_equal": true,
+        "all_aggregate_comparisons_equal": true,
+        "both_audits_without_errors": true,
+        "inputs_unchanged_during_both_checks": true,
+        "sources_stable_during_both_checks": true
+      },
+      "comparison_passed": true,
+      "trace_comparisons": [
+        {
+          "path": "artifacts/base_pilot_v1/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/base_pilot_v2/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/base_smoke/traces.jsonl",
+          "rows": 2,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/base_smoke_v2/traces.jsonl",
+          "rows": 2,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo60_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_smoke_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v5_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v5_rl_train_r3_s45/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v1_terminal_probe_r8_s47/traces.jsonl",
+          "rows": 32,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v2_terminal_probe_r8_s47/traces.jsonl",
+          "rows": 32,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v5_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v5_rl_train_r3_s45/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_dev_pair/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_pilot_v3a/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_pilot_v3b/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/dev/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/iid_test/traces.jsonl",
+          "rows": 42,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/ood_test/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/train/traces.jsonl",
+          "rows": 108,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-366_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_train_r3/traces.jsonl",
+          "rows": 108,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_smoke_dev_pair/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        }
+      ],
+      "aggregate_comparisons": {
+        "totals": true,
+        "task_ids_seen": true,
+        "termination_on_recorded_histories": true,
+        "recorded_action_counts": true,
+        "observation_marker_counts": true,
+        "observation_marker_examples": true,
+        "historical_field_presence": true,
+        "historical_detail_comparison_totals": true
+      },
+      "loader_error_text_change_count": 53,
+      "historical_input_changes": []
+    },
+    {
+      "baseline_phase": "S1",
+      "current_phase": "S3",
+      "checks": {
+        "historical_input_inventory_equal": true,
+        "trace_members_equal": true,
+        "all_trace_content_comparisons_equal": true,
+        "all_loader_statuses_equal": true,
+        "all_aggregate_comparisons_equal": true,
+        "both_audits_without_errors": true,
+        "inputs_unchanged_during_both_checks": true,
+        "sources_stable_during_both_checks": true
+      },
+      "comparison_passed": true,
+      "trace_comparisons": [
+        {
+          "path": "artifacts/base_pilot_v1/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/base_pilot_v2/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/base_smoke/traces.jsonl",
+          "rows": 2,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/base_smoke_v2/traces.jsonl",
+          "rows": 2,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo60_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_smoke_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v5_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v5_rl_train_r3_s45/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_grpo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v1_terminal_probe_r8_s47/traces.jsonl",
+          "rows": 32,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v2_terminal_probe_r8_s47/traces.jsonl",
+          "rows": 32,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v5_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v5_rl_train_r3_s45/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/eval_sft_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_dev_pair/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_pilot_v3a/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_pilot_v3b/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/dev/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/iid_test/traces.jsonl",
+          "rows": 42,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/ood_test/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/train/traces.jsonl",
+          "rows": 108,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-366_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_train_r3/traces.jsonl",
+          "rows": 108,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_smoke_dev_pair/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": false
+        }
+      ],
+      "aggregate_comparisons": {
+        "totals": true,
+        "task_ids_seen": true,
+        "termination_on_recorded_histories": true,
+        "recorded_action_counts": true,
+        "observation_marker_counts": true,
+        "observation_marker_examples": true,
+        "historical_field_presence": true,
+        "historical_detail_comparison_totals": true
+      },
+      "loader_error_text_change_count": 53,
+      "historical_input_changes": []
+    },
+    {
+      "baseline_phase": "S2",
+      "current_phase": "S3",
+      "checks": {
+        "historical_input_inventory_equal": true,
+        "trace_members_equal": true,
+        "all_trace_content_comparisons_equal": true,
+        "all_loader_statuses_equal": true,
+        "all_aggregate_comparisons_equal": true,
+        "both_audits_without_errors": true,
+        "inputs_unchanged_during_both_checks": true,
+        "sources_stable_during_both_checks": true
+      },
+      "comparison_passed": true,
+      "trace_comparisons": [
+        {
+          "path": "artifacts/base_pilot_v1/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/base_pilot_v2/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/base_smoke/traces.jsonl",
+          "rows": 2,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/base_smoke_v2/traces.jsonl",
+          "rows": 2,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo60_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_dapo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_drgrpo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_gspo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_smoke_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_v5_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_v5_rl_train_r3_s45/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_grpo_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_t5_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v1_terminal_probe_r8_s47/traces.jsonl",
+          "rows": 32,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v2_terminal_probe_r8_s47/traces.jsonl",
+          "rows": 32,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v381_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v381_iid_r3_s45/traces.jsonl",
+          "rows": 54,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v381_ood_r3_s45/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v4_rl_train_r3/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v5_dev_r3_s45/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v5_rl_train_r3_s45/traces.jsonl",
+          "rows": 21,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/eval_sft_v6_rl_train_r3_s45/traces.jsonl",
+          "rows": 99,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_dev_pair/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_pilot_v3a/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_pilot_v3b/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/dev/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/iid_test/traces.jsonl",
+          "rows": 42,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/ood_test/traces.jsonl",
+          "rows": 12,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_base_v2_62/train/traces.jsonl",
+          "rows": 108,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_checkpoint-366_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_dev_r1/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_dev_r3/traces.jsonl",
+          "rows": 24,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_e1_final_train_r3/traces.jsonl",
+          "rows": 108,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        },
+        {
+          "path": "artifacts/qwen25_15b_sft_smoke_dev_pair/traces.jsonl",
+          "rows": 8,
+          "checks_equal": {
+            "rows": true,
+            "read_only_scored": true,
+            "current_reward_min": true,
+            "current_reward_max": true,
+            "current_reward_components_sha256": true,
+            "report_read_projection_count": true,
+            "historical_fields_present": true,
+            "historical_missing_fields": true,
+            "historical_detail_comparison": true,
+            "comparison_examples": true
+          },
+          "different_fields": [],
+          "loader_status_equal": true,
+          "loader_error_text_equal": true
+        }
+      ],
+      "aggregate_comparisons": {
+        "totals": true,
+        "task_ids_seen": true,
+        "termination_on_recorded_histories": true,
+        "recorded_action_counts": true,
+        "observation_marker_counts": true,
+        "observation_marker_examples": true,
+        "historical_field_presence": true,
+        "historical_detail_comparison_totals": true
+      },
+      "loader_error_text_change_count": 0,
+      "historical_input_changes": []
+    }
+  ],
+  "s2_to_s3_source_changes": [
+    {
+      "path": "AgenticArxiv/agents/agent_engine.py",
+      "s2_sha256": "eb41609305b0718a13ac4dac1333ade9ce0ad57458a1519615b124a85608ea1b",
+      "s3_sha256": "36b9e95f9e126565ec7f49516339adf054313c4dc14add5d92dd50f0a98b6e19",
+      "s3_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/benchmark/metrics.py",
+      "s2_sha256": "4d1b56c955ac6f7544342b45e9f090a35f9e8f9386f41d4c2ad0bfca61097f04",
+      "s3_sha256": "921a70fdc7e255bb94a904578561058effd790d5aafea1e5f42290c9e5fcfb92",
+      "s3_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/benchmark/report.py",
+      "s2_sha256": "c902e6373abb782679f4755eb26038d01084ba0787b97d594d6e8188769755c5",
+      "s3_sha256": "460e1972f287fb9663be43aa4846febbe59d4e6c2fa6a013fe0ff5cc6ea316b4",
+      "s3_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/rl/grpo_reward.py",
+      "s2_sha256": "0f688df08219c7e0a702bc0cd7e1052993f8f7974d806824f45c5d0c458af8e7",
+      "s3_sha256": "0ac4a4e080927019770bf191b869a03a53044a230b0c1aaca0974fab3a47aeb8",
+      "s3_status": "present"
+    },
+    {
+      "path": "AgenticArxiv/rl/trajectory.py",
+      "s2_sha256": "2524c4dda5020e8080fb10dc179f80cdc65faa39da2f6f49583f1327aed149db",
+      "s3_sha256": "3fd94c381a63c869a786d6930c62b9ef4851868a603a55981902c2caf8e9ee03",
+      "s3_status": "present"
+    },
+    {
+      "path": "scripts/audit_historical_records.py",
+      "s2_sha256": "a17c311f9932062197cf4c0350f7157fd8a1ac3d39f691079dc058aec80e3b46",
+      "s3_sha256": "20081253250fda0940a06d8d78d5546a6a4441e59124447f3b999f6ac58c9d07",
+      "s3_status": "present"
+    },
+    {
+      "path": "scripts/generate_sft_data.py",
+      "s2_sha256": "71a8b01c4f25bf4940054af3c6ae47cc9400ab510c93824e00e68d2665640f67",
+      "s3_sha256": "17529886f75d64e366d4cb27098038eac8ff2cc998a4abb0c740b0e88500ad0d",
+      "s3_status": "present"
+    }
+  ],
+  "reward_weight_check": "全部53份原history的评分分解（含weights）规范化哈希与S0/S1/S2均相同；均使用curriculum_steps=0，不反推历史训练配方。",
+  "usage_reading_semantics": {
+    "evidence_type": "S3 当前实际读取统计；前阶段未保存该用量聚合投影，旧默认0与新None的区别另以源码审查说明，不伪称动态逐值重测旧实现。",
+    "original_history_rows_with_token_usage": 0,
+    "current_unknown_rows": {
+      "prompt_tokens": 1865,
+      "completion_tokens": 1865,
+      "total_tokens": 1865
+    },
+    "new_report_fields": [
+      "current_history_usage_projection",
+      "current_history_usage_missing_rows",
+      "historical_explicit_avg_tokens",
+      "usage_projection_note"
+    ],
+    "historical_explicit_values_preserved": true,
+    "trace_checks": [
+      {
+        "path": "artifacts/base_pilot_v1/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4883.4
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/base_pilot_v2/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5183.1
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/base_smoke/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 2,
+          "completion_tokens": 2,
+          "total_tokens": 2
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 2,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 2,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 2,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5841.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/base_smoke_v2/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 2,
+          "completion_tokens": 2,
+          "total_tokens": 2
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 2,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 2,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 2,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5586.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo60_v4_rl_train_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 21,
+          "completion_tokens": 21,
+          "total_tokens": 21
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3436.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_dapo_v381_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4346.4
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_dapo_v381_iid_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 54,
+          "completion_tokens": 54,
+          "total_tokens": 54
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5587.3
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_dapo_v381_ood_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 8102.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_dapo_v6_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 99,
+          "completion_tokens": 99,
+          "total_tokens": 99
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 6581.7
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_drgrpo_v381_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4347.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_drgrpo_v381_iid_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 54,
+          "completion_tokens": 54,
+          "total_tokens": 54
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5257.4
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_drgrpo_v381_ood_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 8516.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_drgrpo_v6_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 99,
+          "completion_tokens": 99,
+          "total_tokens": 99
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 6497.1
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_gspo_v381_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4347.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_gspo_v381_iid_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 54,
+          "completion_tokens": 54,
+          "total_tokens": 54
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5141.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_gspo_v381_ood_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 8110.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_gspo_v6_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 99,
+          "completion_tokens": 99,
+          "total_tokens": 99
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 6461.6
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_smoke_v4_rl_train_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 21,
+          "completion_tokens": 21,
+          "total_tokens": 21
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3436.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_v381_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4347.3
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_v381_iid_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 54,
+          "completion_tokens": 54,
+          "total_tokens": 54
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5141.4
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_v381_ood_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 8314.1
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_v5_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3353.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_v5_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 21,
+          "completion_tokens": 21,
+          "total_tokens": 21
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3487.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_grpo_v6_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 99,
+          "completion_tokens": 99,
+          "total_tokens": 99
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 6461.7
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_t5_v381_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3757.6
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_t5_v381_iid_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 54,
+          "completion_tokens": 54,
+          "total_tokens": 54
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5124.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_t5_v381_ood_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 8225.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_t5_v6_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 99,
+          "completion_tokens": 99,
+          "total_tokens": 99
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 6179.1
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v1_terminal_probe_r8_s47/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 32,
+          "completion_tokens": 32,
+          "total_tokens": 32
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 32,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 32,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 32,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 1405.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v2_terminal_probe_r8_s47/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 32,
+          "completion_tokens": 32,
+          "total_tokens": 32
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 32,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 32,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 32,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 1414.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v381_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 2698.4
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v381_iid_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 54,
+          "completion_tokens": 54,
+          "total_tokens": 54
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 54,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3949.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v381_ood_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 6023.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v4_rl_train_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 21,
+          "completion_tokens": 21,
+          "total_tokens": 21
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3432.7
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v5_dev_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3349.0
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v5_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 21,
+          "completion_tokens": 21,
+          "total_tokens": 21
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 21,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3918.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/eval_sft_v6_rl_train_r3_s45/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 99,
+          "completion_tokens": 99,
+          "total_tokens": 99
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 99,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4511.3
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_dev_pair/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 8,
+          "completion_tokens": 8,
+          "total_tokens": 8
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4853.6
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_pilot_v3a/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5089.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_pilot_v3b/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5089.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_v2_62/dev/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5090.6
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_v2_62/iid_test/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 42,
+          "completion_tokens": 42,
+          "total_tokens": 42
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 42,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 42,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 42,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5458.6
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_v2_62/ood_test/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 12,
+          "completion_tokens": 12,
+          "total_tokens": 12
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 12,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 7628.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_base_v2_62/train/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 108,
+          "completion_tokens": 108,
+          "total_tokens": 108
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 108,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 108,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 108,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 5700.1
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r1/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 8,
+          "completion_tokens": 8,
+          "total_tokens": 8
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3116.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_checkpoint-300_dev_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3117.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r1/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 8,
+          "completion_tokens": 8,
+          "total_tokens": 8
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3116.9
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_checkpoint-350_dev_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3116.7
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_checkpoint-366_dev_r1/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 8,
+          "completion_tokens": 8,
+          "total_tokens": 8
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3123.1
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_final_dev_r1/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 8,
+          "completion_tokens": 8,
+          "total_tokens": 8
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3120.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_final_dev_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 24,
+          "completion_tokens": 24,
+          "total_tokens": 24
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 24,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3120.2
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_e1_final_train_r3/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 108,
+          "completion_tokens": 108,
+          "total_tokens": 108
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 108,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 108,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 108,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 3695.5
+        },
+        "historical_explicit_values_read_exactly": true
+      },
+      {
+        "path": "artifacts/qwen25_15b_sft_smoke_dev_pair/traces.jsonl",
+        "current_history_usage_missing_rows": {
+          "prompt_tokens": 8,
+          "completion_tokens": 8,
+          "total_tokens": 8
+        },
+        "current_history_usage_projection": {
+          "regex": {
+            "avg_tokens": null,
+            "token_usage_coverage": {
+              "prompt_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "completion_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              },
+              "total_tokens": {
+                "known_runs": 0,
+                "unknown_runs": 8,
+                "coverage": 0.0,
+                "known_sum": 0
+              }
+            }
+          }
+        },
+        "historical_explicit_avg_tokens": {
+          "regex": 4827.8
+        },
+        "historical_explicit_values_read_exactly": true
+      }
+    ],
+    "note": "1865条原history全部缺token_usage，当前prompt/completion/total均None，各文件history投影avg_tokens=None、known_runs=0、coverage=0。known_sum=0是空已知集汇总，不表示真实用量为0。原summary已有明确avg_tokens数字直接读取且保持原样，不用于补造缺字段。"
+  },
+  "loader_error_explanation": "S3 相比S2训练loader错误文本与accepted=False状态均未变；对S0/S1的53处文本变化沿用S2解释：unknown agent_type被保留extra_fields后，仍缺训练Trajectory必需task/final_reward/metrics/timestamp。不补造缺字段。",
+  "limits": [
+    "仅299个原文件、53份原traces和77个历史任务ID的只读契约核对，不是全部86任务执行或新协议模型能力证明。",
+    "未运行工具、模型、环境、网络、旧behavior fixture/test、数据生成或训练；无新轨迹/快照/响应/token/fixture输入。",
+    "旧S0/S1/S2报告及原数据文件保持原样；协议、状态和用量缺失字段不补写。",
+    "S3共同消息前缀、真实tokenizer、mask、EOS与模型集成能力应引用各自源码/已有测试证据，不用本报告宣称新运行动态等价。",
+    "既有78条arg、488条ref及55条false_finish历史指标差异不变；1865条ref_applicable=False中性值不作为正确指代或研究性能结果。"
+  ]
+}

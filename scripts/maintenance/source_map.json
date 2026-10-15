@@ -1,0 +1,1441 @@
+{
+  "schema_version": 1,
+  "change": "reorganize-mainline-architecture",
+  "说明": "只记录实施起点源码身份及当前位置；历史manifest、报告、旧来源哈希不回填。多路径表示拆分，不伪造旧文件继续存在。",
+  "sources": {
+    "AgenticArxiv/config.py": {
+      "original_sha256": "d43748617a8c7e7e0e9bffe88b6424b25b1777a4f33aff9b184d2e4501ed2ba3",
+      "current_paths": [
+        "src/agentic_arxiv/config.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/config.py": "80ce5e9b93917e07903d7da627b593eb3927d327dc9550f12d6f774fa039940e"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/main.py": {
+      "original_sha256": "4a3b5951acff19ca3f2429336427f56b584bf8ad0936dae9555cc97c98b28251",
+      "current_paths": [
+        "src/agentic_arxiv/cli/run.py",
+        "src/agentic_arxiv/cli/__init__.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/cli/run.py": "705dde372220694d1ea66929f953678cfbb737b9f15d7f68c1b619e42854230c",
+        "src/agentic_arxiv/cli/__init__.py": "5eac9246c22146dd57a14c88dff29cbd5d3356b6129f00ec7d94d2320283e4f8"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/readme.md": {
+      "original_sha256": "6cc7951f9a69477212788e8e4c4dff6b28f1c97bb2224944c276ce313fe2722e",
+      "current_paths": [
+        "docs/python_mainline.md"
+      ],
+      "current_sha256": {
+        "docs/python_mainline.md": "010ef54706d3b76f0c07a8222d0f1b0924d0b08fd2e4c77191304db8fcb0c66f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/requirements-extra.txt": {
+      "original_sha256": "9636048a83e221feb430fa97eb232fc5b12694d617304b1c143d31aa6e44b942",
+      "current_paths": [
+        "pyproject.toml"
+      ],
+      "current_sha256": {
+        "pyproject.toml": "0ab1f86bad9638464c9a0cf329fba2d04039386e338eef69f5ac34e6e9d01ddc"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/requirements.txt": {
+      "original_sha256": "f6f73bf5687da3a0857f54cd8418cd6dd744d26eb2c4168241669e991f1e64e9",
+      "current_paths": [
+        "pyproject.toml"
+      ],
+      "current_sha256": {
+        "pyproject.toml": "0ab1f86bad9638464c9a0cf329fba2d04039386e338eef69f5ac34e6e9d01ddc"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/agents/__init__.py": {
+      "original_sha256": "2aec8ad8f4e13cde79b7faa0443adfd774c567af2446343d4151da734395b354",
+      "current_paths": [],
+      "current_sha256": {},
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/agents/agent_engine.py": {
+      "original_sha256": "36b9e95f9e126565ec7f49516339adf054313c4dc14add5d92dd50f0a98b6e19",
+      "current_paths": [
+        "src/agentic_arxiv/runtime/agent_engine.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/runtime/agent_engine.py": "3431e262bdf63c5e7d88ecda1003f14bb059517dcb3aa15dd07c3778a17638b6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/agents/prompt_templates.py": {
+      "original_sha256": "eb3312c9d95d97aab96e3a3f3ddf2db1d482b6f93d06db68377dab0a9371feb0",
+      "current_paths": [
+        "src/agentic_arxiv/runtime/prompt_templates.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/runtime/prompt_templates.py": "fbd238d5d9a223265693adf39b0e97daf41b09e9b84df9f7beb1f4a4865aa341"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/agents/react_contract.py": {
+      "original_sha256": "5f3ba1b2b528e2d60a781619f29d9f11a6cf592b47a8776f73f3fedf36ac48d8",
+      "current_paths": [
+        "src/agentic_arxiv/contracts.py",
+        "src/agentic_arxiv/runtime/react_contract.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/contracts.py": "4ed3f26f065f44a585480ce0d9aaa2d3279dcb0152d0b17f72421c8a0f9dc89d",
+        "src/agentic_arxiv/runtime/react_contract.py": "3bf4ba77150600136f916c9e199a4c0397e8677e5b6c8c58dcd6485115cd8687"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/__init__.py": {
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/__init__.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/__init__.py": "cfc1554616cddea524b961a8292d5422ac6325de1a796b9ef558fc7b31a464df"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/badcases.py": {
+      "original_sha256": "f5d2580fd65493d0572d1c1c06b480571d4bfab9233651895982d52db267171a",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/badcases.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/badcases.py": "4419176f9ae6d2175c8dd66b6c7fe9be5b80f7d669682ac772baf5727cc55a6a"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/baselines.py": {
+      "original_sha256": "9cf687b92a8c38ae9feef5e75b37a5b77fd3fc888bb95b8178dadfdc2020c98f",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/baselines.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/baselines.py": "eb0efc49bddb4fb90ce2552a079e5bf17f9c192b1a54e7d810d155b1b9ac5c17"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/metrics.py": {
+      "original_sha256": "921a70fdc7e255bb94a904578561058effd790d5aafea1e5f42290c9e5fcfb92",
+      "current_paths": [
+        "src/agentic_arxiv/scoring/metrics.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/scoring/metrics.py": "f627bd21eeba481f78e98ff48624cb1b714b7bce9a62de407c1c2df954435526"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/readme.md": {
+      "original_sha256": "df864cdd911409a291063281bd2d56ca57a14715449ffa196823184df132fe24",
+      "current_paths": [
+        "docs/evaluation.md"
+      ],
+      "current_sha256": {
+        "docs/evaluation.md": "96b77873857ad5e39f103204e093b6f8905236d6664f2b5749d59a1f43d418d0"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/report.py": {
+      "original_sha256": "460e1972f287fb9663be43aa4846febbe59d4e6c2fa6a013fe0ff5cc6ea316b4",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/report.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/report.py": "89e876451224e990e0e7b9be3bafe8407ebd4ba2fefc13cd971c6ebac23fa02f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/rescore_traces.py": {
+      "original_sha256": "07373ebd24ea12e391228ad73ea803c448482ad59c30614fdc5f156a218399cd",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/rescore_traces.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/rescore_traces.py": "7db25b59b9078bc6d14c20e4fd774e5f4aadfbb9ec06e11ebd649a4e78ec6252"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/run_baselines.py": {
+      "original_sha256": "12dbb630f2330be8ac89cfcd2e4d696ebea1f37e0647b38ef7d348b2183a692f",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/run_baselines.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/run_baselines.py": "a38c6883c6352da7e01bd8828397ecae36b07f36d24a00d9cd0fe9364b572fbe"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/run_benchmark.py": {
+      "original_sha256": "b96db189b4541516d7569b5f2581619ab81471a0f37277b1c9674c50ac5ba23f",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/run_benchmark.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/run_benchmark.py": "986eae66268f24b88273d47f0f27d77437757ec2ecf6c3bc8e40faf7e60f9295"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/runner.py": {
+      "original_sha256": "4bde3936e2f9c7ad29844c2cd83e9f7848740939b15933eca00f87e29eca9730",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/runner.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/runner.py": "abdb95fa3e4e2677be56cc7ac9fe1a43013b432a3771e2a93b924b8362facd65"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/semantic_oracle.py": {
+      "original_sha256": "00416d165978459e07bcd99d2018982a58a7706077e51cadfdb0df47031d4357",
+      "current_paths": [
+        "src/agentic_arxiv/tasks/reference.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tasks/reference.py": "1c01e57ff317e77d93252cf8f3b390fccdcf75c3392e84cd73b67f5c5594b8b6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/splits.py": {
+      "original_sha256": "fa1f3bd8237a3cc525bf92007beb1bad141da89b8800ca9026c863bfad9ed026",
+      "current_paths": [
+        "src/agentic_arxiv/tasks/splits.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tasks/splits.py": "0b1ed46f090ffec19867b2d5ad6ba6f165818b15fc2b4398488e9961ef428dca"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/task_io.py": {
+      "original_sha256": "a9aec7ce96679f33b60776aee9c3673ec61c0d4606a83b12ad5000ca1fbdaf96",
+      "current_paths": [
+        "src/agentic_arxiv/tasks/task_io.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tasks/task_io.py": "1403b27f8fe0cefb4a41dc31b05ac0794c9bec4aed70a6be53fe5684a85e7b2c"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/task_spec.py": {
+      "original_sha256": "29b828a44e82afedd55ef5daea3cf5c3bc32e3755a6c257c5ac860dedf67ea7b",
+      "current_paths": [
+        "src/agentic_arxiv/tasks/task_spec.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tasks/task_spec.py": "0515219a88d4a59f7069e0a7c875453673935c4c8280c76734a61565fab7394c"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/tasks.py": {
+      "original_sha256": "cf28afd1eaeb44f28d3db54cd462f1adc647110e64860c522aac14ff053aab9e",
+      "current_paths": [
+        "src/agentic_arxiv/tasks/tasks.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tasks/tasks.py": "96e9359e4861306ad463ecdf07e9b53a8979755082df1c6cc943830e89d69ded"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/benchmark/tasks_expanded.py": {
+      "original_sha256": "6526b98e87399d06be9679292351ea52504320517d3378368429950f97eea2f4",
+      "current_paths": [
+        "src/agentic_arxiv/tasks/tasks_expanded.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tasks/tasks_expanded.py": "295970299662b96ca37780272c5d4249e0a997e035020103a3cf2be3ddfbbaf6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/models/__init__.py": {
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "current_paths": [
+        "src/agentic_arxiv/state/__init__.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/state/__init__.py": "c85f785b0b689cacf38f6c36e54e8b86d4376e31e69dd091d7b1fe7f58ba6c0f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/models/schemas.py": {
+      "original_sha256": "690aca9370211023bcfc2124662aaa661e4b9be299f07122f0f58b1c23335a6a",
+      "current_paths": [
+        "src/agentic_arxiv/state/schemas.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/state/schemas.py": "8cdc85f246d6391780780342863744223d7c28fd90c7759ac995797bb098c5b7"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/models/store.py": {
+      "original_sha256": "b3ebcb8e1fe6dcd61e1afd50fb4126cf9711cf89edcf7d28ce7cafdd8c08e22b",
+      "current_paths": [
+        "src/agentic_arxiv/state/store.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/state/store.py": "edcf99a1e9dcf55c178f7fbd23b6e40b2a2480b6120e678025b264086ce78b59"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/models/store_memory.py": {
+      "original_sha256": "93a26a02dbbdcd02810b4af617e6673c969f9c3a07710c6da774e2721a0511d5",
+      "current_paths": [
+        "src/agentic_arxiv/state/store_memory.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/state/store_memory.py": "37f0b296351c4a8229b6a868c88f523610e73fd9cddab0bb32d3e290f54b781e"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/__init__.py": {
+      "original_sha256": "131b04f245868746f5b43c58362cdfefcf2e9edb5504925d32eaf6d46b6eac33",
+      "current_paths": [
+        "src/agentic_arxiv/training/__init__.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/__init__.py": "072736c48bb877b645d0d75f765628357f38cfec7d644688af3d029eadbba11d"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/backfill_figure_analysis.py": {
+      "original_sha256": "3734c4cad647a2e74b8151a7a7c8fee8c2834880d31510158c771199eb8ef06d",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/backfill_figure_analysis.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/backfill_figure_analysis.py": "15f749f3fb5bfcc5d53c6aba035d44562a697b1c00260731ee965ef7fa1b021f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/build_snapshot.py": {
+      "original_sha256": "5ff16a4449024fdc330b637f80217745b97ed059b4ff4ba21bae0018fae7743a",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/build_snapshot.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/build_snapshot.py": "751ade521c61d637d0babce526fcc8a632d1cfcd21fe85d6c82673bf346a7337"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/canary.py": {
+      "original_sha256": "130261e4bef8779088866cfbeee37631ceb80851c038ac24f0102ed26835fe8a",
+      "current_paths": [
+        "src/agentic_arxiv/training/canary.py",
+        "src/agentic_arxiv/training/callbacks.py",
+        "src/agentic_arxiv/evaluation/episode.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/canary.py": "56cbefc2f262780b006882461f579892dbb6a55c8d22729bf87b889ebd715a34",
+        "src/agentic_arxiv/training/callbacks.py": "5e6c551cb00154877d415b5390f46752b0c861875e369be7b324215a930d8a90",
+        "src/agentic_arxiv/evaluation/episode.py": "0c5817ef097dac5753436bb571579ee3f3939daa4be58277da20637f108b9a71"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/env.py": {
+      "original_sha256": "6652d6f910b1db6e8b17e8918d87866734d92b61e27b811e662d861fe0e2837f",
+      "current_paths": [
+        "src/agentic_arxiv/runtime/env.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/runtime/env.py": "8f87121d7b8a9d9d50d850872ffa817a2fd4da92046c8e7b9dcaf582a7598419"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/grpo_reward.py": {
+      "original_sha256": "0ac4a4e080927019770bf191b869a03a53044a230b0c1aaca0974fab3a47aeb8",
+      "current_paths": [
+        "src/agentic_arxiv/training/grpo_reward.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/grpo_reward.py": "a08e76b546a8bd5ac94c221cc6439955fb204f99dadf641330efe0e7cb2241e3"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/mainline_config.py": {
+      "original_sha256": "6f139bddbf479bded26a8f3df45836184dbdd5df9d0171fe3f91fca27cb70bb7",
+      "current_paths": [
+        "src/agentic_arxiv/training/mainline_config.py",
+        "src/agentic_arxiv/config.py",
+        "src/agentic_arxiv/cli/training_arguments.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/mainline_config.py": "56053684e35888563fa8b668ff38a1f9c41b5ef6bd147b3fa093c9e2e1675788",
+        "src/agentic_arxiv/config.py": "80ce5e9b93917e07903d7da627b593eb3927d327dc9550f12d6f774fa039940e",
+        "src/agentic_arxiv/cli/training_arguments.py": "5fe835841e47bc8fc54cf37f0a5e23f3e95820e2ecd197d243088b74a1d6be1d"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/multiturn_env.py": {
+      "original_sha256": "1838723be506b8ec3c3052f7b6845198b825c5dbbc75f244a15f296451b73b35",
+      "current_paths": [
+        "src/agentic_arxiv/runtime/multiturn_env.py",
+        "src/agentic_arxiv/tasks/initialization.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/runtime/multiturn_env.py": "35a495237fd3b6904813f492f597433c98e4552382f80801230696c9ac0b4cd8",
+        "src/agentic_arxiv/tasks/initialization.py": "b2e0a58c35a99ec33461da8b48176512d2650d6fdabffdf69a8a594643bcba44"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/observability.py": {
+      "original_sha256": "50f140ff0b5028fa56e17ef0d1c3edb1a388579a43b04fd824190f9723f24682",
+      "current_paths": [
+        "src/agentic_arxiv/training/observability.py",
+        "src/agentic_arxiv/scoring/health.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/observability.py": "9b2287eed315fe1b923f52c110246e5a22771676c5a8798db779580a50f9fe8e",
+        "src/agentic_arxiv/scoring/health.py": "6671cab98f416fdfa612d6a6ed6bcef7c0433037c0f6b334c636e8919fe4e724"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/precision.py": {
+      "original_sha256": "a09c7b8f05c87dfde7dbe9e97629cf8291ad1d9e2deccf2d937e06edf34b21fe",
+      "current_paths": [
+        "src/agentic_arxiv/training/precision.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/precision.py": "a09c7b8f05c87dfde7dbe9e97629cf8291ad1d9e2deccf2d937e06edf34b21fe"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/reward.py": {
+      "original_sha256": "60d3ea54ad03830a62049396324cd9590e718c4daf83a8e7d31c2bc9bd0de690",
+      "current_paths": [
+        "src/agentic_arxiv/scoring/reward.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/scoring/reward.py": "db60a2a6682735de7e7f146bbc37554b334225db30122738b7b3ce33c5819249"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/rollout.py": {
+      "original_sha256": "0856d04c5c80c8570d9cfdd3e88041f141f94595e560034a4e513ae21188499e",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/rollout.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/rollout.py": "9d16a93ecc4a8c715abb5246f3cd4c4482e6c0325ec39c87df2fc431f468224b"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/rollout_audit.py": {
+      "original_sha256": "6711dba131a75279252dc85b90e5f91de5c734ddb3eb399ffdc68c2c5272d138",
+      "current_paths": [
+        "src/agentic_arxiv/training/rollout_audit.py",
+        "src/agentic_arxiv/scoring/health.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/rollout_audit.py": "8b27d7d75b11ab01d9697706d3e2f38a7954bad1b4687935c0dc15fa884ac3f7",
+        "src/agentic_arxiv/scoring/health.py": "6671cab98f416fdfa612d6a6ed6bcef7c0433037c0f6b334c636e8919fe4e724"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/run_manifest.py": {
+      "original_sha256": "9181e8ac1ee93139ccd1d96199f2a2e0e62aff4c830cc39f235b2f809d839f89",
+      "current_paths": [
+        "src/agentic_arxiv/provenance.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/provenance.py": "1ee12f05b025c5893d4481b5297eb1e7816f1ec20e218487aaabad514098a606"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/sandbox.py": {
+      "original_sha256": "86e503e1df75a76296f879236661e43e0d9884160b543dab490856e9a3983910",
+      "current_paths": [
+        "src/agentic_arxiv/runtime/sandbox.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/runtime/sandbox.py": "86e503e1df75a76296f879236661e43e0d9884160b543dab490856e9a3983910"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/stage_verifier.py": {
+      "original_sha256": "1a59f9e65c36c11e8b5f119490fe2504a6216df04c5dbb36c7d054292ed95055",
+      "current_paths": [
+        "src/agentic_arxiv/training/stage_verifier.py",
+        "src/agentic_arxiv/evaluation/episode.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/stage_verifier.py": "5667d0b04ef4f18ea34e4677c140e5d459a09f891beb176928cf1f6089c8aea1",
+        "src/agentic_arxiv/evaluation/episode.py": "0c5817ef097dac5753436bb571579ee3f3939daa4be58277da20637f108b9a71"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/train_grpo.py": {
+      "original_sha256": "d318ff4f67b9b2499c1da6d480f7901f38ea553eebb63974df87e31041852ee8",
+      "current_paths": [
+        "src/agentic_arxiv/training/grpo.py",
+        "src/agentic_arxiv/training/model_setup.py",
+        "src/agentic_arxiv/training/callbacks.py",
+        "src/agentic_arxiv/cli/training_arguments.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/grpo.py": "bc0d95dc1d4f98feea48493321673cc1d2e305c88609b1d26dc6021bfb603278",
+        "src/agentic_arxiv/training/model_setup.py": "552af421e4381ed40a80febbc05e0cd71d5584b40556db546353f2ea195df524",
+        "src/agentic_arxiv/training/callbacks.py": "5e6c551cb00154877d415b5390f46752b0c861875e369be7b324215a930d8a90",
+        "src/agentic_arxiv/cli/training_arguments.py": "5fe835841e47bc8fc54cf37f0a5e23f3e95820e2ecd197d243088b74a1d6be1d"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/train_sft.py": {
+      "original_sha256": "bcc686b5ded5a10dab6b897135cca6b6e46b343cd1192aad1d601ad7c7dc0b43",
+      "current_paths": [
+        "src/agentic_arxiv/training/sft.py",
+        "src/agentic_arxiv/training/model_setup.py",
+        "src/agentic_arxiv/cli/training_arguments.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/sft.py": "ee5ad42f303e721a6235fd0c947c4ab49fd7418cc2d67189cd5574ae6f27f739",
+        "src/agentic_arxiv/training/model_setup.py": "552af421e4381ed40a80febbc05e0cd71d5584b40556db546353f2ea195df524",
+        "src/agentic_arxiv/cli/training_arguments.py": "5fe835841e47bc8fc54cf37f0a5e23f3e95820e2ecd197d243088b74a1d6be1d"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/trajectory.py": {
+      "original_sha256": "3fd94c381a63c869a786d6930c62b9ef4851868a603a55981902c2caf8e9ee03",
+      "current_paths": [
+        "src/agentic_arxiv/contracts.py",
+        "src/agentic_arxiv/provenance.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/contracts.py": "4ed3f26f065f44a585480ce0d9aaa2d3279dcb0152d0b17f72421c8a0f9dc89d",
+        "src/agentic_arxiv/provenance.py": "1ee12f05b025c5893d4481b5297eb1e7816f1ec20e218487aaabad514098a606"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/rl/trl_compat.py": {
+      "original_sha256": "ae5e0dd7d27251f3087e7972d47f7edc4d0e57e6975858355239d7ca1b8a364a",
+      "current_paths": [
+        "src/agentic_arxiv/training/trl_compat.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/training/trl_compat.py": "03cd0fcae7e889141e89f9168d56b9cc72349e2e740cc8651da76eeae5d10be0"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/__init__.py": {
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "current_paths": [
+        "tests/__init__.py"
+      ],
+      "current_sha256": {
+        "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/conftest.py": {
+      "original_sha256": "7cd1b9f5a088d8751215f7aaa454e07b3a45d899c9c36ed85884d9ad34fd58bb",
+      "current_paths": [
+        "tests/conftest.py"
+      ],
+      "current_sha256": {
+        "tests/conftest.py": "151fdd4ece4ec4480a5a1d401df6c449773ca19ebdf92d7b01664815c844d3a4"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/fixtures_expanded_v1.json": {
+      "original_sha256": "bc3a8d1699a991d7d44865d58761753fe5e7ad754a2ecf282e695b3c4d55d305",
+      "current_paths": [
+        "tests/fixtures_expanded_v1.json"
+      ],
+      "current_sha256": {
+        "tests/fixtures_expanded_v1.json": "bc3a8d1699a991d7d44865d58761753fe5e7ad754a2ecf282e695b3c4d55d305"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_agent.py": {
+      "original_sha256": "892a06d23d5029f1a0fbd590b97193dcf5f193b7891a0918d9292e86e62175b9",
+      "current_paths": [
+        "tests/test_agent.py"
+      ],
+      "current_sha256": {
+        "tests/test_agent.py": "f623c65e33eb0b203e8bdeb85104caff392674cae1043131ba1380f4a53231f3"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_agent_session_leak.py": {
+      "original_sha256": "5a475f46fec4ecf450b770e2d239bef118be2343560449d789af81142918e4c5",
+      "current_paths": [
+        "tests/test_agent_session_leak.py"
+      ],
+      "current_sha256": {
+        "tests/test_agent_session_leak.py": "267d6c9902380c981d0a2bcf2db98f500e853ea19a369c8fa448a2fe0f7d4a4f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_analyze_curriculum.py": {
+      "original_sha256": "e853932816f6f89bd232c4e32acf7e4395054d784ef0780ec0b0c3a6f4cc7701",
+      "current_paths": [
+        "tests/test_analyze_curriculum.py"
+      ],
+      "current_sha256": {
+        "tests/test_analyze_curriculum.py": "ef37994795db086974d0a937510cfa451b63969eeb493921620064701a304aa3"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_api_rollout_model.py": {
+      "original_sha256": "39b49c5e4efd1eb8ce046404629604497b5e62d84438f7f71a43ffe7ef621494",
+      "current_paths": [
+        "tests/test_api_rollout_model.py"
+      ],
+      "current_sha256": {
+        "tests/test_api_rollout_model.py": "365da63f7aa440e11a2a679aa61fdab640b0af484dbc50794a90f048e2051043"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_augment_sft_data.py": {
+      "original_sha256": "854886f75b9c13ce9d273ce87804c441af87daf041ea619c29228dc66b7cc4a4",
+      "current_paths": [
+        "tests/test_augment_sft_data.py"
+      ],
+      "current_sha256": {
+        "tests/test_augment_sft_data.py": "4d348913a4e68434a1425fc1ce35621e9f57372b8c2f29e6a5064240f3d749d5"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_badcases.py": {
+      "original_sha256": "6d0b8983e623c634c514ba5dfacea8930e6e5be6f90d9bfe2e777ba541a391e3",
+      "current_paths": [
+        "tests/test_badcases.py"
+      ],
+      "current_sha256": {
+        "tests/test_badcases.py": "fd64aa79169b3b2df0da3c1537916e308bcc204ee67aa43349c72168a68fdc46"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_baselines.py": {
+      "original_sha256": "2bb7c4d6872bc83fdb3c7d7f8d9d036edf1c46411ba5d78f4cd8a2837425ebea",
+      "current_paths": [
+        "tests/test_baselines.py"
+      ],
+      "current_sha256": {
+        "tests/test_baselines.py": "8f809636fb28a4b981c25f12f6471d0e2f8522cd034651a13e06df3d7d36101a"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_benchmark_offline.py": {
+      "original_sha256": "8d2d30acab5da72149619a390f68e37940a1e41046d017b6d0919c8f8af45639",
+      "current_paths": [
+        "tests/test_benchmark_offline.py"
+      ],
+      "current_sha256": {
+        "tests/test_benchmark_offline.py": "e01bc8b1ac9cace9c89dd099b0cfe7f502a6c61df26c992560cab5a0ac229e95"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_build_snapshot.py": {
+      "original_sha256": "4c5ef8ba259a7e465b74c48bd43f55d0f8c4315f4f75a4661fab199b12d9f148",
+      "current_paths": [
+        "tests/test_build_snapshot.py"
+      ],
+      "current_sha256": {
+        "tests/test_build_snapshot.py": "841208be89387a87d80d3dd38cbf84ced973cf325fd8f4f39da0e346d24f2720"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_canary.py": {
+      "original_sha256": "edacd840df637a9ef271c87824ff7609bb57574853c4596ca928009af3b21c70",
+      "current_paths": [
+        "tests/test_canary.py"
+      ],
+      "current_sha256": {
+        "tests/test_canary.py": "e25f38051dbe11c46884e5e49cfbc2797c645df1aac4c9c6443548ccc15d950f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_cli_entrypoints.py": {
+      "original_sha256": "4450d027dee2699d0ac71cd725a8e6172336ecaf1bc3d3569b15f487497c06fb",
+      "current_paths": [
+        "tests/test_cli_entrypoints.py"
+      ],
+      "current_sha256": {
+        "tests/test_cli_entrypoints.py": "79e17cb55365b1d4d8e23c090885e5f18d996a723479c0a626c6ebdd2c2acbda"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_constraint_tasks.py": {
+      "original_sha256": "d4d535bcf5b200b6ea07a6a9cee19a4e00e0340ae3ea7cee638abbce291c3571",
+      "current_paths": [
+        "tests/test_constraint_tasks.py"
+      ],
+      "current_sha256": {
+        "tests/test_constraint_tasks.py": "11408fed9bbf72bebfb11b9579a6e0ff605e00b3bea46903be96d70ed762d8d6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_cost_metrics.py": {
+      "original_sha256": "27ff6fe406d7c59b99932924e95da2ed96908786d135d5c25494c0d860aea71b",
+      "current_paths": [
+        "tests/test_cost_metrics.py"
+      ],
+      "current_sha256": {
+        "tests/test_cost_metrics.py": "c4e85bf0031f80b842ce3bb0a4ddf597274b358d503a1d44b6011e18a9915fc7"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_false_finish.py": {
+      "original_sha256": "48ab99440d5e6abb86073b12b5a049861fb3449ec4fbe4cdc7ed22008d818008",
+      "current_paths": [
+        "tests/test_false_finish.py"
+      ],
+      "current_sha256": {
+        "tests/test_false_finish.py": "40b37105442681aa9483fc9949356643624d16cf6e3e2323493aa89362d5ed7d"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_figure_analysis_tool.py": {
+      "original_sha256": "d68a330a09da153401ebb1acd17b7c83f62a76ed2ca149ecf9a6046c42b23a8d",
+      "current_paths": [
+        "tests/test_figure_analysis_tool.py"
+      ],
+      "current_sha256": {
+        "tests/test_figure_analysis_tool.py": "1720a1b369ca0c090cb66f1d4ef817788f3e71f9c1a13132bde66d664e3c20a3"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_generate_sft_data.py": {
+      "original_sha256": "40268a9c039d1942b1ba1feca6d417258a301c8a1c2be490cf17744c2a3ba2a7",
+      "current_paths": [
+        "tests/test_generate_sft_data.py"
+      ],
+      "current_sha256": {
+        "tests/test_generate_sft_data.py": "f347b6962c8376aee34a59a3873abb989e6fdc39625bf275e428367b194b19d1"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_grpo_reward.py": {
+      "original_sha256": "1efa969b63162815f1bd1ae890034b7f9c14e668b9f110da18ba026b50be3c56",
+      "current_paths": [
+        "tests/test_grpo_reward.py"
+      ],
+      "current_sha256": {
+        "tests/test_grpo_reward.py": "c84087f918e44bc9a7d7a6668d15ccba4f8d4f7fe5100fc76854df9fe05ef8bf"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_grpo_signal_split.py": {
+      "original_sha256": "3f8913256f492acedcfca12a23102d7ae9b5b388c5bc82bdbbf81354f72aa347",
+      "current_paths": [
+        "tests/test_grpo_signal_split.py"
+      ],
+      "current_sha256": {
+        "tests/test_grpo_signal_split.py": "b27124da9993f354e258fc4ee0f54956125f1122ffbead00e9d28aa3210f3116"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_keyword_search.py": {
+      "original_sha256": "14ae03ef5ccf6dcd8679467181d11ea3473b90ca2b28c4b339ffc95d133376a7",
+      "current_paths": [
+        "tests/test_keyword_search.py"
+      ],
+      "current_sha256": {
+        "tests/test_keyword_search.py": "c5f07443c90d64b093bd920e9daf770646ae42c2f8bb7c8340092ee3033327e1"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_llm_client_retry.py": {
+      "original_sha256": "87300ec93645a528fef21ffbad3c060f0afad527eb3505d786ea4cd2625a2897",
+      "current_paths": [
+        "tests/test_llm_client_retry.py"
+      ],
+      "current_sha256": {
+        "tests/test_llm_client_retry.py": "549baa660c0136aedfd5188f95da8031927edd9b29a842aa7d981cddc9cf5a32"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_llm_pdf_one_step.py": {
+      "original_sha256": "2c53f91c4b24180f72ccb1282fe225ce00b1418b73579467931b663c7cba2a4d",
+      "current_paths": [
+        "tests/test_llm_pdf_one_step.py"
+      ],
+      "current_sha256": {
+        "tests/test_llm_pdf_one_step.py": "bee8015ff105ee17fcb596148a185c0e8943e2541b1c4590bb4e1febcee3e5c4"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_llm_request_params.py": {
+      "original_sha256": "f510d0edbde183c184ef575deb9602821f2d151bca5134221e14e1fc19cd9e68",
+      "current_paths": [
+        "tests/test_llm_request_params.py"
+      ],
+      "current_sha256": {
+        "tests/test_llm_request_params.py": "71a0669282fd244de8de5cacc936eb884d4954961991b11736e90aa1b401936a"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_mainline_assets.py": {
+      "original_sha256": "7e034a8da89f2c2e19e753d7f5f5626b28a9ee3bb520781073a4c2e5062af15f",
+      "current_paths": [
+        "tests/test_mainline_assets.py"
+      ],
+      "current_sha256": {
+        "tests/test_mainline_assets.py": "f14b0588a8ac2aca064cb3df7b3c52a2fb4082a767e121e9ada7fd03efb0554d"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_mainline_behavior_baseline.py": {
+      "original_sha256": "a8b57aab695153b4303eae43035294a080d7b473881a62971860b94bb551362a",
+      "current_paths": [
+        "docs/archive/mainline-behavior-baseline/test_mainline_behavior_baseline.py.txt"
+      ],
+      "current_sha256": {
+        "docs/archive/mainline-behavior-baseline/test_mainline_behavior_baseline.py.txt": "a8b57aab695153b4303eae43035294a080d7b473881a62971860b94bb551362a"
+      },
+      "reason": "按原字节归档或迁移配置"
+    },
+    "AgenticArxiv/tests/test_mock_env.py": {
+      "original_sha256": "e77a2f248dae9dd3340257b7a89a9302583e48798f4b9855cfc7221a78e59cef",
+      "current_paths": [
+        "tests/test_mock_env.py"
+      ],
+      "current_sha256": {
+        "tests/test_mock_env.py": "26807cba81bc147b3329d377d256608342d969f9bf9cf1b1a977ede3d0c6bf1f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_modules.py": {
+      "original_sha256": "321144d9ea2cef0190c52266c490b9f2758966d17adce4d4aab696a2278ea519",
+      "current_paths": [
+        "tests/test_modules.py"
+      ],
+      "current_sha256": {
+        "tests/test_modules.py": "24dd12b63df41f6b9d60ddca42a9181e63ce5317b80149d56bb714c7ff887afc"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_multigranular_reward.py": {
+      "original_sha256": "7cb2c6e02eab78f0f4789a4e656b9d2f7a223eeeb2887107b698fcbdd73227c1",
+      "current_paths": [
+        "tests/test_multigranular_reward.py"
+      ],
+      "current_sha256": {
+        "tests/test_multigranular_reward.py": "91727de780b5cc55f4b89fe5f4603988b7af4108a87cb4b8e6f3baa2f76d96a9"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_multiturn_env.py": {
+      "original_sha256": "145294735358bd97261bc25b074fad738ef40a94607f55b49dbee4de707cbed1",
+      "current_paths": [
+        "tests/test_multiturn_env.py"
+      ],
+      "current_sha256": {
+        "tests/test_multiturn_env.py": "fde0a49f8b67b4d654e28a116f3f1a5e2b895430d019150fb4527973cc954d91"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_observability.py": {
+      "original_sha256": "8b97f06e217432d34b47a1e7f14cc61e56b35652e9711270dda5891060b9a7ac",
+      "current_paths": [
+        "tests/test_observability.py"
+      ],
+      "current_sha256": {
+        "tests/test_observability.py": "1652cb2e24ba43b21556b2f8133c610dd749a24e685815ecba29a3941422a601"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_paper_content_tool.py": {
+      "original_sha256": "fed495f99e9e4a62fd47bea40ec17197231cf7b87f5ba718fa20a1d2b2b6cd21",
+      "current_paths": [
+        "tests/test_paper_content_tool.py"
+      ],
+      "current_sha256": {
+        "tests/test_paper_content_tool.py": "65f235b9beb38e8ccb252270548f17245e9ab67521db0b41a22f1cac5c0e44a9"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_paper_figures_tool.py": {
+      "original_sha256": "f570b781e945a659d71e1e9e5a646487595279c6d3ca760146b0b0a1b355bd8b",
+      "current_paths": [
+        "tests/test_paper_figures_tool.py"
+      ],
+      "current_sha256": {
+        "tests/test_paper_figures_tool.py": "9be3f4de7b9af9ec3536c7b7f40e287aa476467138ee67f5956c5c582df9165c"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_paper_summary_tool.py": {
+      "original_sha256": "a8b9fc9702599621be2f72e6b6c8dcb2526b2f9bc3bb91be1e0770b9dcd3108c",
+      "current_paths": [
+        "tests/test_paper_summary_tool.py"
+      ],
+      "current_sha256": {
+        "tests/test_paper_summary_tool.py": "ddaa65b1447233446aa6e43a8c23cc8a3e750314c02b1adb5c147d205657c77b"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_parametric_sft_data.py": {
+      "original_sha256": "e663320fc29c826670f538678f52a49deaf02902ca47f3feb02d792ad22ac9c4",
+      "current_paths": [
+        "tests/test_parametric_sft_data.py"
+      ],
+      "current_sha256": {
+        "tests/test_parametric_sft_data.py": "6d5698c40158efac35ecee746947c6fdbb750daae0bf8eda4686fcde4d8f5c19"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_pdf_downloader.py": {
+      "original_sha256": "10c8faecdb84e84a2e1f3e36b7a30f8a6c39374ca0aa932feefb11462430e796",
+      "current_paths": [
+        "tests/test_pdf_downloader.py"
+      ],
+      "current_sha256": {
+        "tests/test_pdf_downloader.py": "54ece2556f5bf2e3ce6a91fe269296f23953cd52dd98d927d530a9899d67c66c"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_reference_resolution.py": {
+      "original_sha256": "ebcfdee376b24f0830316682774ada3c0540dcec9682b569a59454d754b8acb7",
+      "current_paths": [
+        "tests/test_reference_resolution.py"
+      ],
+      "current_sha256": {
+        "tests/test_reference_resolution.py": "2764a8a4f998c82873161526500db84999980de657bb0b4f3c96f349693ce383"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_reliability.py": {
+      "original_sha256": "1058e3c38d0937dd23b5d84c707818677dcd2f9b3dd134ac2d8b0b43c542714f",
+      "current_paths": [
+        "tests/test_reliability.py"
+      ],
+      "current_sha256": {
+        "tests/test_reliability.py": "8cd7b52363afd5088db98573168d9e143d93bb6d55a1dcbeb2e85e69cc9c1697"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_reward_discrimination.py": {
+      "original_sha256": "0ab1fb9c849210a200b3e561f3cb4463c78eab2ff80263316e9b4240544d0f93",
+      "current_paths": [
+        "tests/test_reward_discrimination.py"
+      ],
+      "current_sha256": {
+        "tests/test_reward_discrimination.py": "e23c8542ff4f3137e7551a315977761310ecab1013d85a9fc0cd0ab8d561f4a1"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_rollout.py": {
+      "original_sha256": "d15f9df201e773dfd510579f9633233e834b916f25dcf139cd7661a2b4fca52a",
+      "current_paths": [
+        "tests/test_rollout.py"
+      ],
+      "current_sha256": {
+        "tests/test_rollout.py": "d875e3b6fea45ec93e68aebda7a16032c85132876e5b02175bec85df27228da4"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_rollout_audit.py": {
+      "original_sha256": "e6219e684048b2dfaf8cc8bb658d78fb0fd42d1bb13636884b427e317f51edcf",
+      "current_paths": [
+        "tests/test_rollout_audit.py"
+      ],
+      "current_sha256": {
+        "tests/test_rollout_audit.py": "4bd8bbad279f263869ddcda0db4ea06ebab64097018f298017c16e5aa359be99"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_rollout_sandbox.py": {
+      "original_sha256": "29b91cacd11ab769d2791160c6bab04b20468293574cceecd2ec37b33cc1a94b",
+      "current_paths": [
+        "tests/test_rollout_sandbox.py"
+      ],
+      "current_sha256": {
+        "tests/test_rollout_sandbox.py": "d9b3fd4020a9fdff53f85623a5d94c58eef89dbff5aab24319b3756dba107998"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_sft_mix.py": {
+      "original_sha256": "3aff891894197be4ce28dbb95677ffc43f010d8e1371ff0d805e65a119477a24",
+      "current_paths": [
+        "tests/test_sft_mix.py"
+      ],
+      "current_sha256": {
+        "tests/test_sft_mix.py": "a0cdc4340954f53e9502031d5e7a79436e4b7c751cb2c20888685dabe26c91f7"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_splits.py": {
+      "original_sha256": "6b3c4a6d8c4afb97c676c21ac9f3b6714fa321502d690435718f6001e283a7f5",
+      "current_paths": [
+        "tests/test_splits.py"
+      ],
+      "current_sha256": {
+        "tests/test_splits.py": "38ba59f43b53da488329304b807fd58ab10cc87d281a2e1fcd7edda9e8077f63"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_t5_parametric_sft.py": {
+      "original_sha256": "b3018bb082bd3f89b63f6005981f4de83ea5653a904507ffee54cab12cd1f1a5",
+      "current_paths": [
+        "tests/test_t5_parametric_sft.py"
+      ],
+      "current_sha256": {
+        "tests/test_t5_parametric_sft.py": "1515ae42c54664053661e68741bac38217273dfc37c5979da7d004bf3c78cae9"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_t5_snapshot_backfill.py": {
+      "original_sha256": "2dba8d7944bb36b55cc0a07ddb87b7e352f4f101eec940b176aee9f80249fc8e",
+      "current_paths": [
+        "tests/test_t5_snapshot_backfill.py"
+      ],
+      "current_sha256": {
+        "tests/test_t5_snapshot_backfill.py": "3933e3228aaa6691a9da55e1c3cbdb914e5a35a60c4c1eff18e82289430ef7ea"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_task_spec.py": {
+      "original_sha256": "8a492e4b2d0c0591f221e22748078c13ebeb0ba2649616b6393b4455a1872110",
+      "current_paths": [
+        "tests/test_task_spec.py"
+      ],
+      "current_sha256": {
+        "tests/test_task_spec.py": "1e4ee921ec35058dd6cd215e16dd526a87d454d4af46ec81daaa05d77dc19990"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_terminal_action.py": {
+      "original_sha256": "9d12d77db9c05f17d3685e1f3f31f3404b5a2b1bac80446dd0b3f2111f85c9bb",
+      "current_paths": [
+        "tests/test_terminal_action.py"
+      ],
+      "current_sha256": {
+        "tests/test_terminal_action.py": "4ba902c0f7af3055a76f83fbb45a9b302a4a36ca54bc5b14dd005e2f09869028"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_tool_bootstrap.py": {
+      "original_sha256": "d251d76492c7a18c3bdeb0aed16306921cc636060f0b078e1b8e1a517a3149fc",
+      "current_paths": [
+        "tests/test_tool_bootstrap.py"
+      ],
+      "current_sha256": {
+        "tests/test_tool_bootstrap.py": "8df63da8735707f91f43a076c5346e62429f45009460073dc51c5a305935ee48"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_tool_registry.py": {
+      "original_sha256": "bfeb2ffb1dd8b0696e61bbf4e9c8ef498187f70ea6ce4329f3f748cf2891f178",
+      "current_paths": [
+        "tests/test_tool_registry.py"
+      ],
+      "current_sha256": {
+        "tests/test_tool_registry.py": "a9e43f7f544c65b748d5cf29df1cb2775904cfa4dc90888736dc3b0c096c6f1c"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_tool_sequence_strict.py": {
+      "original_sha256": "d7df692a87f1fe2a0dca09a94546399a06ee418b4dfda13fe31b99e085733458",
+      "current_paths": [
+        "tests/test_tool_sequence_strict.py"
+      ],
+      "current_sha256": {
+        "tests/test_tool_sequence_strict.py": "f80d32165dda976b4087c09057015ab97e180bbf61ae80dc11d2afae683a3152"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_training_guards.py": {
+      "original_sha256": "6fcb84bf6768d4c295bbb7ccf2a7740aca24be6b2f3c2b1d2927f137a8c6275f",
+      "current_paths": [
+        "tests/test_training_guards.py"
+      ],
+      "current_sha256": {
+        "tests/test_training_guards.py": "304804ae43a23b6224a2964a66fdbd9a7d9e6472ad1da16cf63e05f3b7f35421"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_trajectory.py": {
+      "original_sha256": "a6abc6fc53d649e251f37462d47d261e0f115db52b4134430f8f1152af9c12f2",
+      "current_paths": [
+        "tests/test_trajectory.py"
+      ],
+      "current_sha256": {
+        "tests/test_trajectory.py": "5dac131be99a89bb4565c8131de17d4f37fdcd7d4dfb205188fb11761f33da75"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/test_translated_content_tool.py": {
+      "original_sha256": "60f479fc75be357826b92251c27721a57fbccbe5a7c833d29459c6a78553bfca",
+      "current_paths": [
+        "tests/test_translated_content_tool.py"
+      ],
+      "current_sha256": {
+        "tests/test_translated_content_tool.py": "eba5903ba463949e887a0dbda0423289937207ab24b3930a6fcabd53bd7e16d4"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tests/fixtures/t4_snapshot_for_t5.json": {
+      "original_sha256": "5c6861877657d5e4e2c73e2d657e10254d770d73af3e017bbec9a477c89c8df3",
+      "current_paths": [
+        "tests/fixtures/t4_snapshot_for_t5.json"
+      ],
+      "current_sha256": {
+        "tests/fixtures/t4_snapshot_for_t5.json": "5c6861877657d5e4e2c73e2d657e10254d770d73af3e017bbec9a477c89c8df3"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/__init__.py": {
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "current_paths": [
+        "src/agentic_arxiv/tools/__init__.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/__init__.py": "36dd316953e617d2fd0e13d24cfc9d488438c19e5873d49ac7d7fe6a5701f2b6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/arxiv_tool.py": {
+      "original_sha256": "029938c51a7b225793600a79b9a24e334f20653a0388974057a4edf51cf7cf16",
+      "current_paths": [
+        "src/agentic_arxiv/tools/arxiv_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/arxiv_tool.py": "bd6cbcf512a56cb6ab15681618126ab076f46a473a2f9d85731eedc842b80fae"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/bootstrap.py": {
+      "original_sha256": "4936d8957c2385f3ebd92f73fa3a1149aafb4c3144484f3c4287b3f301906929",
+      "current_paths": [
+        "src/agentic_arxiv/tools/bootstrap.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/bootstrap.py": "0e1900478a1884713b69429c7125af9ed686ea07219a10b85c4f69336def973e"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/cache_status_tool.py": {
+      "original_sha256": "80fe771bc069226ac95696d3bb70b07673926f64957ff66d6ec071faf9a1f129",
+      "current_paths": [
+        "src/agentic_arxiv/tools/cache_status_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/cache_status_tool.py": "aab73a261f3bffa6f97c4f3d45b3ad6e3c98a078a75ece06625b5a5ee8837782"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/figure_analysis_tool.py": {
+      "original_sha256": "17b4a3955738a0ea67de5e13f61487f1f623354f057a6c5a347cf090cc659d64",
+      "current_paths": [
+        "src/agentic_arxiv/tools/figure_analysis_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/figure_analysis_tool.py": "6d6d7746d16527a46aa82c882950de7d4385b4f2fd1565ad4074b969164fb301"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/paper_content_tool.py": {
+      "original_sha256": "26bbfaecf7ff6532b094c91321bf80ee74b2919fa29a3367a4e0dcffb9f13cba",
+      "current_paths": [
+        "src/agentic_arxiv/tools/paper_content_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/paper_content_tool.py": "79399f8742c509d78420ec1810ad3663bcfed4adeb1654bdead51b9d723778d0"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/paper_figures_tool.py": {
+      "original_sha256": "5cef262df0a4d45874470b546e5722c563c23c51799bacaade38031204d19f88",
+      "current_paths": [
+        "src/agentic_arxiv/tools/paper_figures_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/paper_figures_tool.py": "d6eee7ca1b4ebe3f19491759ba93e9628fc435f8e4d2fa4684e7ae128ab68249"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/paper_summary_tool.py": {
+      "original_sha256": "e38fb2f692801006ff1bfff6b00f7e93f317aeed59bb62e758e65ee50f7d78da",
+      "current_paths": [
+        "src/agentic_arxiv/tools/paper_summary_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/paper_summary_tool.py": "26f9a34ff81fb764a049b1e8b16806631fab06e014b1e79866ab3ad38534c010"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/pdf_download_tool.py": {
+      "original_sha256": "d2adcbc2149c41e643f7f46e253d6ac118de888ac121363667cb6f706e0ef307",
+      "current_paths": [
+        "src/agentic_arxiv/tools/pdf_download_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/pdf_download_tool.py": "04f696b886376a9810614dad6f09b1397b223fa09819f7ffc7e8b2f514556931"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/pdf_translate_tool.py": {
+      "original_sha256": "c9f65f56904bddac3906e3c312961cc7f37e32f8ffd3b1f7a6bf63b713e6b74b",
+      "current_paths": [
+        "src/agentic_arxiv/tools/pdf_translate_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/pdf_translate_tool.py": "ff1760a9165b167664a6a445006dd11c12107c86dbbe7c02bf5e77d2793a6638"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/tool_registry.py": {
+      "original_sha256": "d0c8a7d7e83cd582e1da506f941ebf71e7b851dbd9ec3b8815f949b09a09b2e5",
+      "current_paths": [
+        "src/agentic_arxiv/tools/tool_registry.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/tool_registry.py": "263cbddea6720db9968e8d402f06945e55749850fd2113718cd8677bd7dbe13f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/tools/translated_content_tool.py": {
+      "original_sha256": "f5078ad74cc6df3483359bce7d209b6728fc96800b1524b02da43ae11dc14417",
+      "current_paths": [
+        "src/agentic_arxiv/tools/translated_content_tool.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/translated_content_tool.py": "8a89be2af1b9dc6497a2f958d8c087b5023934474a17cd8fdfd230d14f6135eb"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/__init__.py": {
+      "original_sha256": "1f5439fb716fe6e17353dded3219a02ef1ff50b6de91ecbd45c30b5ff1e7f0af",
+      "current_paths": [],
+      "current_sha256": {},
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/artifact_paths.py": {
+      "original_sha256": "4478b46c2c32d8d1fde8094fb6890d37dcde0794abff698902bad85e398ecc75",
+      "current_paths": [
+        "src/agentic_arxiv/state/artifact_paths.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/state/artifact_paths.py": "1957f94cc30c26db69cb83deec9d14ef9163f4031ebbf2036a638c35f9f7234b"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/file_writer.py": {
+      "original_sha256": "cea10f1915246feabccd09fceedbdbc66d7a0c1774906ee3b0356a8cb722bda6",
+      "current_paths": [
+        "src/agentic_arxiv/provenance.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/provenance.py": "1ee12f05b025c5893d4481b5297eb1e7816f1ec20e218487aaabad514098a606"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/io_utils.py": {
+      "original_sha256": "42dfd31ac48da6126ec7dfdd5271c53e6cf66299a77754816a610509f7b73e9d",
+      "current_paths": [
+        "src/agentic_arxiv/provenance.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/provenance.py": "1ee12f05b025c5893d4481b5297eb1e7816f1ec20e218487aaabad514098a606"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/llm_client.py": {
+      "original_sha256": "195ebd5457cb25498c95c9e1192aa6f5694d69c72dde8fbbb244ff16baed0c61",
+      "current_paths": [
+        "src/agentic_arxiv/llm/client.py",
+        "src/agentic_arxiv/llm/api.py",
+        "src/agentic_arxiv/llm/local.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/llm/client.py": "1fdb21a4ef39ca14d629d0ba8d78389e2005889e9399c48f28642a01633d218b",
+        "src/agentic_arxiv/llm/api.py": "5e89771384acd71bde35fa8135d11d1bd92d9ad57bea3f5cbad2cac7b760da74",
+        "src/agentic_arxiv/llm/local.py": "aa3f02256ba7d14ad8801280e8714baed93fa995ca74ca32b08a8b27aee4ea45"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/logger.py": {
+      "original_sha256": "93d1c6e119046fff0f22e786b9328daaeeb69c157bfe075f5ed43730ceed42e1",
+      "current_paths": [
+        "src/agentic_arxiv/config.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/config.py": "80ce5e9b93917e07903d7da627b593eb3927d327dc9550f12d6f774fa039940e"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/pdf_downloader.py": {
+      "original_sha256": "f6b46115708560f48b86e4b6f98c05a3e714d89d021d930bbef3699dfd3869b3",
+      "current_paths": [
+        "src/agentic_arxiv/tools/pdf_downloader.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/pdf_downloader.py": "93d7d8af7ea1caa7939bf649826ccb25207acb8f238030fddc62c58df6259ee8"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/utils/pdf_translator.py": {
+      "original_sha256": "3c9c0a9e61bda30e13c66793e6c3dcef870629614137d6465ac19ad2ab2bcab9",
+      "current_paths": [
+        "src/agentic_arxiv/tools/pdf_translator.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/tools/pdf_translator.py": "d24d3409fd6eab84efd8ffded3010a3b91c0d7f7ec272ffdd3bf53e0a2388efa"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "artifacts/mainline_baseline/behavior.json": {
+      "original_sha256": "74977433596dcd7174a507dc782f7a249741da806e46d350ca1e70766b66365b",
+      "current_paths": [
+        "docs/archive/mainline-behavior-baseline/behavior.json"
+      ],
+      "current_sha256": {
+        "docs/archive/mainline-behavior-baseline/behavior.json": "74977433596dcd7174a507dc782f7a249741da806e46d350ca1e70766b66365b"
+      },
+      "reason": "按原字节归档或迁移配置"
+    },
+    "configs/training/mainline.json": {
+      "original_sha256": "3479911b31a7740321283a30c70f929f1fd8835be9b9974573d2c377a894b34c",
+      "current_paths": [
+        "src/agentic_arxiv/resources/mainline.json"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/resources/mainline.json": "3479911b31a7740321283a30c70f929f1fd8835be9b9974573d2c377a894b34c"
+      },
+      "reason": "按原字节归档或迁移配置"
+    },
+    "eval/badcase_replay.py": {
+      "original_sha256": "75b5844d47c4f013a239a56c2ceabedb38bbdda1bfb780dd09715345a6244698",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/badcase_replay.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/badcase_replay.py": "dfdc7d2576cd1048e1a8b7b89102c9c54626952596f683fb31b50a6d182aa361"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/analyze_curriculum.py": {
+      "original_sha256": "660a07028d43892a60ff6c424b7a48fbea9d65a8e6be55ad6fac8be0c994f8b9",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/curriculum.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/curriculum.py": "74253ce6b8683ca13db244beba2951b992ce72c13d6ce571b1f90418e583fc43"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/audit_grpo_rollouts.py": {
+      "original_sha256": "90033e9f80ed4925eb5be6339292ee1f581c186cd96059f67167c7aaf97cbf1a",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/rollout_audit.py",
+        "src/agentic_arxiv/evaluation/audit_rollouts.py",
+        "src/agentic_arxiv/cli/evaluation_arguments.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/rollout_audit.py": "ffc92191b6c5d2acba9ac7398bf48c51d2ed69ad1b8d8f3466282d67246f43ae",
+        "src/agentic_arxiv/evaluation/audit_rollouts.py": "f536793bdecb1d17fda0e1b76c91b73c762e85650f3553c51d7779e3cbbc6698",
+        "src/agentic_arxiv/cli/evaluation_arguments.py": "1f265efa36807a5cee5fbc1d1bfd51d9fcd21653c748836a8d69f2ddbe6708f2"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/audit_historical_records.py": {
+      "original_sha256": "20081253250fda0940a06d8d78d5546a6a4441e59124447f3b999f6ac58c9d07",
+      "current_paths": [
+        "scripts/maintenance/audit_historical_records.py"
+      ],
+      "current_sha256": {
+        "scripts/maintenance/audit_historical_records.py": "7c05e091c5b4f726c6ebb52f6152e01745e14cb99c60851a00795408c75c7639"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/audit_mainline_configuration.py": {
+      "original_sha256": "ec7ea652083336ffc98bbab87cf20729a9e34a30b313311e0067afa0df15966a",
+      "current_paths": [
+        "scripts/maintenance/audit_mainline_configuration.py"
+      ],
+      "current_sha256": {
+        "scripts/maintenance/audit_mainline_configuration.py": "7faea619be51c6f295fb2640baa57bddfaa9ce1d84e26e21e6e08e4332cd2939"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/augment_parametric_sft_data.py": {
+      "original_sha256": "25455845c160d4f513cc7cd8b6a58fb7947bd085d0e82b2817b0db2ec003fa9f",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/augment_parametric_sft_data.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/augment_parametric_sft_data.py": "86bbf121b71337fbe1794e7bbf151020fdc47fcfd8cbb9504d0346bac97c2a72"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/augment_sft_data.py": {
+      "original_sha256": "3f83ec0f832836a6142d26528729625388541d288fb73d7063d9b051a66ace71",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/augment_sft_data.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/augment_sft_data.py": "1754daa8c065c732ff7e44eb214f28ed89654f7e635ee02cdc8bea4f4e0a9128"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/build_grpo_signal_split.py": {
+      "original_sha256": "9a2faa02a4db1b32efc0c4b46ca93b5eebb7fc844848d0328371d8eeff75e963",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/build_grpo_signal_split.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/build_grpo_signal_split.py": "62b16539dd1b02c18716cf71e2349d6807abe937ad509e3c3803f13547c17cb6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/build_sft_train_mix.py": {
+      "original_sha256": "6fad9a5b985204660f247ac441ef31fe3ee4bc0167e4a2c25c177a180ebe19ae",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/build_sft_train_mix.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/build_sft_train_mix.py": "ab57206e1f56c59d382187ab58d047a7b2d860e3ccfb5db7b7eb093b9b7bb65f"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/freeze_mainline_assets.py": {
+      "original_sha256": "3ae61652b06eb4f22bc48783b17d81a54af54c262daf6ab083f8e6bcc3cac0b1",
+      "current_paths": [
+        "src/agentic_arxiv/evaluation/assets.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/evaluation/assets.py": "8ce108b08a7355212f7f5e9129d5ca98679485f6326c27f5cc695f318dd18606"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/generate_parametric_sft_data.py": {
+      "original_sha256": "26d310d004df5a36199515633acc0d7bb74f62f71f9410cb85ae9bc27d50f70e",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/generate_parametric_sft_data.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/generate_parametric_sft_data.py": "fcfba283d7abc40db6724c8a0820987fe771a81a20717d64d29258e3ad17fcd8"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "scripts/generate_sft_data.py": {
+      "original_sha256": "17529886f75d64e366d4cb27098038eac8ff2cc998a4abb0c740b0e88500ad0d",
+      "current_paths": [
+        "src/agentic_arxiv/data_pipeline/generate_sft_data.py"
+      ],
+      "current_sha256": {
+        "src/agentic_arxiv/data_pipeline/generate_sft_data.py": "badb11f0db327b1c1dfa88e509a1c7746c3bb8291a2773d6a0274c5b111cdfe6"
+      },
+      "reason": "源码按职责迁移，旧来源哈希不代表新源码哈希"
+    },
+    "AgenticArxiv/agents/base_agent.py": {
+      "original_sha256": null,
+      "current_paths": [],
+      "current_sha256": {},
+      "reason": "上次主线迁移已退出，实施起点不存在；旧身份仍保存在原历史报告，不推测新位置或新哈希。"
+    },
+    "AgenticArxiv/agents/side_effects.py": {
+      "original_sha256": null,
+      "current_paths": [],
+      "current_sha256": {},
+      "reason": "上次主线迁移已退出，实施起点不存在；旧身份仍保存在原历史报告，不推测新位置或新哈希。"
+    }
+  }
+}

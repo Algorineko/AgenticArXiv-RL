@@ -5,7 +5,7 @@
 # AgenticArXiv-RL — Agentic RL 训练环境
 
 > **基于 ReAct Agent + arXiv 工具的 Agentic RL 训练环境**
-> 支持 SFT/DPO/GRPO/OPD 训练路径与可验证奖励（RLVR），用于研究 LLM Agent 强化学习。
+> 默认训练主线为 SFT → GRPO，显式可选 SFT → DPO → GRPO；普通推理与评测统一使用文本 ReAct 和可验证奖励（RLVR）。
 > 终极目标：**端侧部署的轻量多模态论文助手**——从检索、下载、翻译到总结、识图的端到端论文阅读模型。
 
 <p align="center">
@@ -19,49 +19,48 @@
 将 arXiv 论文检索/下载/翻译/解读任务改造为**可训练的强化学习环境**，专注于：
 
 1. **Verifiable Reward**：基于规则化奖励（工具调用准确度、任务完成度、解析错误等），无需人类标注
-2. **渐进式训练**：SFT → DPO → GRPO（另提供 OPD on-policy 蒸馏路线；PPO 在当前依赖下不可用）
+2. **直接训练主线与可选偏好阶段**：默认 SFT → GRPO，可选 SFT → DPO → GRPO；默认 QLoRA，也支持显式全参资源策略
 3. **轻量级工程**：纯 Python + JSONL 存储，无数据库、无前端，专注离线训练
 
 **非目标**：生产级 arXiv 应用、Web UI、实时翻译服务（原 Web 应用已从本仓库移除，见原版 [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv)）。
 
-### 可选 Jev 工具路由实验
+### 已退出的 Jev 实验（历史记录）
 
-普通 ReAct 推理支持默认关闭的 Jev next-tool router：Jev 选择下一步工具，guided 模式
-用确定性解析器处理显式参数，含糊参数仍交给策略模型，环境继续执行工具。默认
-`TOOL_ROUTER=policy` 完全保留原行为；显式设为 `jev` 后，低置信度、API 故障或参数
-验证失败都会回退原策略路径。该功能不接入 GRPO 训练。配置、baseline、81 条
-routing-only pilot、限制与复现方式见
-[JEV_ROUTER.md](JEV_ROUTER.md)，可复制的开关/API 配置见
-[jev_config.example.env](jev_config.example.env)。另有无需 GPU/网络的 project-interface
-smoke，验证 policy/Jev 两条路径可经过同一 ReAct、环境和 benchmark 接口互换。真实
-GRPO Qwen 的 mixed 10-task、repeat=3 小样本中，guided Jev 将 strict success 从 40%
-提高到 60%，本地 Qwen token 减少 74.01%，总延迟增加 36.96%。该结果是小样本结构
-验证，不代表完整 81 题总体胜率。
+Jev 路由与配置入口已退出，现仅支持普通文本 ReAct。历史 GRPO Qwen mixed 10-task、repeat=3 小样本中，guided Jev 的 strict success 为 40%→60%，本地 Qwen token 减少 74.01%，总延迟增加 36.96%；这是原小样本结构记录，不代表完整 81 题总体胜率，也不是本次重跑结果。退出范围见 [JEV_ROUTER.md](JEV_ROUTER.md)。
 
 ---
 
-## 🚀 快速开始
+## 快速开始
+
+以下安装命令从仓库根目录执行，使用 `.venv`，不含前端或数据库步骤。安装后可从任意目录调用 `agentic-arxiv`，无需设置 `PYTHONPATH`。
 
 ```bash
-# 1. 克隆并安装（Python 3.9+）
 git clone https://github.com/Algorineko/AgenticArXiv-RL.git
 cd AgenticArXiv-RL
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r AgenticArxiv/requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
 
-# 2. 配置 LLM API（API rollout 需要；本地模型训练/评测不需要）
-cat > AgenticArxiv/.env << 'EOF'
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-your-api-key
-MODEL=gpt-4-turbo
-EOF
-
-# 3. 测试 Rollout（奖励范围 [-1, 1]，随轨迹变化）
-python -m AgenticArxiv.rl.rollout search_01 traces/train/
-# ✅ Task search_01 rollout 完成  Reward: 1.00
+agentic-arxiv evaluate rollout --help
+agentic-arxiv evaluate run --help
+agentic-arxiv run --help
 ```
 
-批量 rollout：`python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/`。后续命令默认在仓库根目录执行。
+基础安装支持外部 API 和历史记录读取，不强制安装本地模型或训练栈。本地推理/评测与 DPO 数据生成安装 `pip install '.[local]'`，SFT/DPO/GRPO 训练安装 `pip install '.[train]'`。API 推理需要显式设置 `LLM_BASE_URL`、`LLM_API_KEY` 和 `MODEL`；不要提交真实 `.env` 或凭据。本地模型训练/评测不要求 API key。真实 PDF 翻译按需安装 `pip install '.[translate]'`，不启动异步应用服务。
+
+全局 `--workspace` 默认当前工作目录；相对配置、模型、数据、快照和输出路径均相对于工作区，绝对路径保持原义。从其他目录使用已有研究输入时，将 `agentic-arxiv --workspace /实际工作区` 放在子命令前；缺失输入不会回退搜索源码目录。`.env` 只在实际操作时从工作区读取，帮助不会读取凭据或创建日志。新旧入口映射见 [架构迁移说明](docs/architecture_migration.md)。
+
+```bash
+# 后续另行运行已有本地模型和快照；本次未执行
+agentic-arxiv evaluate rollout \
+  --task-id search_01 --output-dir traces/react_messages \
+  --model outputs/sft_qlora/final --offline \
+  --snapshot data/mock_arxiv_snapshot.json --max-iterations 6
+```
+
+普通 `run` 默认 API/live；`evaluate rollout` 默认 offline，显式 `--no-offline` 才使用 live 工具。快照模式与模型后端相互独立，完整契约见 [运行时说明](docs/react_runtime.md)。
+
+执行任务需要已有模型或可用 API；离线工具回放需要已有快照，缺失不自动联网补齐。安装/帮助检查与真实任务执行不同，本次没有调用外部 API、运行训练或模型评测。
 
 ---
 
@@ -80,21 +79,23 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 1. `get_recently_submitted_cs_papers(aspect, days, max_results)` — 按子领域+时间窗浏览
 2. `search_arxiv_papers(query, max_results, days=None)` — 关键词/标题/作者检索
-3. `download_arxiv_pdf(ref, session_id)` — 下载 PDF
-4. `translate_arxiv_pdf(ref, session_id)` — 翻译 PDF（pdf2zh）
-5. `get_paper_cache_status(ref, session_id)` — 查询缓存状态
-6. `get_paper_content(ref, session_id, section=None)` — 读取摘要或指定章节（确定性抽取）
+3. `download_arxiv_pdf(ref)` — 下载 PDF
+4. `translate_arxiv_pdf(ref)` — 翻译 PDF（pdf2zh）
+5. `get_paper_cache_status(ref)` — 查询缓存状态
+6. `get_paper_content(ref, section=None)` — 读取摘要或指定章节（确定性抽取）
 7. `summarize_paper(ref, style, max_words)` — env 侧摘要（tldr / structured / bullet）
 8. `extract_paper_figures(ref)` — 抽出图表文件与 caption
 9. `analyze_figure(ref, figure_no, question=None)` — 图表分析：env 侧调本地 VLM 读图（多模态环境启用）
-10. `get_translated_content(ref, session_id, page=1)` — 按页读取译文（翻译后的中文 PDF，确定性抽取；第 1 页通常是标题与摘要）
+10. `get_translated_content(ref, page=1)` — 按页读取译文（翻译后的中文 PDF，确定性抽取；第 1 页通常是标题与摘要）
 
-> 「检索 → 下载 → 阅读 → 总结 → 抽图 → 识图」解读闭环已全部打通：识图由本项目后训练的 [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) 在 env 侧完成并录制快照，策略侧有学会该四步链的 [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) 权重。
+> 以上列出常用业务参数，完整 schema 以工具注册表为准；`session_id` 由执行边界注入，不写入策略 Action 或 SFT 标签。
+
+> **历史原协议能力记录，未在新协议下重跑。** 「检索 → 下载 → 阅读 → 总结 → 抽图 → 识图」解读闭环已全部打通：识图由本项目后训练的 [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) 在 env 侧完成并录制快照，策略侧有学会该四步链的 [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) 权重。
 > **准入原则**：动作空间不是越大越好——新增工具的准入标准是「能开启一类新任务」，而不是「可能有用」。设计决策链见 [工具集演进设计](docs/toolset_evolution.md)。
 
 ### Verifiable Reward（五分量）
 
-**多粒度可验证奖励**（`rl/reward.py`）。五个分量归一化到 `[-1, 1]`，另有诊断分量与不可补偿的失败上限：
+**多粒度可验证奖励**（`src/agentic_arxiv/scoring/reward.py`）。五个分量归一化到 `[-1, 1]`，另有诊断分量与不可补偿的失败上限：
 
 | 分量 | 默认权重 | 信号 |
 |------|:---:|------|
@@ -105,98 +106,98 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 | `outcome` | 3 | 正确完成 +1、路径错误完成 +0.25、强制停止 −0.5、错误 −1 |
 | `result_quality` / `efficiency` | 诊断 gate | observation 是否真实成功；严重冗余触发 reward 上限 |
 
-- **课程学习**：前 30 步将 `tool`/`argument`/`outcome` 权重乘 1/3（`RewardCalculator.schedule`）。实测结论：SFT 起点已学会 ReAct 结构（format 起点 0.983），课程两臂对照不可区分——**从 SFT 起点请直接 `--reward_curriculum_steps 0`**，该档位留给冷启动场景。
+- **课程学习**：源码默认前 30 步将 `tool`/`argument`/`outcome` 权重乘 1/3（`RewardCalculator.schedule`），未因工程清理改成 0。历史实测记录为 SFT 起点 format 0.983、课程两臂对照不可区分；若未来显式覆盖 `--reward-curriculum-steps 0`，manifest 必须记录该覆盖，不能把它称为保留默认值。
 - **非补偿性失败**：解析失败、执行失败、虚假 FINISH 最多得负奖励，不得靠格式分抵消；`analyze_figure` 缺有效答案时总奖励上限 −0.75。
 - 所有奖励 **rule-based 可验证**（RLVR），每条轨迹记录 `reward_components` 明细，便于审计。判定细则见 [多粒度奖励文档](docs/multigranular_rl.md)。
 
-### Rollout 隔离
+### 轨迹隔离
 
-`rl/sandbox.py` 的 `RolloutSandbox` 在每条轨迹前记录环境/Store/产物目录基线，轨迹后恢复并清理——多轮 GRPO、rollout 与 benchmark 共用该 reset 契约，杜绝轨迹间状态串联。
+每个 episode 持有独立会话状态和产物目录，快照与预取资产只读共享。reset/close 仅清理自身拥有的目录，不能清扫其他轨迹或用户文件。完整任务默认允许 6 轮，FINISH 占一轮；结束请求不等于任务成功。
 
 ---
 
-## 🛠️ 训练路径（SFT → DPO → GRPO / OPD）
+## 统一消息协议
 
-### 阶段1：SFT
+当前唯一协议为 `react-runtime-v2` / `react-messages-v3`：初始 user 建立任务/工具/实际 setup，后续 assistant 与环境 user Observation 交替，环境内容明确是数据。SFT 只监督当前 completion；DPO 在完全一致的实际完整消息下，只比较未截断的真实当前 assistant 决策，不补 FINISH、不截历史；GRPO 保留原采样 ID，policy mask=1、环境/插入边界 mask=0，严格比较 token 前缀、保留已有 EOS，rollout 不再次按 G 扩增。
+
+旧/未知数据或需延续训练的模型产物不能自动标成兼容，训练协议检查不能由跳过 manifest 开关绕过。报告分开记录实际执行版本与来源模型真实训练版本，关系为 same_protocol/cross_protocol/unknown；未知不是同口径复现。真实 tokenizer 前缀、梯度与模型能力本次未验证。完整说明见 [运行时契约](docs/react_runtime.md)。
+
+## 训练主线：默认 SFT → GRPO，可选 DPO
+
+以下是后续另行执行的命令，不是本次工程验收步骤。需要新协议 SFT 数据及 manifest、基座模型/训练资源、离线快照；本次不生成这些输入，也不运行训练。
+
+先安装 `pip install '.[train]'`。默认训练配置来自包资源 `agentic_arxiv/resources/mainline.json`，新增独立 DPO 节，原 SFT/GRPO 默认与来源子树不变；旧配置缺整个 DPO 节时在内存补默认，不写回文件。显式 `--config` 覆盖包默认，显式 CLI 参数再覆盖配置。
 
 ```bash
-python scripts/generate_parametric_sft_data.py   # 参数化派生专家轨迹（无需 API）
-python -m AgenticArxiv.rl.train_sft              # 产出 outputs/sft/final
+# 默认 QLoRA SFT；GRPO 直接消费其适配器和基座元数据
+agentic-arxiv train sft \
+  --data data/sft/sft_react_messages_v3_train_mix.jsonl \
+  --output-dir outputs/sft_qlora
+
+agentic-arxiv train grpo \
+  --model outputs/sft_qlora/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
+
+# 显式全参路径；不要把适配器输出误当作全参模型
+agentic-arxiv train sft \
+  --data data/sft/sft_react_messages_v3_train_mix.jsonl \
+  --no-qlora --output-dir outputs/sft_full
+agentic-arxiv train grpo \
+  --model outputs/sft_full/final \
+  --no-qlora --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
 ```
+
+正式 GRPO 必须显式绑定任务集及 `FILE:NAME` 训练切分；`--smoke` 是显式 8 任务模式，不隐式训练全部 86 条任务。历史 `v6_grpo_train.json:rl_train` 的 33 条与 `v7_86.json:train` 的 55 条不是同一训练集。
+
+小型主线配置保全源码显式值、默认值及条件传参，不把未设置的损失、重要性采样或奖励缩放字段猜填为某版库默认值，也不宣称历史配方等价。缺模型、数据或必要元数据明确失败，不回退到其他模型/API。数据生成、扩增、混合、资源覆盖、消息/mask 和兼容说明见 [主线指南](docs/rl_building.md)。
+
+训练保护保留长度检查、方差诊断、Canary、SFT 可解析率阈值 ≥ 0.3、GRPO mean reward 阈值 ≥ −0.2、精度和日志检查。验证消费完整 episode，而不是首步正确就算成功；真实模型通过这些阈值本次未验证。
+
+SFT/DPO/GRPO 的 QLoRA 也支持单机 DDP，每卡一个进程。`python -m agentic_arxiv.training.launch` 启动器支持显式 GPU、各 rank 日志及无副作用的 `--dry-run`；四卡 batch/累积换算、GRPO 跨 rank 分组和验证边界见 [多卡训练指南](docs/training_distributed.md)。本次未启动真实多卡训练，不影响已有单卡任务。
+
+### 显式可选 DPO（示例未执行）
+
+不选择该阶段时，GRPO 仍默认读取 `outputs/sft_qlora/final`，不查找 DPO 目录或自动串接训练。生成只使用当前协议本地 SFT、已有快照及显式版本化 expanded `:train`，不接受留出集、裸 train 或历史 `rl_train` 子集：
+
+```bash
+agentic-arxiv data dpo generate \
+  --model outputs/sft_qlora/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json \
+  --output data/dpo/dpo_react_messages_v3_train.jsonl
+agentic-arxiv train dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl --inspect-only
+agentic-arxiv train dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl \
+  --snapshot data/mock_arxiv_snapshot.json --output-dir outputs/dpo
+agentic-arxiv train grpo --model outputs/dpo/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
+```
+
+`--inspect-only` 审计数据/轨迹哈希、训练成员、来源、协议、实际 tokenizer 前缀/目标与完整长度，不加载策略权重或训练；仍需本地 tokenizer。超长或模板边界不兼容直接失败，不截断。每任务最多一对，完整轨迹奖励只作偏好排序，不是单步因果证明；报告任务产出率和请求组合接受率两个分母，低产出仅报警，零对保留轨迹/失败报告并非零退出，不发布成功训练包。
+
+DPO 的 policy/reference 独立来自同一完整 SFT，参考保留 SFT adapter 并冻结，不共享可变参数；双模型增加显存，`--no-qlora` 显式全参，不自动换参考。epochs 3、lr `5e-6`、beta 0.1、QLoRA batch 1/累积 8 是设计默认，不是已验证历史配方。默认完整多轮 Canary 验证报告奖励、严格成功率、解析率、虚假完成率、终止/覆盖及协议关系；阈值失败保留模型/报告并非零退出，`--no-verify` 记 skipped 而非 PASS，不自动进入 GRPO。训练完成、冒烟验证通过和优于 SFT 分开表述。详见 [主线指南](docs/rl_building.md)；本次没有生成数据、训练或模型评测，真实 tokenizer、参考优化后不变、GPU/DDP 与收益未验证。
+
+OPD、PPO、GRPO 变体选择、自进化、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL/SSE 活动入口仍退出；恢复 DPO 不恢复旧脚本、旧导入或旧数据兼容。图表工具既有推理后端、快照构建、T5 backfill、坏例评分和外部 LLM API 保留。
+
+### 历史发布结果（原协议，未重跑）
+
+下列发布信息和数值保留原实验口径，不表示新消息协议下的当前模型能力。新协议训练拒绝不兼容输入，跨协议评测须明确标注。
 
 > 已发布：[AgenticArXiv-RL-Qwen2.5-1.5B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT)（Qwen2.5-1.5B 全参，2 epoch / 2628 条专家轨迹，loss 0.079；只覆盖前 8 个工具）。
 
-### 阶段2：DPO
-
-```bash
-python scripts/generate_dpo_data.py --model outputs/sft/final --num_rollouts_per_task 8
-python -m AgenticArxiv.rl.train_dpo              # 产出 outputs/dpo/final
-```
-
-偏好对来自 SFT 模型本地采样（无需 `LLM_API_KEY`）；有快照时自动离线回放，仅奖励差超过 `--min_reward_gap` 且首工具不同的轨迹组成对。
-
-### 阶段3：GRPO
-
-```bash
-python -m AgenticArxiv.rl.build_snapshot         # 生成离线快照（唯一联网步骤）
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --max_turns 4
-
-# DAPO 预设（loss_type=dapo + clip-higher + overlong filtering + dynamic sampling）
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --dapo
-
-# 序列级重要性采样（GSPO）与 Dr.GRPO 无偏变体
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --importance_sampling_level sequence
-python -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --loss_type dr_grpo
-
-# 多卡（DDP 双卡实测跑通；FSDP 需 torch>=2.6）
-accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
-  -m AgenticArxiv.rl.train_grpo --model outputs/sft/final --no-qlora
-
-# 训练曲线
-python -m AgenticArxiv.rl.train_grpo --report_to tensorboard
-tensorboard --logdir outputs/grpo/logs
-```
-
 > 已发布：[AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO)（33 条信号任务，全程离线快照回放）。离线评测（seed 45 / repeat 3，严格成功率 pass³）SFT → GRPO：**rl_train 0.081→0.636，dev 0.000→0.375，iid_test 0.056→0.444，ood_test 0.000→0.500**。
-
-**多轮 rollout 与打分**（`rl/grpo_reward.py`）：每轮由当前 policy 生成 ReAct 动作，独立 `MockArxivEnv` 执行并把 observation 插回上下文；assistant token 进 loss，环境 token 经 `env_mask=0` 只作上下文；完整轨迹交五分量 `RewardCalculator` 打分，与 rollout / benchmark 同一标准。
-
-**训练质量保障**（静默失败 → 响亮报错）：生成长度体检、零方差守护（`RewardVarianceGuard`）、Canary 中途评估早停、阶段验证阈值（SFT 可解析率 ≥ 0.3、DPO 奖励 ≥ −0.3、GRPO 奖励 ≥ −0.2）、混合精度自适应、日志后端预校验。曲线除 TRL 自带指标外记录 `reward_components/*`（分量明细）、`reward_weights/*`（课程权重）、`rollout/*`（turns / finished / parse_error_rate）。
-
-### 阶段3'：OPD（on-policy 蒸馏，可选，与 GRPO 互替）
-
-```bash
-python -m AgenticArxiv.rl.train_opd --model outputs/sft/final \
-  --teacher Qwen/Qwen2.5-7B-Instruct --max_turns 4 --snapshot data/mock_arxiv_snapshot.json
-```
-
-学生在任务 prompt 上 on-policy 采样，教师给逐 token logprob，损失取 reverse-KL（mode-seeking）。与 GRPO 的关系：
-
-| 维度 | GRPO | OPD |
-|---|---|---|
-| 学习信号 | 可验证奖励（稀疏、轨迹级） | 教师逐 token logprob（稠密） |
-| 额外模型 | 无 | 教师模型（需本地权重） |
-| 上限 | 可探索超越教师 | 收敛到教师行为 |
-| 适用 | 有可验证奖励 | 有强教师、想省探索成本 |
-
-### 阶段4：PPO — ⚠️ 当前依赖下不可用
-
-TRL 已移除经典 PPOTrainer（`trl>=0.28.0` 上不存在），`train_ppo.py` 会在 import 阶段给出明确说明后退出。有可验证奖励走 GRPO、有强教师走 OPD，两者都比 PPO 省显存。
-
-### 多模态后训练（env 侧 VLM）
-
-```bash
-python scripts/build_figure_qa_dataset.py                          # 图表 QA 种子数据
-python -m AgenticArxiv.rl.train_vlm_figure_qa                      # Qwen3-VL-4B LoRA 后训练
-FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
-  python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
-```
 
 > 已发布：[AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA)（451 图 / 73 论文，按论文切分防泄漏；留出 94 图 ROUGE-1 0.105→0.126、ROUGE-L 0.081→0.102）。
 
 ---
 
 ## 📦 已发布模型
+
+> **以下是历史已发布模型列表。** 不表示退出的变体仍可训练，也不保证旧 checkpoint 在新上下文中行为不变。
 
 | 模型 | 基座 | 说明 |
 |------|------|------|
@@ -214,24 +215,34 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 
 ## 🧪 任务集与评测
 
-- **冒烟集**（`benchmark/tasks.py`）：8 条（search / download / translate / cache / composite）
-- **扩展集**（`benchmark/tasks_expanded.py`）：86 条、十四类模板（search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**），`run_benchmark.py --task-set expanded` 启用。两套任务统一走 `TaskSpec`：`expected_tools` / `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表漂移。
-- **切分**：按模板切 train / iid_test / ood_test（`benchmark/splits.py`，固化于 `data/splits/`）；`rl_train` 只取成功率中间带（两端组内方差为零、不产生梯度）。换模型后需重新测量 rates，不能沿用旧档位。
-- **评测口径**：`pass^k` 可靠性（tau-bench 口径）、`false_finish`（退化策略 `always_finish` 91.5% vs `reference` 0%）、`ref_score`（比 `paper_id` 而非 `ref` 写法）、代价按成功次数归一。
-- **区分度闸门**（`run_baselines.py`）：确定性退化策略逐类目卡门槛——「永远搜 cs.AI」在检索类 0.833→0.446，「本该不调工具却调了」+0.165→−0.235。
-- **坏例回放**（`eval/badcase_replay.py` + `eval/eval_cases.jsonl`，17 条）：失败轨迹冻成永久回归用例，回放只跑打分器，`pytest` 即闸门；`hack/*` 记录骗分形态并配阈值断言，兼作 reward hacking 案例库。
+- **冒烟集**（`src/agentic_arxiv/tasks/tasks.py`）：8 条（search / download / translate / cache / composite）
+- **扩展集**（`src/agentic_arxiv/tasks/tasks_expanded.py`）：86 条、十四类模板（search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**），`agentic-arxiv evaluate run --task-set expanded` 启用。两套任务统一走 `TaskSpec`：`expected_tools` / `expected_tool_args` 由同一份 `steps` 派生，不出现两份手写列表漂移。
+- **切分**：`data/splits/v7_86.json` 为 train 55 / dev 8 / iid_test 19 / ood_test 4；历史 `v6_grpo_train.json:rl_train` 为 33 条，不能混称。未来信号选择只从声明 train 产生新文件，dev/iid/ood 不参与训练；本次不重新测量 rates。
+- **评测口径（数值为历史记录）**：`pass^k` 可靠性（tau-bench 口径）、`false_finish`（退化策略 `always_finish` 91.5% vs `reference` 0%）、`ref_score`（比 `paper_id` 而非 `ref` 写法）、代价按成功次数归一。
+- **区分度闸门（历史统计）**（当前入口 `agentic-arxiv evaluate baselines`）：确定性退化策略逐类目卡门槛——「永远搜 cs.AI」在检索类 0.833→0.446，「本该不调工具却调了」+0.165→−0.235。
+- **坏例回放**（`agentic-arxiv evaluate badcases replay` + `eval/eval_cases.jsonl`，17 条）：失败轨迹冻成永久回归用例，回放只跑打分器，`pytest` 即闸门；`hack/*` 记录骗分形态并配阈值断言，兼作 reward hacking 案例库。
 
 ```bash
-python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_test --offline
+agentic-arxiv evaluate run \
+  --backend transformers --model outputs/grpo/final \
+  --task-set expanded --split data/splits/v7_86.json:iid_test \
+  --offline --snapshot data/mock_arxiv_snapshot.json \
+  --repeat 3 --output artifacts/eval_react_messages_iid
 ```
 
 ---
 
-## 🛡️ 依赖说明
+## 依赖说明
 
-**核心依赖**（`AgenticArxiv/requirements.txt`）：`torch>=2.0`、`transformers>=4.45`、`trl>=0.28.0`（已在 0.29.1 验证；下限由多轮 GRPO 的 rollout_func 路径决定）、`peft`、`bitsandbytes`（QLoRA）、`datasets`、`accelerate`、`arxiv`、`requests`、`python-dotenv`、`loguru`、`pydantic>=2`、`fire`。
+唯一依赖声明为 [pyproject.toml](pyproject.toml)，安装与旧入口迁移见 [架构迁移说明](docs/architecture_migration.md)。基础 `pip install .` 包含 `arxiv`、`requests`、`python-dotenv`、`loguru`、`pydantic`、PyMuPDF 和 Pillow，不含训练栈。
 
-**可选依赖**（`requirements-extra.txt`）：`pdf2zh`（真实 PDF 翻译）、`fastapi`/`uvicorn`/`sqlalchemy`/`pymysql`（归档的 Web 兼容层）、`mcp`（归档的 MCP 兼容层）、`tensorboard`/`wandb`（曲线后端）、`matplotlib`/`numpy`/`pandas`（绘图脚本）。
+- `pip install '.[local]'`：torch、transformers、accelerate、peft，用于本地推理、默认 LoRA 产物和按需模型工具，不安装训练器。
+- `pip install '.[train]'`：包含 local 同约束依赖，再加 trl、datasets、bitsandbytes 和 packaging。
+- `pip install '.[translate]'`：真实 PDF 翻译 pdf2zh。
+- `pip install '.[logging]'`：训练曲线 tensorboard；wandb 可按既有方式单独安装并显式启用。
+- `pip install '.[dev]'`：pytest、覆盖率、flake8、构建与元数据检查，不隐含 train。
+
+训练库版本沿用声明与接口保护，本次不升级/降级；Fire 已退出。图表/摘要模型后端使用显式本地模型，缺少可选依赖时在实际使用时报错，不缩减完整 10 工具注册。帮助检查不加载真实 tokenizer、模型或训练器，也不证明其集成行为已经验证。Web、数据库和其他 Agent 架构依赖不是安装选项。
 
 ---
 
@@ -245,7 +256,7 @@ python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_t
 
 ## 🤝 贡献
 
-欢迎 Issue 与 PR！流程：Fork → feature 分支 → `pytest AgenticArxiv/tests/` → `feat:` 前缀提交 → PR。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎 Issue 与 PR！流程：Fork → feature 分支 → `pip install -e '.[dev]'` → `pytest tests/` → `feat:` 前缀提交 → PR。训练侧无模型回归另需 train 依赖，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 📄 License
 
@@ -255,7 +266,7 @@ MIT License
 
 ## 🙋 FAQ
 
-**Q: 与原 AgenticArXiv 的区别？** 原版是生产级 Web 应用（FastAPI+Vue3+MySQL，三种 Agent 架构）；本项目是纯 Python + JSONL 的 RL 训练环境，只保留 ReAct 单策略，核心是 SFT/DPO/GRPO 训练与可验证奖励。
+**Q: 与原 AgenticArXiv 的区别？** 原版是生产级 Web 应用（FastAPI+Vue3+MySQL，三种 Agent 架构）；本项目是纯 Python + JSONL 的 RL 训练环境，只保留 ReAct 单策略，默认 SFT → GRPO、显式可选 DPO，推理使用文本 ReAct 可验证奖励。
 
 **Q: 为什么选 GRPO 不用 PPO？** GRPO 无需 value model（显存开销小）、适合 1.5B 量级小模型、实现简单易调试；PPO 更适合生产级大模型训练。
 
@@ -263,7 +274,10 @@ MIT License
 
 ---
 
-## 📝 Roadmap（开发路线图）
+## 历史 Roadmap（非当前待办）
+
+> **以下为原方向记录，不是当前运行或实施计划。** 原数值、旧旗标及路径保留语境；已退出的入口不能运行，旧“待跑”条目不构成本次工程验收待办。当前未来命令与本次未执行边界见 [主线指南](docs/rl_building.md)。
+
 
 > 完整论据与引入路径见 [docs/roadmap_notes.md](docs/roadmap_notes.md)。欢迎认领（见 🤝 贡献）。
 
