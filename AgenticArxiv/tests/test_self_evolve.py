@@ -1,5 +1,7 @@
 """Bounded self-evolution loop: pure-JSON components, no model, no torch."""
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -42,6 +44,19 @@ def summary(*rows):
 
 
 class TrialVerdictTest(unittest.TestCase):
+    def test_invalid_k_is_rejected_even_without_trials(self):
+        for k in (0, -1, 1.5, True, "3", None):
+            calls = (
+                lambda: se.pass_at_k(0, 0, k),
+                lambda: se.pass_k_by_task(summary(), k),
+                lambda: se.pass_k(summary(), k),
+                lambda: se.diagnose([], [], [], k=k),
+                lambda: se.gate({}, {}, cases_before=0, cases_after=0, k=k),
+            )
+            for call in calls:
+                with self.subTest(k=k, call=call), self.assertRaisesRegex(ValueError, "positive integer"):
+                    call()
+
     def test_strict_success_mirrors_metrics_predicate(self):
         self.assertTrue(se.strict_success(trial("t")))
         for bad in (
