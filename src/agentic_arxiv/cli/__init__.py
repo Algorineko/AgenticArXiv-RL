@@ -10,6 +10,7 @@ import sys
 from .data_arguments import register_commands as register_data_commands
 from .evaluation_arguments import register_commands as register_evaluation_commands
 from .training_arguments import register_commands as register_training_commands
+from .experiment_arguments import register_commands as register_experiment_commands
 
 
 HELP_COMMANDS = (
@@ -23,6 +24,8 @@ HELP_COMMANDS = (
     ("data", "sft", "mix"), ("data", "dpo"), ("data", "dpo", "generate"),
     ("data", "grpo"), ("data", "grpo", "select-signal"),
     ("audit",), ("audit", "rollouts"), ("audit", "curriculum"), ("audit", "assets"),
+    ("experiment",), *(("experiment", name) for name in
+        ("check", "register", "start", "list", "status", "logs", "stop", "resume", "evaluate")),
 )
 
 
@@ -59,6 +62,8 @@ def build_parser():
     register_training_commands(train, _add_command)
     data = _add_command(commands, "data", help="显式数据准备操作")
     register_data_commands(data, _add_command)
+    experiment = _add_command(commands, "experiment", help="服务器本地轻量实验管理；无需 train 安装层")
+    register_experiment_commands(experiment, _add_command)
     return parser
 
 
@@ -111,9 +116,9 @@ def _resolve_paths(args):
         "audit.rollouts": ("trace", "summary_out"),
         "audit.curriculum": ("log_dir",),
         "audit.assets": ("baseline",),
-        "train.sft": ("data", "data_manifest", "output_dir", "config_path"),
-        "train.dpo": ("data", "data_manifest", "output_dir", "snapshot", "config_path"),
-        "train.grpo": ("output_dir", "snapshot", "resume_from_checkpoint", "rollout_trace_path", "config_path"),
+        "train.sft": ("data", "data_manifest", "output_dir", "snapshot", "config_path", "managed_context", "resume_from_checkpoint"),
+        "train.dpo": ("data", "data_manifest", "output_dir", "snapshot", "config_path", "managed_context", "resume_from_checkpoint"),
+        "train.grpo": ("output_dir", "snapshot", "resume_from_checkpoint", "rollout_trace_path", "config_path", "managed_context"),
         "data.snapshot": ("snapshot",),
         "data.backfill-figures": ("snapshot",),
         "data.sft.generate": ("output", "snapshot"),
@@ -201,6 +206,9 @@ def _operation_kwargs(args):
 
 def main(argv=None):
     parser, args = parse_args(argv, check_capabilities=True)
+    # 管理命令拥有独立结果/退出码契约，绝不读取训练环境凭据。
+    if args._operation.startswith("experiment."):
+        return _dispatch(args)
     try:
         from agentic_arxiv.config import initialize_operation
 
@@ -216,6 +224,10 @@ def main(argv=None):
 
 def _dispatch(args):
     operation = args._operation
+    if operation.startswith("experiment."):
+        from agentic_arxiv.experiments.cli import execute
+
+        return execute(args)
     kwargs = _operation_kwargs(args)
     if operation == "run":
         from .run import execute

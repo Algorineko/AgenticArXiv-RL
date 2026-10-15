@@ -31,6 +31,9 @@ HELP_COMMANDS = (
     ("data", "dpo"), ("data", "dpo", "generate"),
     ("data", "grpo"), ("data", "grpo", "select-signal"),
     ("audit",), ("audit", "rollouts"), ("audit", "curriculum"), ("audit", "assets"),
+    ("experiment",), *(("experiment", name) for name in (
+        "check", "register", "start", "list", "status", "logs", "stop", "resume", "evaluate",
+    )),
 )
 
 
@@ -94,6 +97,18 @@ def check_installation(layer: str, require_wheel: bool, source_root: Path, histo
     config_bytes = resources.files("agentic_arxiv").joinpath("resources").joinpath("mainline.json").read_bytes()
     assert hashlib.sha256(config_bytes).hexdigest() == DEFAULT_CONFIG_SHA256, "安装资源与当前配置不一致"
     json.loads(config_bytes)
+    # 正常安装必须携带实际管理模板，不能因编辑式源码可见而漏掉包资源。
+    experiment_resources = resources.files("agentic_arxiv").joinpath("resources", "experiments")
+    recipe_resources = experiment_resources.joinpath("recipes")
+    groups = {"M0", "M1", "M2", "M3", "M4", "C1"}
+    packaged_recipes = {}
+    for item in recipe_resources.iterdir():
+        if item.name.endswith(".json"):
+            payload = json.loads(item.read_text(encoding="utf-8"))
+            packaged_recipes[payload["group"]] = payload
+    assert set(packaged_recipes) == groups, "安装包缺少六组配方资源"
+    assert packaged_recipes["M0"]["stage"] == "evaluate", "M0 不能解析为训练"
+    assert experiment_resources.joinpath("profiles", "server.json").is_file(), "安装包缺少服务器 profile 模板"
 
     executable = Path(sys.executable).parent / ("agentic-arxiv.exe" if os.name == "nt" else "agentic-arxiv")
     assert executable.is_file(), "当前Python安装环境缺少 agentic-arxiv console script"

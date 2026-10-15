@@ -12,6 +12,15 @@ from agentic_arxiv.scoring.metrics import is_strict_success
 from agentic_arxiv.tasks.initialization import compile_initialization
 
 
+class EvaluationCancelled(RuntimeError):
+    """An explicit stop was observed between complete episodes, not a pass."""
+
+    def __init__(self, completed_episodes=0, partial_results=None):
+        super().__init__(f"evaluation interrupted after {completed_episodes} complete episodes")
+        self.completed_episodes = completed_episodes
+        self.partial_results = list(partial_results or [])
+
+
 def execute_episode(
     client: Any,
     task: Mapping[str, Any],
@@ -77,6 +86,7 @@ def evaluate_episodes(
     max_new_tokens: int = 256,
     training_step: int = 0,
     session_prefix: str = "canary",
+    cancel_requested: Callable[[], bool] | None = None,
 ) -> EpisodeEvaluation:
     """复用既有 Canary 统计口径，不加载模型或准备评分参考答案。"""
     if num_generations < 1 or max_iterations < 1:
@@ -93,6 +103,8 @@ def evaluate_episodes(
         initialization_plan = compile_initialization(task, task_lookup=task_lookup)
         task_rewards = per_task.setdefault(tid, [])
         for trial in range(num_generations):
+            if cancel_requested is not None and cancel_requested():
+                raise EvaluationCancelled(total)
             result = execute_episode(
                 client, task, environment_factory,
                 initialization_plan=initialization_plan,

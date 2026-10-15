@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "resolved_at": "2026-10-15",
+  "resolver": "uv 0.11.6",
+  "target": {"python": "3.10.19", "platform": "x86_64-manylinux_2_28", "cuda": "12.6"},
+  "command": ["uv", "pip", "compile", "pyproject.toml", "containers/training-baseline.in", "--extra", "train", "--extra", "logging", "--torch-backend", "cu126", "--python-version", "3.10.19", "--python-platform", "x86_64-manylinux_2_28", "--no-build", "--generate-hashes", "--emit-index-url", "--emit-index-annotation", "--output-file", "containers/requirements-linux-py310-cu126.lock"],
+  "environment": {"UV_PYTHON_DOWNLOADS": "never"},
+  "package_count": 94,
+  "lock_sha256": "bb3d615a1ceb3e7fb659fbaf5a77c289dcbf155065a735b13e4fba2b0280d7aa",
+  "baseline_sha256": "89fd47664490910e08dadec053c17efe700fdcf083d26833db73b2955cc6366f",
+  "source_policy": {
+    "torch_and_triton": "https://download.pytorch.org/whl/cu126",
+    "other_packages": "https://pypi.org/simple",
+    "record": "锁文件对每个包记录实际解析源、精确版本及发行物哈希，不仅是顶层约束"
+  },
+  "evidence": {
+    "dependency_metadata_resolution": "通过：解析94包闭包；未下载大型wheel或安装训练栈",
+    "image_build": "未执行：本地daemon为ARM64，未经授权不进行跨架构CUDA构建",
+    "installation_and_interfaces": "待固定镜像构建后执行，元数据解析不能代替此项",
+    "gpu_training": "未执行，需要独立授权"
+  }
+}

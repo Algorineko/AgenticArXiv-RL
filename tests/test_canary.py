@@ -307,6 +307,37 @@ class CanaryCallbackTest(unittest.TestCase):
         for r in cb.results:
             self.assertIsInstance(r, CanaryResult)
 
+    def test_restored_patience_is_not_reset(self):
+        cb = self._make_cb(steps=10, min_reward=0.0, patience=3)
+        self._fire(cb, 2)
+        restored = self._make_cb(steps=10, min_reward=0.0, patience=3)
+        restored.load_state_dict(cb.state_dict())
+        self.assertEqual(len(restored.results), 2)
+        control = self._fire(restored, 1, step=20)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(restored.tripped)
+
+    def test_restored_last_monitoring_step_is_not_evaluated_twice(self):
+        cb = self._make_cb(steps=10, min_reward=0.0, patience=3)
+        self._fire(cb, 2)
+        restored = self._make_cb(steps=10, min_reward=0.0, patience=3)
+        restored.load_state_dict(cb.state_dict())
+        self._fire(restored, 1, step=10)
+        self.assertEqual(len(restored.results), 2)
+
+    def test_resume_rejects_tripped_changed_or_corrupted_monitoring(self):
+        cb = self._make_cb(steps=10, min_reward=0.0, patience=3)
+        self._fire(cb, 3)
+        with self.assertRaisesRegex(ValueError, "不允许普通恢复"):
+            self._make_cb(steps=10, min_reward=0.0, patience=3).load_state_dict(cb.state_dict())
+        cb = self._make_cb(steps=10, min_reward=0.0, patience=3)
+        with self.assertRaisesRegex(ValueError, "配置不一致"):
+            self._make_cb(steps=20, min_reward=0.0, patience=3).load_state_dict(cb.state_dict())
+        data = cb.state_dict()
+        data["schema_version"] = 99
+        with self.assertRaisesRegex(ValueError, "状态版本"):
+            cb.load_state_dict(data)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -10,6 +10,7 @@ from agentic_arxiv.tasks.tasks import get_all_tasks
 from agentic_arxiv.tasks.tasks_expanded import get_expanded_tasks
 from agentic_arxiv.tasks.splits import DEFAULT_SPLIT_PATH, load_split
 from agentic_arxiv.evaluation.runner import BenchmarkRunner
+from agentic_arxiv.evaluation.episode import EvaluationCancelled
 from agentic_arxiv.evaluation.report import BenchmarkReport
 from agentic_arxiv.provenance import read_protocol_metadata
 from agentic_arxiv.config import settings
@@ -66,7 +67,7 @@ def _common_protocol_metadata(results, field: str) -> dict:
     return read_protocol_metadata(common)
 
 
-def execute(args) -> None:
+def execute(args, *, cancel_requested=None, model_artifact=False) -> dict:
     """执行已解析参数；命令参数声明由 CLI 单独维护。"""
     if args.backend == "transformers" and not args.model:
         raise ValueError("--backend transformers 必须同时提供 --model 本地模型目录")
@@ -142,6 +143,8 @@ def execute(args) -> None:
         local_device=args.local_device,
         local_dtype=args.local_dtype,
         generation_seed=args.seed,
+        **({"cancel_requested": cancel_requested} if cancel_requested is not None else {}),
+        **({"model_artifact": True} if model_artifact else {}),
     )
 
     print("=" * 60)
@@ -159,7 +162,12 @@ def execute(args) -> None:
     print(f"  工具执行: {'离线快照回放' if args.offline else '真实 arXiv API'}")
     print("=" * 60)
 
-    results = runner.run_all(task_list)
+    interrupted = None
+    try:
+        results = runner.run_all(task_list)
+    except EvaluationCancelled as error:
+        interrupted = error
+        results = error.partial_results
 
     if args.save_traces is not None:
         traces_path = Path(args.save_traces) if args.save_traces else Path(args.output) / "traces.jsonl"
@@ -194,6 +202,9 @@ def execute(args) -> None:
         for e in error_dicts[:10]:
             print(f"  [{e['session_id']}] {e['error'][:100]}")
 
+    if interrupted is not None:
+        raise interrupted
+
     if not all_metrics:
         print("无有效指标数据，退出")
         sys.exit(1)
@@ -208,3 +219,6 @@ def execute(args) -> None:
     report.save_all(args.output)
 
     print(f"\nBenchmark 完成: {len(all_metrics)} 条有效数据, {len(error_dicts)} 个异常")
+    return {"execution": "failed" if error_dicts else "complete",
+            "expected_episodes": len(task_list) * args.repeat,
+            "completed_episodes": len(results), "error_count": len(error_dicts)}

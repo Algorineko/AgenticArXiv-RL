@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "group": "M0",
+  "stage": "evaluate",
+  "training_config": null,
+  "inputs": {
+    "model": null,
+    "snapshot": null,
+    "split": null
+  },
+  "training_overrides": {
+    "defaults": {},
+    "trainer_parameters": {}
+  },
+  "checkpoint": null,
+  "evaluation": {
+    "kind": "benchmark",
+    "config": null
+  },
+  "budget": {
+    "max_steps": null,
+    "epochs": null,
+    "comparison_group": null,
+    "accounting": "gpu_hours",
+    "strict_match": false,
+    "costs": {
+      "preference_generation_gpu_hours": null,
+      "dpo_gpu_hours": null,
+      "grpo_gpu_hours": null
+    }
+  }
+}

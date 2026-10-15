@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "group": "M4",
+  "stage": "grpo",
+  "training_config": null,
+  "inputs": {
+    "model": {
+      "kind": "registration",
+      "registration_id": "REPLACE_WITH_DPO_REGISTRATION"
+    },
+    "snapshot": null,
+    "split": null,
+    "source_sft": {
+      "kind": "registration",
+      "registration_id": "REPLACE_WITH_COMMON_SFT_REGISTRATION"
+    }
+  },
+  "training_overrides": {
+    "defaults": {},
+    "trainer_parameters": {}
+  },
+  "checkpoint": {
+    "save_steps": 10,
+    "save_total_limit": 3
+  },
+  "evaluation": {
+    "kind": "benchmark",
+    "config": null
+  },
+  "budget": {
+    "max_steps": null,
+    "epochs": null,
+    "comparison_group": null,
+    "accounting": "gpu_hours",
+    "strict_match": false,
+    "costs": {
+      "preference_generation_gpu_hours": null,
+      "dpo_gpu_hours": null,
+      "grpo_gpu_hours": null
+    }
+  },
+  "task_pool": {
+    "path": null,
+    "fingerprint": null
+  },
+  "filter_policy": {
+    "path": null,
+    "fingerprint": null
+  }
+}

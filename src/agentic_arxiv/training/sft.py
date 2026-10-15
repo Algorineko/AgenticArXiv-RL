@@ -14,11 +14,18 @@ import dataclasses
 import hashlib
 import json
 import math
+import time
 from importlib.metadata import version
 from pathlib import Path
 
 from agentic_arxiv.training.observability import describe_logging, resolve_report_to
 from agentic_arxiv.training.distributed import TrainingContext
+from agentic_arxiv.training.dataloader_resume import preserve_managed_dataloader_epoch
+from agentic_arxiv.training.managed import (
+    prepare_managed_training, attach_managed_training, validate_managed_config,
+    record_training_result,
+    managed_cancellation_check,
+)
 from agentic_arxiv.training.stage_verifier import StageVerifier
 from agentic_arxiv.training.mainline_config import (
     config_file_path,
@@ -42,6 +49,25 @@ from agentic_arxiv.training.model_setup import (
 )
 
 SFT_DEFAULTS = stage_config("sft")["defaults"]
+
+
+def _verification_environment(snapshot, managed):
+    """Bind managed verification to the frozen input, never the container cwd."""
+    if managed is not None:
+        inputs = managed.identity["inputs"].get("inputs", {})
+        reference = inputs.get("snapshot", {})
+        declared = reference.get("path") if isinstance(reference, dict) else None
+        if not isinstance(declared, str) or not declared:
+            raise ValueError("受管 SFT 阶段验证需要明确 snapshot 输入")
+        if snapshot and workspace_path(snapshot).resolve() != Path(declared).resolve():
+            raise ValueError("SFT 阶段验证快照与受管输入身份不一致")
+        snapshot = declared
+    if not snapshot:
+        # Preserve the historical workspace fallback for unmanaged callers.
+        return None
+    from agentic_arxiv.runtime.env import MockArxivEnv
+
+    return MockArxivEnv(snapshot_path=workspace_path(snapshot), mode="replay")
 
 
 def _filter_dataclass_kwargs(config_cls, kwargs: dict) -> tuple[dict, list[str]]:
@@ -261,10 +287,19 @@ def main(
     report_to: str = SFT_DEFAULTS["report_to"],
     run_name: str = SFT_DEFAULTS["run_name"],
     config_path: str = None,
+    managed_context: str = None,
+    resume_from_checkpoint: str = None,
+    snapshot: str = None,
 ):
+    managed = prepare_managed_training(
+        managed_context, stage="sft", output_dir=output_dir,
+        resume_from_checkpoint=resume_from_checkpoint,
+    )
     import torch
     requested_config = dict(locals())
     requested_config.pop("torch")
+    requested_config.pop("managed")
+    verification_env = _verification_environment(snapshot, managed) if verify else None
     # 纯数据、标签和参数保护可以独立检查；执行训练时才加载训练栈。
     from agentic_arxiv.training import trl_compat  # noqa: F401
     from trl import SFTConfig, SFTTrainer
@@ -272,6 +307,7 @@ def main(
     from datasets import Dataset
 
     configured = stage_config("sft", config_path)
+    validate_managed_config(managed, requested_config, configured)
     execution = TrainingContext.from_environment()
     if configured["trainer_parameters"].get("completion_only_loss") is not True:
         raise SystemExit("SFT 主线必须仅监督当前 assistant completion")
@@ -282,7 +318,7 @@ def main(
     out_path = workspace_path(output_dir)
     # 先校验日志后端再加载模型：参数写错时应立刻失败
     backends = resolve_report_to(report_to)
-    logging_dir = str(out_path / "logs")
+    logging_dir = str(managed.log_dir if managed is not None else out_path / "logs")
 
     print(f"📚 加载 SFT 数据集: {train_data_path}")
     if not train_data_path.exists():
@@ -425,6 +461,8 @@ def main(
         **_precision_flags(),  # 只有 CUDA 才开混合精度
     }
     config_kwargs.update(execution.trainer_kwargs(stage="sft"))
+    if managed is not None:
+        config_kwargs["logging_dir"] = logging_dir
     require_supported_config(SFTConfig, config_kwargs)
     config = SFTConfig(**config_kwargs)
 
@@ -444,6 +482,9 @@ def main(
     }
     trainer = SFTTrainer(**trainer_kwargs)
     execution.validate_trainer(trainer, stage="sft", allow_sharded=not qlora)
+    stop_control, _checkpoint = attach_managed_training(
+        trainer, managed, execution, resume_from_checkpoint=resume_from_checkpoint,
+    )
 
     trainable, total, ratio = _trainable_parameter_stats(trainer.model)
     if qlora:
@@ -477,6 +518,8 @@ def main(
                     "project_training_artifact" if source_protocol is not None else
                     "local_unclassified_input" if Path(resolved_model).is_dir() else "requested_sft_base"
                 ),
+                **({"training_loss_semantics": "Trainer 原始返回值，不作为跨尝试累计均值或恢复等价证据",
+                    "attempt_loss_sum": None, "attempt_mean_loss": None} if managed is not None else {}),
             },
             source_baseline={
                 "configuration_baseline": load_mainline_config(config_path)["source_baseline"],
@@ -520,30 +563,68 @@ def main(
         )
         return record
 
+    training_started = time.monotonic()
     try:
-        train_result = trainer.train()
+        with preserve_managed_dataloader_epoch(
+                trainer, enabled=managed is not None and bool(resume_from_checkpoint)):
+            train_result = (trainer.train(resume_from_checkpoint=str(workspace_path(resume_from_checkpoint)))
+                            if resume_from_checkpoint else trainer.train())
     except BaseException as exc:
+        if stop_control is not None:
+            stop_control.mark_failed(exc, getattr(trainer.state, "global_step", None))
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=getattr(trainer.state, "global_step", None),
+                               planned_steps=getattr(trainer.state, "max_steps", None),
+                               reason=f"training_exception:{type(exc).__name__}",
+                               best_effort=True,
+                               training_elapsed_seconds=time.monotonic() - training_started)
         try:
             save_run_diagnostic(f"training_exception:{type(exc).__name__}")
         except Exception as record_error:
             print(f"训练异常时未能保存运行诊断: {type(record_error).__name__}")
         raise
+    training_elapsed = time.monotonic() - training_started
     train_loss = float(train_result.training_loss)
     if not math.isfinite(train_loss):
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=getattr(trainer.state, "global_step", None),
+                               planned_steps=getattr(trainer.state, "max_steps", None),
+                               reason="invalid_training_loss", training_elapsed_seconds=training_elapsed,
+                               best_effort=True)
         try:
             save_run_diagnostic("invalid_training_loss")
         except Exception as record_error:
             print(f"无效训练 loss 时未能保存运行诊断: {type(record_error).__name__}")
         raise SystemExit(f"❌ training_loss不是有限数: {train_loss}")
     actual_steps = int(getattr(trainer.state, "global_step", 0) or 0)
-    planned_steps = max_steps if max_steps > 0 else getattr(trainer.state, "max_steps", None)
+    planned_steps = getattr(trainer.state, "max_steps", None)
+    if managed is not None and (type(planned_steps) is not int or planned_steps < 1):
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=actual_steps, reason="missing_trainer_budget",
+                               training_elapsed_seconds=training_elapsed)
+        raise ValueError("受管 SFT 缺少 Trainer 实际核定的总优化步数，不能宣称预算完成")
+    if managed is None and max_steps > 0:
+        planned_steps = max_steps
     stop_reason = (
         "trainer_stopped_early"
         if planned_steps and actual_steps < planned_steps
         else "max_steps_or_epochs_completed"
     )
+    if stop_reason == "trainer_stopped_early" and stop_control is not None and stop_control.user_stopped:
+        stop_reason = "user_safe_stop"
     memory = execution.memory_summary()
     run_record = execution.run_on_main(lambda: save_run_diagnostic(stop_reason))
+    if stop_reason != "max_steps_or_epochs_completed":
+        record_training_result(
+            managed, execution,
+            training="user_safe_stop" if stop_reason == "user_safe_stop" else "protection_stopped",
+            validation="not_run", global_step=actual_steps, reason=stop_reason,
+            planned_steps=planned_steps,
+            checkpoint=stop_control.checkpoint if stop_control is not None else None,
+            training_elapsed_seconds=training_elapsed,
+        )
+        print(f"SFT 训练已停止: {stop_reason}；未导出 final 或运行正常完成验证")
+        return
 
     final_output_dir = out_path / "final"
     trainer.save_model(str(final_output_dir))
@@ -611,13 +692,19 @@ def main(
         )
 
     execution.run_on_main(save_final_artifacts)
+    record_training_result(managed, execution, training="budget_completed",
+                           validation="in_progress" if verify else "skipped",
+                           global_step=actual_steps, reason=stop_reason,
+                           planned_steps=planned_steps,
+                           training_elapsed_seconds=training_elapsed)
 
     # 其余 rank 等待结果；主进程验证失败也必须通知它们，不能挂在 barrier。
     if verify:
         def verify_final():
             print("\n🔍 运行 SFT 阶段验证...")
-            verifier = StageVerifier(sft_min_parse_rate=min_parse_rate)
-            report = verifier.verify_sft(model_path=str(final_output_dir))
+            verifier = StageVerifier(sft_min_parse_rate=min_parse_rate,
+                                     cancel_requested=managed_cancellation_check(managed))
+            report = verifier.verify_sft(model_path=str(final_output_dir), env=verification_env)
             verifier.save_report(report, final_output_dir)
             print(report.summary())
             if not report.passed:
@@ -625,5 +712,24 @@ def main(
                     "\n⚠️  SFT 阶段验证未通过，但模型已保存。"
                     f"请在继续 GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
                 )
+            return ("interrupted" if getattr(report, "coverage", {}).get("execution") == "interrupted"
+                    else "passed" if report.passed else "failed")
 
-        execution.run_on_main(verify_final)
+        verification_started = time.monotonic()
+        try:
+            verification = execution.run_on_main(verify_final)
+        except BaseException as exc:
+            record_training_result(managed, execution, training="budget_completed",
+                                   validation="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
+                                   global_step=actual_steps, reason=f"verification_exception:{type(exc).__name__}",
+                                   planned_steps=planned_steps,
+                                   best_effort=True,
+                                   training_elapsed_seconds=training_elapsed,
+                                   stage_validation_elapsed_seconds=time.monotonic() - verification_started)
+            raise
+        record_training_result(managed, execution, training="budget_completed",
+                               validation=verification,
+                               global_step=actual_steps, reason=stop_reason,
+                               planned_steps=planned_steps,
+                               training_elapsed_seconds=training_elapsed,
+                               stage_validation_elapsed_seconds=time.monotonic() - verification_started)

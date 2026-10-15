@@ -157,6 +157,12 @@ agentic-arxiv train grpo \
 
 SFT/DPO/GRPO 的 QLoRA 也支持单机 DDP，每卡一个进程。`python -m agentic_arxiv.training.launch` 启动器支持显式 GPU、各 rank 日志及无副作用的 `--dry-run`；四卡 batch/累积换算、GRPO 跨 rank 分组和验证边界见 [多卡训练指南](docs/training_distributed.md)。本次未启动真实多卡训练，不影响已有单卡任务。
 
+### 容器化实验管理
+
+`agentic-arxiv experiment --help` 提供轻量管理入口，覆盖六组配方、只读登记、单作业启动、状态与日志、安全停止、完整 checkpoint 恢复和独立评测。管理端只需基础安装，不连接远程服务器、不自动补跑前置阶段。配方支持预先声明总优化步数或 epoch 预算，恢复继续原预算并写入新尝试目录，不覆盖旧产物。
+
+操作见 [命令与配置](docs/experiment-cli.md)、[输入与配方](docs/experiment_inputs.md)、[容器准备](docs/container-deployment.md) 和 [本地验证及未验证矩阵](docs/containerized-experiment-validation.md)。工程测试通过不等于实际训练镜像、GPU 容器或三阶段单卡/四卡恢复已通过；服务器操作和真实训练仍需独立授权。
+
 ### 显式可选 DPO（示例未执行）
 
 不选择该阶段时，GRPO 仍默认读取 `outputs/sft_qlora/final`，不查找 DPO 目录或自动串接训练。生成只使用当前协议本地 SFT、已有快照及显式版本化 expanded `:train`，不接受留出集、裸 train 或历史 `rl_train` 子集：

@@ -6,6 +6,7 @@ import gc
 import inspect
 import json
 import math
+import time
 from functools import partial
 from pathlib import Path
 
@@ -20,6 +21,12 @@ from agentic_arxiv.runtime.react_contract import (
     parse_react_response, protocol_metadata, validate_react_messages,
 )
 from agentic_arxiv.training.distributed import TrainingContext
+from agentic_arxiv.training.dataloader_resume import preserve_managed_dataloader_epoch
+from agentic_arxiv.training.managed import (
+    prepare_managed_training, attach_managed_training, validate_managed_config,
+    record_training_result,
+    managed_cancellation_check,
+)
 from agentic_arxiv.training.mainline_config import (
     config_file_path, load_mainline_config, require_supported_config,
     resolve_model_source, stage_config, stage_config_source,
@@ -143,9 +150,15 @@ def main(
     min_reward: float = DPO_DEFAULTS["min_reward"], report_to: str = DPO_DEFAULTS["report_to"],
     run_name: str = DPO_DEFAULTS["run_name"], base_model: str = DPO_DEFAULTS["base_model"],
     snapshot: str = DPO_DEFAULTS["snapshot"], config_path: str = None,
+    managed_context: str = None, resume_from_checkpoint: str = None,
 ):
     requested_config = dict(locals())
+    managed = prepare_managed_training(
+        managed_context, stage="dpo", output_dir=output_dir,
+        resume_from_checkpoint=resume_from_checkpoint,
+    )
     configured = stage_config("dpo", config_path)
+    validate_managed_config(managed, requested_config, configured)
     execution = TrainingContext.from_environment()
     effective_batch = execution.effective_batch_size(batch_size, grad_accum)
     for name, value in (("epochs", epochs), ("lr", lr), ("beta", beta)):
@@ -164,6 +177,8 @@ def main(
         expected_protocol=protocol_metadata(), local_base_only=True,
     )
     source_model = model_input_fingerprint(resolved)
+    if managed is not None:
+        managed.validate_reference_identity(resolved)
     rows, _traces, manifest = load_dpo_package(
         data_path, manifest_path=manifest_path, expected_protocol=protocol_metadata(),
         expected_source_model=source_model, decision_parser=parse_react_response,
@@ -217,7 +232,8 @@ def main(
         "optim": actual_optim, "gradient_checkpointing": gradient_checkpointing,
         "gradient_checkpointing_kwargs": {"use_reentrant": False} if gradient_checkpointing else None,
         "seed": seed, "data_seed": seed, "report_to": backends,
-        "run_name": run_name or out_path.name, "logging_dir": str(out_path / "logs"),
+        "run_name": run_name or out_path.name,
+        "logging_dir": str(managed.log_dir if managed is not None else out_path / "logs"),
         **precision_flags(), **execution.trainer_kwargs(stage="dpo"),
     }
     require_supported_config(DPOConfig, config_kwargs)
@@ -240,6 +256,9 @@ def main(
     execution.validate_trainer(trainer, stage="dpo")
     _assert_prepared_dataset(trainer.train_dataset, audited)
     _assert_independent_reference(trainer.model, trainer.ref_model, trainer.optimizer)
+    stop_control, _checkpoint = attach_managed_training(
+        trainer, managed, execution, resume_from_checkpoint=resume_from_checkpoint,
+    )
     trainable, total, ratio = (_assert_lora_only_trainable(trainer.model) if qlora
                                else _trainable_parameter_stats(trainer.model))
     effective_adapters = {
@@ -267,6 +286,8 @@ def main(
                             "trainable_parameters": trainable, "model_parameters": total,
                             "trainer_planned_steps": getattr(trainer_state, "max_steps", None),
                             "effective_adapters": effective_adapters,
+                            **({"training_loss_semantics": "Trainer 原始返回值，不作为跨尝试累计均值或恢复等价证据",
+                                "attempt_loss_sum": None, "attempt_mean_loss": None} if managed is not None else {}),
                             "audited_max_length": max_length, "configuration_source": stage_config_source("dpo", config_path)},
             source_baseline={"configuration_baseline": load_mainline_config(config_path)["source_baseline"],
                              "execution_source": source_fingerprint(
@@ -288,13 +309,26 @@ def main(
         _write_json(out_path / "run_manifest.json", record)
         return record
 
+    training_started = time.monotonic()
     try:
-        result = trainer.train()
+        # Trainer 仅恢复可训练策略；reference 始终从最初的 SFT 独立重建。
+        with preserve_managed_dataloader_epoch(
+                trainer, enabled=managed is not None and bool(resume_from_checkpoint)):
+            result = (trainer.train(resume_from_checkpoint=str(workspace_path(resume_from_checkpoint)))
+                      if resume_from_checkpoint else trainer.train())
         _assert_independent_reference(trainer.model, trainer.ref_model, trainer.optimizer)
         train_loss = float(result.training_loss)
         if not math.isfinite(train_loss):
             raise ValueError(f"DPO training_loss 不是有限数: {train_loss}")
     except BaseException as exc:
+        if stop_control is not None:
+            stop_control.mark_failed(exc, getattr(trainer.state, "global_step", None))
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=getattr(trainer.state, "global_step", None),
+                               planned_steps=getattr(trainer.state, "max_steps", None),
+                               reason=f"training_exception:{type(exc).__name__}",
+                               best_effort=True,
+                               training_elapsed_seconds=time.monotonic() - training_started)
         # 训练器自己的集体通信错误不再启动额外 collective，避免掩盖原异常。
         trainer_state = trainer.state
         try:
@@ -302,12 +336,35 @@ def main(
         except Exception as record_error:
             print(f"DPO 训练异常时无法保存运行诊断: {type(record_error).__name__}")
         raise
+    training_elapsed = time.monotonic() - training_started
     trainer_state = trainer.state
     actual_steps = int(getattr(trainer.state, "global_step", 0) or 0)
-    planned = max_steps if max_steps > 0 else getattr(trainer.state, "max_steps", None)
+    planned = getattr(trainer.state, "max_steps", None)
+    if managed is not None and (type(planned) is not int or planned < 1):
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=actual_steps, reason="missing_trainer_budget",
+                               training_elapsed_seconds=training_elapsed)
+        raise ValueError("受管 DPO 缺少 Trainer 实际核定的总优化步数，不能宣称预算完成")
+    if managed is None and max_steps > 0:
+        planned = max_steps
     reason = "trainer_stopped_early" if planned and actual_steps < planned else "max_steps_or_epochs_completed"
+    if reason == "trainer_stopped_early" and stop_control is not None and stop_control.user_stopped:
+        reason = "user_safe_stop"
+    if reason != "max_steps_or_epochs_completed":
+        record_training_result(
+            managed, execution,
+            training="user_safe_stop" if reason == "user_safe_stop" else "protection_stopped",
+            validation="not_run", global_step=actual_steps, reason=reason,
+            planned_steps=planned,
+            checkpoint=stop_control.checkpoint if stop_control is not None else None,
+            training_elapsed_seconds=training_elapsed,
+        )
+        verification.update(status="skipped", reason=reason)
     memory = execution.memory_summary()
     record = execution.run_on_main(lambda: save_run(reason))
+    if reason != "max_steps_or_epochs_completed":
+        print(f"DPO 训练已停止: {reason}；未导出 final 或运行正常完成验证")
+        return
     # 所有 rank 参与 Trainer 保存；共享 tokenizer/manifest 只有全局主进程写入。
     trainer.save_model(str(final_path))
 
@@ -334,21 +391,30 @@ def main(
         return exported
 
     exported = execution.run_on_main(partial(save_final, tokenizer))
+    record_training_result(managed, execution, training="budget_completed",
+                           validation="in_progress" if verify else "skipped",
+                           global_step=actual_steps, reason=reason,
+                           planned_steps=planned,
+                           training_elapsed_seconds=training_elapsed)
     # 参考、优化器、策略可能被 Trainer/Accelerate 同时持有；先清空这些引用再加载验证模型。
     trainer.accelerator.free_memory()
-    del trainer, policy, reference, dataset, tokenizer
+    # 受管保存适配和停止回调也持有 Trainer，必须一起退出训练生命周期。
+    del stop_control, _checkpoint, trainer, policy, reference, dataset, tokenizer
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
     def verify_final():
         from agentic_arxiv.runtime.env import MockArxivEnv
-        verifier = StageVerifier(dpo_min_reward=min_reward)
+        verifier = StageVerifier(dpo_min_reward=min_reward,
+                                 cancel_requested=managed_cancellation_check(managed))
         try:
             env = MockArxivEnv(snapshot_path=snapshot_path, mode="replay")
             report = verifier.verify_dpo(model_path=str(final_path), env=env)
             verifier.save_report(report, final_path)
-            verification.update(status="passed" if report.passed else "failed",
+            status = ("interrupted" if getattr(report, "coverage", {}).get("execution") == "interrupted"
+                      else "passed" if report.passed else "failed")
+            verification.update(status=status,
                                 report=str(final_path / "verification_report.json"))
             print(report.summary())
         except BaseException as exc:
@@ -363,10 +429,26 @@ def main(
             record["protections"]["verification"] = dict(verification)
             _write_json(final_path / "training_manifest.json", exported)
             _write_json(out_path / "run_manifest.json", record)
-        if not report.passed:
+        if not report.passed and verification["status"] != "interrupted":
             raise SystemExit("DPO 阶段验证失败；模型与报告已保留，不自动继续 GRPO")
         return dict(verification)
 
     if verify:
-        verification.update(execution.run_on_main(verify_final))
+        verification_started = time.monotonic()
+        try:
+            verification.update(execution.run_on_main(verify_final))
+        except BaseException as exc:
+            record_training_result(managed, execution, training="budget_completed",
+                                   validation="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
+                                   global_step=actual_steps, reason=f"verification_exception:{type(exc).__name__}",
+                                   planned_steps=planned,
+                                   best_effort=True,
+                                   training_elapsed_seconds=training_elapsed,
+                                   stage_validation_elapsed_seconds=time.monotonic() - verification_started)
+            raise
+        record_training_result(managed, execution, training="budget_completed",
+                               validation=verification["status"], global_step=actual_steps, reason=reason,
+                               planned_steps=planned,
+                               training_elapsed_seconds=training_elapsed,
+                               stage_validation_elapsed_seconds=time.monotonic() - verification_started)
     print(f"DPO 训练产物已保存: {final_path}；验证状态={verification['status']}")

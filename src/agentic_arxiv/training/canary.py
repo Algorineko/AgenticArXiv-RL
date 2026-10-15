@@ -18,7 +18,8 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Sequence
 
@@ -86,6 +87,7 @@ class CanaryEvaluator:
         environment_factory: Callable[[], AgenticArxivMultiTurnEnv] | None = None,
         model_source: str = "",
         artifact: bool = False,
+        cancel_requested: Callable[[], bool] | None = None,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -99,6 +101,7 @@ class CanaryEvaluator:
         self.environment_factory = environment_factory
         self.model_source = model_source
         self.artifact = artifact
+        self.cancel_requested = cancel_requested
         if num_generations < 1 or max_iterations < 1:
             raise ValueError("Canary 采样数和完整 episode 轮数必须为正数")
 
@@ -169,6 +172,7 @@ class CanaryEvaluator:
                 max_new_tokens=self.max_new_tokens,
                 training_step=step,
                 session_prefix="canary",
+                cancel_requested=self.cancel_requested,
             )
         finally:
             self.model.train(was_training)
@@ -213,6 +217,60 @@ class CanaryCallback(TrainerCallback):
         self._below_streak = 0
         self._tripped = False
         self._results: List[CanaryResult] = []
+        self._last_evaluated_step = None
+        if type(steps) is not int or steps < 1 or type(patience) is not int or patience < 1:
+            raise ValueError("Canary steps 与 patience 必须为正整数")
+
+    def _state_config(self):
+        config = {"steps": self.steps, "min_reward": self.min_reward, "patience": self.patience}
+        # The evaluator's sampling settings are part of the monitoring identity.
+        for name in ("canary_task_ids", "num_generations", "max_new_tokens", "temperature",
+                     "max_iterations", "model_source", "artifact"):
+            value = getattr(self.evaluator, name, None)
+            if isinstance(value, (str, int, float, bool, list)):
+                config[name] = value
+        return config
+
+    def state_dict(self):
+        """Versioned monitoring history, including patience already consumed."""
+        return {"schema_version": 1, "config": self._state_config(),
+                "below_streak": self._below_streak, "tripped": self._tripped,
+                "last_evaluated_step": self._last_evaluated_step,
+                "results": [asdict(result) for result in self._results]}
+
+    def load_state_dict(self, state):
+        """Reject changed monitoring settings and protection-stopped resumes."""
+        expected = {"schema_version", "config", "below_streak", "tripped",
+                    "last_evaluated_step", "results"}
+        if not isinstance(state, dict) or set(state) != expected or (
+            type(state["schema_version"]) is not int or state["schema_version"] != 1
+        ):
+            raise ValueError("不支持或损坏的 Canary 状态版本")
+        if state["config"] != self._state_config():
+            raise ValueError("Canary 恢复配置不一致")
+        if type(state["tripped"]) is not bool or state["tripped"]:
+            raise ValueError("已触发或损坏的 Canary 保护状态不允许普通恢复")
+        streak, last = state["below_streak"], state["last_evaluated_step"]
+        if type(streak) is not int or not 0 <= streak < self.patience or (
+            last is not None and (type(last) is not int or last < 0)
+        ) or not isinstance(state["results"], list):
+            raise ValueError("损坏的 Canary 累计状态")
+        restored = []
+        names = {item.name for item in fields(CanaryResult)}
+        for row in state["results"]:
+            if not isinstance(row, dict) or set(row) != names or (
+                type(row["step"]) is not int or row["step"] < 0
+                or type(row["mean_reward"]) not in (int, float)
+                or not math.isfinite(row["mean_reward"])
+            ):
+                raise ValueError("损坏的 Canary 结果历史")
+            restored.append(CanaryResult(**row))
+        if bool(restored) != (last is not None) or streak > len(restored):
+            raise ValueError("Canary 历史与计数不一致")
+        self._results = restored
+        self._below_streak = streak
+        self._tripped = False
+        self._last_evaluated_step = last
 
     @property
     def tripped(self) -> bool:
@@ -225,7 +283,7 @@ class CanaryCallback(TrainerCallback):
         return list(self._results)
 
     def on_log(self, args, state, control, logs=None, **kwargs):
-        if state.global_step % self.steps != 0:
+        if state.global_step % self.steps != 0 or state.global_step == self._last_evaluated_step:
             return
 
         def evaluate():
@@ -234,6 +292,7 @@ class CanaryCallback(TrainerCallback):
         result = (self.distributed.run_on_main(evaluate)
                   if self.distributed is not None else evaluate())
         self._results.append(result)
+        self._last_evaluated_step = state.global_step
 
         # 打印 canary 报告
         self._print(

@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -95,12 +95,14 @@ class StageVerifier:
         sft_min_parse_rate: float = 0.3,
         grpo_min_reward: float = -0.2,
         dpo_min_reward: float = -0.3,
+        cancel_requested: Callable[[], bool] | None = None,
     ):
         self.thresholds = {
             "sft": {"parse_rate": sft_min_parse_rate},
             "dpo": {"mean_reward": dpo_min_reward},
             "grpo": {"mean_reward": grpo_min_reward},
         }
+        self.cancel_requested = cancel_requested
 
     # ------------------------------------------------------------------
     # SFT 验证
@@ -152,6 +154,7 @@ class StageVerifier:
                 model, tokenizer, task_ids=task_ids, env=env,
                 num_generations=2, temperature=0.3, max_iterations=max_iterations,
                 model_source=model_path,
+                **({"cancel_requested": self.cancel_requested} if self.cancel_requested else {}),
             )
         except Exception as error:
             return self._evaluation_failure("sft", model_path, error, task_ids, max_iterations, tokenizer)
@@ -225,6 +228,7 @@ class StageVerifier:
                 model, tokenizer, task_ids=DEFAULT_CANARY_TASK_IDS,
                 env=env, max_iterations=max_iterations, model_source=model_path,
                 artifact=stage == "dpo",
+                **({"cancel_requested": self.cancel_requested} if self.cancel_requested else {}),
             )
         except Exception as error:
             return self._evaluation_failure(
@@ -252,12 +256,16 @@ class StageVerifier:
         )
 
     def _evaluation_failure(self, stage, model_path, error, task_ids, max_iterations, tokenizer):
+        from agentic_arxiv.evaluation.episode import EvaluationCancelled
+
+        interrupted = isinstance(error, EvaluationCancelled)
         return VerificationReport(
             stage=stage, model_path=model_path, passed=False,
             metrics={"parse_rate": 0.0, "mean_reward": -1.0, "task_completion_rate": 0.0},
             thresholds=self.thresholds[stage], failures=[f"完整 episode 验证失败: {error}"],
             coverage={"task_ids": list(task_ids), "max_iterations": max_iterations,
-                      "execution": "failed", "scope": "smoke-only"},
+                      "execution": "interrupted" if interrupted else "failed", "scope": "smoke-only",
+                      **({"completed_episodes": error.completed_episodes} if interrupted else {})},
             protocol=_evaluation_protocol(model_path, tokenizer),
         )
 
@@ -330,6 +338,7 @@ def _check_episode_result(
     max_iterations: int = 6,
     model_source: str = "",
     artifact: bool = False,
+    cancel_requested: Callable[[], bool] | None = None,
 ):
     """全部阶段共用真实多轮执行，不从首个 completion 合成轨迹。"""
     from agentic_arxiv.training.canary import CanaryEvaluator
@@ -346,6 +355,7 @@ def _check_episode_result(
         max_iterations=max_iterations,
         model_source=model_source,
         artifact=artifact,
+        **({"cancel_requested": cancel_requested} if cancel_requested else {}),
     )
     return evaluator.evaluate(step=0)
 

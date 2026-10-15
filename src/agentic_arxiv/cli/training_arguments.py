@@ -40,13 +40,22 @@ def _add_shared_arguments(parser, defaults):
                         help="TensorBoard / wandb 运行名称，默认取输出目录末段")
     parser.add_argument("--config", dest="config_path", default=None,
                         help="主线配置 JSON；显式 CLI 参数优先于配置")
+    parser.add_argument("--managed-context", default=None,
+                        help="受管尝试身份文件；不改变原训练配置或总预算")
+
+
+def _add_managed_resume_argument(parser):
+    parser.add_argument("--resume-from-checkpoint", default=None,
+                        help="显式完整恢复点；须同时提供 --managed-context 和新的尝试输出目录")
 
 
 def _add_sft_arguments(parser, defaults):
     _add_shared_arguments(parser, defaults)
+    _add_managed_resume_argument(parser)
     parser.add_argument("--data", default=defaults["data"], help="已有 SFT 数据文件")
     parser.add_argument("--data-manifest", default=defaults["data_manifest"],
                         help="已有 SFT 数据 manifest")
+    parser.add_argument("--snapshot", default=None, help="阶段验证使用的已有离线快照")
     parser.add_argument("--max-length", type=int, default=defaults["max_length"],
                         help="训练序列长度上限；训练前检查长度，避免截断 assistant 目标")
     parser.add_argument("--inspect-only", action="store_true", default=defaults["inspect_only"],
@@ -60,6 +69,7 @@ def _add_sft_arguments(parser, defaults):
 
 def _add_dpo_arguments(parser, defaults):
     _add_shared_arguments(parser, defaults)
+    _add_managed_resume_argument(parser)
     parser.add_argument("--data", default=defaults["data"], help="当前协议 DPO 训练包 JSONL")
     parser.add_argument("--data-manifest", default=defaults["data_manifest"],
                         help="默认读取数据旁的 manifest；不支持跳过完整性校验")
@@ -111,7 +121,7 @@ def _add_grpo_arguments(parser, defaults):
     parser.add_argument("--save-total-limit", type=int, default=defaults["save_total_limit"],
                         help="最多保留的周期 checkpoint 数，最终模型不计入")
     parser.add_argument("--resume-from-checkpoint", default=defaults["resume_from_checkpoint"],
-                        help="恢复模型、优化器与调度器状态；须保持原输出目录和训练参数")
+                        help="显式恢复训练状态；受管恢复使用新尝试目录并保持原训练参数和总预算")
     parser.add_argument("--snapshot", default=defaults["snapshot"], help="已有离线快照目录")
     parser.add_argument("--task-set", choices=["default", "expanded"],
                         default=defaults["task_set"],

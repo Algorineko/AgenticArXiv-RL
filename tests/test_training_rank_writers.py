@@ -1,6 +1,7 @@
 """用薄训练器验证 SFT/GRPO 入口的 writer 边界，不加载模型或执行训练。"""
 
 from collections import defaultdict
+from contextlib import nullcontext
 import ast
 import inspect
 import json
@@ -14,14 +15,31 @@ from agentic_arxiv.runtime.react_contract import protocol_metadata
 from agentic_arxiv.training.distributed import TrainingContext
 
 
-def _run_stage(stage, rank, tmp_path, monkeypatch, *, fail_training=False):
+def _run_stage(stage, rank, tmp_path, monkeypatch, *, fail_training=False,
+               actual_steps=2, user_stopped=False, resume=None, observed=None, epoch_mode=False):
     torch = pytest.importorskip("torch")
     trl = pytest.importorskip("trl")
     transformers = pytest.importorskip("transformers")
     from agentic_arxiv.training import grpo, sft
 
     module = sft if stage == "sft" else grpo
+    if stage == "sft":
+        # Snapshot parsing/binding has its own tests; this fixture isolates writers.
+        monkeypatch.setattr(module, "_verification_environment", Mock(return_value=None))
+        monkeypatch.setattr(module, "preserve_managed_dataloader_epoch", lambda *args, **kwargs: nullcontext())
     output = tmp_path / "output"
+    if stage == "sft" and (resume or user_stopped or epoch_mode):
+        managed = SimpleNamespace(log_dir=str(output / "logs"))
+        monkeypatch.setattr(module, "prepare_managed_training", lambda *args, **kwargs: managed)
+        monkeypatch.setattr(module, "validate_managed_config", lambda *args: None)
+        def record_result(*args, **kwargs):
+            if observed is not None:
+                observed.setdefault("results", []).append(kwargs)
+
+        monkeypatch.setattr(module, "record_training_result", record_result)
+        stop_control = SimpleNamespace(user_stopped=user_stopped, checkpoint="old/checkpoint-1",
+                                       mark_failed=Mock())
+        monkeypatch.setattr(module, "attach_managed_training", lambda *args, **kwargs: (stop_control, None))
     responses = iter([{}, None, None] if stage == "sft" else [{}, output / "reward_probe_summary.json", (None, None), None, None])
 
     class Context(TrainingContext):
@@ -59,6 +77,8 @@ def _run_stage(stage, rank, tmp_path, monkeypatch, *, fail_training=False):
 
     class Config:
         def __init__(self, **kwargs):
+            if observed is not None:
+                observed["config"] = kwargs
             self.__dict__.update(kwargs)
             self.generation_batch_size = kwargs["per_device_train_batch_size"] * kwargs["gradient_accumulation_steps"] * 4
 
@@ -71,7 +91,7 @@ def _run_stage(stage, rank, tmp_path, monkeypatch, *, fail_training=False):
         def __init__(self, *, model, args, **kwargs):
             self.model = model
             self.args = args
-            self.state = SimpleNamespace(global_step=2, max_steps=2)
+            self.state = SimpleNamespace(global_step=actual_steps, max_steps=2)
             self.accelerator = SimpleNamespace(num_processes=4, process_index=rank, distributed_type="MULTI_CPU")
             self.model_accepts_loss_kwargs = True
             self.compute_loss_func = None
@@ -81,6 +101,8 @@ def _run_stage(stage, rank, tmp_path, monkeypatch, *, fail_training=False):
             pass
 
         def train(self, **kwargs):
+            if observed is not None:
+                observed["train"] = kwargs
             if fail_training:
                 raise ValueError("intentional trainer failure")
             return SimpleNamespace(training_loss=0.25)
@@ -93,15 +115,18 @@ def _run_stage(stage, rank, tmp_path, monkeypatch, *, fail_training=False):
 
     monkeypatch.setattr(trl, "SFTConfig" if stage == "sft" else "GRPOConfig", Config)
     monkeypatch.setattr(trl, "SFTTrainer" if stage == "sft" else "GRPOTrainer", Trainer)
-    report = SimpleNamespace(passed=True, summary=lambda: "unit-test report")
+    report = SimpleNamespace(passed=True, coverage={}, summary=lambda: "unit-test report")
     verifier = Mock()
     verifier.verify_sft.return_value = report
     verifier.verify_grpo.return_value = report
     monkeypatch.setattr(module, "StageVerifier", Mock(return_value=verifier))
 
     arguments = {"model": str(model_path), "output_dir": str(output), "qlora": False,
-                 "max_steps": 2, "batch_size": 1, "grad_accum": 2 if stage == "sft" else 1,
+                 "max_steps": -1 if epoch_mode else 2,
+                 "batch_size": 1, "grad_accum": 2 if stage == "sft" else 1,
                  "verify": True}
+    if stage == "sft" and resume:
+        arguments.update(managed_context="current-context.json", resume_from_checkpoint=str(resume))
     if stage == "sft":
         data = tmp_path / "data.jsonl"
         data.write_text('{}\n')
@@ -179,6 +204,63 @@ def test_training_failure_has_only_main_diagnostic_and_no_success_final(stage, r
         assert not output.exists()
 
 
+@pytest.mark.train
+def test_sft_resume_passes_full_state_path_without_reissuing_budget(tmp_path, monkeypatch):
+    observed = {}
+    checkpoint = tmp_path / "previous-attempt" / "checkpoint-1"
+    output, _, verifier, models = _run_stage(
+        "sft", 0, tmp_path, monkeypatch, resume=checkpoint, observed=observed,
+    )
+    assert observed["train"] == {"resume_from_checkpoint": str(checkpoint)}
+    assert observed["config"]["max_steps"] == 2
+    assert observed["config"]["learning_rate"] == 1e-4
+    assert observed["config"]["output_dir"] == str(output)
+    assert models == [str(output / "final")]
+    verifier.verify_sft.assert_called_once()
+
+
+@pytest.mark.train
+@pytest.mark.parametrize("user_stopped", [True, False])
+def test_sft_user_or_protection_stop_never_exports_success_final_or_verifies(user_stopped, tmp_path, monkeypatch):
+    output, tokenizer, verifier, models = _run_stage(
+        "sft", 0, tmp_path, monkeypatch, actual_steps=1, user_stopped=user_stopped,
+    )
+    assert not models and not (output / "final").exists()
+    tokenizer.save_pretrained.assert_not_called()
+    verifier.verify_sft.assert_not_called()
+    record = json.loads((output / "run_manifest.json").read_text())
+    assert record["stop_reason"] == ("user_safe_stop" if user_stopped else "trainer_stopped_early")
+
+
+@pytest.mark.train
+def test_sft_completed_budget_wins_over_late_stop_request(tmp_path, monkeypatch):
+    output, _, verifier, models = _run_stage(
+        "sft", 0, tmp_path, monkeypatch, user_stopped=True,
+    )
+    assert models == [str(output / "final")]
+    verifier.verify_sft.assert_called_once()
+    assert json.loads((output / "run_manifest.json").read_text())["stop_reason"] == "max_steps_or_epochs_completed"
+
+
+@pytest.mark.train
+@pytest.mark.parametrize("actual_steps,user_stopped", [(1, True), (2, False)])
+def test_sft_epoch_resume_keeps_epoch_scheduler_and_records_trainer_actual_plan(
+        actual_steps, user_stopped, tmp_path, monkeypatch):
+    observed = {}
+    checkpoint = tmp_path / "previous-attempt/checkpoint-1"
+    output, _, _, models = _run_stage(
+        "sft", 0, tmp_path, monkeypatch, resume=checkpoint, observed=observed,
+        epoch_mode=True, actual_steps=actual_steps, user_stopped=user_stopped,
+    )
+    assert observed["config"]["max_steps"] == -1
+    assert observed["config"]["num_train_epochs"] == 3
+    assert observed["config"]["lr_scheduler_type"] == "cosine"
+    assert observed["train"] == {"resume_from_checkpoint": str(checkpoint)}
+    assert observed["results"][-1]["planned_steps"] == 2
+    assert observed["results"][-1]["training"] == ("user_safe_stop" if user_stopped else "budget_completed")
+    assert models == ([] if user_stopped else [str(output / "final")])
+
+
 def _dpo_main_tree():
     """只检查接线结构，不添加模型响应、token 或轨迹输入。"""
     from agentic_arxiv.training import dpo
@@ -217,6 +299,51 @@ def test_dpo_final_writers_and_verification_have_main_rank_broadcast_boundary():
                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                    and node.func.attr == "free_memory")
     assert release < verify.lineno
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_dpo_cleanup_releases_managed_trainer_and_models_before_verification(managed):
+    import gc
+    import weakref
+    from agentic_arxiv.training.checkpoint import ManagedCheckpointAdapter
+
+    class Resource:
+        pass
+
+    class Accelerator:
+        def free_memory(self):
+            self.models.clear()
+
+    def training_namespace():
+        trainer, policy, reference, optimizer = (Resource() for _ in range(4))
+        trainer.model, trainer.ref_model, trainer.optimizer = policy, reference, optimizer
+        trainer.accelerator = Accelerator()
+        trainer.accelerator.models = [policy, reference]
+        adapter = (ManagedCheckpointAdapter(trainer, context=None, training_context=None)
+                   if managed else None)
+        callback = Resource() if managed else None
+        if managed:
+            callback.checkpoint_committed = lambda step: adapter.last_checkpoint
+            trainer.callbacks = [callback]
+            trainer._managed_checkpoint = adapter
+        refs = [weakref.ref(item) for item in (trainer, policy, reference, optimizer)]
+        return {"trainer": trainer, "policy": policy, "reference": reference,
+                "stop_control": callback, "_checkpoint": adapter,
+                "dataset": Resource(), "tokenizer": Resource(), "gc": gc}, refs
+
+    tree = _dpo_main_tree()
+    start = next(index for index, node in enumerate(tree.body)
+                 if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                 and isinstance(node.value.func, ast.Attribute) and node.value.func.attr == "free_memory")
+    end = next(index for index, node in enumerate(tree.body[start:], start)
+               if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+               and isinstance(node.value.func, ast.Attribute) and node.value.func.attr == "collect")
+    # 执行生产代码的实际清理片段，只提供内存资源及真实受管适配对象，不运行训练。
+    cleanup = ast.Module(body=tree.body[start:end + 1], type_ignores=[])
+    namespace, references = training_namespace()
+    assert all(reference() is not None for reference in references)
+    exec(compile(cleanup, "dpo-cleanup", "exec"), namespace)
+    assert all(reference() is None for reference in references)
 
 
 def test_dpo_uses_explicit_reference_without_second_peft_configuration():

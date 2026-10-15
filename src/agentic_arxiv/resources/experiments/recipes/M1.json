@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "group": "M1",
+  "stage": "sft",
+  "training_config": null,
+  "inputs": {
+    "model": null,
+    "data": null,
+    "data_manifest": null,
+    "snapshot": null
+  },
+  "training_overrides": {
+    "defaults": {},
+    "trainer_parameters": {}
+  },
+  "checkpoint": {
+    "save_steps": 50,
+    "save_total_limit": 3
+  },
+  "evaluation": {
+    "kind": "benchmark",
+    "config": null
+  },
+  "budget": {
+    "max_steps": null,
+    "epochs": null,
+    "comparison_group": null,
+    "accounting": "gpu_hours",
+    "strict_match": false,
+    "costs": {
+      "preference_generation_gpu_hours": null,
+      "dpo_gpu_hours": null,
+      "grpo_gpu_hours": null
+    }
+  }
+}

@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from agentic_arxiv.config import workspace_path
-from agentic_arxiv.evaluation.episode import execute_episode
+from agentic_arxiv.evaluation.episode import EvaluationCancelled, execute_episode
 from agentic_arxiv.runtime.agent_engine import ReActAgent
 from agentic_arxiv.scoring.metrics import TaskMetrics, extract_metrics, is_strict_success
 from agentic_arxiv.tasks.tasks import BENCHMARK_TASKS
@@ -40,6 +40,8 @@ class BenchmarkRunner:
         snapshot: Optional[str] = None, llm_backend: str = "api",
         local_device: str = "auto", local_dtype: str = "auto",
         generation_seed: Optional[int] = None,
+        cancel_requested: Callable[[], bool] | None = None,
+        model_artifact: bool = False,
     ):
         if llm_backend not in self.LLM_BACKENDS:
             raise ValueError(f"llm_backend 必须是 {self.LLM_BACKENDS} 之一")
@@ -59,6 +61,8 @@ class BenchmarkRunner:
         self.local_device = local_device
         self.local_dtype = local_dtype
         self.generation_seed = generation_seed
+        self.cancel_requested = cancel_requested
+        self.model_artifact = model_artifact
         if session_prefix is None:
             from datetime import datetime
             session_prefix = f"bench_r{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -73,9 +77,14 @@ class BenchmarkRunner:
                     raise ValueError("transformers 后端需要本地模型路径")
                 if not Path(self.model).exists():
                     raise FileNotFoundError(f"本地模型不存在: {self.model}")
+                artifact_kwargs = {}
+                if self.model_artifact:
+                    from agentic_arxiv.runtime.react_contract import protocol_metadata
+                    artifact_kwargs = {"artifact": True, "expected_protocol": protocol_metadata()}
                 self._llm_client = TransformersLLMClient(
                     model=self.model, device=self.local_device,
                     dtype=self.local_dtype, seed=self.generation_seed,
+                    **artifact_kwargs,
                 )
             else:
                 self._llm_client = get_env_llm_client()
@@ -115,6 +124,8 @@ class BenchmarkRunner:
         total = len(tasks) * self.repeat
         for task_def in tasks:
             for trial in range(self.repeat):
+                if self.cancel_requested is not None and self.cancel_requested():
+                    raise EvaluationCancelled(len(results), results)
                 task_id = task_def["id"]
                 session_id = f"{self.session_prefix}_{task_id}_regex_{trial}"
                 print(f"[{len(results) + 1}/{total}] task={task_id} trial={trial}", flush=True)

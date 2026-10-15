@@ -27,7 +27,8 @@ ALLOWED = {
     "evaluation": SHARED,
     "data_pipeline": SHARED,
     "training": SHARED | {"evaluation"},
-    "cli": SHARED | {"training", "evaluation", "data_pipeline"},
+    "experiments": FOUNDATIONS | {"llm", "tasks", "training", "evaluation"},
+    "cli": SHARED | {"training", "evaluation", "data_pipeline", "experiments"},
 }
 OLD_NAMESPACES = {"AgenticArxiv", "agents", "benchmark", "rl", "models", "utils"}
 # 训练入口不作为另一阶段的共享实现。
@@ -179,6 +180,37 @@ def _check_dependency(source: str, target: str, location: str):
             )
         return
     allowed = ALLOWED[source_owner]
+    if source_owner == "experiments" and (
+        target == "agentic_arxiv.runtime.react_contract"
+        or target.startswith("agentic_arxiv.runtime.react_contract.")
+    ):
+        # 沿用唯一文本协议的纯元数据契约，不执行运行时或工具。
+        return
+    if source == "agentic_arxiv.evaluation.managed_job":
+        # 容器内的独立作业适配器仅复用文件记录、取消协议和既有阶段验证。
+        job_contracts = {
+            "agentic_arxiv.experiments.store",
+            "agentic_arxiv.training.control",
+            "agentic_arxiv.training.stage_verifier",
+        }
+        if any(target == service or target.startswith(service + ".") for service in job_contracts):
+            return
+    if source == "agentic_arxiv.experiments.preflight" and any(
+        target == service or target.startswith(service + ".") for service in (
+            "agentic_arxiv.training.sft", "agentic_arxiv.training.dpo",
+            "agentic_arxiv.training.grpo", "agentic_arxiv.training.grpo_reward",
+            "agentic_arxiv.tools.bootstrap", "agentic_arxiv.runtime.env",
+        )
+    ):
+        # 仅在无 GPU 的只读校验容器内显式运行，复用原审计而非另建弱校验。
+        # 回放后端只用于加载已有验证快照，不能扩展到宿主控制端。
+        return
+    if source_owner == "experiments" and target_owner == "training":
+        # 管理端只能复用不加载训练栈的配置、文件协议和恢复完整性契约。
+        assert any(target == service or target.startswith(service + ".") for service in (
+            "agentic_arxiv.training.mainline_config", "agentic_arxiv.training.checkpoint",
+            "agentic_arxiv.training.control",
+        )), f"{location}: 管理端不能导入训练器 {target}"
     if source_owner == "tasks" and _is_reference(source):
         allowed = allowed | {"runtime"}
     assert target_owner in allowed, f"{location}: {source_owner} 不允许依赖 {target}"
@@ -188,6 +220,16 @@ def _check_dependency(source: str, target: str, location: str):
         )), (
             f"{location}: training 只能使用模型无关公共 episode 评测服务，不能导入 {target}"
         )
+
+
+def test_replay_backend_is_only_available_to_container_preflight():
+    target = "agentic_arxiv.runtime.env"
+    _check_dependency("agentic_arxiv.experiments.preflight", target, "container preflight")
+    for source in ("service", "artifacts", "config"):
+        with pytest.raises(AssertionError, match="experiments 不允许依赖"):
+            _check_dependency(f"agentic_arxiv.experiments.{source}", target, "host controller")
+    with pytest.raises(AssertionError, match="experiments 不允许依赖"):
+        _check_dependency("agentic_arxiv.experiments.preflight", "agentic_arxiv.runtime", "runtime re-export")
 
 
 def test_real_source_dependency_allowlist():

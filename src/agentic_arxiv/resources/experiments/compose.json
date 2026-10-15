@@ -1,0 +1,21 @@
+{
+  "services": {
+    "experiment": {
+      "pull_policy": "never",
+      "restart": "no",
+      "read_only": true,
+      "init": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "network_mode": "none",
+      "tmpfs": ["/tmp:rw,nosuid,nodev,size=1g,mode=1777"],
+      "environment": {
+        "HF_HUB_OFFLINE": "1",
+        "HF_DATASETS_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "WANDB_MODE": "disabled",
+        "TOKENIZERS_PARALLELISM": "false"
+      }
+    }
+  }
+}

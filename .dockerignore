@@ -1,0 +1,25 @@
+# 默认拒绝，只允许构建代码、锁文件和构建身份；数据/输出/凭据不进入上下文。
+**
+!pyproject.toml
+!README.md
+!LICENSE
+!src/
+!src/agentic_arxiv/
+!src/agentic_arxiv/**/
+!src/agentic_arxiv/**/*.py
+!src/agentic_arxiv/**/*.json
+!containers/
+!containers/Dockerfile
+!containers/training-baseline.in
+!containers/requirements-linux-py310-cu126.lock
+!containers/base-image.json
+!containers/lock-resolution.json
+!build-identity.json
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+**/.env*
+**/*.pem
+**/*.key
+**/.ssh/
+**/node_modules/

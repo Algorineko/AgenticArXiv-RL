@@ -56,7 +56,7 @@ where = ["src"]
 include = ["agentic_arxiv*"]
 
 [tool.setuptools.package-data]
-agentic_arxiv = ["resources/mainline.json"]
+agentic_arxiv = ["resources/mainline.json", "resources/experiments/*.json", "resources/experiments/profiles/*.json", "resources/experiments/recipes/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

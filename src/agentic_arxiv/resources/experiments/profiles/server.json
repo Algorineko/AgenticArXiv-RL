@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "workspace": null,
+  "run_root": null,
+  "input_roots": [],
+  "cache_root": null,
+  "image": null,
+  "uid": null,
+  "gid": null,
+  "gpus": [],
+  "shm_size": "16g",
+  "min_free_bytes": 10737418240
+}

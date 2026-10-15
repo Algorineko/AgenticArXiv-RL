@@ -21,6 +21,7 @@ import dataclasses
 import json
 import math
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -81,6 +82,49 @@ from agentic_arxiv.config import get_workspace, workspace_path
 
 DEFAULT_SNAPSHOT = Path("data/mock_arxiv_snapshot.json")
 GRPO_DEFAULTS = stage_config("grpo")["defaults"]
+
+
+def _load_policy_for_run(resolved, *, managed, seed, **kwargs):
+    """受管初始化使用共同种子；TRL 随后仍设置各 rank 的生成随机流。"""
+    if managed is not None:
+        from transformers import set_seed
+
+        # TRL 在接收已建好的 PEFT 模型后才设种子。新 LoRA 必须在此之前
+        # 使用共同 seed，才能让初始冻结参考跨进程、跨恢复尝试保持一致。
+        set_seed(seed)
+    return _load_policy(resolved, **kwargs)
+
+
+def _release_managed_reference(trainer):
+    """只解除即将替换的参考，不能清空 Accelerator 的策略和优化器。"""
+    from accelerate.utils import release_memory
+
+    old_reference = trainer.ref_model
+    if old_reference is None or old_reference is trainer.model:
+        raise ValueError("受管 GRPO 缺少可独立释放的旧参考模型")
+    accelerator = trainer.accelerator
+    raw_reference = accelerator.unwrap_model(
+        old_reference, keep_fp32_wrapper=False, keep_torch_compile=False,
+    )
+    registrations = getattr(accelerator, "_models", None)
+    identities = {id(old_reference), id(raw_reference)}
+    if not isinstance(registrations, list) or not any(
+        id(model) in identities for model in registrations
+    ):
+        raise ValueError("受管 GRPO 无法确认旧参考的 Accelerator 模型注册")
+    # Accelerate 1.11.0 没有单模型 unregister；free_memory 会清空全部状态。
+    # 固定接口下只删除旧参考的身份匹配项，保留其余注册和列表对象本身。
+    registrations[:] = [model for model in registrations if id(model) not in identities]
+    trainer.ref_model = None
+    del old_reference, raw_reference
+    release_memory()
+
+
+def _validate_reference_initialization(grpo_state, execution):
+    """在 DDP 包装前确认每个 rank 将绑定同一份实际冻结参考。"""
+    fingerprints = execution.gather(grpo_state.reference_weights)
+    if any(value != fingerprints[0] for value in fingerprints[1:]):
+        raise ValueError("GRPO 各 rank 的初始冻结参考权重不一致")
 
 
 def _precision_flags():
@@ -169,6 +213,36 @@ class RewardVarianceGuard(TrainerCallback):
         self.tripped = False
         self.converged = False
         self.stop_step = None
+
+    def state_dict(self):
+        """保护状态随完整 checkpoint 提交，不给恢复重新发放耐心窗口。"""
+        return {"schema_version": 1, "patience": self.patience,
+                "grace_steps": self.grace_steps, "streak": self.streak,
+                "tripped": self.tripped, "converged": self.converged,
+                "stop_step": self.stop_step}
+
+    def load_state_dict(self, state):
+        expected = {"schema_version", "patience", "grace_steps", "streak", "tripped",
+                    "converged", "stop_step"}
+        if (not isinstance(state, dict) or set(state) != expected
+                or type(state["schema_version"]) is not int or state["schema_version"] != 1):
+            raise ValueError("未知或不完整的零方差保护状态")
+        if (type(state["patience"]) is not int or type(state["grace_steps"]) is not int
+                or state["patience"] != self.patience or state["grace_steps"] != self.grace_steps):
+            raise ValueError("零方差保护配置与 checkpoint 不一致")
+        if (type(state["streak"]) is not int or state["streak"] < 0
+                or type(state["tripped"]) is not bool or type(state["converged"]) is not bool
+                or (state["stop_step"] is not None and
+                    (type(state["stop_step"]) is not int or state["stop_step"] < 0))):
+            raise ValueError("零方差保护累计状态非法")
+        if state["tripped"] or state["converged"] or state["stop_step"] is not None:
+            raise ValueError("零方差保护已经停止训练，普通恢复不能绕过保护")
+        if state["streak"] >= self.patience:
+            raise ValueError("零方差保护累计次数超过耐心窗口，拒绝不一致状态")
+        self.streak = state["streak"]
+        self.tripped = state["tripped"]
+        self.converged = state["converged"]
+        self.stop_step = state["stop_step"]
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         if not logs:
@@ -265,8 +339,18 @@ def main(
     rollout_trace_path: str = GRPO_DEFAULTS["rollout_trace_path"],
     rollout_trace_max_samples: int = GRPO_DEFAULTS["rollout_trace_max_samples"],
     config_path: str = None,
+    managed_context: str = None,
 ):
     requested_config = dict(locals())
+    from agentic_arxiv.training.managed import (
+        prepare_managed_training, attach_managed_training, validate_managed_config,
+        record_training_result,
+    )
+
+    managed = prepare_managed_training(
+        managed_context, stage="grpo", output_dir=output_dir,
+        resume_from_checkpoint=resume_from_checkpoint,
+    )
     # 操作启动后才设置训练进程选项，包导入不改变用户环境。
     os.environ.setdefault("STORE_BACKEND", "memory")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -276,6 +360,7 @@ def main(
     from agentic_arxiv.training import trl_compat  # noqa: F401
     from trl import GRPOConfig, GRPOTrainer
     configured = stage_config("grpo", config_path)
+    validate_managed_config(managed, requested_config, configured)
     execution = TrainingContext.from_environment()
     generation_batch = grpo_generation_batch_size(batch_size, grad_accum, num_generations, execution)
     try:
@@ -298,6 +383,8 @@ def main(
         raise SystemExit("❌ save_steps 不能为负数")
     if save_steps > 0 and save_total_limit < 1:
         raise SystemExit("❌ 启用周期 checkpoint 时 save_total_limit 必须至少为 1")
+    if managed is not None and save_steps < 1:
+        raise SystemExit("受管 GRPO 必须显式启用周期完整 checkpoint")
     resolved_resume_checkpoint = None
     if resume_from_checkpoint:
         resume_path = workspace_path(resume_from_checkpoint)
@@ -397,8 +484,10 @@ def main(
         )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    policy = _load_policy(
+    policy = _load_policy_for_run(
         resolved,
+        managed=managed,
+        seed=seed,
         qlora=qlora,
         base_model=base_model,
         lora_r=lora_r,
@@ -433,6 +522,12 @@ def main(
             if rollout_trace_path
             else workspace_path(output_dir) / "rollout_traces.jsonl"
         )
+        if managed is not None:
+            attempt_output = workspace_path(output_dir).resolve()
+            if not resolved_trace_path.resolve().is_relative_to(attempt_output):
+                raise ValueError("受管 GRPO 轨迹路径必须属于当前尝试输出，不能写入旧轨迹")
+            if resolved_trace_path.exists():
+                raise ValueError("受管 GRPO 拒绝清空已存在的轨迹文件")
         if execution.is_main:
             auditor = RolloutAuditWriter(
                 resolved_trace_path,
@@ -472,6 +567,7 @@ def main(
     cfg_kwargs = {
         **configured["trainer_parameters"],
         "output_dir": str(workspace_path(output_dir)),
+        **({"logging_dir": logging_dir} if managed is not None else {}),
         "num_train_epochs": epochs,
         "max_steps": max_steps,
         "per_device_train_batch_size": batch_size,
@@ -530,6 +626,25 @@ def main(
         rollout_func=rollout_func,
     )
     execution.validate_trainer(trainer, stage="grpo")
+    if managed is not None:
+        trl_compat.require_managed_grpo_interfaces(trainer)
+        if beta != 0.0:
+            if qlora:
+                # TRL 0.29.1 已从初始 default adapter 复制 ref；恢复时须保留该原始参考。
+                reference_parameters = trl_compat._reference_parameters(trainer)
+                for _, parameter in reference_parameters:
+                    parameter.requires_grad = False
+            else:
+                # 合并过 adapter 的 policy.config 可能仍指向 Base，不能据此重建参考。
+                from agentic_arxiv.training.model_setup import load_reference_policy
+
+                _release_managed_reference(trainer)
+                trainer.ref_model = trainer.accelerator.prepare_model(
+                    load_reference_policy(
+                        resolved, qlora=False, base_model=base_model,
+                        allowed_stages=None, expected_protocol=current_protocol,
+                    ), evaluation_mode=True,
+                )
     # 必须在 trainer 建好之后接线。即使 report_to=none，TRL 仍会把 _metrics
     # 汇总到控制台；report_to 只控制是否转发到 TensorBoard/wandb，不应决定
     # 是否采集指标。此前的条件绑定还会让 _pending 在长训练中持续增长。
@@ -563,7 +678,54 @@ def main(
         guard = RewardVarianceGuard()
         trainer.add_callback(guard)
 
+    grpo_state = None
+    stop_callback = None
+    checkpoint_adapter = None
+    if managed is not None:
+        grpo_state = trl_compat.GRPOResumeState(
+            trainer, execution, model_input_fingerprint(resolved), tracker=tracker,
+            auditor=auditor, guard=guard, canary=canary_cb,
+            curriculum_steps=reward_curriculum_steps,
+        )
+        _validate_reference_initialization(grpo_state, execution)
+        grpo_state.install_sampler_tracking()
+
+        class ResumeBoundaryCallback(TrainerCallback):
+            def on_train_begin(self, args, state, control, **kwargs):
+                grpo_state.validate_loaded_state()
+
+        trainer.add_callback(ResumeBoundaryCallback())
+
+        def protection_reason():
+            if guard is not None and (guard.tripped or guard.converged):
+                return "reward_variance_guard"
+            if canary_cb is not None and canary_cb.tripped:
+                return "canary_threshold"
+            return None
+
+        stop_callback, checkpoint_adapter = attach_managed_training(
+            trainer, managed, execution,
+            resume_from_checkpoint=resolved_resume_checkpoint,
+            state_provider=grpo_state.state_dict, state_restorer=grpo_state.load_state_dict,
+            protection_reason=protection_reason,
+        )
+        if resolved_resume_checkpoint is not None:
+            grpo_state.install_policy_adapter_restore()
+        if execution.is_main:
+            boundary = {
+                "schema_version": 1, "attempt_id": managed.attempt_id,
+                "resumed_from_checkpoint": resolved_resume_checkpoint,
+                "committed_global_step": grpo_state.restored_step,
+                "inherited_rollout_summary": grpo_state.inherited_audit,
+                "new_trace_path": str(resolved_trace_path) if resolved_trace_path else None,
+                "recomputation_policy": "只承接完整提交边界；旧尝试边界之后的生成保留为失败重算证据，不重复计入逻辑统计",
+            }
+            boundary_path = workspace_path(output_dir) / "resume_boundary.json"
+            boundary_path.parent.mkdir(parents=True, exist_ok=True)
+            boundary_path.write_text(json.dumps(boundary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
     memory = None
+    training_elapsed_seconds = None
 
     def save_run_diagnostic(reason: str) -> dict | None:
         """保护器或异常退出仍保存可得事实，不把失败运行标为成功 final。"""
@@ -587,6 +749,11 @@ def main(
                 "actual_task_ids": [task["id"] for task in tasks],
                 "actual_base_model": actual_base_model,
                 "trainer_planned_steps": planned,
+                **({"training_elapsed_seconds": training_elapsed_seconds}
+                   if managed is not None else {}),
+                **({"training_loss_semantics": "标准 Trainer 原始返回值；恢复时不是跨尝试运行累计均值，不作为等价恢复证据",
+                    "attempt_loss_sum": None, "attempt_mean_loss": None}
+                   if managed is not None else {}),
             },
             source_baseline={
                 "configuration_baseline": load_mainline_config(config_path)["source_baseline"],
@@ -596,6 +763,10 @@ def main(
                      Path(__file__).with_name("canary.py"),
                      Path(__file__).with_name("observability.py"),
                      Path(__file__).with_name("model_setup.py"),
+                     Path(__file__).with_name("trl_compat.py"),
+                     Path(__file__).with_name("managed.py"),
+                     Path(__file__).with_name("checkpoint.py"),
+                     Path(__file__).with_name("callbacks.py"),
                      Path(__file__).with_name("distributed.py"),
                      Path(__file__).with_name("precision.py")], repo_root=get_workspace(),
                 ),
@@ -642,11 +813,23 @@ def main(
                                encoding="utf-8")
         return record
 
+    training_started = time.monotonic()
     try:
         train_result = trainer.train(
             resume_from_checkpoint=resolved_resume_checkpoint
         )
     except BaseException as exc:
+        training_elapsed_seconds = time.monotonic() - training_started
+        if stop_callback is not None:
+            stop_callback.mark_failed(exc, step=getattr(trainer.state, "global_step", 0))
+        record_training_result(
+            managed, execution, training="failed", validation="not_run",
+            global_step=getattr(trainer.state, "global_step", 0),
+            planned_steps=getattr(trainer.state, "max_steps", None),
+            reason=f"training_exception:{type(exc).__name__}",
+            training_elapsed_seconds=training_elapsed_seconds,
+            checkpoint=str(checkpoint_adapter.last_checkpoint) if checkpoint_adapter and checkpoint_adapter.last_checkpoint else None,
+        )
         try:
             save_run_diagnostic(f"training_exception:{type(exc).__name__}")
         except Exception as record_error:
@@ -661,8 +844,15 @@ def main(
             print(f"🔎 训练中断，已保留 rollout 审计: {failed_summary_path}")
         raise
 
+    training_elapsed_seconds = time.monotonic() - training_started
+
     train_loss = float(train_result.training_loss)
     if not math.isfinite(train_loss):
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=getattr(trainer.state, "global_step", 0),
+                               planned_steps=getattr(trainer.state, "max_steps", None),
+                               reason="invalid_training_loss",
+                               training_elapsed_seconds=training_elapsed_seconds)
         try:
             save_run_diagnostic("invalid_training_loss")
         except Exception as record_error:
@@ -670,7 +860,14 @@ def main(
         raise SystemExit(f"❌ GRPO training_loss不是有限数: {train_loss}")
 
     actual_steps = int(getattr(trainer.state, "global_step", 0) or 0)
-    planned_steps = max_steps if max_steps > 0 else getattr(trainer.state, "max_steps", None)
+    planned_steps = getattr(trainer.state, "max_steps", None)
+    if managed is not None and (type(planned_steps) is not int or planned_steps < 1):
+        record_training_result(managed, execution, training="failed", validation="not_run",
+                               global_step=actual_steps, reason="missing_trainer_budget",
+                               training_elapsed_seconds=training_elapsed_seconds)
+        raise ValueError("受管 GRPO 缺少 Trainer 实际核定的总优化步数，不能宣称预算完成")
+    if managed is None and max_steps > 0:
+        planned_steps = max_steps
     stopped_early = bool(planned_steps and actual_steps < planned_steps)
     if guard is not None and guard.tripped:
         stop_reason = "reward_variance_initial_signal_missing"
@@ -678,12 +875,27 @@ def main(
         stop_reason = "reward_variance_window_saturated"
     elif canary_cb is not None and canary_cb.tripped:
         stop_reason = "canary_threshold"
+    elif stop_callback is not None and stop_callback.user_stopped:
+        stop_reason = "user_safe_stop"
     elif stopped_early:
         stop_reason = "trainer_stopped_early"
     else:
         stop_reason = "max_steps_or_epochs_completed"
     memory = execution.memory_summary()
     run_record = execution.run_on_main(lambda: save_run_diagnostic(stop_reason))
+    managed_training_state = (
+        "protection_stopped" if (guard is not None and (guard.tripped or guard.converged)) or
+        (canary_cb is not None and canary_cb.tripped) else
+        "user_safe_stop" if stop_callback is not None and stop_callback.user_stopped else
+        "failed" if stopped_early else "budget_completed"
+    )
+    record_training_result(
+        managed, execution, training=managed_training_state, validation="not_run",
+        global_step=actual_steps, reason=stop_reason,
+        planned_steps=planned_steps,
+        training_elapsed_seconds=training_elapsed_seconds,
+        checkpoint=str(checkpoint_adapter.last_checkpoint) if checkpoint_adapter and checkpoint_adapter.last_checkpoint else None,
+    )
 
     # 保护器提前停止也保留全球奖励与完整 generation 组的审计统计。
     reward_summary_path = execution.run_on_main(lambda: tracker.save_task_summary(
@@ -707,6 +919,10 @@ def main(
         raise SystemExit(1)
     if canary_cb is not None and canary_cb.tripped:
         raise SystemExit(1)
+    if managed is not None and managed_training_state != "budget_completed":
+        # 保护即使在最终预算步触发也不能被后续导出/验证覆盖为成功。
+        # 复用已记录的终态，避免用 stopped_early 漏掉最终步的 converged。
+        return
 
     final_dir = workspace_path(output_dir) / "final"
     trainer.save_model(str(final_dir))
@@ -798,12 +1014,27 @@ def main(
     execution.run_on_main(save_final_artifacts)
 
     if verify:
+        record_training_result(managed, execution, training="budget_completed",
+                               validation="in_progress", global_step=actual_steps,
+                               planned_steps=planned_steps,
+                               training_elapsed_seconds=training_elapsed_seconds,
+                               reason=stop_reason)
         def verify_final():
             print("\n🔍 运行 GRPO 阶段验证...")
-            verifier = StageVerifier()
+            if managed is not None:
+                from agentic_arxiv.training.control import read_stop_request
+
+                verifier = StageVerifier(cancel_requested=lambda: read_stop_request(
+                    managed.control_dir, managed.run_id, managed.attempt_id) is not None)
+            else:
+                verifier = StageVerifier()
             report = verifier.verify_grpo(model_path=str(final_dir), tokenizer=tokenizer, env=env)
             verifier.save_report(report, final_dir)
             print(report.summary())
+            if managed is not None and report.coverage.get("execution") == "interrupted":
+                from agentic_arxiv.evaluation.episode import EvaluationCancelled
+
+                raise EvaluationCancelled(completed_episodes=report.coverage.get("completed_episodes", 0))
             if not report.passed:
                 raise SystemExit(
                     "\n❌ GRPO 阶段验证失败，模型未达到最低质量阈值。\n"
@@ -811,4 +1042,29 @@ def main(
                     "   跳过验证用 --no-verify。"
                 )
 
-        execution.run_on_main(verify_final)
+        validation_started = time.monotonic()
+        try:
+            execution.run_on_main(verify_final)
+        except BaseException as exc:
+            from agentic_arxiv.evaluation.episode import EvaluationCancelled
+
+            interrupted = isinstance(exc, EvaluationCancelled) or "EvaluationCancelled" in str(exc)
+            record_training_result(managed, execution, training="budget_completed",
+                                   validation="interrupted" if interrupted else "failed",
+                                   global_step=actual_steps,
+                                   planned_steps=planned_steps,
+                                   training_elapsed_seconds=training_elapsed_seconds,
+                                   stage_validation_elapsed_seconds=time.monotonic() - validation_started,
+                                   reason="stage_verification_interrupted" if interrupted else "stage_verification_failed")
+            raise
+        record_training_result(managed, execution, training="budget_completed",
+                               validation="passed", global_step=actual_steps, reason=stop_reason,
+                               planned_steps=planned_steps,
+                               training_elapsed_seconds=training_elapsed_seconds,
+                               stage_validation_elapsed_seconds=time.monotonic() - validation_started)
+    else:
+        record_training_result(managed, execution, training="budget_completed",
+                               validation="skipped", global_step=actual_steps, reason=stop_reason,
+                               planned_steps=planned_steps,
+                               training_elapsed_seconds=training_elapsed_seconds,
+                               stage_validation_elapsed_seconds=None)

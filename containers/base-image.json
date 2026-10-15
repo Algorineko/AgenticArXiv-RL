@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "reference": "docker.io/library/python:3.10.19-bookworm@sha256:c8e004af3b763d720985b2bbb75825e28639b7620de4ff45e9e6e98c6e129809",
+  "platform": "linux/amd64",
+  "python": "3.10.19",
+  "verified_at": "2026-10-15",
+  "verification": "docker buildx imagetools inspect python:3.10.19-bookworm",
+  "cuda_source": "https://download.pytorch.org/whl/cu126",
+  "training_image_digest": null,
+  "training_image_status": "待构建；基础镜像元数据核验不代表训练镜像已构建或GPU通过"
+}
