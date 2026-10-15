@@ -160,8 +160,23 @@ def failure_modes(row: Mapping[str, Any]) -> List[str]:
     return modes
 
 
+def _validate_k(k: int) -> None:
+    if isinstance(k, bool) or not isinstance(k, int) or k <= 0:
+        raise ValueError("k must be a positive integer")
+
+
+def _positive_k(value: str) -> int:
+    try:
+        k = int(value)
+        _validate_k(k)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("k must be a positive integer") from exc
+    return k
+
+
 def pass_at_k(successes: int, trials: int, k: int) -> Optional[float]:
     """Probability that k trials drawn without replacement from ``trials`` all succeed."""
+    _validate_k(k)
     if trials < k:
         return None
     if successes < k:
@@ -192,6 +207,7 @@ def trials_by_task(summary: Mapping[str, Any]) -> Dict[str, List[Mapping[str, An
 
 
 def pass_k_by_task(summary: Mapping[str, Any], k: int = PASS_K) -> Dict[str, Optional[float]]:
+    _validate_k(k)
     return {
         task_id: pass_at_k(sum(strict_success(r) for r in rows), len(rows), k)
         for task_id, rows in trials_by_task(summary).items()
@@ -296,6 +312,7 @@ def diagnose(
     of that family: those are the only parents the loop may re-derive data from,
     so weaknesses in ood-only families are reported but never acted on.
     """
+    _validate_k(k)
     train = set(map(str, train_ids))
     task_by_id = {str(t["id"]): t for t in tasks}
     family_by_id = {tid: family_of(t) for tid, t in task_by_id.items()}
@@ -657,7 +674,12 @@ def gate(
     2. the badcase library may only grow;
     3. the held-out split file must be byte-identical to the one frozen in the
        round manifest (no data leakage by moving tasks between splits).
+
+    Before comparing scores, each split must cover the same non-empty task
+    set in both evaluations, with at least k trials for every task. Unlike
+    reporting, promotion must not silently skip under-evaluated tasks.
     """
+    _validate_k(k)
     if dev_tolerance < 0:
         raise ValueError("dev_tolerance must be >= 0")
     checks: List[GateCheck] = []
@@ -669,11 +691,22 @@ def gate(
             checks.append(GateCheck(f"pass^{k}:{split}", False,
                                     {"error": "missing summary for split"}))
             continue
-        p_prev, p_new = pass_k(prev, k), pass_k(new, k)
-        if p_prev is None or p_new is None:
+        prev_tasks, new_tasks = trials_by_task(prev), trials_by_task(new)
+        short_prev = {tid: len(rows) for tid, rows in sorted(prev_tasks.items()) if len(rows) < k}
+        short_new = {tid: len(rows) for tid, rows in sorted(new_tasks.items()) if len(rows) < k}
+        if short_prev or short_new or not prev_tasks or not new_tasks:
             checks.append(GateCheck(f"pass^{k}:{split}", False,
-                                    {"error": f"fewer than {k} trials per task"}))
+                                    {"error": f"empty evaluation or fewer than {k} trials per task",
+                                     "previous_short_tasks": short_prev, "new_short_tasks": short_new,
+                                     "previous_task_count": len(prev_tasks), "new_task_count": len(new_tasks)}))
             continue
+        if prev_tasks.keys() != new_tasks.keys():
+            checks.append(GateCheck(f"pass^{k}:{split}", False,
+                                    {"error": "task coverage differs",
+                                     "missing_tasks": sorted(prev_tasks.keys() - new_tasks.keys()),
+                                     "extra_tasks": sorted(new_tasks.keys() - prev_tasks.keys())}))
+            continue
+        p_prev, p_new = pass_k(prev, k), pass_k(new, k)
         checks.append(GateCheck(
             f"pass^{k}:{split}",
             p_new + 1e-12 >= p_prev - tolerance,
@@ -844,7 +877,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--task-set", choices=["default", "expanded"], default="expanded")
-        p.add_argument("--k", type=int, default=PASS_K, help="k of strict pass^k (default 3)")
+        p.add_argument("--k", type=_positive_k, default=PASS_K,
+                       help="positive integer k of strict pass^k (default 3)")
 
     p = sub.add_parser("diagnose", help="per-family weakness report from held-out summary.json files")
     p.add_argument("--eval", action="append", required=True, metavar="SPLIT=summary.json")
