@@ -16,8 +16,8 @@ def build_launch(argv=None):
     parser.add_argument("--gpus", help="显式选择 GPU，例如 0,1,2,3；省略时保留 CUDA_VISIBLE_DEVICES")
     parser.add_argument("--log-dir", type=Path, help="torchrun 各 rank 的 stdout/stderr 日志目录")
     parser.add_argument("--dry-run", action="store_true", help="只显示命令，不初始化 GPU 或启动训练")
-    parser.add_argument("stage", choices=("sft", "grpo"))
-    parser.add_argument("training_args", nargs=argparse.REMAINDER, help="原样传给 train sft/grpo 的参数")
+    parser.add_argument("stage", choices=("sft", "dpo", "grpo"))
+    parser.add_argument("training_args", nargs=argparse.REMAINDER, help="原样传给 train sft/dpo/grpo 的参数")
     args = parser.parse_args(argv)
     if args.num_processes < 2:
         parser.error("DDP --num-processes 必须至少为 2；单卡请直接使用 agentic-arxiv train")

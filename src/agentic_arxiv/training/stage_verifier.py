@@ -29,7 +29,7 @@ from agentic_arxiv.provenance import evaluation_protocol_relation, read_protocol
 class VerificationReport:
     """单次阶段验证的结果。"""
 
-    stage: str  # "sft", "grpo"
+    stage: str  # "sft", "dpo", "grpo"
     model_path: str
     passed: bool
     metrics: Dict[str, float] = field(default_factory=dict)
@@ -58,30 +58,25 @@ class VerificationReport:
 def _load_verification_model(
     model_path: str,
     tokenizer: Optional[PreTrainedTokenizer] = None,
+    *,
+    stage: str | None = None,
 ) -> tuple:
-    """Load a produced model for stage verification onto the training device.
-
-    Verification used to load with a bare ``from_pretrained``, which lands on
-    CPU, and ``CanaryEvaluator`` reads the device off the parameters — so the
-    gate was generating on the CPU.  A 1.5B model doing 8 × 256-token
-    generations that way takes tens of minutes per stage, slow enough that
-    running the gate by default stopped being defensible.
-    """
+    """按明确产物契约离线加载全参/适配器，并保持原训练设备选择。"""
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from agentic_arxiv.llm.local import TransformersLLMClient
 
-    if torch.cuda.is_available():
-        model = AutoModelForCausalLM.from_pretrained(model_path)
-        model = model.to("cuda")
-    else:
-        model = AutoModelForCausalLM.from_pretrained(model_path)
-
-    if tokenizer is None:
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-    return model, tokenizer
+    try:
+        client = TransformersLLMClient(
+            model_path,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+            artifact=True,
+            allowed_stages=None if stage is None else {f"{stage}_full", f"{stage}_qlora"},
+            expected_protocol=protocol_metadata(tokenizer),
+        )
+    except SystemExit as error:
+        # 共享产物检查也服务 CLI；这里转换成可保存的失败报告。
+        raise ValueError(str(error)) from error
+    return client.model, tokenizer if tokenizer is not None else client.tokenizer
 
 
 class StageVerifier:
@@ -89,6 +84,7 @@ class StageVerifier:
 
     阈值参考：
     - SFT parse_rate=0.3：完整 episode 中至少 30% 的模型决策可解析
+    - DPO mean_reward=-0.3：最低冒烟质量门，不是优于 SFT 的证据
     - GRPO mean_reward=-0.2：应展现学习进展
 
     所有阈值均可通过构造参数覆盖。
@@ -98,9 +94,11 @@ class StageVerifier:
         self,
         sft_min_parse_rate: float = 0.3,
         grpo_min_reward: float = -0.2,
+        dpo_min_reward: float = -0.3,
     ):
         self.thresholds = {
             "sft": {"parse_rate": sft_min_parse_rate},
+            "dpo": {"mean_reward": dpo_min_reward},
             "grpo": {"mean_reward": grpo_min_reward},
         }
 
@@ -129,7 +127,7 @@ class StageVerifier:
         print(f"🔍 验证 SFT 模型: {model_path}")
 
         try:
-            model, tokenizer = _load_verification_model(model_path, tokenizer)
+            model, tokenizer = _load_verification_model(model_path, tokenizer, stage="sft")
         except Exception as e:
             return VerificationReport(
                 stage="sft",
@@ -189,25 +187,32 @@ class StageVerifier:
         env: Any = None,
         max_iterations: int = 6,
     ) -> VerificationReport:
-        """验证 GRPO 模型在 canary 任务上的平均奖励。
+        """验证 GRPO 模型在既有 Canary 任务上的完整 episode 平均奖励。"""
+        return self._verify_reward_stage("grpo", model_path, tokenizer, env, max_iterations)
 
-        Args:
-            model_path: 模型路径
-            tokenizer: 可选外部 tokenizer
-            env: 可选 MockArxivEnv 用于工具执行
-        """
+    def verify_dpo(
+        self,
+        model_path: str | Path,
+        tokenizer: PreTrainedTokenizer | None = None,
+        env: Any = None,
+        max_iterations: int = 6,
+    ) -> VerificationReport:
+        """验证可选 DPO 产物；范围与 GRPO 相同，不新增通过门槛。"""
+        return self._verify_reward_stage("dpo", model_path, tokenizer, env, max_iterations)
+
+    def _verify_reward_stage(self, stage, model_path, tokenizer, env, max_iterations):
         model_path = str(model_path)
-        print(f"🔍 验证 GRPO 模型: {model_path}")
+        print(f"🔍 验证 {stage.upper()} 模型: {model_path}")
 
         try:
-            model, tokenizer = _load_verification_model(model_path, tokenizer)
+            model, tokenizer = _load_verification_model(model_path, tokenizer, stage=stage)
         except Exception as e:
             return VerificationReport(
-                stage="grpo",
+                stage=stage,
                 model_path=model_path,
                 passed=False,
                 metrics={"mean_reward": -1.0},
-                thresholds=self.thresholds["grpo"],
+                thresholds=self.thresholds[stage],
                 failures=[f"模型加载失败: {e}"],
                 coverage={"execution": "not-started", "scope": "smoke-only"},
                 protocol=_evaluation_protocol(model_path, tokenizer),
@@ -219,14 +224,15 @@ class StageVerifier:
             result = _check_episode_result(
                 model, tokenizer, task_ids=DEFAULT_CANARY_TASK_IDS,
                 env=env, max_iterations=max_iterations, model_source=model_path,
+                artifact=stage == "dpo",
             )
         except Exception as error:
             return self._evaluation_failure(
-                "grpo", model_path, error, DEFAULT_CANARY_TASK_IDS, max_iterations, tokenizer
+                stage, model_path, error, DEFAULT_CANARY_TASK_IDS, max_iterations, tokenizer
             )
         mean_reward = result.mean_reward
 
-        thresholds = self.thresholds["grpo"]
+        thresholds = self.thresholds[stage]
         passed = mean_reward >= thresholds["mean_reward"]
         failures = []
         if not passed:
@@ -235,7 +241,7 @@ class StageVerifier:
             )
 
         return VerificationReport(
-            stage="grpo",
+            stage=stage,
             model_path=model_path,
             passed=passed,
             metrics=_episode_metrics(result),
@@ -323,6 +329,7 @@ def _check_episode_result(
     temperature: float = 1.0,
     max_iterations: int = 6,
     model_source: str = "",
+    artifact: bool = False,
 ):
     """全部阶段共用真实多轮执行，不从首个 completion 合成轨迹。"""
     from agentic_arxiv.training.canary import CanaryEvaluator
@@ -338,13 +345,15 @@ def _check_episode_result(
         temperature=temperature,
         max_iterations=max_iterations,
         model_source=model_source,
+        artifact=artifact,
     )
     return evaluator.evaluate(step=0)
 
 
 def _episode_metrics(result):
     return {"parse_rate": result.parse_rate, "mean_reward": result.mean_reward,
-            "task_completion_rate": result.task_completion_rate}
+            "task_completion_rate": result.task_completion_rate,
+            "false_finish_rate": result.false_finish_rate}
 
 
 def _evaluation_protocol(model_path, tokenizer):
@@ -359,7 +368,16 @@ def _episode_coverage(result):
             "task_ids": result.task_ids, "episode_count": result.episode_count,
             "num_generations_per_task": result.num_generations_per_task,
             "max_iterations": result.max_iterations,
+            "temperature": result.temperature,
+            "max_new_tokens": result.max_new_tokens,
+            "scoring": result.scoring,
             "termination_counts": result.termination_counts,
+            "strict_success_count": result.strict_success_count,
+            "false_finish_count": result.false_finish_count,
+            "parsed_decision_count": result.parsed_decision_count,
+            "model_decision_count": result.model_decision_count,
             "task_completion_basis": "is_strict_success; FINISH is not success",
+            "false_finish_rate_basis": "same-episode metrics.false_finish / all episodes",
+            "quality_claim": "smoke threshold only; not held-out improvement or superiority to SFT",
             "reference_oracle": result.reference_oracle,
             "parse_rate_basis": "all-model-decisions including token truncation; framework-only markers excluded"}

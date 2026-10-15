@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agentic-arxiv"
 version = "0.1.0"
-description = "Text ReAct research workflows with SFT and GRPO training"
+description = "Text ReAct research workflows with SFT, optional DPO and GRPO training"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -25,7 +25,7 @@ local = [
     "torch>=2.0.0",
     "transformers>=4.45.0",
     "accelerate>=0.25.0",
-    # Local inference also loads the default SFT/GRPO LoRA adapters.
+    # Local inference also loads SFT/DPO/GRPO LoRA adapters.
     "peft>=0.17.1",
 ]
 train = [

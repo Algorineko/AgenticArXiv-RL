@@ -684,37 +684,46 @@ class VerificationModelDeviceTest(unittest.TestCase):
         from unittest.mock import MagicMock, patch
 
         torch = pytest.importorskip("torch")
-        transformers = pytest.importorskip("transformers")
+        pytest.importorskip("transformers")
         from agentic_arxiv.training import stage_verifier
 
         model = MagicMock()
         tokenizer = MagicMock()
-        tokenizer.pad_token = None
+        tokenizer.pad_token = "</s>"
         tokenizer.eos_token = "</s>"
 
         with patch.object(torch.cuda, "is_available", return_value=cuda), \
-             patch.object(
-                 transformers.AutoModelForCausalLM, "from_pretrained", return_value=model
-             ), patch.object(
-                 transformers.AutoTokenizer, "from_pretrained", return_value=tokenizer
-             ):
+             patch("agentic_arxiv.llm.local.TransformersLLMClient",
+                   return_value=SimpleNamespace(model=model, tokenizer=tokenizer)) as client:
             loaded_model, loaded_tokenizer = stage_verifier._load_verification_model(
                 "/tmp/fake-model"
             )
-        # 助手返回的是 .to() 的结果，断言要看被调用的那个对象
-        return model, loaded_model, loaded_tokenizer
+        return client, loaded_model, loaded_tokenizer
 
     def test_model_is_moved_to_the_cuda_device_when_available(self):
-        loaded, _moved, _tokenizer = self._loaded(cuda=True)
-        loaded.to.assert_called_once_with("cuda")
+        client, _model, _tokenizer = self._loaded(cuda=True)
+        self.assertEqual(client.call_args.kwargs["device"], "cuda")
 
     def test_cpu_only_environment_does_not_try_to_move(self):
-        loaded, _moved, _tokenizer = self._loaded(cuda=False)
-        loaded.to.assert_not_called()
+        client, _model, _tokenizer = self._loaded(cuda=False)
+        self.assertEqual(client.call_args.kwargs["device"], "cpu")
 
-    def test_missing_pad_token_falls_back_to_eos(self):
-        _loaded, _moved, tokenizer = self._loaded(cuda=True)
-        self.assertEqual(tokenizer.pad_token, tokenizer.eos_token)
+    def test_model_loading_uses_explicit_artifact_protocol(self):
+        client, _model, _tokenizer = self._loaded(cuda=True)
+        self.assertIs(client.call_args.kwargs["artifact"], True)
+        self.assertEqual(client.call_args.kwargs["expected_protocol"]["context_version"], "react-messages-v3")
+
+    def test_artifact_rejection_becomes_a_failed_report(self):
+        from unittest.mock import patch
+        pytest.importorskip("torch")
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        with patch("agentic_arxiv.llm.local.TransformersLLMClient",
+                   side_effect=SystemExit("training_manifest 缺失")) as client:
+            report = StageVerifier().verify_dpo("/nonexistent/path/model")
+        self.assertFalse(report.passed)
+        self.assertIn("training_manifest 缺失", report.failures[0])
+        self.assertEqual(client.call_args.kwargs["allowed_stages"], {"dpo_full", "dpo_qlora"})
 
 
 class StageVerifierTest(unittest.TestCase):
@@ -750,9 +759,18 @@ class StageVerifierTest(unittest.TestCase):
         v = StageVerifier(
             sft_min_parse_rate=0.5,
             grpo_min_reward=0.1,
+            dpo_min_reward=-0.1,
         )
         self.assertEqual(v.thresholds["sft"]["parse_rate"], 0.5)
         self.assertEqual(v.thresholds["grpo"]["mean_reward"], 0.1)
+        self.assertEqual(v.thresholds["dpo"]["mean_reward"], -0.1)
+
+    def test_default_thresholds_preserve_existing_stages(self):
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        self.assertEqual(StageVerifier().thresholds, {
+            "sft": {"parse_rate": 0.3}, "grpo": {"mean_reward": -0.2},
+            "dpo": {"mean_reward": -0.3},
+        })
 
     def test_verify_sft_model_load_failure(self):
         """模型路径不存在时返回 failed report 而非抛异常。"""
@@ -770,10 +788,68 @@ class StageVerifierTest(unittest.TestCase):
         v = StageVerifier()
         from unittest.mock import patch
 
-        with patch("agentic_arxiv.training.stage_verifier._load_verification_model", side_effect=OSError("模型路径不存在")):
-            report = v.verify_grpo(model_path="/nonexistent/path/model")
+        for stage in ("grpo", "dpo"):
+            with self.subTest(stage=stage), patch("agentic_arxiv.training.stage_verifier._load_verification_model", side_effect=OSError("模型路径不存在")):
+                report = getattr(v, f"verify_{stage}")(model_path="/nonexistent/path/model")
+            self.assertFalse(report.passed)
+            self.assertIn("模型加载失败", report.failures[0])
+
+    def test_dpo_uses_existing_canary_and_reports_smoke_scope(self):
+        from unittest.mock import patch
+        from agentic_arxiv.training.canary import CanaryResult, DEFAULT_CANARY_TASK_IDS
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        # 只复用既有 Canary 元数据，不生成模型响应或轨迹。
+        result = CanaryResult(step=0, mean_reward=-0.8, task_completion_rate=0.0,
+                              per_task_rewards={"search_01": -0.8},
+                              task_ids=list(DEFAULT_CANARY_TASK_IDS))
+        with patch("agentic_arxiv.training.stage_verifier._load_verification_model", return_value=(None, None)), \
+             patch("agentic_arxiv.training.stage_verifier._check_episode_result", return_value=result) as evaluate:
+            report = StageVerifier().verify_dpo("/tmp/model")
         self.assertFalse(report.passed)
-        self.assertIn("模型加载失败", report.failures[0])
+        self.assertEqual(report.stage, "dpo")
+        self.assertEqual(evaluate.call_args.kwargs["task_ids"], DEFAULT_CANARY_TASK_IDS)
+        self.assertEqual(evaluate.call_args.kwargs["max_iterations"], 6)
+        self.assertIs(evaluate.call_args.kwargs["artifact"], True)
+        self.assertEqual(report.metrics["false_finish_rate"], result.false_finish_rate)
+        self.assertEqual(report.coverage["scope"], "smoke-only")
+        self.assertEqual(report.coverage["scoring"], result.scoring)
+        self.assertIn("not held-out improvement", report.coverage["quality_claim"])
+
+    def test_dpo_artifact_mode_reaches_actual_canary_client(self):
+        from unittest.mock import patch
+        from agentic_arxiv.runtime.env import MockArxivEnv
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+
+        # 在执行任何 episode 前截住调用，只检查模式透传，不生成响应或 token。
+        for stage in ("sft", "dpo", "grpo"):
+            with self.subTest(stage=stage):
+                model = SimpleNamespace(training=True, eval=Mock(), train=Mock())
+                tokenizer = object()
+                with patch("agentic_arxiv.training.stage_verifier._load_verification_model",
+                           return_value=(model, tokenizer)), \
+                     patch("agentic_arxiv.training.canary.evaluate_episodes",
+                           side_effect=RuntimeError("在采样前停止")) as evaluate:
+                    report = getattr(StageVerifier(), f"verify_{stage}")(
+                        "/nonexistent/path/model", env=MockArxivEnv(mode="replay"),
+                    )
+                client = evaluate.call_args.args[0]
+                self.assertIs(client._artifact_mode, stage == "dpo")
+                self.assertIs(client.model, model)
+                self.assertIs(client.tokenizer, tokenizer)
+                model.train.assert_called_once_with(True)
+                self.assertFalse(report.passed)
+                self.assertIn("在采样前停止", report.failures[0])
+
+    def test_dpo_episode_failure_is_not_pass(self):
+        from unittest.mock import patch
+        from agentic_arxiv.training.stage_verifier import StageVerifier
+        with patch("agentic_arxiv.training.stage_verifier._load_verification_model", return_value=(None, None)), \
+             patch("agentic_arxiv.training.stage_verifier._check_episode_result", side_effect=RuntimeError("既有失败路径")):
+            report = StageVerifier().verify_dpo("/tmp/model")
+        self.assertFalse(report.passed)
+        self.assertEqual(report.coverage["execution"], "failed")
+        self.assertIn("完整 episode 验证失败", report.failures[0])
 
     def test_save_report_writes_file(self):
         import tempfile

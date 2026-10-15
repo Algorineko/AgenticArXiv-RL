@@ -1,4 +1,20 @@
-# SFT → GRPO 文本 ReAct 主线迁移记录
+# 当前补记：恢复显式可选 DPO
+
+本节对应 `restore-optional-dpo-stage`，下方原 `simplify-sft-grpo-react-mainline` 记录、命令、数值及当时退出范围保留历史语境，不是当前入口说明。当前默认仍为 **SFT → GRPO**，GRPO 默认输入仍为 `outputs/sft_qlora/final`；显式可选 **SFT → DPO → GRPO**，不扫描最新目录、不自动启动任何中间阶段。
+
+恢复入口仅为统一命令 `agentic-arxiv data dpo generate` 和 `agentic-arxiv train dpo`，并扩展 GRPO 显式读取当前协议 DPO 全参/适配器产物。旧 DPO 脚本、旧导入、历史字符串数据和缺当前协议 manifest 的 checkpoint 不恢复兼容；OPD/PPO、算法变体、自进化、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/数据库/SSE 仍退出。所有未执行的命令示例及参数见 [主线指南](rl_building.md)。
+
+生成要求已有本地当前协议 SFT、离线快照、显式 expanded 版本化 `FILE:train`，不使用留出集、裸 train 或历史 GRPO 信号子集。严格比较完整实际 messages，只取共同前缀下首个真实动作分歧；chosen/rejected 只含当前未截断 assistant，不补 FINISH、不删 Thought/Observation。训练按实际 tokenizer 审计前缀、目标与完整长度，超预算明确失败，不截断；`--inspect-only` 不加载策略权重但仍需本地 tokenizer。
+
+报告保留请求任务/请求无序组合两个分母及唯一结果分类，每任务最多一对；奖励仅用于排序，不证明单步因果优势。零有效对保留真实轨迹/失败诊断并非零退出，不发布成功训练包；低产出只报警，不放宽条件。policy/reference 从同一完整 SFT 独立初始化，参考保留 SFT adapter 并冻结，双模型增加显存。包配置新增独立 DPO 节、整体哈希变化，原 SFT/GRPO 及 source_baseline 子树不变；旧用户配置缺该节仅在内存补默认。新默认不是经验证的历史有效配方。
+
+DPO 默认完整多轮 Canary 阶段验证，报告奖励、严格成功率、解析率、虚假完成率、终止计数、覆盖及协议关系。保存后验证失败保留模型/失败报告并非零退出，`--no-verify` 记录 skipped 而非 PASS，不自动继续 GRPO；训练完成、阈值通过与优于 SFT 分别表述，冒烟不是独立留出集效果证据。
+
+本次工程实施不生成研究数据、不训练、不执行模型评测、不下载研究资产、不改写下方历史证据。源码/既有检查与真实执行必须分别记录；真实 tokenizer、优化后参考权重冻结、GPU/DDP、资源释放、完整任务运行与模型效果均未验证，不能由帮助、dry-run 或历史记录推出通过。实际工程检查结果以本变更验收记录为准。
+
+---
+
+# 历史记录：SFT → GRPO 文本 ReAct 主线迁移
 
 ## 范围与阶段
 

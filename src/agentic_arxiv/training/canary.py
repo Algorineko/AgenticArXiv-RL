@@ -55,6 +55,14 @@ class CanaryResult:
     termination_counts: Dict[str, int] = field(default_factory=dict)
     reference_oracle: str = "not_available"
     protocol: Dict[str, Any] = field(default_factory=dict)
+    false_finish_rate: float = 0.0
+    false_finish_count: int = 0
+    strict_success_count: int = 0
+    parsed_decision_count: int = 0
+    model_decision_count: int = 0
+    temperature: float = 1.0
+    max_new_tokens: int = 256
+    scoring: Dict[str, Any] = field(default_factory=dict)
 
 
 class CanaryEvaluator:
@@ -77,6 +85,7 @@ class CanaryEvaluator:
         max_iterations: int = 6,
         environment_factory: Callable[[], AgenticArxivMultiTurnEnv] | None = None,
         model_source: str = "",
+        artifact: bool = False,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -89,6 +98,7 @@ class CanaryEvaluator:
         self.max_iterations = max_iterations
         self.environment_factory = environment_factory
         self.model_source = model_source
+        self.artifact = artifact
         if num_generations < 1 or max_iterations < 1:
             raise ValueError("Canary 采样数和完整 episode 轮数必须为正数")
 
@@ -134,7 +144,9 @@ class CanaryEvaluator:
         was_training = bool(self.model.training)
         self.model.eval()
 
-        client = TransformersLLMClient.from_loaded(self.model, self.tokenizer, self.model_source)
+        client = TransformersLLMClient.from_loaded(
+            self.model, self.tokenizer, self.model_source, artifact=self.artifact,
+        )
         reference_oracle = "not_available"
 
         try:

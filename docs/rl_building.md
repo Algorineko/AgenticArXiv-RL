@@ -1,6 +1,6 @@
-# SFT → GRPO 与文本 ReAct 主线指南
+# SFT → GRPO、可选 DPO 与文本 ReAct 主线指南
 
-活动训练主线仅为 **SFT → GRPO**；普通推理、专家数据生成、训练采样与评测使用文本 ReAct。本文列出当前配置契约与后续另行执行的命令，不是要求为本次工程验收准备资产或运行实验。
+默认活动训练主线为 **SFT → GRPO**，显式可选路径为 **SFT → DPO → GRPO**；不选择 DPO 时，不生成偏好、不启动中间训练、不扫描 DPO 目录。普通推理、数据生成、训练采样与评测使用文本 ReAct。本文所有实验命令均为未执行的后续示例，不是本次工程验收步骤，也不是历史有效配方或效果承诺。
 
 本次不生成/重生成数据，不新增论文、快照、模型响应、token 序列、轨迹或行为 fixture，不运行任何训练（包括少量步数冒烟），不下载真实 tokenizer，不执行完整 86 任务或模型性能对照。当前安装与来源保全规则见 [架构迁移说明](architecture_migration.md)，此前的 [mainline_migration.md](mainline_migration.md) 保留历史原文。
 
@@ -20,6 +20,8 @@ python -m pip install '.[translate,logging]'
 agentic-arxiv evaluate rollout --help
 agentic-arxiv evaluate run --help
 agentic-arxiv train sft --help
+agentic-arxiv data dpo generate --help
+agentic-arxiv train dpo --help
 agentic-arxiv train grpo --help
 agentic-arxiv run --help
 ```
@@ -36,7 +38,7 @@ agentic-arxiv run --help
 
 ## 小型主线配置与默认值
 
-原 `configs/training/mainline.json` 按原字节迁入唯一包资源 `resources/mainline.json`，由 `agentic_arxiv.config` 通过资源 API 读取。省略 `--config` 即使用包内默认，显式 `--config PATH` 使用工作区路径；CLI 中显式提供的字段再覆盖配置，未提供字段不能覆盖配置。配置来源及实际覆盖记录在 manifest。它不是新配方框架，也不还原仓库外历史有效值。
+唯一包资源 `resources/mainline.json` 由 `agentic_arxiv.config` 通过资源 API 读取。原配置迁入后，本次新增可选 `dpo` 节，整体文件哈希变化，但 `sft`、`grpo` 和原 `source_baseline` 子树内容保持不变。`schema_version=1` 的旧用户配置缺少整个 DPO 节时只在内存补入有来源记录的包内 DPO 默认，不写回文件；显式 DPO 节必须完整、类型正确，未知字段拒绝。省略 `--config` 使用包内默认，显式 `--config PATH` 使用工作区路径；显式 CLI 字段优先。配置来源及覆盖记录在 manifest，不还原仓库外历史有效值。
 
 | 字段 | SFT | GRPO |
 | --- | --- | --- |
@@ -113,6 +115,76 @@ accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
 
 未来数据/manifest/长度预检可用 `agentic-arxiv train sft --inspect-only`，但仍需实际 tokenizer，不能作为本次必须补资产的检查。日志可显式加 `--report-to tensorboard` 或 `wandb`，后端依赖与 API 凭据按需准备；资源覆盖必须记入运行指纹，不伪装成原配方。SFT/GRPO QLoRA 已增加单机 DDP 路径与独立启动器，四卡配置为 `configs/accelerate/ddp_4gpu.yaml`；全参仍显式使用 `--no-qlora`。QLoRA 分片与 GRPO FSDP/vLLM 不在支持范围内；原有非量化 SFT 分片入口未在本次验证。launcher 的 `--config_file` 属于 accelerate，应用参数仍使用连字符。详见 [多卡训练指南](training_distributed.md)；本次只做工程回归，不启动真实多卡训练。
 
+## 显式可选的 SFT → DPO → GRPO
+
+仅当用户选择该路径时执行。生成需要 `local`，训练需要 `train`；两者只接受带当前协议 manifest 的本地 SFT 起点及已有离线快照，不联网补齐或改走 API。必须显式 `--task-set expanded --split FILE:train`，拒绝未指定切分、裸 train、dev/iid_test/ood_test、basic 或历史 `rl_train` 信号子集。以下示例均未执行，路径中的输入必须已存在，输出必须是新批次：
+
+```bash
+agentic-arxiv data dpo generate \
+  --model outputs/sft_qlora/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json \
+  --output data/dpo/dpo_react_messages_v3_train.jsonl
+
+# 只审计完整性、来源、协议及真实模板边界；不加载策略权重、不训练
+agentic-arxiv train dpo \
+  --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl --inspect-only
+
+# 显式训练；默认保存后执行完整多轮阶段验证
+agentic-arxiv train dpo \
+  --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl \
+  --snapshot data/mock_arxiv_snapshot.json --output-dir outputs/dpo
+
+# 只有显式指定时，GRPO 才消费 DPO 产物
+agentic-arxiv train grpo \
+  --model outputs/dpo/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
+```
+
+原 GRPO 默认输入仍是 `outputs/sft_qlora/final`，以上命令不会组成自动流水线。当前协议 DPO 全参/适配器产物按其真实阶段、基座与权重类型加载，来源链保留 DPO 及 SFT；不把旧 DPO 目录补标为 SFT 或自动升级。显式交给 GRPO 不额外要求 PASS 报告，但应检查失败/跳过状态，不能将可加载等同验证通过。
+
+### 配对与诊断
+
+每个任务采样相互隔离的实际完整 episode，按 task/trial 记录独立随机流及实际 messages/响应。配对要求同任务、初始化、快照、模型、协议和采样设置；完整消息的角色、顺序及原文逐项一致，不能只比较工具动作，不能删除 Thought/Observation 或拼接不同历史。只取共同前缀下首个有效动作分歧，两侧都是未截断的真实当前 CALL/FINISH；框架结束标记与短轨迹缺失步骤不补 FINISH。每任务最多选择奖励差最大的一个有效对，平局稳定处理；其他有效对记为 `not_selected`，重复单独统计。
+
+完整轨迹奖励只用于排序，要求有限奖励差严格大于 `min_reward_gap`，不证明当前单步动作的因果优势。业务失败保留真实评分；模型调用/记录失败不是合成低分负例。诊断同时报告：
+
+- 任务产出率 = 有最终偏好对的任务数 / 请求生成的训练任务数。
+- 组合接受率 = 通过配对条件的组合数 / 请求的无序轨迹组合数，包括采样失败影响的组合。
+- 请求/完成/无效 rollout、请求/通过/丢弃组合、去重、有效未选和最终对数及每任务细分。每个请求组合只有一个首要结果码，分类总和必须等于请求组合数。
+
+丢弃原因区分采样失败、来源/协议不符、记录/响应缺失、上下文不同、不可用/截断决策、无动作分歧、非有限分数、奖励差不足与重复。不能只报过滤后的成功比例。零有效对保留真实轨迹和失败报告、非零退出，不发布训练 JSONL 或成功 manifest；低任务产出率只报警，不自动降阈值、重采样或造负例。
+
+输出数据文件旁追加 `.traces.jsonl`、`.manifest.json` 和 `.report.json`（例如 `dpo_react_messages_v3_train.jsonl.manifest.json`）。成功 manifest 最后发布，绑定数据/轨迹哈希、数量、源 SFT、切分、初始化/快照、模板、采样与评分配置；拒绝覆盖已有文件。训练拒绝缺完成标记、篡改哈希/数量、非 train 成员、来源不符或历史字符串格式。
+
+### 设计默认与资源代价
+
+以下仅为本次恢复的设计默认，不是已验证的历史完整配方：
+
+| 项目 | DPO 默认 |
+| --- | --- |
+| 起点 / 输出 | `outputs/sft_qlora/final` / `outputs/dpo/final` |
+| 数据 | `data/dpo/dpo_react_messages_v3_train.jsonl` |
+| 每任务采样 / 温度 / seed | 5 / 0.8 / 42 |
+| 奖励差 / 低产出警戒线 | 严格大于 0.05 / 任务产出率低于 0.25 |
+| 采样预算 | 6 轮含 FINISH，每轮 256 新 token |
+| 固定评分 | `curriculum_steps=30`、`training_step=0`，不随 DPO 优化步数改变 |
+| epochs / lr / beta | 3 / `5e-6` / 0.1，固定 sigmoid loss |
+| 资源 / 每卡 batch / grad_accum | QLoRA / 1 / 8 |
+| 完整序列预算 | `max_length=4096`，超长失败，不截断 |
+| 阶段验证 | 默认开启，mean reward 下限 −0.3 |
+
+默认来源分开记录：5 次采样、温度 0.8、seed 42、奖励差 0.05，以及 epochs 3、lr `5e-6`、beta 0.1 和验证阈值 −0.3 沿用旧入口的显式值；6 轮/每轮 256 token、QLoRA batch 1/累积 8/完整长度 4096 对齐当前运行与资源约定，不复用旧 4 轮、batch 2 双全参资源设置。产出率警戒线 0.25 是本次诊断默认，不是效果合格线。包资源中的 `dpo.defaults`、`dpo.trainer_parameters`、`dpo.generation_defaults` 分别记录 CLI/训练、训练器固定约定及生成默认，不能把新增节说成旧配置字节未变。
+
+策略与冻结参考从同一完整 SFT 独立加载，不共享可变参数。QLoRA 输入 adapter 时延续原 SFT adapter 配置，参考也包含同一 SFT adapter，不通过关闭 adapter 退回原始基座；全参 SFT 上只为策略建立 LoRA。显式 `--no-qlora` 使用全参路径，adapter 输入在各自独立模型中正确合并。参考为 eval、无可训练参数且不进入优化器；仅导出策略的 `dpo_qlora` / `dpo_full` 产物及 tokenizer/来源。两份模型及 DDP 每 rank 的 policy/reference 增加显存，不承诺任何卡型可运行，资源不足明确失败，不自动更换参考或算法。
+
+`--inspect-only` 仍需实际本地 tokenizer，但不加载策略权重或执行优化。审计包括完整 token 前缀、当前单条 assistant 目标与长度；历史/环境不计目标概率，模板不保持前缀或超预算立即失败，不左右截断或静默丢配置。实际训练库不支持显式字段时拒绝，不升降级依赖绕过。
+
+保存后默认用既有 Canary 冒烟任务执行完整多轮验证，报告 mean_reward、严格成功率、解析率、虚假完成率、终止计数、任务/episode 覆盖与协议关系。训练完成、验证阈值通过、优于 SFT 是三个不同结论；冒烟通过不是留出集提升证据。失败保留模型及失败报告、返回非零，并广播到其他 rank；显式 `--no-verify` 记 skipped，不写 PASS，不自动启动 GRPO。本次没有执行生成、只审计、训练或模型评测；真实 tokenizer、优化后参考权重不变、GPU/DDP、资源释放及模型收益均未验证。
+
 ## 消息、监督与采样责任
 
 当前唯一活动协议为 `react-runtime-v2` / `react-messages-v3`，由 `runtime/react_contract.py::build_react_messages/append_react_turn` 构造初始 user 任务/工具/实际可见 setup，随后 assistant 动作与 user 环境 Observation 交替。任务与工具只建立一次，环境反馈明确标为数据，不能改变协议规则。旧单 user 历史拼接实现和旧执行开关已退出；缺实际 `policy_text/visible_observation` 不猜填旧响应继续运行。
@@ -125,6 +197,7 @@ assistant  next Thought / Action or FINISH
 ```
 
 - SFT 每个决策点保存此前完整消息前缀与当前唯一 assistant completion；`training/train_sft.py::_to_prompt_completion` 将 `messages[:-1]` 与 `messages[-1:]` 分开，并强制 `completion_only_loss=True`。历史 assistant、setup 和 Observation 不计本样本 loss，不能只截取第一条 user 消息丢掉历史。
+- DPO 在严格共同完整 prompt 下，仅对 chosen/rejected 各一条实际当前 assistant 计算偏好目标；完整历史与环境反馈不计 completion log-prob，不截断样本。它是离线消息编码，不冒充 on-policy 原始 token 重放。
 - GRPO 保留独立 token 采样循环及原始采样 ID。模型 token 的 mask 为 1，环境反馈与运行时插入边界的 mask 为 0；不能 decode/re-encode 已采样响应来替代训练输出。
 - 后续追加消息必须保持已采样 token 前缀，实际模板不支持时明确失败，不静默重写。已采样结束 token 不重复插入，模型伪造 Observation 不驱动后续工具动作。
 - 训练器已完成 prompt 分组/采样数量契约，rollout 不再次按 G 扩增；每条实际轨迹与奖励一对一，回调不再做第二次组归一化。
@@ -267,11 +340,11 @@ dev、iid_test、ood_test 分别用同一显式文件及协议评测；旧 check
 
 每次未来实际训练由 `provenance.py` 记录源码基线、请求配置、实际可得的有效/派生值、版本、输入指纹、模型/数据/切分来源、资源覆盖、协议、实际步数与停止原因。无法取得的值标未知，不把 CLI null 写成已解析的有效算法值，不保存凭据或敏感环境变量。本次实现写入能力，没有为验收生成训练 manifest。
 
-共同 QLoRA、参数统计和版本/精度检查归 `training/model_setup.py` 及相邻公共模块；SFT/GRPO 不互相导入命令入口私有函数。Canary/阶段验证的公共 episode 执行归 `evaluation`，阈值、停止策略和审计 writer 留在 `training`。评分归 `scoring`，只消费实际轨迹与已准备参考，不重新执行工具。任务初始化由 `tasks` 纯编译、`runtime` 执行，参考在独立 replay episode 显式准备，不进入模型消息或学习标签。
+共同 QLoRA、参数统计和版本/精度检查归 `training/model_setup.py` 及相邻公共模块；SFT/DPO/GRPO 不互相导入命令入口私有函数，纯产物校验归 `llm/artifacts.py`。Canary/阶段验证的公共 episode 执行归 `evaluation`，阈值、停止策略和审计 writer 留在 `training`。DPO 生成层复用任务、运行时与评分，不导入训练器或评测编排。评分只消费实际轨迹与已准备参考，不重新执行工具。任务初始化由 `tasks` 纯编译、`runtime` 执行，参考在独立 replay episode 显式准备，不进入模型消息或学习标签。
 
 配置只读审计位于 `scripts/maintenance/audit_mainline_configuration.py`，历史记录审计位于 `scripts/maintenance/audit_historical_records.py`；它们使用已安装包、显式工作区与 [独立源码映射](../scripts/maintenance/source_map.json)，不覆写历史 source_configuration 或旧报告。新结果可写入独立 `outputs/audits/`；临时迁移证据目录已清理，旧路径和旧指纹继续描述原来源，不能回填成当前值。
 
-活动入口已删除 DPO/OPD/PPO、GRPO 变体选择、动态重采样、自进化编排、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL/SSE。共享 IO、奖励、精度、PDF/图像、外部 LLM API、图表推理、快照构建和 T5 backfill 保留。历史算法结果见 [历史范式对照](rl_paradigm_comparison.md)，不再据旧旗标提供活动运行方式。
+除本次通过统一命令恢复的可选 DPO 外，OPD/PPO、GRPO 变体选择、动态重采样、自进化编排、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL/SSE 活动入口仍退出。共享 IO、奖励、精度、PDF/图像、外部 LLM API、图表推理、快照构建和 T5 backfill 保留。历史算法结果见 [历史范式对照](rl_paradigm_comparison.md)，旧 DPO 命令、旧导入路径和旧数据/模型不因此恢复兼容。
 
 可运行帮助、解析、源码/现有测试/历史记录与资产核对按各自实际证据验收。缺少模型、数据、默认快照或真实 tokenizer 的动态路径明确为本次未验证，不补输入、不标通过，也不改列为工程遗留必做项。
 

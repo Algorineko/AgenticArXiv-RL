@@ -51,6 +51,7 @@ python -m pip install '.[dev]'
 | `AgenticArxiv/benchmark/rescore_traces.py` | `agentic-arxiv evaluate rescore` |
 | `eval/badcase_replay.py` 的默认/replay、capture、run | `agentic-arxiv evaluate badcases replay`、`capture`、`run` |
 | `AgenticArxiv/rl/train_sft.py`、`train_grpo.py` | `agentic-arxiv train sft`、`train grpo` |
+| 历史 DPO 生成/训练入口（旧接口不恢复） | `agentic-arxiv data dpo generate`、`train dpo`；使用当前协议新包 |
 | `AgenticArxiv/rl/build_snapshot.py`、`backfill_figure_analysis.py` | `agentic-arxiv data snapshot`、`data backfill-figures` |
 | `scripts/generate_sft_data.py`、`generate_parametric_sft_data.py` | `agentic-arxiv data sft generate`、`generate-parametric` |
 | `scripts/augment_sft_data.py`、`augment_parametric_sft_data.py` | `agentic-arxiv data sft augment`、`augment-parametric` |
@@ -73,7 +74,11 @@ agentic-arxiv --workspace /path/to/AgenticArXiv-RL train grpo --help
 
 工作区不是安装位置。包不包含 `data/`、模型、轨迹、实验报告、历史基线或输出缓存；不写入 site-packages，也不自动寻找其他仓库或联网补齐缺失资产。缺少输入时错误应包含实际解析路径。快照缺失不能回退 live，指定本地模型缺失不能替换成 API 或其他模型。
 
-原活动 `configs/training/mainline.json` 按原字节迁为 `src/agentic_arxiv/resources/mainline.json`，通过资源 API 加载，只有一个可编辑默认来源。默认配置不依赖工作区文件是否存在。优先级为：包内默认配置 < 显式 `--config PATH` < CLI 中显式提供的字段。未提供 CLI 字段不得覆盖配置；GRPO 五个库委托字段仍在值为 `None` 时省略向 TRL 传参，不猜填其有效值。
+原活动 `configs/training/mainline.json` 曾按原字节迁为 `src/agentic_arxiv/resources/mainline.json`，通过资源 API 加载，只有一个可编辑默认来源。恢复可选 DPO 后增加独立 `dpo` 节，整体配置字节及当前资源哈希随之改变；既有 `sft`、`grpo`、`source_baseline` 子树内容保持不变，不改写旧基线资产。`dpo.defaults` / `trainer_parameters` 用于训练，`dpo.generation_defaults` 用于本地生成；这些新值是本次设计默认，不是已验证的历史有效配方。
+
+`schema_version=1` 继续接受缺少整个 `dpo` 节的旧配置：只在内存中补齐包内 DPO 默认，并在 DPO 配置来源中记录补值，绝不写回用户文件。显式提供 DPO 节必须字段完整、类型正确，未知字段失败。默认配置不依赖工作区文件是否存在。训练优先级为：包内默认配置 < 显式 `--config PATH` < CLI 中显式提供的字段。未提供 CLI 字段不得覆盖配置；GRPO 五个库委托字段仍在值为 `None` 时省略向 TRL 传参，不猜填其有效值。生成参数直接由包内 DPO 生成默认及显式 CLI 决定。
+
+直接 `SFT -> GRPO` 仍是默认，GRPO 起点保持 `outputs/sft_qlora/final`。`SFT -> DPO -> GRPO` 必须显式运行生成/训练并指定交接产物，不自动搜索或启动 DPO。DPO 生成属于 `local` 能力，DPO 训练（含 `--inspect-only`）要求 `train`；帮助仍在基础安装可用。生成只接受已有本地 SFT、已有快照及显式 expanded `PATH:train`，不下载研究资产。两入口的模型、数据、快照、输出和切分文件均遵守工作区路径规则。DPO 策略及独立冻结参考策略各自保留完整 SFT 权重，额外模型副本的资源代价不能以关闭 SFT adapter 规避。DDP launcher 可显式选择 `dpo`，不套用 SFT token 归一化或 GRPO 生成组约束。
 
 `configs/accelerate/ddp_2gpu.yaml` 和 `fsdp_2gpu.yaml` 内容保持不变，仍由 launcher 显式选择。旧操作的模型、快照和输出逻辑子路径保留；原依赖源码层级定位的工具缓存改从工作区定位，episode 自有产物仍位于独立临时空间。这是允许的路径归属变化，不是工具业务或训练语义变化。
 
@@ -102,7 +107,7 @@ agentic-arxiv --workspace /path/to/AgenticArXiv-RL train grpo --help
 | `tasks` | 任务声明、切分、初始化计划编译及显式参考答案准备 |
 | `scoring` | 既有轨迹与已提供参考数据的只读评分，不做工具或文件 I/O |
 | `evaluation` | 组合运行与评分、历史诊断、报告和资产核对，不导入训练回调 |
-| `training` | SFT/GRPO、共同模型配置、原始 token 适配、回调与停止策略 |
+| `training` | SFT/可选 DPO/GRPO、共同模型配置、原始 token 适配、回调与停止策略 |
 | `data_pipeline` | 可导入的数据生成/增强/混合/快照/信号选择，不反向依赖 CLI |
 | `cli` | 参数解析、按子命令组装及交付，不被业务模块导入 |
 
@@ -144,7 +149,7 @@ actual trajectory + provided reference data -> scoring -> scores
 
 一次性迁移证据目录已按用户要求清理，没有覆盖 `artifacts/mainline_baseline/` 或此前研究报告。维护审计仍需使用的 [独立源码映射](../scripts/maintenance/source_map.json) 保留在 `scripts/maintenance/`，记录原路径、当前一个或多个路径，以及原/当前身份；拆分模块可一对多，退出入口注明退出，不能伪造旧路径仍存在或旧哈希等于新哈希。
 
-历史 manifest 的路径、命令字符串、来源哈希和协议字段保持原义。维护审计只通过独立映射定位当前实现，不回填历史字段，不以搬迁为由把原本可核对的参数自动降级为未知。默认配置原/新路径的 SHA256 均为 `3479911b31a7740321283a30c70f929f1fd8835be9b9974573d2c377a894b34c`；fixture 迁移另记录来源与字节一致性，不与研究资产或非活动基线混在一起。
+历史 manifest 的路径、命令字符串、来源哈希和协议字段保持原义。维护审计只通过独立映射定位当前实现，不回填历史字段，不以搬迁为由把原本可核对的参数自动降级为未知。架构迁移时配置原/新路径的 SHA256 均为 `3479911b31a7740321283a30c70f929f1fd8835be9b9974573d2c377a894b34c`；这是增加 DPO 前的历史指纹，当前资源指纹见配置资源测试和安装检查，不能再声称整体字节未变。fixture 迁移另记录来源与字节一致性，不与研究资产或非活动基线混在一起。
 
 配置与历史记录的只读审计入口位于 `scripts/maintenance/`，使用已安装包、显式工作区和保留的源码映射，可按需重新执行。临时结果已随证据目录清理；新的输出不替换旧配置指纹或原实验报告。
 

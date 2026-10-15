@@ -1,8 +1,13 @@
 """数据准备命令的轻量参数声明，不加载业务或模型实现。"""
 
 import argparse
+import json
 from pathlib import Path
 from typing import Callable
+
+from agentic_arxiv.config import read_default_mainline_config
+
+DPO_GENERATION_DEFAULTS = json.loads(read_default_mainline_config())["dpo"]["generation_defaults"]
 
 
 def register_commands(
@@ -153,6 +158,30 @@ def register_commands(
         help="训练混合数据输出路径",
     )
     mix.add_argument("--seed", type=int, default=42, help="确定性打乱的随机种子")
+
+    dpo = add_command(commands, "dpo", help="本地 SFT 的真实决策偏好数据；需要 local 安装层")
+    dpo_commands = dpo.add_subparsers(dest="dpo_data_command", required=True)
+    dpo_generate = add_command(dpo_commands, "generate", help="严格同上下文离线偏好采样；需要 local 安装层")
+    dpo_generate.description = "从已有本地 SFT 和显式 expanded :train 采样；需要 agentic-arxiv[local]"
+    dpo_generate.set_defaults(_operation="data.dpo.generate")
+    dpo_generate.add_argument("--model", default=DPO_GENERATION_DEFAULTS["model"], help="当前协议本地 SFT 产物")
+    dpo_generate.add_argument("--base-model", default=DPO_GENERATION_DEFAULTS["base_model"], help="适配器声明的精确本地基座")
+    dpo_generate.add_argument("--output", default=DPO_GENERATION_DEFAULTS["output"], help="新批次 JSONL，拒绝覆盖")
+    dpo_generate.add_argument("--snapshot", default=DPO_GENERATION_DEFAULTS["snapshot"], help="必需的已有离线快照，不联网补齐")
+    dpo_generate.add_argument("--task-set", choices=("expanded",), default=DPO_GENERATION_DEFAULTS["task_set"], help="仅支持 expanded 训练任务")
+    dpo_generate.add_argument("--split", default=DPO_GENERATION_DEFAULTS["split"], metavar="PATH:train", help="必需的显式版本化 train 切分")
+    for name, value_type, help_text in (
+        ("num_trials", int, "每任务独立采样轨迹数"),
+        ("temperature", float, "采样温度"),
+        ("seed", int, "按任务和 trial 派生独立随机流的种子"),
+        ("min_reward_gap", float, "奖励差必须严格大于此值"),
+        ("min_task_yield", float, "任务产出率低于此值只报警，不放宽筛选"),
+        ("max_turns", int, "轨迹轮数预算，含 FINISH"),
+        ("max_new_tokens", int, "每轮新 token 预算"),
+        ("reward_curriculum_steps", int, "固定离线评分的课程步数，评分 training_step 为 0"),
+    ):
+        dpo_generate.add_argument("--" + name.replace("_", "-"), type=value_type,
+                                  default=DPO_GENERATION_DEFAULTS[name], help=help_text)
 
     grpo = add_command(commands, "grpo", help="GRPO 数据选择")
     grpo_commands = grpo.add_subparsers(dest="grpo_data_command", required=True)

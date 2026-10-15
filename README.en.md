@@ -5,7 +5,7 @@
 # AgenticArXiv-RL — Agentic RL Training Environment
 
 > **An Agentic RL training environment built on a ReAct agent + arXiv tools**
-> The supported training mainline is SFT → GRPO; inference and evaluation use text ReAct with verifiable rewards (RLVR).
+> The default training mainline is SFT → GRPO, with an explicit optional SFT → DPO → GRPO path; inference and evaluation use text ReAct with verifiable rewards (RLVR).
 > The ultimate goal: **a lightweight multimodal paper assistant for on-device deployment** — an end-to-end paper-reading model spanning retrieval, download, translation, summarization, and figure understanding.
 
 <p align="center">
@@ -19,7 +19,7 @@
 This project turns arXiv paper retrieval/download/translation/interpretation tasks into a **trainable reinforcement learning environment**, focused on:
 
 1. **Verifiable Reward**: rule-based rewards (tool-call accuracy, task completion, parsing errors, etc.), no human annotation required
-2. **Direct training mainline**: SFT → GRPO, with QLoRA by default and explicit full-parameter training
+2. **Direct mainline and optional preference stage**: default SFT → GRPO or explicit SFT → DPO → GRPO, with QLoRA by default and explicit full-parameter training
 3. **Lightweight engineering**: pure Python + JSONL storage, no database, no frontend — focused on offline training
 
 **Non-goals**: a production-grade arXiv app, a Web UI, a real-time translation service (the original web app has been removed from this repo; see the original [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv)).
@@ -42,7 +42,7 @@ agentic-arxiv evaluate run --help
 agentic-arxiv run --help
 ```
 
-The base install supports external APIs and historical-record reading without local-model or training dependencies. Install `pip install '.[local]'` for local inference/evaluation or `pip install '.[train]'` for SFT/GRPO. For API inference, explicitly set `LLM_BASE_URL`, `LLM_API_KEY`, and `MODEL`; never commit credentials or a real `.env`. Local training/evaluation does not require an API key. Install `pip install '.[translate]'` for real PDF translation; no asynchronous application service is required.
+The base install supports external APIs and historical-record reading without local-model or training dependencies. Install `pip install '.[local]'` for local inference/evaluation and DPO data generation, or `pip install '.[train]'` for SFT/DPO/GRPO training. For API inference, explicitly set `LLM_BASE_URL`, `LLM_API_KEY`, and `MODEL`; never commit credentials or a real `.env`. Local training/evaluation does not require an API key. Install `pip install '.[translate]'` for real PDF translation; no asynchronous application service is required.
 
 Global `--workspace` defaults to the current directory. Relative configuration, model, data, snapshot, and output paths are workspace-relative; absolute paths are unchanged. To use existing research inputs from elsewhere, place `agentic-arxiv --workspace /actual/workspace` before the subcommand. Missing inputs do not fall back to the source tree. `.env` is read from the workspace only for an actual operation; help does not read credentials or create logs. See the [architecture migration guide](docs/architecture_migration.md) for old-to-new entry mappings.
 
@@ -118,11 +118,11 @@ The only active protocol is `react-runtime-v2` / `react-messages-v3`: an initial
 
 Old/unknown data or trained artifacts cannot be silently labeled compatible, and skipping a manifest check does not bypass protocol validation. Reports separate the actual execution protocol from the source model's real training metadata, with same_protocol/cross_protocol/unknown relations; unknown is not a comparable reproduction. Real tokenizer prefixes, gradients, and model ability were not verified here. See the [runtime contract](docs/react_runtime.md).
 
-## Training Mainline: SFT → GRPO
+## Training Mainline: Default SFT → GRPO, Optional DPO
 
 These are commands for a separate future run, not engineering acceptance steps. They need new-protocol SFT data and its manifest, base-model/training resources, and an existing offline snapshot. None of these inputs were generated, and no training was run in this change.
 
-First install `pip install '.[train]'`. The default training configuration is the package resource `agentic_arxiv/resources/mainline.json`, with unchanged content; the old source-tree configuration path is no longer needed. An explicit `--config` overrides the package default, and explicit CLI arguments override that configuration.
+First install `pip install '.[train]'`. The package resource `agentic_arxiv/resources/mainline.json` adds a separate DPO section while preserving the SFT/GRPO defaults and original source-baseline subtrees. Older configurations missing the whole DPO section receive recorded defaults in memory, without file changes. An explicit `--config` overrides the package default, and explicit CLI arguments take precedence.
 
 ```bash
 # Default QLoRA: GRPO directly loads the SFT adapter and base-model metadata
@@ -150,7 +150,31 @@ The small mainline configuration preserves explicit source values, defaults, and
 
 Guards retain length checks, variance diagnostics, Canary, SFT parse-rate threshold ≥ 0.3, GRPO mean-reward threshold ≥ −0.2, precision handling, and logging checks. Validation uses complete episodes, not first-action correctness; real-model threshold success was not verified here.
 
-DPO, OPD, PPO, GRPO variant selection, self-evolution orchestration, independent VLM post-training, Jev, MCP/Skill CLI, Web/HTTP, MySQL, and SSE entries are retired. Existing figure-tool inference, snapshot construction, T5 backfill, bad-case scoring, and external LLM APIs remain.
+### Explicit Optional DPO (Examples Not Executed)
+
+Without this stage, GRPO still defaults to `outputs/sft_qlora/final`; it never scans DPO directories or starts intermediate stages. Generation requires a current-protocol local SFT artifact, an existing snapshot, and an explicit versioned expanded `:train` split, never held-out data, bare train, or historical `rl_train` subsets:
+
+```bash
+agentic-arxiv data dpo generate \
+  --model outputs/sft_qlora/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json \
+  --output data/dpo/dpo_react_messages_v3_train.jsonl
+agentic-arxiv train dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl --inspect-only
+agentic-arxiv train dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl \
+  --snapshot data/mock_arxiv_snapshot.json --output-dir outputs/dpo
+agentic-arxiv train grpo --model outputs/dpo/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
+```
+
+Pairs require exactly equal complete actual messages, including Thought/setup/Observation text, and two real, untruncated current CALL/FINISH responses. Missing steps never become fabricated FINISH. Only current assistant targets enter the preference objective. `--inspect-only` audits hashes, train membership, provenance, protocol, real tokenizer prefixes/targets and full lengths without loading policy weights or training; a local tokenizer is still required. Overlength or incompatible templates fail rather than truncate. At most one pair per task is selected; trajectory rewards rank preferences, not establish single-action causality. Reports use requested tasks and requested unordered combinations as separate denominators. Low yield only warns; zero pairs retain traces/failure reports and exit nonzero, without a successful training package.
+
+Independent policy/reference models start from the same complete SFT, including its adapter; the reference stays frozen and shares no mutable parameters. Two models cost extra memory; `--no-qlora` selects full-parameter training explicitly, never a different reference. Epochs 3, lr `5e-6`, beta 0.1 and QLoRA batch 1/accumulation 8 are design defaults, not verified historical recipes. Default full-episode Canary validation reports reward, strict success, parsing, false finishes, termination, coverage and protocol relation. Failure retains model/report and exits nonzero; `--no-verify` records skipped, not PASS. Training completion, smoke validation and improvement over SFT are separate claims; GRPO never starts automatically. See the [mainline guide](docs/rl_building.md). No generation, training or model evaluation ran here; real tokenizer integration, reference invariance after optimization, GPU/DDP and benefits remain unverified.
+
+OPD, PPO, GRPO variant selection, self-evolution orchestration, independent VLM post-training, Jev, MCP/Skill CLI, Web/HTTP, MySQL, and SSE entries remain retired. DPO restoration does not restore old scripts/imports or upgrade old data. Existing figure-tool inference, snapshot construction, T5 backfill, bad-case scoring, and external LLM APIs remain.
 
 ### Historical Release Results (original protocol, not rerun)
 
@@ -235,7 +259,7 @@ MIT License
 
 ## 🙋 FAQ
 
-**Q: How does this differ from the original AgenticArXiv?** The original is a production-grade web app (FastAPI + Vue3 + MySQL, three agent architectures); this project is a pure Python + JSONL RL training environment that keeps only the single-policy ReAct setup, centered on SFT → GRPO training and text ReAct with verifiable rewards.
+**Q: How does this differ from the original AgenticArXiv?** The original is a production-grade web app (FastAPI + Vue3 + MySQL, three agent architectures); this project is a pure Python + JSONL RL training environment with single-policy text ReAct, default SFT → GRPO, optional DPO and verifiable rewards.
 
 **Q: Why GRPO instead of PPO?** GRPO needs no value model (lower memory footprint), suits small models at the 1.5B scale, and is simple to implement and debug; PPO is a better fit for production-grade training of large models.
 

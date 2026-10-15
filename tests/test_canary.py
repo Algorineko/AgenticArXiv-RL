@@ -172,6 +172,11 @@ class CanaryEvaluatorTest(unittest.TestCase):
         self.assertEqual(result.task_ids, DEFAULT_CANARY_TASK_IDS)
         self.assertEqual(result.max_iterations, 6)
         self.assertEqual(result.task_completion_rate, 0.0)
+        self.assertEqual(result.false_finish_rate, 0.0)
+        self.assertEqual(result.false_finish_count, 0)
+        self.assertEqual(result.strict_success_count, 0)
+        self.assertEqual(result.model_decision_count, 24)
+        self.assertEqual(result.parsed_decision_count, 24)
         self.assertEqual(result.termination_counts, {"MAX_TURNS": 4})
 
     def test_invalid_task_id_raises(self):

@@ -29,7 +29,11 @@ DEFAULT_BETA = 0.04
 
 from agentic_arxiv.training.callbacks import TrainerCallback
 from agentic_arxiv.training.distributed import TrainingContext, grpo_generation_batch_size
-from agentic_arxiv.training.precision import quantized_model_device_map
+from agentic_arxiv.llm.artifacts import (
+    adapter_base_model as _adapter_base_model,
+    artifact_metadata as _artifact_metadata,
+    artifact_lineage,
+)
 
 # 工具集从 tools/bootstrap.py 的注册表来，不在这里手写模块清单：
 # 手写的那份漏掉过 paper_content / paper_summary / paper_figures，后果是
@@ -70,10 +74,8 @@ from agentic_arxiv.training.observability import (
 from agentic_arxiv.scoring.reward import RewardCalculator
 from agentic_arxiv.training.stage_verifier import StageVerifier
 from agentic_arxiv.training.model_setup import (
-    _assert_lora_only_trainable,
-    _build_qlora_configs,
-    _qlora_runtime_guard,
     _trainable_parameter_stats,
+    load_training_policy as _load_policy,
 )
 from agentic_arxiv.config import get_workspace, workspace_path
 
@@ -141,142 +143,6 @@ def _global_step(state) -> int:
         return int(getattr(state, "global_step", 0) or 0)
     except (TypeError, ValueError):
         return 0
-
-
-def _adapter_base_model(adapter_path: Path, override: Optional[str] = None) -> str:
-    """Resolve the immutable base model behind an SFT LoRA adapter."""
-    if override:
-        return resolve_model_source(override)
-    config_path = adapter_path / "adapter_config.json"
-    if not config_path.exists():
-        raise SystemExit(f"适配器元数据缺失: {config_path}")
-    config = json.loads(config_path.read_text(encoding="utf-8"))
-    if not isinstance(config, dict):
-        raise SystemExit(f"adapter_config 必须为 JSON 对象: {config_path}")
-    value = str(config.get("base_model_name_or_path") or "")
-    if not value:
-        raise SystemExit(f"❌ adapter_config 未声明 base_model_name_or_path: {config_path}")
-    try:
-        return resolve_model_source(value)
-    except ValueError as exc:
-        raise SystemExit(
-            f"SFT adapter 引用的基座模型不存在: {value}；"
-            "换机器后可显式传 --base-model 指定同一基座的有效位置"
-        ) from exc
-
-
-def _artifact_metadata(model_path: str, *, base_model: Optional[str] = None) -> dict:
-    """GRPO 只消费明确的本地产物，不能用基座或远程 API 替代丢失的 SFT。"""
-    local = Path(resolve_model_source(model_path, local_only=True))
-    manifest_path = local / "training_manifest.json"
-    if not manifest_path.is_file():
-        raise SystemExit(f"训练模型缺少必要 training_manifest: {manifest_path}")
-    metadata = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(metadata, dict):
-        raise SystemExit(f"training_manifest 必须是 JSON 对象: {manifest_path}")
-    stage = metadata.get("stage")
-    if stage not in ("sft_qlora", "sft_full", "grpo_qlora", "grpo_full"):
-        raise SystemExit(f"不支持的训练产物 stage={stage!r}: {manifest_path}")
-    is_adapter = (local / "adapter_config.json").is_file()
-    if is_adapter != stage.endswith("_qlora"):
-        raise SystemExit("训练 manifest 的全参/适配器类型与产物文件不一致")
-    if is_adapter:
-        if not metadata.get("base_model"):
-            raise SystemExit("适配器 training_manifest 缺少 base_model")
-        if not any((local / name).is_file() for name in (
-            "adapter_model.safetensors", "adapter_model.bin"
-        )):
-            raise SystemExit(f"适配器权重缺失: {local}")
-        adapter_config = json.loads((local / "adapter_config.json").read_text(encoding="utf-8"))
-        declared_base = adapter_config.get("base_model_name_or_path")
-        if not declared_base or declared_base != metadata["base_model"]:
-            raise SystemExit("适配器基座声明与 training_manifest 的 base_model 不一致")
-        _adapter_base_model(local, base_model)
-    else:
-        if not (local / "config.json").is_file():
-            raise SystemExit(f"全参模型 config.json 缺失: {local}")
-        if not any((local / name).is_file() for name in (
-            "model.safetensors", "model.safetensors.index.json",
-            "pytorch_model.bin", "pytorch_model.bin.index.json"
-        )):
-            raise SystemExit(f"全参模型权重或分片索引缺失: {local}")
-    return metadata
-
-
-def _load_policy(
-    model_path: str,
-    *,
-    qlora: bool,
-    base_model: Optional[str],
-    lora_r: int,
-    lora_alpha: int,
-    lora_dropout: float,
-):
-    """按全参/适配器产物合同加载，QLoRA 只是资源策略。"""
-    import torch
-    from transformers import AutoModelForCausalLM
-
-    _artifact_metadata(model_path, base_model=base_model)
-    local = Path(resolve_model_source(model_path, local_only=True))
-    model_path = str(local)
-    is_adapter = local.is_dir() and (local / "adapter_config.json").exists()
-    if not is_adapter and base_model:
-        raise SystemExit("全参 SFT 产物不能用 --base-model 替换训练起点")
-    TrainingContext.from_environment().prepare_device(qlora=qlora)
-    if not qlora:
-        print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
-        source = _adapter_base_model(local, base_model) if is_adapter else model_path
-        # 全参保留路径原本不传 dtype；适配器合并合同也不借机改写此省略语义。
-        policy = AutoModelForCausalLM.from_pretrained(
-            source, local_files_only=Path(source).exists(),
-        )
-        if is_adapter:
-            from peft import PeftModel
-
-            policy = PeftModel.from_pretrained(policy, model_path).merge_and_unload()
-        for parameter in policy.parameters():
-            parameter.requires_grad = True
-        policy.config.use_cache = False
-        return policy
-
-    _qlora_runtime_guard()
-    quantization, fresh_lora = _build_qlora_configs(
-        lora_r, lora_alpha, lora_dropout
-    )
-    from peft import PeftModel, get_peft_model, prepare_model_for_kbit_training
-
-    source = _adapter_base_model(local, base_model) if is_adapter else model_path
-    source_path = Path(source)
-    print(
-        "🪶 GRPO QLoRA: 4-bit NF4 + double quant + BF16 compute\n"
-        f"   base={source}\n"
-        f"   adapter={model_path if is_adapter else '(new)'}"
-    )
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-    base = AutoModelForCausalLM.from_pretrained(
-        source,
-        quantization_config=quantization,
-        device_map=quantized_model_device_map(),
-        dtype=torch.bfloat16,
-        low_cpu_mem_usage=True,
-        local_files_only=source_path.exists(),
-    )
-    base = prepare_model_for_kbit_training(
-        base, use_gradient_checkpointing=False
-    )
-    policy = (
-        PeftModel.from_pretrained(base, model_path, is_trainable=True)
-        if is_adapter
-        else get_peft_model(base, fresh_lora)
-    )
-    policy.config.use_cache = False
-    trainable, total, ratio = _assert_lora_only_trainable(policy)
-    print(
-        f"🔧 参数统计: trainable={trainable:,}, model_parameters={total:,}, "
-        f"trainable_ratio={ratio:.4f}%"
-    )
-    return policy
 
 
 class RewardVarianceGuard(TrainerCallback):
@@ -738,6 +604,7 @@ def main(
                 "model_manifest": file_fingerprint(Path(resolved) / "training_manifest.json"),
                 "source_model": {**model_input_fingerprint(resolved),
                                  "stage": source_metadata["stage"]},
+                "source_model_lineage": artifact_lineage(resolved, source_metadata),
                 "base_model": model_input_fingerprint(actual_base_model),
                 "snapshot": file_fingerprint(snapshot_path),
                 "split": file_fingerprint(split_path),
@@ -857,6 +724,7 @@ def main(
         manifest = {
             "stage": "grpo_qlora" if qlora else "grpo_full",
             "source_model": resolved,
+            "source_model_lineage": artifact_lineage(resolved, source_metadata),
             "base_model": actual_base_model,
             "task_set": "default" if smoke else task_set,
             "split": split,

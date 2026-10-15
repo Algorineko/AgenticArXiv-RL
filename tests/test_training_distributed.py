@@ -186,13 +186,15 @@ def test_launcher_keeps_training_arguments_and_scopes_gpu_selection():
     assert command[-8:] == ["--module", "agentic_arxiv", "train", "sft", "--max-length", "9216", "--grad-accum", "2"]
 
 
-def test_launcher_dry_run_has_no_process_or_file_side_effect(tmp_path, capsys):
+@pytest.mark.parametrize("stage", ["sft", "dpo", "grpo"])
+def test_launcher_dry_run_has_no_process_or_file_side_effect(tmp_path, capsys, stage):
     with patch("agentic_arxiv.training.launch.subprocess.call") as call:
         assert launch(["--gpus", "0,1,2,3", "--dry-run", "--log-dir", str(tmp_path / "logs"),
-                       "grpo", "--batch-size", "1", "--num-generations", "4"]) == 0
+                       stage, "--batch-size", "1", "--grad-accum", "8"]) == 0
     call.assert_not_called()
     result = json.loads(capsys.readouterr().out)
     assert "--tee=3" in result["command"]
+    assert result["command"][-5:] == [stage, "--batch-size", "1", "--grad-accum", "8"]
     assert not list(tmp_path.iterdir())
 
 

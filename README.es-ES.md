@@ -5,7 +5,7 @@
 # AgenticArXiv-RL — Entorno de Entrenamiento para RL Agentic
 
 > **Entorno de entrenamiento de RL agentic basado en un agente ReAct + herramientas de arXiv**
-> La línea de entrenamiento admitida es SFT → GRPO; la inferencia y la evaluación usan ReAct textual con recompensas verificables (RLVR).
+> La línea predeterminada es SFT → GRPO, con la ruta opcional explícita SFT → DPO → GRPO; la inferencia y la evaluación usan ReAct textual con recompensas verificables (RLVR).
 > Objetivo final: **un asistente de papers multimodal y ligero, desplegado en el dispositivo** — un modelo de lectura de papers de extremo a extremo, desde la búsqueda, la descarga y la traducción hasta el resumen y el análisis de figuras.
 
 <p align="center">
@@ -19,7 +19,7 @@
 Convertir las tareas de búsqueda/descarga/traducción/interpretación de papers de arXiv en un **entorno de aprendizaje por refuerzo entrenable**, centrado en:
 
 1. **Verifiable Reward**: recompensas basadas en reglas (precisión de las llamadas a herramientas, completitud de la tarea, errores de parseo, etc.), sin anotación humana
-2. **Línea directa de entrenamiento**: SFT → GRPO, con QLoRA por defecto y entrenamiento de todos los parámetros explícito
+2. **Línea directa y etapa de preferencias opcional**: SFT → GRPO por defecto o SFT → DPO → GRPO explícito, con QLoRA por defecto y entrenamiento de todos los parámetros explícito
 3. **Ingeniería ligera**: Python puro + almacenamiento en JSONL, sin base de datos ni frontend, enfocado en el entrenamiento offline
 
 **No es objetivo**: una aplicación de arXiv de nivel de producción, una UI web o un servicio de traducción en tiempo real (la app web original se retiró de este repositorio; véase el [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) original).
@@ -42,7 +42,7 @@ agentic-arxiv evaluate run --help
 agentic-arxiv run --help
 ```
 
-La instalación base permite usar APIs externas y leer registros históricos, sin dependencias de modelos locales ni entrenamiento. Instala `pip install '.[local]'` para inferencia/evaluación local o `pip install '.[train]'` para SFT/GRPO. Para la inferencia mediante API, configura explícitamente `LLM_BASE_URL`, `LLM_API_KEY` y `MODEL`; no publiques credenciales ni un `.env` real. El entrenamiento y la evaluación locales no necesitan API key. Instala `pip install '.[translate]'` para traducción PDF real; no hay servicio asíncrono de la aplicación.
+La instalación base permite usar APIs externas y leer registros históricos, sin dependencias de modelos locales ni entrenamiento. Instala `pip install '.[local]'` para inferencia/evaluación local y generación DPO, o `pip install '.[train]'` para entrenar SFT/DPO/GRPO. Para la inferencia mediante API, configura explícitamente `LLM_BASE_URL`, `LLM_API_KEY` y `MODEL`; no publiques credenciales ni un `.env` real. El entrenamiento y la evaluación locales no necesitan API key. Instala `pip install '.[translate]'` para traducción PDF real; no hay servicio asíncrono de la aplicación.
 
 La opción global `--workspace` usa el directorio actual por defecto. Las rutas relativas de configuración, modelos, datos, snapshots y salidas se resuelven desde ese espacio; las absolutas no cambian. Desde otro directorio, coloca `agentic-arxiv --workspace /espacio/real` antes del subcomando. No se buscan entradas ausentes en el código fuente. `.env` se lee del espacio solo al ejecutar una operación; la ayuda no lee credenciales ni crea logs. El [documento de migración de arquitectura](docs/architecture_migration.md) recoge el mapa de entradas antiguas a nuevas.
 
@@ -118,11 +118,11 @@ El único protocolo activo es `react-runtime-v2` / `react-messages-v3`: un mensa
 
 No se declaran compatibles automáticamente datos antiguos/desconocidos ni artefactos entrenados; omitir la comprobación de manifest no evita la validación de protocolo. Los informes separan el protocolo de ejecución y los metadatos reales de entrenamiento del modelo de origen, con relaciones same_protocol/cross_protocol/unknown; unknown no es una reproducción comparable. Aquí no se verificaron prefijos con tokenizer real, gradientes ni capacidad del modelo. Véase el [contrato de ejecución](docs/react_runtime.md).
 
-## Línea de Entrenamiento: SFT → GRPO
+## Línea de Entrenamiento: SFT → GRPO Predeterminado, DPO Opcional
 
 Estos comandos corresponden a una ejecución futura separada, no a la aceptación de ingeniería. Requieren datos SFT del protocolo nuevo y su manifest, modelo base/recursos de entrenamiento y un snapshot offline existente. Este cambio no generó esas entradas ni ejecutó entrenamiento.
 
-Primero instala `pip install '.[train]'`. La configuración predeterminada es el recurso del paquete `agentic_arxiv/resources/mainline.json`, con contenido sin cambios; ya no se necesita la ruta antigua del código fuente. Un `--config` explícito sustituye el recurso predeterminado y los argumentos CLI explícitos prevalecen sobre esa configuración.
+Primero instala `pip install '.[train]'`. El recurso `agentic_arxiv/resources/mainline.json` añade una sección DPO independiente, conservando los valores SFT/GRPO y el origen original. Si una configuración antigua no incluye toda la sección DPO, se completa en memoria con origen registrado, sin reescribir el archivo. Un `--config` explícito sustituye el recurso predeterminado y los argumentos CLI explícitos prevalecen.
 
 ```bash
 # QLoRA por defecto: GRPO carga el adaptador SFT y sus metadatos de modelo base
@@ -150,7 +150,31 @@ La configuración mínima conserva valores explícitos del código, valores pred
 
 Se conservan controles de longitud, diagnóstico de varianza, Canary, umbral SFT de parseo ≥ 0.3, umbral GRPO de recompensa media ≥ −0.2, precisión y registro. La validación usa episodios completos, no solo la primera acción correcta; aquí no se verificó que modelos reales superen los umbrales.
 
-Se retiraron las entradas activas de DPO, OPD, PPO, variantes GRPO, autoevolución, post-entrenamiento VLM independiente, Jev, MCP/Skill CLI, Web/HTTP, MySQL y SSE. Se conservan inferencia de figuras, construcción de snapshots, backfill T5, puntuación de casos malos y APIs LLM externas.
+### DPO Opcional Explícito (Ejemplos No Ejecutados)
+
+Sin elegir esta etapa, GRPO sigue leyendo `outputs/sft_qlora/final`, sin buscar directorios DPO ni iniciar etapas intermedias. La generación requiere SFT local con protocolo actual, snapshot existente y partición expanded `:train` versionada explícita; no admite conjuntos reservados, train sin versión ni subconjuntos históricos `rl_train`:
+
+```bash
+agentic-arxiv data dpo generate \
+  --model outputs/sft_qlora/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json \
+  --output data/dpo/dpo_react_messages_v3_train.jsonl
+agentic-arxiv train dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl --inspect-only
+agentic-arxiv train dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl \
+  --snapshot data/mock_arxiv_snapshot.json --output-dir outputs/dpo
+agentic-arxiv train grpo --model outputs/dpo/final \
+  --task-set expanded --split data/splits/v7_86.json:train \
+  --snapshot data/mock_arxiv_snapshot.json --max-turns 6
+```
+
+Los pares exigen mensajes reales completos exactamente iguales, incluidos Thought/setup/Observation, y dos respuestas actuales CALL/FINISH reales sin truncar. Nunca se inventa FINISH para pasos ausentes; solo el assistant actual participa en el objetivo. `--inspect-only` audita hashes, miembros train, origen, protocolo, prefijos/objetivos del tokenizer real y longitudes completas sin cargar pesos de política ni entrenar; aún necesita tokenizer local. Exceso de longitud o plantillas incompatibles producen error, no truncamiento. Se selecciona como máximo un par por tarea; la recompensa ordena preferencias, no demuestra causalidad de una acción. El informe separa denominadores de tareas solicitadas y combinaciones no ordenadas solicitadas. Rendimiento bajo solo avisa; cero pares conserva trazas/informe de fallo y termina con código no cero, sin paquete de entrenamiento exitoso.
+
+Política y referencia independientes parten del mismo SFT completo, incluido su adaptador; la referencia permanece congelada, sin parámetros mutables compartidos. Dos modelos aumentan la memoria; `--no-qlora` selecciona todos los parámetros explícitamente, nunca otra referencia. Epochs 3, lr `5e-6`, beta 0.1 y QLoRA batch 1/acumulación 8 son valores de diseño, no recetas históricas verificadas. La validación Canary predeterminada ejecuta episodios completos y registra recompensa, éxito estricto, parseo, FINISH falso, terminación, cobertura y relación de protocolos. El fallo conserva modelo/informe y termina con código no cero; `--no-verify` registra skipped, no PASS. Entrenamiento terminado, validación smoke y mejora frente a SFT son conclusiones diferentes; GRPO no empieza automáticamente. Véase la [guía principal](docs/rl_building.md). No se generaron datos ni se entrenaron/evaluaron modelos aquí; tokenizer real, invariancia de referencia tras optimizar, GPU/DDP y beneficios no se verificaron.
+
+OPD, PPO, variantes GRPO, autoevolución, post-entrenamiento VLM independiente, Jev, MCP/Skill CLI, Web/HTTP, MySQL y SSE siguen retirados. Restaurar DPO no restaura scripts/importaciones antiguos ni convierte datos antiguos. Se conservan inferencia de figuras, construcción de snapshots, backfill T5, puntuación de casos malos y APIs LLM externas.
 
 ### Resultados Históricos Publicados (protocolo original, sin repetir)
 
@@ -235,7 +259,7 @@ Licencia MIT
 
 ## 🙋 FAQ
 
-**P: ¿En qué se diferencia del AgenticArXiv original?** El original es una aplicación web de nivel de producción (FastAPI+Vue3+MySQL, tres arquitecturas de agente); este proyecto es un entorno de entrenamiento RL en Python puro + JSONL que conserva únicamente la política única ReAct: su núcleo son SFT → GRPO y ReAct textual con recompensa verificable.
+**P: ¿En qué se diferencia del AgenticArXiv original?** El original es una aplicación web de nivel de producción (FastAPI+Vue3+MySQL, tres arquitecturas de agente); este proyecto es un entorno RL en Python puro + JSONL con una única política ReAct textual, SFT → GRPO predeterminado, DPO opcional y recompensa verificable.
 
 **P: ¿Por qué GRPO y no PPO?** GRPO no necesita value model (menor consumo de VRAM), encaja con modelos pequeños de la escala de 1.5B y su implementación es simple y fácil de depurar; PPO es más adecuado para entrenar modelos grandes de nivel de producción.
 

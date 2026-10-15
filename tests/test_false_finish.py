@@ -114,6 +114,26 @@ class ReportAggregationTest(unittest.TestCase):
         self.assertAlmostEqual(row["false_finish_rate"], 1 / 3)            # 占全部运行
         self.assertAlmostEqual(row["false_finish_of_completed"], 1 / 2)    # 占 FINISH 运行
 
+        from unittest.mock import patch
+        from agentic_arxiv.evaluation.episode import evaluate_episodes
+        from agentic_arxiv.scoring.reward import RewardCalculator
+
+        # 重用上方既有评分记录，不增加响应、token 或动作轨迹，也不执行模型。
+        tasks = [{"id": tid, "task": tid, "expected_tools": exp}
+                 for tid, exp, _hist, _agent in rows]
+        results = [{"history": hist} for _tid, _exp, hist, _agent in rows]
+        with patch("agentic_arxiv.evaluation.episode.execute_episode", side_effect=results) as execute:
+            aggregate = evaluate_episodes(None, tasks, lambda: None, RewardCalculator(),
+                                          num_generations=1)
+        self.assertEqual(execute.call_count, len(rows))
+        self.assertEqual(aggregate.episode_count, 3)
+        self.assertEqual(aggregate.false_finish_count, 1)
+        self.assertEqual(aggregate.false_finish_rate, round(1 / 3, 4))
+        self.assertEqual(aggregate.termination_counts, {"FINISH": 2, "FORCE_STOP": 1})
+        self.assertEqual(aggregate.model_decision_count, 0)  # 旧记录没有模型 raw_response
+        self.assertEqual(aggregate.parse_rate, 0.0)
+        self.assertEqual(aggregate.scoring["training_step"], 0)
+
     def test_no_completed_runs_does_not_divide_by_zero(self):
         rows = [("t", [DOWNLOAD], [{"thought": "x", "action": "ERROR", "observation": ""}], "regex")]
         self.assertEqual(self._report(rows).summary_by_agent()["regex"]["false_finish_of_completed"], 0.0)

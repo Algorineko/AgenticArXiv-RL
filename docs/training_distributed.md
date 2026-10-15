@@ -1,6 +1,6 @@
-# SFT / GRPO 单机 DDP
+# SFT / DPO / GRPO 单机 DDP
 
-SFT 和文本多轮 GRPO 均支持每卡一个进程的 DDP，包括默认 NF4/双量化/BF16 QLoRA。单卡入口及默认主线配置不变；四卡不会自动调整学习率、epoch、每卡 batch 或梯度累积。
+SFT、可选 DPO 和文本多轮 GRPO 均支持每卡一个进程的 DDP，包括默认 NF4/双量化/BF16 QLoRA。默认仍是 SFT → GRPO，DPO 必须显式选择；原 SFT/GRPO 单卡默认不变，四卡不会自动调整学习率、epoch、每卡 batch 或梯度累积。
 
 本次工程回归使用合成张量和 CPU/Gloo 多进程，不读取研究数据、加载预训练模型或启动真实训练。CUDA/NCCL、bitsandbytes 四卡训练速度与实际保存/重载仍须在独立冒烟中验证。不要更新正在训练的安装环境；应先安装到新的隔离环境，再在指定 GPU 空闲时启动新实验。
 
@@ -26,7 +26,7 @@ python -m agentic_arxiv.training.launch \
   --output-dir "$RUN/output"
 ```
 
-启动器只委托当前 Python 的 `torch.distributed.run --standalone --module agentic_arxiv train STAGE`。启动器选项放在 `sft/grpo` 前，训练参数放在其后，原样透传。`--gpus` 仅修改子进程的 `CUDA_VISIBLE_DEVICES`；省略时保留现有可见设备，不会自动突破限制。可见卡少于进程数、重复 GPU、嵌套启动均明确报错。`--log-dir` 保存各 rank 的 stdout/stderr，并在控制台添加 rank 前缀；不指定则沿用 torchrun 标准输出。
+启动器只委托当前 Python 的 `torch.distributed.run --standalone --module agentic_arxiv train STAGE`。启动器选项放在 `sft/dpo/grpo` 前，训练参数放在其后，原样透传。`--gpus` 仅修改子进程的 `CUDA_VISIBLE_DEVICES`；省略时保留现有可见设备，不会自动突破限制。可见卡少于进程数、重复 GPU、嵌套启动均明确报错。`--log-dir` 保存各 rank 的 stdout/stderr，并在控制台添加 rank 前缀；不指定则沿用 torchrun 标准输出。
 
 也可以使用 Accelerate，新增的 `configs/accelerate/ddp_4gpu.yaml` 是四卡 BF16 DDP 配置：
 
@@ -58,6 +58,22 @@ python -m agentic_arxiv.training.launch \
   --output-dir /data/ding/runs/grpo-ddp-new-run/output
 ```
 
+## 可选 DPO 的跨 rank 语义
+
+以下仅为未执行示例；它只打印命令，不加载模型或执行训练：
+
+```bash
+python -m agentic_arxiv.training.launch \
+  --num-processes 2 --gpus 0,1 --dry-run \
+  dpo --model outputs/sft_qlora/final \
+  --data data/dpo/dpo_react_messages_v3_train.jsonl \
+  --snapshot data/mock_arxiv_snapshot.json --output-dir outputs/dpo
+```
+
+DPO 每个 rank 独立持有同源 SFT policy 和冻结 reference，两者不共享可变参数；双模型增加显存，不保证任意卡型可训练。全局偏好对 batch = 每卡偏好对 batch × world size × grad_accum，默认单卡为 `1×1×8=8`。这不是 SFT token loss 归一化，也不受 GRPO generation 组整除规则约束。主进程写公共 manifest/报告，阶段验证只执行一次且结果/异常广播所有 rank；失败保留已保存模型及失败报告并非零退出，`--no-verify` 记录 skipped，不自动继续 GRPO。
+
+DPO 当前只核对工程接线及既有检查；没有执行真实 tokenizer、优化后参考权重不变、CUDA/NCCL、GPU/DDP 训练、显存容量或资源释放验证。设计默认与 dry-run 都不是历史有效配方、真实训练通过或收益证据。
+
 ## GRPO 的跨 rank 语义
 
 - 数据分片、prompt 的 G 次重复和梯度同步交给 Trainer/Accelerate/TRL，不另套采样器、不在 rollout 中再次扩增 G。
@@ -71,7 +87,7 @@ python -m agentic_arxiv.training.launch \
 
 量化加载前按 `LOCAL_RANK` 设置 CUDA 当前设备，再将完整量化模型复制到该设备；不使用全局 `RANK` 当设备编号，也不使用 `device_map="auto"` 拆分 DDP 副本。DDP 设置 `find_unused_parameters=False`、`broadcast_buffers=False`，保留非重入 gradient checkpointing。
 
-普通 checkpoint 和最终模型保存由所有 rank 调用 Trainer API，由训练器决定实际 writer；tokenizer、run/training manifest、奖励摘要和最终验证报告仅 rank 0 写入。manifest 记录 world size、全局有效 batch、GRPO generation batch，以及各 rank 的 peak allocated/reserved 显存。原始主线 JSON 不变，world size 作为资源覆盖记录，不能伪装成原单卡配方。
+普通 checkpoint 和最终模型保存由所有 rank 调用 Trainer API，由训练器决定实际 writer；tokenizer、run/training manifest、奖励摘要和最终验证报告仅 rank 0 写入。manifest 记录 world size、全局有效 batch、GRPO generation batch 或 DPO 全局偏好对 batch，以及各 rank 的 peak allocated/reserved 显存。原 SFT/GRPO 配置子树不变，本次新增独立 DPO 节；world size 作为资源覆盖记录，不能伪装成原单卡配方。
 
 QLoRA 的 FSDP/DeepSpeed 分片未在此支持；多轮 GRPO 也拒绝分片/vLLM 生成路径，因为不同 rank 的工具轮数不同，不能安全插入这些路径的逐轮 collective。已有非量化 SFT 分片入口不在本次 DDP 验证范围内。现有 `fsdp_2gpu.yaml` 不是 QLoRA 多卡启动方案。
 

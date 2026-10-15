@@ -30,8 +30,10 @@ ALLOWED = {
     "cli": SHARED | {"training", "evaluation", "data_pipeline"},
 }
 OLD_NAMESPACES = {"AgenticArxiv", "agents", "benchmark", "rl", "models", "utils"}
-# 两个训练入口不再作为另一阶段的共享实现。
-TRAINING_ENTRYPOINTS = {"agentic_arxiv.training.sft", "agentic_arxiv.training.grpo"}
+# 训练入口不作为另一阶段的共享实现。
+TRAINING_ENTRYPOINTS = {
+    "agentic_arxiv.training.sft", "agentic_arxiv.training.dpo", "agentic_arxiv.training.grpo",
+}
 
 
 def _module_name(path: Path) -> str:

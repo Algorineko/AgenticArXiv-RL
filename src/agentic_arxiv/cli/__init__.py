@@ -16,11 +16,12 @@ HELP_COMMANDS = (
     (), ("run",), ("evaluate",), ("evaluate", "run"), ("evaluate", "rollout"),
     ("evaluate", "baselines"), ("evaluate", "rescore"), ("evaluate", "badcases"),
     ("evaluate", "badcases", "replay"), ("evaluate", "badcases", "capture"),
-    ("evaluate", "badcases", "run"), ("train",), ("train", "sft"), ("train", "grpo"),
+    ("evaluate", "badcases", "run"), ("train",), ("train", "sft"), ("train", "dpo"), ("train", "grpo"),
     ("data",), ("data", "snapshot"), ("data", "backfill-figures"), ("data", "sft"),
     ("data", "sft", "generate"), ("data", "sft", "generate-parametric"),
     ("data", "sft", "augment"), ("data", "sft", "augment-parametric"),
-    ("data", "sft", "mix"), ("data", "grpo"), ("data", "grpo", "select-signal"),
+    ("data", "sft", "mix"), ("data", "dpo"), ("data", "dpo", "generate"),
+    ("data", "grpo"), ("data", "grpo", "select-signal"),
     ("audit",), ("audit", "rollouts"), ("audit", "curriculum"), ("audit", "assets"),
 )
 
@@ -54,7 +55,7 @@ def build_parser():
     evaluate = _add_command(commands, "evaluate", help="评测、rollout 与历史轨迹")
     audit = _add_command(commands, "audit", help="只读诊断与资产核对")
     register_evaluation_commands(evaluate, audit, _add_command)
-    train = _add_command(commands, "train", help="SFT / GRPO；需要安装 agentic-arxiv[train]")
+    train = _add_command(commands, "train", help="SFT / 可选 DPO / GRPO；需要安装 agentic-arxiv[train]")
     register_training_commands(train, _add_command)
     data = _add_command(commands, "data", help="显式数据准备操作")
     register_data_commands(data, _add_command)
@@ -111,6 +112,7 @@ def _resolve_paths(args):
         "audit.curriculum": ("log_dir",),
         "audit.assets": ("baseline",),
         "train.sft": ("data", "data_manifest", "output_dir", "config_path"),
+        "train.dpo": ("data", "data_manifest", "output_dir", "snapshot", "config_path"),
         "train.grpo": ("output_dir", "snapshot", "resume_from_checkpoint", "rollout_trace_path", "config_path"),
         "data.snapshot": ("snapshot",),
         "data.backfill-figures": ("snapshot",),
@@ -119,6 +121,7 @@ def _resolve_paths(args):
         "data.sft.augment": ("input", "output", "manifest", "split_file"),
         "data.sft.augment-parametric": ("input", "output", "manifest", "split_file"),
         "data.sft.mix": ("original", "parametric", "output"),
+        "data.dpo.generate": ("output", "snapshot"),
         "data.grpo.select-signal": ("probe", "model", "output"),
     }.get(operation, ())
     if operation.startswith("evaluate.badcases."):
@@ -136,12 +139,12 @@ def _resolve_paths(args):
     local_model = ((operation == "run" and args.llm_backend == "transformers")
                    or (operation == "evaluate.run" and args.backend == "transformers")
                    or (operation == "evaluate.rollout" and args.model is not None)
-                   or operation in ("evaluate.badcases.run", "train.grpo"))
+                   or operation in ("evaluate.badcases.run", "train.grpo", "train.dpo", "data.dpo.generate"))
     if local_model and args.model:
         args.model = str(workspace_path(args.model, workspace=args.workspace))
     elif operation == "train.sft":
         args.model = _model_source(args.model, args.workspace)
-    if operation == "train.grpo" and args.base_model:
+    if operation in ("train.grpo", "train.dpo", "data.dpo.generate") and args.base_model:
         args.base_model = _model_source(args.base_model, args.workspace)
 
 
@@ -165,7 +168,7 @@ def _check_capabilities(args):
     local = ((args._operation == "run" and args.llm_backend == "transformers")
              or (args._operation == "evaluate.run" and args.backend == "transformers")
              or (args._operation == "evaluate.rollout" and args.model is not None)
-             or args._operation == "evaluate.badcases.run")
+             or args._operation in ("evaluate.badcases.run", "data.dpo.generate"))
     if args._operation.startswith("train."):
         _require_capability("train")
     elif local:
@@ -192,7 +195,7 @@ def _validate_operation(parser, args):
 
 def _operation_kwargs(args):
     excluded = {"workspace", "command", "evaluate_command", "badcases_command", "audit_command",
-                "train_command", "data_command", "sft_data_command", "grpo_data_command", "_operation"}
+                "train_command", "data_command", "sft_data_command", "dpo_data_command", "grpo_data_command", "_operation"}
     return {key: value for key, value in vars(args).items() if key not in excluded}
 
 
@@ -226,6 +229,10 @@ def _dispatch(args):
         from agentic_arxiv.training.grpo import main as train_grpo
 
         return train_grpo(**kwargs)
+    if operation == "train.dpo":
+        from agentic_arxiv.training.dpo import main as train_dpo
+
+        return train_dpo(**kwargs)
     if operation == "evaluate.run":
         from agentic_arxiv.evaluation.run_benchmark import execute
 
@@ -301,4 +308,8 @@ def _dispatch(args):
         from agentic_arxiv.data_pipeline.build_grpo_signal_split import main as select_signal
 
         return select_signal(**kwargs)
+    if operation == "data.dpo.generate":
+        from agentic_arxiv.data_pipeline.generate_dpo_data import generate_dpo_dataset
+
+        return generate_dpo_dataset(**kwargs)
     raise ValueError(f"未知操作: {operation}")

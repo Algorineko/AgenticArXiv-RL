@@ -1,6 +1,7 @@
 """本地 Hugging Face 客户端，不从训练入口取得模型加载能力。"""
 
 from hashlib import sha256
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from agentic_arxiv.config import resolve_model_source
@@ -20,6 +21,11 @@ class TransformersLLMClient:
         device: str = "auto",
         dtype: str = "auto",
         seed: Optional[int] = None,
+        *,
+        artifact: bool = False,
+        base_model: Optional[str] = None,
+        allowed_stages=None,
+        expected_protocol=None,
     ) -> None:
         try:
             import torch
@@ -31,11 +37,25 @@ class TransformersLLMClient:
             ) from exc
 
         load_source = resolve_model_source(model, local_only=True)
+        metadata = None
+        if artifact:
+            from agentic_arxiv.llm.artifacts import artifact_metadata
+
+            metadata = artifact_metadata(
+                load_source, base_model=base_model, allowed_stages=allowed_stages,
+                expected_protocol=expected_protocol, local_base_only=True,
+            )
         self.model_name = model
         self.seed = seed
         self._stream_seed = seed
         self._calls = 0
-        self.tokenizer = AutoTokenizer.from_pretrained(load_source)
+        self._artifact_mode = artifact
+        tokenizer_kwargs = {"local_files_only": True} if artifact else {}
+        self.tokenizer = AutoTokenizer.from_pretrained(load_source, **tokenizer_kwargs)
+        if metadata is not None and expected_protocol is not None:
+            from agentic_arxiv.llm.artifacts import require_artifact_tokenizer
+
+            require_artifact_tokenizer(metadata, self.tokenizer)
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -51,16 +71,36 @@ class TransformersLLMClient:
         self.device = device
         if device == "auto":
             load_kwargs["device_map"] = "auto"
-        self.model = AutoModelForCausalLM.from_pretrained(load_source, **load_kwargs)
+        is_adapter = artifact and (Path(load_source) / "adapter_config.json").is_file()
+        model_source = load_source
+        if artifact:
+            load_kwargs["local_files_only"] = True
+        if is_adapter:
+            from agentic_arxiv.llm.artifacts import adapter_base_model
+
+            model_source = adapter_base_model(Path(load_source), base_model, local_only=True)
+        elif artifact and base_model:
+            raise ValueError("全参产物不能用 base_model 替换推理起点")
+        self.model = AutoModelForCausalLM.from_pretrained(model_source, **load_kwargs)
+        if is_adapter:
+            try:
+                from peft import PeftModel
+            except ImportError as exc:
+                raise RuntimeError(
+                    "本地 adapter 推理需要 peft；请安装 agentic-arxiv[local]。"
+                ) from exc
+            self.model = PeftModel.from_pretrained(
+                self.model, load_source, is_trainable=False, local_files_only=True,
+            ).merge_and_unload()
         if device != "auto":
             self.model.to(device)
         self.model.eval()
 
     @classmethod
     def from_loaded(
-        cls, model: Any, tokenizer: Any, model_name: str = ""
+        cls, model: Any, tokenizer: Any, model_name: str = "", *, artifact: bool = False,
     ) -> "TransformersLLMClient":
-        """绑定已加载对象，不重复加载，也不改变模型的训练模式。"""
+        """绑定已加载对象；artifact 仅保留模板编码模式，不重新校验或加载产物。"""
         client = cls.__new__(cls)
         client.model = model
         client.tokenizer = tokenizer
@@ -68,6 +108,7 @@ class TransformersLLMClient:
         client.seed = None
         client._stream_seed = None
         client._calls = 0
+        client._artifact_mode = artifact
         client.device = "loaded"
         return client
 
@@ -109,7 +150,12 @@ class TransformersLLMClient:
             add_generation_prompt=True,
             **template_kwargs,
         )
-        inputs = self.tokenizer(prompt, return_tensors="pt")
+        # 严格产物路径与 apply_chat_template(tokenize=True) 使用相同边界，
+        # 特殊 token 由模板控制，不能在二次编码时再默认增加 BOS/EOS。
+        tokenization_kwargs = (
+            {"add_special_tokens": False} if getattr(self, "_artifact_mode", False) else {}
+        )
+        inputs = self.tokenizer(prompt, return_tensors="pt", **tokenization_kwargs)
         target = next(self.model.parameters()).device
         inputs = {key: value.to(target) for key, value in inputs.items()}
         do_sample = temperature is not None and temperature > 0

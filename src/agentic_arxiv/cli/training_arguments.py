@@ -1,4 +1,4 @@
-"""轻量 SFT/GRPO 参数声明；帮助不导入训练器或读取用户配置。"""
+"""轻量 SFT/DPO/GRPO 参数声明；帮助不导入训练器或读取用户配置。"""
 
 from __future__ import annotations
 
@@ -56,6 +56,22 @@ def _add_sft_arguments(parser, defaults):
                         help="仅跳过数据 kind/hash/行数校验，不能绕过协议兼容检查")
     parser.add_argument("--min-parse-rate", type=float, default=defaults["min_parse_rate"],
                         help="SFT 阶段验证的最低可解析率")
+
+
+def _add_dpo_arguments(parser, defaults):
+    _add_shared_arguments(parser, defaults)
+    parser.add_argument("--data", default=defaults["data"], help="当前协议 DPO 训练包 JSONL")
+    parser.add_argument("--data-manifest", default=defaults["data_manifest"],
+                        help="默认读取数据旁的 manifest；不支持跳过完整性校验")
+    parser.add_argument("--beta", type=float, default=defaults["beta"], help="固定 sigmoid DPO 的 beta")
+    parser.add_argument("--max-length", type=int, default=defaults["max_length"],
+                        help="完整 prompt 与当前单步目标长度上限；超长失败，不截断")
+    parser.add_argument("--inspect-only", action="store_true", default=defaults["inspect_only"],
+                        help="只审计数据、来源和实际 tokenizer 模板，不加载策略权重或训练")
+    parser.add_argument("--base-model", default=defaults["base_model"], help="适配器声明的精确本地基座")
+    parser.add_argument("--snapshot", default=defaults["snapshot"], help="阶段验证使用的已有离线快照")
+    parser.add_argument("--min-reward", type=float, default=defaults["min_reward"],
+                        help="DPO 阶段验证最低平均奖励，不代表优于 SFT")
 
 
 def _add_grpo_arguments(parser, defaults):
@@ -128,6 +144,10 @@ def register_commands(train_parser, add_command):
     sft.description = "SFT / 单卡或 DDP 4-bit QLoRA；执行需要 agentic-arxiv[train]"
     _add_sft_arguments(sft, config["sft"]["defaults"])
     sft.set_defaults(_operation="train.sft")
+    dpo = add_command(commands, "dpo", help="可选 DPO 单卡或 DDP；需要 train 安装层")
+    dpo.description = "DPO / 同源 SFT 策略与独立冻结参考策略；执行需要 agentic-arxiv[train]"
+    _add_dpo_arguments(dpo, config["dpo"]["defaults"])
+    dpo.set_defaults(_operation="train.dpo")
     grpo = add_command(commands, "grpo", help="GRPO 单卡或 DDP 多轮训练；需要 train 安装层")
     grpo.description = "GRPO 单卡或 DDP 多轮训练；执行需要 agentic-arxiv[train]"
     _add_grpo_arguments(grpo, config["grpo"]["defaults"])

@@ -47,6 +47,61 @@
       "packing": false
     }
   },
+  "dpo": {
+    "generation_defaults": {
+      "model": "outputs/sft_qlora/final",
+      "base_model": null,
+      "output": "data/dpo/dpo_react_messages_v3_train.jsonl",
+      "snapshot": null,
+      "task_set": "expanded",
+      "split": null,
+      "num_trials": 5,
+      "temperature": 0.8,
+      "seed": 42,
+      "min_reward_gap": 0.05,
+      "min_task_yield": 0.25,
+      "max_turns": 6,
+      "max_new_tokens": 256,
+      "reward_curriculum_steps": 30
+    },
+    "defaults": {
+      "model": "outputs/sft_qlora/final",
+      "data": "data/dpo/dpo_react_messages_v3_train.jsonl",
+      "data_manifest": null,
+      "output_dir": "outputs/dpo",
+      "epochs": 3,
+      "max_steps": -1,
+      "batch_size": 1,
+      "grad_accum": 8,
+      "lr": 0.000005,
+      "beta": 0.1,
+      "max_length": 4096,
+      "qlora": true,
+      "base_model": null,
+      "lora_r": 16,
+      "lora_alpha": 32,
+      "lora_dropout": 0.05,
+      "gradient_checkpointing": true,
+      "optim": "paged_adamw_8bit",
+      "inspect_only": false,
+      "snapshot": null,
+      "seed": 42,
+      "verify": true,
+      "min_reward": -0.3,
+      "report_to": "none",
+      "run_name": null
+    },
+    "trainer_parameters": {
+      "logging_steps": 1,
+      "logging_first_step": true,
+      "save_steps": 50,
+      "save_total_limit": 3,
+      "warmup_ratio": 0.03,
+      "lr_scheduler_type": "cosine",
+      "dataloader_num_workers": 0,
+      "dataset_num_proc": 1
+    }
+  },
   "grpo": {
     "defaults": {
       "model": "outputs/sft_qlora/final",

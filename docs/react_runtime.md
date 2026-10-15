@@ -88,9 +88,15 @@ S2 阶段记录保留为历史边界：当时上下文为 `react-single-user-v1`
 
 `build_react_messages` 初始 user 只建立一次任务、工具及实际可见 setup；`append_react_turn` 追加原始合法 assistant 前缀和明确标为环境数据的 user Observation。任务边界沿用 TASK_START/TASK_END，后续反馈不伪装成新任务或原生工具角色。消息从 user 开始交替，prompt 以 user 结束，包含当前目标的监督样本以 assistant 结束。
 
-普通本地与 API 推理、专家生成及 GRPO 使用同一逻辑消息构造。旧记录缺 `policy_text` 或 `visible_observation` 时只允许读取/评分，不从 Thought/Action 重建当前协议响应继续运行，也不每轮 flatten 历史为一个 user prompt。
+普通本地与 API 推理、专家生成、可选 DPO 及 GRPO 使用同一逻辑消息构造。旧记录缺 `policy_text` 或 `visible_observation` 时只允许读取/评分，不从 Thought/Action 重建当前协议响应继续运行，也不每轮 flatten 历史为一个 user prompt。
 
 SFT 转换把此前完整消息作为 prompt，仅最后一条当前 assistant 作为 completion，强制 completion-only loss。历史 assistant、初始化和环境 Observation 不计本样本监督；长度与 manifest 保护保留。
+
+可选 DPO 的 `prompt` 是两条实际请求逐项完全一致的完整 messages：角色、顺序、content 原文（含空白、历史 Thought/Action、可见 setup 和环境 Observation）全部保留。动作相同不等于上下文相同；不同 Thought 不能删除后匹配，不跳过历史差异寻找后续相同状态。每个同来源轨迹组合只考虑共同前缀下首个有效动作分歧，每任务最多选一个有效对。
+
+`chosen` / `rejected` 各只包含实际生成的当前单条 assistant `policy_text`，非空、未被 token 截断且可解析为 CALL 或 FINISH。模型续写的 Observation 不进入目标；框架 ERROR/MAX_TURNS、缺失响应和短轨迹不补成 FINISH。真实提前 FINISH 不预设正负，由同次真实轨迹奖励排序，奖励差严格超过配置阈值才构成候选；这不是单步动作因果优势的证明。
+
+DPO 为离线消息偏好，不冒充 GRPO 原始 token 重放。训练前使用实际 tokenizer/chat template 审计共同 token 前缀、单条 assistant 目标与完整长度；历史、setup 和环境消息不参与 completion log-prob。模板改变前缀或任一完整序列超预算必须失败，不通过左右截断、删历史或删动作继续训练。`train dpo --inspect-only` 完成同一审计而不加载策略权重或创建 checkpoint；仍需真实本地 tokenizer，本次没有执行真实 tokenizer 集成。
 
 GRPO 保留原始采样 token ID，不 decode/re-encode 响应。`_append_environment_tokens` 对聊天模板的完整候选前缀逐 token 比较，只有完全兼容才追加 suffix；环境与运行时消息边界 mask 为 0，原始 policy token 为 1。已采样 EOS 属于原前缀，不重复插入；不兼容模板明确失败。总 completion 预算包含环境片段，首次没有合法 token 失败，后续空结束记录 MODEL_END。G 的采样数量由训练器/适配接口保证，rollout 不再扩增一次。
 
@@ -104,7 +110,7 @@ GRPO 保留原始采样 token ID，不 decode/re-encode 响应。`_append_enviro
 
 执行轨迹与报告只把实际运行版本当执行事实。模型的 `training_protocol_metadata` 必须从真实模型 manifest 或明确声明读取，不能自动 stamp 当前 context；API 模型没有声明时仍未知。`protocol_relation` 分别列出 different_fields 和 unknown_fields：存在明确差异为 cross_protocol，无差异但缺字段为 unknown，齐全相符才为 same_protocol。未知或跨协议不是同口径复现，模板哈希也不能证明真实 token 前缀已验证。
 
-新协议训练拒绝旧/未知/不匹配数据或需延续训练的模型产物。SFT 的 `--skip-data-manifest-check` 不跳过协议检查；无 tokenizer 生成的数据可保留未知 chat 哈希，已知哈希必须匹配实际模板。GRPO 的 SFT 起点必须有必要 manifest 及兼容实际 chat 哈希；原始初始化基座的先前训练协议未知时，只记录来源，不宣称其已按当前 ReAct 协议训练。
+新协议训练拒绝旧/未知/不匹配数据或需延续训练的模型产物。SFT 的 `--skip-data-manifest-check` 不跳过协议检查；无 tokenizer 生成的数据可保留未知 chat 哈希，已知哈希必须匹配实际模板。DPO 必须绑定同来源 SFT manifest 及完整偏好数据包，不自动升级历史字符串偏好。GRPO 的 SFT 或显式 DPO 起点必须有必要 manifest 及兼容实际 chat 哈希；原始初始化基座的先前训练协议未知时，只记录来源，不宣称其已按当前 ReAct 协议训练。
 
 新数据/模型/报告写入独立协议声明；历史原件、数值与缺字段状态不改。新信号选择继承实际 probe 协议并独立保存来源模型关系，不把旧探测记录 stamp 成当前版本。
 
@@ -129,6 +135,6 @@ agentic-arxiv evaluate badcases run --help
 
 安装后无需切换源码子目录或设置 `PYTHONPATH`。全局 `--workspace PATH` 默认当前目录，所有相对输入与输出相对工作区，绝对路径保持不变；工具缓存从工作区解析，不从 site-packages 猜测研究资产。基础安装可查看全部帮助及全部 10 工具声明；实际本地推理、翻译等能力按 [安装分层](architecture_migration.md) 检查依赖，帮助不读取 `.env`、写日志或加载模型。
 
-必须共同接线的消费者包括普通 ReAct、rollout、benchmark、专家/参数化生成、语义 oracle、GRPO token rollout、Canary、StageVerifier 与坏例实际执行。Canary/StageVerifier 用完整 episode；SFT 解析率阈值 0.3 和 GRPO mean reward 阈值 −0.2 保留，解析率、完成率和覆盖任务分别报告，不把健康检查当 86 任务能力证据。
+必须共同接线的消费者包括普通 ReAct、rollout、benchmark、专家/参数化生成、DPO 实际轨迹生成、语义 oracle、GRPO token rollout、Canary、StageVerifier 与坏例实际执行。Canary/StageVerifier 用完整 episode；SFT 解析率阈值 0.3 和 GRPO mean reward 阈值 −0.2 保留。DPO 默认验证平均奖励阈值为 −0.3，同时报告严格成功率、解析率、虚假完成率、终止原因、任务/episode 覆盖和协议关系；这是冒烟质量门，不是独立留出集改善或 86 任务能力证据。验证失败保留模型/失败报告并非零退出，`--no-verify` 记录 skipped 而不是 PASS，不自动继续 GRPO。
 
 本次证据仅来自源码、现有测试及历史输入读取；实际结果以迁移记录为准。缺失的真实 tokenizer、快照/模型集成、数据生成、训练和完整任务评测均注明本次未验证，不要求补齐，不标为通过，也不列为本次工程遗留待办。

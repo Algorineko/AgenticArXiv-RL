@@ -16,18 +16,19 @@ import tempfile
 LOCAL_DISTRIBUTIONS = {"torch", "transformers", "accelerate", "peft"}
 TRAIN_DISTRIBUTIONS = {"trl", "datasets", "bitsandbytes"}
 HEAVY_MODULES = LOCAL_DISTRIBUTIONS | TRAIN_DISTRIBUTIONS
-DEFAULT_CONFIG_SHA256 = "3479911b31a7740321283a30c70f929f1fd8835be9b9974573d2c377a894b34c"
+DEFAULT_CONFIG_SHA256 = "f3c958144123a522254657cf036bf004291af77dccf4a72d0bfecfa09183d883"
 HELP_COMMANDS = (
     (), ("run",),
     ("evaluate",), ("evaluate", "rollout"), ("evaluate", "run"),
     ("evaluate", "baselines"), ("evaluate", "rescore"),
     ("evaluate", "badcases"), ("evaluate", "badcases", "replay"),
     ("evaluate", "badcases", "capture"), ("evaluate", "badcases", "run"),
-    ("train",), ("train", "sft"), ("train", "grpo"),
+    ("train",), ("train", "sft"), ("train", "dpo"), ("train", "grpo"),
     ("data",), ("data", "snapshot"), ("data", "backfill-figures"),
     ("data", "sft"), ("data", "sft", "generate"),
     ("data", "sft", "generate-parametric"), ("data", "sft", "augment"),
     ("data", "sft", "augment-parametric"), ("data", "sft", "mix"),
+    ("data", "dpo"), ("data", "dpo", "generate"),
     ("data", "grpo"), ("data", "grpo", "select-signal"),
     ("audit",), ("audit", "rollouts"), ("audit", "curriculum"), ("audit", "assets"),
 )
@@ -45,6 +46,23 @@ def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
     result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, timeout=90)
     assert result.returncode == 0, f"入口失败: {command}\n{result.stdout}\n{result.stderr}"
     return result
+
+
+def _missing_input_guards(layer: str, workspace: Path) -> list[tuple[str, list[str], str]]:
+    """能力齐全时匹配入口实际先拒绝的输入；无需创建模型占位产物。"""
+    return [
+        ("本地能力或模型缺失", ["run", "--llm-backend", "transformers", "--model", str(workspace / "missing-model")],
+         "agentic-arxiv[local]" if layer == "base" else str(workspace / "missing-model")),
+        ("训练能力或输入缺失", ["train", "sft", "--model", str(workspace / "missing-model"),
+         "--data", str(workspace / "missing-data.jsonl"), "--report-to", "none", "--no-verify", "--no-qlora"],
+         str(workspace / "missing-data.jsonl") if layer == "train" else "agentic-arxiv[train]"),
+        ("DPO 本地生成能力或切分缺失", ["data", "dpo", "generate",
+         "--model", str(workspace / "missing-model"), "--snapshot", str(workspace / "missing-snapshot.json")],
+         "agentic-arxiv[local]" if layer == "base" else "split"),
+        ("DPO 训练能力或输入缺失", ["train", "dpo", "--model", str(workspace / "missing-model"),
+         "--data", str(workspace / "missing-dpo.jsonl"), "--inspect-only"],
+         str(workspace / "missing-model") if layer == "train" else "agentic-arxiv[train]"),
+    ]
 
 
 def check_installation(layer: str, require_wheel: bool, source_root: Path, history: Path | None) -> dict:
@@ -74,7 +92,7 @@ def check_installation(layer: str, require_wheel: bool, source_root: Path, histo
             assert not filename.endswith((".jsonl", ".py.txt")), f"正常wheel携带了研究输入或非活动基线: {filename}"
     assert not (HEAVY_MODULES & set(sys.modules)), "根包导入加载了本地或训练栈"
     config_bytes = resources.files("agentic_arxiv").joinpath("resources").joinpath("mainline.json").read_bytes()
-    assert hashlib.sha256(config_bytes).hexdigest() == DEFAULT_CONFIG_SHA256, "安装资源与迁移前配置不一致"
+    assert hashlib.sha256(config_bytes).hexdigest() == DEFAULT_CONFIG_SHA256, "安装资源与当前配置不一致"
     json.loads(config_bytes)
 
     executable = Path(sys.executable).parent / ("agentic-arxiv.exe" if os.name == "nt" else "agentic-arxiv")
@@ -125,15 +143,8 @@ def check_installation(layer: str, require_wheel: bool, source_root: Path, histo
             )
         assert not list(workspace.iterdir()), "缺失输入检查意外生成了产物"
 
-        guards = [
-            ("本地能力或模型缺失", ["run", "--llm-backend", "transformers", "--model", str(workspace / "missing-model")],
-             "agentic-arxiv[local]" if layer == "base" else str(workspace / "missing-model")),
-            ("训练能力或输入缺失", ["train", "sft", "--model", str(workspace / "missing-model"),
-             "--data", str(workspace / "missing-data.jsonl"), "--report-to", "none", "--no-verify", "--no-qlora"],
-             str(workspace / "missing-data.jsonl") if layer == "train" else "agentic-arxiv[train]"),
-        ]
         offline_env = {**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"}
-        for label, arguments, expected_error in guards:
+        for label, arguments, expected_error in _missing_input_guards(layer, workspace):
             guarded = subprocess.run([
                 sys.executable, "-m", "agentic_arxiv", "--workspace", str(workspace), *arguments,
             ], cwd=cwd, text=True, capture_output=True, timeout=90, env=offline_env)

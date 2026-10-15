@@ -144,6 +144,39 @@ class ArgumentContractTest(unittest.TestCase):
             _, local = parse_args(("evaluate", "rollout", "--workspace", str(root), "--model", "models/policy"))
             self.assertEqual(local.model, str(root / "models/policy"))
 
+    def test_dpo_arguments_preserve_workspace_and_explicit_precedence(self):
+        payload = json.loads(read_default_mainline_config())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            payload["dpo"]["defaults"]["epochs"] = 7
+            path = root / "config.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            _, configured = parse_args(("train", "dpo", "--workspace", str(root), "--config", "config.json"))
+            self.assertEqual(configured.epochs, 7)
+            _, args = parse_args(("train", "dpo", "--workspace", str(root), "--config", "config.json",
+                                  "--epochs", "2", "--inspect-only", "--no-verify"))
+            self.assertEqual(args.epochs, 2)
+            self.assertTrue(args.inspect_only)
+            self.assertFalse(args.verify)
+            self.assertEqual(args.data, str(root / "data/dpo/dpo_react_messages_v3_train.jsonl"))
+            self.assertEqual(args.model, str(root / "outputs/sft_qlora/final"))
+            _, generated = parse_args(("data", "dpo", "generate", "--workspace", str(root),
+                                       "--snapshot", "data/snapshot.json", "--split", "data/splits/v7_86.json:train"))
+            self.assertEqual(generated.snapshot, str(root / "data/snapshot.json"))
+            self.assertEqual(generated.split, f"{root}/data/splits/v7_86.json:train")
+            self.assertEqual(generated.num_trials, 5)
+            self.assertNotIn("dpo_data_command", _operation_kwargs(generated))
+
+    def test_dpo_capability_checks_do_not_require_train_for_generation(self):
+        from unittest.mock import patch
+        from agentic_arxiv.cli import _check_capabilities
+
+        for command, expected in ((("data", "dpo", "generate"), "local"), (("train", "dpo"), "train")):
+            _, args = parse_args(command)
+            with patch("agentic_arxiv.cli._require_capability") as require:
+                _check_capabilities(args)
+            require.assert_called_once_with(expected)
+
 
 if __name__ == "__main__":
     unittest.main()

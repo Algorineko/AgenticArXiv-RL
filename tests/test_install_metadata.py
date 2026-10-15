@@ -1,6 +1,10 @@
 """Check the metadata actually installed by setuptools, not a parallel manifest."""
 
 from importlib import metadata
+from pathlib import Path
+import re
+import runpy
+import tempfile
 import unittest
 
 from packaging.requirements import Requirement
@@ -68,6 +72,28 @@ class InstallMetadataTests(unittest.TestCase):
         ])
         for file in distribution.files or ():
             self.assertFalse(str(file).startswith(("data/", "artifacts/", "models/", "docs/archive/")))
+
+    def test_dpo_install_guard_matches_first_missing_input(self):
+        from agentic_arxiv.cli import _operation_kwargs, parse_args
+        from agentic_arxiv.training.dpo import main
+
+        script = Path(__file__).resolve().parents[1] / "scripts/check_installation.py"
+        guard_definitions = runpy.run_path(str(script))["_missing_input_guards"]
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            guards = guard_definitions("train", workspace)
+            _, arguments, expected_error = next(item for item in guards
+                                                 if item[0] == "DPO 训练能力或输入缺失")
+            _, args = parse_args(["--workspace", temporary, *arguments])
+            # 只检查实际输入拒绝顺序，不伪造 train 安装能力或加载模型。
+            with self.assertRaisesRegex(ValueError, re.escape(expected_error)):
+                main(**_operation_kwargs(args))
+            self.assertEqual(expected_error, str(workspace / "missing-model"))
+            self.assertEqual(list(workspace.iterdir()), [])
+            for layer in ("base", "local"):
+                guard = next(item for item in guard_definitions(layer, workspace)
+                             if item[0] == "DPO 训练能力或输入缺失")
+                self.assertEqual(guard[2], "agentic-arxiv[train]")
 
 
 if __name__ == "__main__":

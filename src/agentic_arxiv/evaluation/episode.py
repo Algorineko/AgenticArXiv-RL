@@ -55,6 +55,14 @@ class EpisodeEvaluation:
     max_iterations: int = 6
     termination_counts: Dict[str, int] = field(default_factory=dict)
     protocol: Dict[str, Any] = field(default_factory=dict)
+    false_finish_rate: float = 0.0
+    false_finish_count: int = 0
+    strict_success_count: int = 0
+    parsed_decision_count: int = 0
+    model_decision_count: int = 0
+    temperature: float = 1.0
+    max_new_tokens: int = 256
+    scoring: Dict[str, Any] = field(default_factory=dict)
 
 
 def evaluate_episodes(
@@ -76,9 +84,10 @@ def evaluate_episodes(
     task_lookup = {task["id"]: task for task in tasks}
     all_rewards: List[float] = []
     per_task: Dict[str, List[float]] = {}
-    completed = total = parsed = decisions = 0
+    completed = total = parsed = decisions = false_finishes = 0
     termination_counts: Dict[str, int] = {}
     protocol: Dict[str, Any] = {}
+    scoring: Dict[str, Any] = {}
     for task in tasks:
         tid = task["id"]
         initialization_plan = compile_initialization(task, task_lookup=task_lookup)
@@ -98,6 +107,13 @@ def evaluate_episodes(
             task_rewards.append(reward)
             if is_strict_success(metrics):
                 completed += 1
+            # 与奖励及严格成功读取同一次完整轨迹的评分，不重新执行工具。
+            false_finishes += int(metrics.false_finish)
+            if not scoring:
+                scoring = {
+                    "training_step": training_step,
+                    "effective_weights": breakdown.to_dict()["weights"],
+                }
             total += 1
             all_rewards.append(reward)
             reason = result.get("termination_reason") or metrics.termination_type
@@ -126,4 +142,12 @@ def evaluate_episodes(
         max_iterations=max_iterations,
         termination_counts=termination_counts,
         protocol=protocol,
+        false_finish_rate=round(false_finishes / total, 4) if total else 0.0,
+        false_finish_count=false_finishes,
+        strict_success_count=completed,
+        parsed_decision_count=parsed,
+        model_decision_count=decisions,
+        temperature=temperature,
+        max_new_tokens=max_new_tokens,
+        scoring=scoring,
     )

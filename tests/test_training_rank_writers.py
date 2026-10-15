@@ -1,6 +1,8 @@
 """用薄训练器验证 SFT/GRPO 入口的 writer 边界，不加载模型或执行训练。"""
 
 from collections import defaultdict
+import ast
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -175,3 +177,75 @@ def test_training_failure_has_only_main_diagnostic_and_no_success_final(stage, r
         assert record["stop_reason"] == "training_exception:ValueError"
     else:
         assert not output.exists()
+
+
+def _dpo_main_tree():
+    """只检查接线结构，不添加模型响应、token 或轨迹输入。"""
+    from agentic_arxiv.training import dpo
+    return ast.parse(inspect.getsource(dpo.main)).body[0]
+
+
+def test_dpo_inspection_precedes_both_independent_weight_loads():
+    tree = _dpo_main_tree()
+    calls = {node.func.id: node.lineno for node in ast.walk(tree)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+    audit = calls["_audit_token_boundaries"]
+    inspect_branch = next(node for node in tree.body if isinstance(node, ast.If)
+                          and isinstance(node.test, ast.Name) and node.test.id == "inspect_only")
+    assert audit < inspect_branch.lineno < calls["load_training_policy"] < calls["load_reference_policy"]
+    assert any(isinstance(node, ast.Return) for node in ast.walk(inspect_branch))
+
+
+def test_dpo_final_writers_and_verification_have_main_rank_broadcast_boundary():
+    tree = _dpo_main_tree()
+    broadcast_operations = {node.args[0].id for node in ast.walk(tree)
+                            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "run_on_main" and node.args
+                            and isinstance(node.args[0], ast.Name)}
+    broadcast_operations.update(node.args[0].args[0].id for node in ast.walk(tree)
+                                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                                and node.func.attr == "run_on_main" and node.args
+                                and isinstance(node.args[0], ast.Call)
+                                and isinstance(node.args[0].func, ast.Name) and node.args[0].func.id == "partial")
+    assert {"save_final", "verify_final"} <= broadcast_operations
+    assert any(isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+               and isinstance(node.value.func, ast.Attribute)
+               and node.value.func.attr == "save_model" for node in tree.body)
+    verify = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "verify_final")
+    assert any(isinstance(node, ast.Raise) for node in ast.walk(verify))
+    release = next(node.lineno for node in ast.walk(tree)
+                   if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                   and node.func.attr == "free_memory")
+    assert release < verify.lineno
+
+
+def test_dpo_uses_explicit_reference_without_second_peft_configuration():
+    tree = _dpo_main_tree()
+    trainer = next(node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                   and isinstance(node.func, ast.Name) and node.func.id == "DPOTrainer")
+    keywords = {item.arg: item.value for item in trainer.keywords}
+    assert isinstance(keywords["ref_model"], ast.Name) and keywords["ref_model"].id == "reference"
+    assert "peft_config" not in keywords
+    from agentic_arxiv.training.distributed import TrainingContext
+    assert "average_tokens_across_devices" not in TrainingContext(4).trainer_kwargs(stage="dpo")
+
+
+@pytest.mark.train
+def test_installed_dpo_config_supports_every_explicit_training_field():
+    trl = pytest.importorskip("trl")
+    from agentic_arxiv.training.mainline_config import require_supported_config, stage_config
+    tree = _dpo_main_tree()
+    config = next(node.value for node in tree.body if isinstance(node, ast.Assign)
+                  and any(isinstance(target, ast.Name) and target.id == "config_kwargs" for target in node.targets))
+    keys = {key.value: None for key in config.keys if isinstance(key, ast.Constant)}
+    keys.update(stage_config("dpo")["trainer_parameters"])
+    keys.update(TrainingContext(4).trainer_kwargs(stage="dpo"))
+    require_supported_config(trl.DPOConfig, keys)
+    literal = {key.value: ast.literal_eval(value) for key, value in zip(config.keys, config.values)
+               if isinstance(key, ast.Constant) and key.value in {
+                   "max_length", "loss_type", "sync_ref_model", "precompute_ref_log_probs",
+                   "f_divergence_type", "label_smoothing", "loss_weights", "padding_free", "use_liger_kernel"}}
+    assert literal == {"max_length": None, "loss_type": ["sigmoid"], "sync_ref_model": False,
+                       "precompute_ref_log_probs": False, "f_divergence_type": "reverse_kl",
+                       "label_smoothing": 0.0, "loss_weights": [1.0], "padding_free": False,
+                       "use_liger_kernel": False}
