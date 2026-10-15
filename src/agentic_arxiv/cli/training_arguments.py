@@ -124,11 +124,11 @@ def register_commands(train_parser, add_command):
     """将独立参数声明注册到统一 CLI，执行组装由调用方负责。"""
     config = json.loads(read_default_mainline_config())
     commands = train_parser.add_subparsers(dest="train_command", required=True)
-    sft = add_command(commands, "sft", help="SFT / 单卡 4-bit QLoRA 训练；需要 train 安装层")
-    sft.description = "SFT / 单卡 4-bit QLoRA 训练；执行需要 agentic-arxiv[train]"
+    sft = add_command(commands, "sft", help="SFT / 单卡或 DDP 4-bit QLoRA；需要 train 安装层")
+    sft.description = "SFT / 单卡或 DDP 4-bit QLoRA；执行需要 agentic-arxiv[train]"
     _add_sft_arguments(sft, config["sft"]["defaults"])
     sft.set_defaults(_operation="train.sft")
-    grpo = add_command(commands, "grpo", help="GRPO 多轮训练；需要 train 安装层")
-    grpo.description = "GRPO 多轮训练；执行需要 agentic-arxiv[train]"
+    grpo = add_command(commands, "grpo", help="GRPO 单卡或 DDP 多轮训练；需要 train 安装层")
+    grpo.description = "GRPO 单卡或 DDP 多轮训练；执行需要 agentic-arxiv[train]"
     _add_grpo_arguments(grpo, config["grpo"]["defaults"])
     grpo.set_defaults(_operation="train.grpo")

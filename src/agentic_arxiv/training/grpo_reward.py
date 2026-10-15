@@ -10,6 +10,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+from agentic_arxiv.training.distributed import TrainingContext
+
 from agentic_arxiv.contracts import (
     ParseKind,
     TOOL_ERROR_PREFIX,
@@ -171,6 +173,8 @@ def make_grpo_reward_fn(
     reward_calc: Optional[RewardCalculator] = None,
     tracker: Any = None,
     auditor: Any = None,
+    distributed: Optional[TrainingContext] = None,
+    num_generations: Optional[int] = None,
 ) -> Callable[..., List[float]]:
     """构造 TRL GRPOTrainer 用的 reward function。
 
@@ -184,6 +188,7 @@ def make_grpo_reward_fn(
             表在动。传入 tracker 即把分量、权重与轨迹健康度一并记进训练日志。
     """
     calc = reward_calc or RewardCalculator()
+    execution = distributed or TrainingContext.from_environment()
 
     def grpo_reward_fn(completions=None, task_id=None, trainer_state=None,
                        trajectory_results=None,
@@ -250,22 +255,40 @@ def make_grpo_reward_fn(
             breakdown, _ = calc.compute_reward_breakdown(
                 task_def, result, training_step=step
             )
-            if tracker is not None:
-                tracker.record(breakdown, result)
             rewards.append(float(breakdown.total))
             breakdowns.append(breakdown)
             resolved_trajectories.append(result)
+
+        # 一组 generation 可以横跨 rank（例如四卡、每卡一条、G=4）。
+        # 这里只汇总观测/审计，不替代 TRL 对原始奖励做的全局 advantage 归一化。
+        batches = execution.gather({
+            "step": step, "completions": completions, "task_ids": ids,
+            "trajectories": resolved_trajectories, "breakdowns": breakdowns, "rewards": rewards,
+            "auditor_enabled": auditor is not None and execution.is_main,
+        })
+        if any(batch["step"] != step for batch in batches):
+            raise ValueError("GRPO 各 rank 的奖励 training_step 不一致")
+        global_batch = {key: [item for batch in batches for item in batch[key]]
+                        for key in ("completions", "task_ids", "trajectories", "breakdowns", "rewards")}
         if tracker is not None:
-            tracker.record_group(ids, rewards)
-        if auditor is not None:
-            auditor.record_batch(
-                completions=completions,
-                task_ids=ids,
-                trajectories=resolved_trajectories,
-                breakdowns=breakdowns,
-                rewards=rewards,
-                training_step=step,
-            )
+            for breakdown, result in zip(global_batch["breakdowns"], global_batch["trajectories"]):
+                if breakdown is not None:
+                    tracker.record(breakdown, result)
+            tracker.record_group(global_batch["task_ids"], global_batch["rewards"],
+                                 num_generations=num_generations)
+        if any(batch["auditor_enabled"] for batch in batches):
+            def save_audit():
+                auditor.record_batch(
+                    completions=global_batch["completions"],
+                    task_ids=global_batch["task_ids"],
+                    trajectories=global_batch["trajectories"],
+                    breakdowns=global_batch["breakdowns"],
+                    rewards=global_batch["rewards"],
+                    training_step=step,
+                )
+
+            execution.run_on_main(save_audit)
+        # 必须仍返回本 rank 的奖励；TRL 负责 gather，不能把 N*G 再扩成 N*G*world_size。
         return rewards
 
     grpo_reward_fn.__name__ = "grpo_reward_fn"

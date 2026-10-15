@@ -184,6 +184,7 @@ class CanaryCallback(TrainerCallback):
         steps: int = 50,
         min_reward: float = -1.0,
         patience: int = 3,
+        distributed=None,
     ):
         """
         Args:
@@ -196,6 +197,7 @@ class CanaryCallback(TrainerCallback):
         self.steps = steps
         self.min_reward = min_reward
         self.patience = patience
+        self.distributed = distributed
         self._below_streak = 0
         self._tripped = False
         self._results: List[CanaryResult] = []
@@ -214,11 +216,15 @@ class CanaryCallback(TrainerCallback):
         if state.global_step % self.steps != 0:
             return
 
-        result = self.evaluator.evaluate(step=state.global_step)
+        def evaluate():
+            return self.evaluator.evaluate(step=state.global_step)
+
+        result = (self.distributed.run_on_main(evaluate)
+                  if self.distributed is not None else evaluate())
         self._results.append(result)
 
         # 打印 canary 报告
-        print(
+        self._print(
             f"\n🐤 Canary (step {result.step}): "
             f"mean_reward={result.mean_reward:.4f}  "
             f"completion_rate={result.task_completion_rate:.2%}  "
@@ -231,7 +237,7 @@ class CanaryCallback(TrainerCallback):
 
         if result.mean_reward < self.min_reward:
             self._below_streak += 1
-            print(
+            self._print(
                 f"⚠️  Canary reward {result.mean_reward:.4f} 低于阈值 {self.min_reward} "
                 f"({self._below_streak}/{self.patience})"
             )
@@ -239,7 +245,7 @@ class CanaryCallback(TrainerCallback):
                 self._tripped = True
                 control.should_training_stop = True
                 recent = self._results[-self.patience:]
-                print(
+                self._print(
                     f"\n❌ Canary reward 连续 {self.patience} 次低于阈值 {self.min_reward}，"
                     f"训练已停止。\n"
                     f"   最近 canary 结果: {[(r.step, r.mean_reward) for r in recent]}\n"
@@ -251,3 +257,7 @@ class CanaryCallback(TrainerCallback):
                 )
         else:
             self._below_streak = 0
+
+    def _print(self, message):
+        if self.distributed is None or self.distributed.is_main:
+            print(message)

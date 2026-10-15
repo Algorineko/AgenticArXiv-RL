@@ -127,18 +127,8 @@ def pin_single_gpu(config) -> None:
     config._n_gpu = 1
 
 
-def assert_quantization_is_single_process(qlora: bool) -> None:
-    """Refuse QLoRA under a multi-process launch instead of mis-training.
+def quantized_model_device_map() -> dict:
+    """Use the process's selected device, never shard a quantized DDP replica."""
+    import torch
 
-    The QLoRA path loads with ``device_map={"": 0}``, which pins every rank to
-    ``cuda:0``; DDP then has all ranks computing on the same device and
-    gradients from a single card.  That is a silent correctness bug, so fail
-    loudly with the supported alternative.
-    """
-    if qlora and is_distributed_launch():
-        raise SystemExit(
-            "❌ QLoRA 不支持多进程启动：device_map={'': 0} 会把每个 rank 都钉在 "
-            "cuda:0，DDP 实际只在单卡上训练。\n"
-            "   多卡请改用 --no-qlora（1.5B 全参微调在 64GB 卡上余量充足），"
-            "或不要用 accelerate launch。"
-        )
+    return {"": torch.cuda.current_device()}

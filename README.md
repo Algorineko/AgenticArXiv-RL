@@ -155,6 +155,8 @@ agentic-arxiv train grpo \
 
 训练保护保留长度检查、方差诊断、Canary、SFT 可解析率阈值 ≥ 0.3、GRPO mean reward 阈值 ≥ −0.2、精度和日志检查。验证消费完整 episode，而不是首步正确就算成功；真实模型通过这些阈值本次未验证。
 
+SFT/GRPO 的 QLoRA 也支持单机 DDP，每卡一个进程。新的 `python -m agentic_arxiv.training.launch` 启动器支持显式 GPU、各 rank 日志及无副作用的 `--dry-run`；四卡 batch/累积换算、GRPO 跨 rank 分组和验证边界见 [多卡训练指南](docs/training_distributed.md)。本次未启动真实多卡训练，不影响已有单卡任务。
+
 DPO、OPD、PPO、GRPO 变体选择、自进化、独立 VLM 后训练、Jev、MCP/Skill CLI、Web/HTTP、MySQL/SSE 的活动入口已退出。图表工具既有推理后端、快照构建、T5 backfill、坏例评分和外部 LLM API 保留。
 
 ### 历史发布结果（原协议，未重跑）

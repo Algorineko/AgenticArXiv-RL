@@ -28,6 +28,8 @@ from typing import Optional
 DEFAULT_BETA = 0.04
 
 from agentic_arxiv.training.callbacks import TrainerCallback
+from agentic_arxiv.training.distributed import TrainingContext, grpo_generation_batch_size
+from agentic_arxiv.training.precision import quantized_model_device_map
 
 # 工具集从 tools/bootstrap.py 的注册表来，不在这里手写模块清单：
 # 手写的那份漏掉过 paper_content / paper_summary / paper_figures，后果是
@@ -220,6 +222,7 @@ def _load_policy(
     is_adapter = local.is_dir() and (local / "adapter_config.json").exists()
     if not is_adapter and base_model:
         raise SystemExit("全参 SFT 产物不能用 --base-model 替换训练起点")
+    TrainingContext.from_environment().prepare_device(qlora=qlora)
     if not qlora:
         print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
         source = _adapter_base_model(local, base_model) if is_adapter else model_path
@@ -254,7 +257,7 @@ def _load_policy(
     base = AutoModelForCausalLM.from_pretrained(
         source,
         quantization_config=quantization,
-        device_map={"": 0},
+        device_map=quantized_model_device_map(),
         dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
         local_files_only=source_path.exists(),
@@ -407,6 +410,8 @@ def main(
     from agentic_arxiv.training import trl_compat  # noqa: F401
     from trl import GRPOConfig, GRPOTrainer
     configured = stage_config("grpo", config_path)
+    execution = TrainingContext.from_environment()
+    generation_batch = grpo_generation_batch_size(batch_size, grad_accum, num_generations, execution)
     try:
         validate_grpo_options(
             loss_type=loss_type,
@@ -562,14 +567,15 @@ def main(
             if rollout_trace_path
             else workspace_path(output_dir) / "rollout_traces.jsonl"
         )
-        auditor = RolloutAuditWriter(
-            resolved_trace_path,
-            num_generations=num_generations,
-            allowed_tools=SUPPORTED_TOOL_NAMES,
-            max_samples=rollout_trace_max_samples,
-            protocol_metadata=current_protocol,
-            training_metadata=source_metadata,
-        )
+        if execution.is_main:
+            auditor = RolloutAuditWriter(
+                resolved_trace_path,
+                num_generations=num_generations,
+                allowed_tools=SUPPORTED_TOOL_NAMES,
+                max_samples=rollout_trace_max_samples,
+                protocol_metadata=current_protocol,
+                training_metadata=source_metadata,
+            )
         limit_text = (
             str(rollout_trace_max_samples)
             if rollout_trace_max_samples
@@ -585,6 +591,8 @@ def main(
         reward_calc=reward_calc,
         tracker=tracker,
         auditor=auditor,
+        distributed=execution,
+        num_generations=num_generations,
     )
     rollout_func = make_multiturn_rollout_func(
         environment_factory,
@@ -593,10 +601,7 @@ def main(
         prompt_task_ids=prompt_task_ids,
         training_metadata=source_metadata,
     )
-    # GRPO 要求生成批量能被 num_generations 整除
-    if batch_size % num_generations != 0:
-        batch_size = num_generations
-        print(f"  调整 per_device_train_batch_size = {batch_size}（需被 num_generations 整除）")
+    print(f"🧮 全局生成批量={generation_batch}，world_size={execution.world_size}，每组={num_generations}")
 
     cfg_kwargs = {
         **configured["trainer_parameters"],
@@ -636,14 +641,16 @@ def main(
         cfg_kwargs["importance_sampling_level"] = importance_sampling_level
     if scale_rewards is not None:
         cfg_kwargs["scale_rewards"] = scale_rewards
+    cfg_kwargs.update(execution.trainer_kwargs(stage="grpo"))
     require_supported_config(GRPOConfig, cfg_kwargs)
     config = GRPOConfig(**cfg_kwargs)
+    if config.generation_batch_size != generation_batch:
+        raise SystemExit("TRL 实际 generation_batch_size 与全局 batch/累积配置不一致")
 
     # 单进程时钉住单卡（避免 Trainer 走 DataParallel 的段错误）；
     # accelerate launch 下 accelerator 自己管设备，这里自动跳过。
-    from agentic_arxiv.training.precision import assert_quantization_is_single_process, pin_single_gpu
+    from agentic_arxiv.training.precision import pin_single_gpu
 
-    assert_quantization_is_single_process(qlora)
     pin_single_gpu(config)
 
     print(describe_logging(backends, logging_dir if backends else None))
@@ -656,6 +663,7 @@ def main(
         processing_class=tokenizer,
         rollout_func=rollout_func,
     )
+    execution.validate_trainer(trainer, stage="grpo")
     # 必须在 trainer 建好之后接线。即使 report_to=none，TRL 仍会把 _metrics
     # 汇总到控制台；report_to 只控制是否转发到 TensorBoard/wandb，不应决定
     # 是否采集指标。此前的条件绑定还会让 _pending 在长训练中持续增长。
@@ -679,6 +687,7 @@ def main(
             steps=canary_steps,
             min_reward=min_canary_reward,
             patience=canary_patience,
+            distributed=execution,
         )
         trainer.add_callback(canary_cb)
         print(f"🐤 Canary: 每 {canary_steps} 步评估，阈值={min_canary_reward}，patience={canary_patience}")
@@ -688,8 +697,12 @@ def main(
         guard = RewardVarianceGuard()
         trainer.add_callback(guard)
 
-    def save_run_diagnostic(reason: str) -> dict:
+    memory = None
+
+    def save_run_diagnostic(reason: str) -> dict | None:
         """保护器或异常退出仍保存可得事实，不把失败运行标为成功 final。"""
+        if not execution.is_main:
+            return None
         step = getattr(trainer.state, "global_step", None)
         planned = getattr(trainer.state, "max_steps", None)
         split_path = (split.rpartition(":")[0] or DEFAULT_SPLIT_PATH) if split else None
@@ -700,6 +713,10 @@ def main(
             resolved_config=config.to_dict(),
             derived_values={
                 "per_device_train_batch_size": batch_size,
+                "effective_batch_size": execution.effective_batch_size(batch_size, grad_accum),
+                "generation_batch_size": generation_batch,
+                "distributed_training": execution.metadata(),
+                "memory": memory,
                 "task_count": len(tasks),
                 "actual_task_ids": [task["id"] for task in tasks],
                 "actual_base_model": actual_base_model,
@@ -710,7 +727,10 @@ def main(
                 "execution_source": source_fingerprint(
                     [Path(__file__), Path(__file__).with_name("mainline_config.py"),
                      Path(__file__).with_name("grpo_reward.py"),
+                     Path(__file__).with_name("canary.py"),
+                     Path(__file__).with_name("observability.py"),
                      Path(__file__).with_name("model_setup.py"),
+                     Path(__file__).with_name("distributed.py"),
                      Path(__file__).with_name("precision.py")], repo_root=get_workspace(),
                 ),
             },
@@ -723,12 +743,12 @@ def main(
                 "split": file_fingerprint(split_path),
                 "mainline_configuration": file_fingerprint(config_file_path(config_path)),
             },
-            resource_overrides={
+            resource_overrides={**execution.resource_overrides(), **{
                 key: {"baseline": GRPO_DEFAULTS[key], "requested": requested_config[key]}
                 for key in ("qlora", "batch_size", "grad_accum", "gradient_checkpointing",
                             "optim", "lora_r", "lora_alpha", "lora_dropout")
                 if requested_config[key] != GRPO_DEFAULTS[key]
-            },
+            }},
             requested_steps=max_steps,
             protocol_metadata=current_protocol,
             actual_steps=step,
@@ -795,28 +815,27 @@ def main(
         stop_reason = "trainer_stopped_early"
     else:
         stop_reason = "max_steps_or_epochs_completed"
-    run_record = save_run_diagnostic(stop_reason)
+    memory = execution.memory_summary()
+    run_record = execution.run_on_main(lambda: save_run_diagnostic(stop_reason))
 
-    # 放在方差/canary 退出检查之前：即使保护器提前停止，也保留诊断数据。
-    reward_summary_path = tracker.save_task_summary(
+    # 保护器提前停止也保留全球奖励与完整 generation 组的审计统计。
+    reward_summary_path = execution.run_on_main(lambda: tracker.save_task_summary(
         workspace_path(output_dir) / "reward_probe_summary.json",
         protocol_metadata=current_protocol,
         training_metadata=source_metadata,
-    )
+    ))
     print(f"📊 逐任务奖励统计: {reward_summary_path}")
-    rollout_audit_summary_path = None
-    rollout_audit_summary = None
-    if auditor is not None:
-        rollout_audit_summary_path = auditor.save_summary(
-            resolved_trace_path.with_suffix(".summary.json")
-        )
-        rollout_audit_summary = auditor.summary()
-        print(
-            f"🔎 rollout 审计摘要: {rollout_audit_summary_path} | "
-            f"已保存={rollout_audit_summary['saved_samples']}, "
-            f"异常样本={rollout_audit_summary['anomalous_samples']}"
-        )
 
+    def save_rollout_summary():
+        if auditor is None:
+            return None, None
+        path = auditor.save_summary(resolved_trace_path.with_suffix(".summary.json"))
+        summary = auditor.summary()
+        print(f"🔎 rollout 审计摘要: {path} | 已保存={summary['saved_samples']}, "
+              f"异常样本={summary['anomalous_samples']}")
+        return path, summary
+
+    rollout_audit_summary_path, rollout_audit_summary = execution.run_on_main(save_rollout_summary)
     if guard is not None and guard.tripped:
         raise SystemExit(1)
     if canary_cb is not None and canary_cb.tripped:
@@ -824,103 +843,104 @@ def main(
 
     final_dir = workspace_path(output_dir) / "final"
     trainer.save_model(str(final_dir))
-    tokenizer.save_pretrained(str(final_dir))
-    if qlora:
-        required_adapter_files = (
-            final_dir / "adapter_config.json",
-            final_dir / "adapter_model.safetensors",
-        )
-        missing = [str(path) for path in required_adapter_files if not path.exists()]
-        if missing:
-            raise SystemExit(f"❌ GRPO完成但adapter文件缺失: {missing}")
-    import torch
-    manifest = {
-        "stage": "grpo_qlora" if qlora else "grpo_full",
-        "source_model": resolved,
-        "base_model": actual_base_model,
-        "task_set": "default" if smoke else task_set,
-        "split": split,
-        "smoke": smoke,
-        "task_count": len(tasks),
-        "train_loss": train_loss,
-        "learning_rate": lr,
-        "beta": beta,
-        "loss_type": loss_type,
-        "epsilon_high": epsilon_high,
-        "mask_truncated_completions": mask_truncated_completions,
-        "importance_sampling_level": importance_sampling_level,
-        "scale_rewards": scale_rewards,
-        "batch_size": batch_size,
-        "gradient_accumulation_steps": grad_accum,
-        "temperature": temperature,
-        "frozen_policy_probe": lr == 0.0,
-        "max_steps": max_steps,
-        "requested_max_steps": max_steps,
-        "actual_steps": actual_steps,
-        "stopped_early": stopped_early,
-        "stop_reason": stop_reason,
-        "reward_variance_guard": (
-            {
-                "enabled": True,
-                "converged": guard.converged,
-                "tripped": guard.tripped,
-                "patience": guard.patience,
-                "grace_steps": guard.grace_steps,
-                "stop_step": guard.stop_step,
-            }
-            if guard is not None
-            else {"enabled": False}
-        ),
-        "reward_curriculum_steps": reward_curriculum_steps,
-        "initial_reward_weights": dataclasses.asdict(initial_weights),
-        "rollout_audit": (
-            {
-                "trace_path": str(resolved_trace_path),
-                "summary_path": str(rollout_audit_summary_path),
-                "seen_samples": rollout_audit_summary["seen_samples"],
-                "saved_samples": rollout_audit_summary["saved_samples"],
-                "anomalous_samples": rollout_audit_summary["anomalous_samples"],
-            }
-            if rollout_audit_summary is not None
-            else None
-        ),
-        "num_generations": num_generations,
-        "max_turns": max_turns,
-        "max_completion_length": max_completion_length,
-        "seed": seed,
-        "save_steps": save_steps,
-        "save_total_limit": save_total_limit if save_steps > 0 else None,
-        "resumed_from_checkpoint": resolved_resume_checkpoint,
-        "peak_vram_gib": (
-            torch.cuda.max_memory_allocated() / 2**30 if torch.cuda.is_available() else 0.0
-        ),
-    }
-    trainable, model_parameters, trainable_ratio = _trainable_parameter_stats(trainer.model)
-    manifest.update({
-        "trainable_parameters": trainable,
-        "model_parameters": model_parameters,
-        "trainable_ratio_percent": trainable_ratio,
-    })
-    manifest.update(run_record)
-    (final_dir / "training_manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    print(f"✅ GRPO 训练完成，模型已保存: {final_dir}")
 
-    # --- 阶段验证：训练后检查模型是否达到最低质量阈值 ---
-    if verify:
-        print(f"\n🔍 运行 GRPO 阶段验证...")
-        verifier = StageVerifier()
-        report = verifier.verify_grpo(
-            model_path=str(final_dir),
-            tokenizer=tokenizer,
-            env=env,
-        )
-        verifier.save_report(report, final_dir)
-        print(report.summary())
-        if not report.passed:
-            raise SystemExit(
-                f"\n❌ GRPO 阶段验证失败，模型未达到最低质量阈值。\n"
-                f"   检查 {final_dir / 'verification_report.json'} 了解详情。\n"
-                f"   跳过验证用 --no-verify。"
+    def save_final_artifacts():
+        tokenizer.save_pretrained(str(final_dir))
+        if qlora:
+            required_adapter_files = (
+                final_dir / "adapter_config.json",
+                final_dir / "adapter_model.safetensors",
             )
+            missing = [str(path) for path in required_adapter_files if not path.exists()]
+            if missing:
+                raise SystemExit(f"❌ GRPO完成但adapter文件缺失: {missing}")
+        manifest = {
+            "stage": "grpo_qlora" if qlora else "grpo_full",
+            "source_model": resolved,
+            "base_model": actual_base_model,
+            "task_set": "default" if smoke else task_set,
+            "split": split,
+            "smoke": smoke,
+            "task_count": len(tasks),
+            "train_loss": train_loss,
+            "learning_rate": lr,
+            "beta": beta,
+            "loss_type": loss_type,
+            "epsilon_high": epsilon_high,
+            "mask_truncated_completions": mask_truncated_completions,
+            "importance_sampling_level": importance_sampling_level,
+            "scale_rewards": scale_rewards,
+            "batch_size": batch_size,
+            "effective_batch_size": execution.effective_batch_size(batch_size, grad_accum),
+            "generation_batch_size": generation_batch,
+            "gradient_accumulation_steps": grad_accum,
+            "temperature": temperature,
+            "frozen_policy_probe": lr == 0.0,
+            "max_steps": max_steps,
+            "requested_max_steps": max_steps,
+            "actual_steps": actual_steps,
+            "stopped_early": stopped_early,
+            "stop_reason": stop_reason,
+            "reward_variance_guard": (
+                {
+                    "enabled": True,
+                    "converged": guard.converged,
+                    "tripped": guard.tripped,
+                    "patience": guard.patience,
+                    "grace_steps": guard.grace_steps,
+                    "stop_step": guard.stop_step,
+                }
+                if guard is not None
+                else {"enabled": False}
+            ),
+            "reward_curriculum_steps": reward_curriculum_steps,
+            "initial_reward_weights": dataclasses.asdict(initial_weights),
+            "rollout_audit": (
+                {
+                    "trace_path": str(resolved_trace_path),
+                    "summary_path": str(rollout_audit_summary_path),
+                    "seen_samples": rollout_audit_summary["seen_samples"],
+                    "saved_samples": rollout_audit_summary["saved_samples"],
+                    "anomalous_samples": rollout_audit_summary["anomalous_samples"],
+                }
+                if rollout_audit_summary is not None
+                else None
+            ),
+            "num_generations": num_generations,
+            "max_turns": max_turns,
+            "max_completion_length": max_completion_length,
+            "seed": seed,
+            "save_steps": save_steps,
+            "save_total_limit": save_total_limit if save_steps > 0 else None,
+            "resumed_from_checkpoint": resolved_resume_checkpoint,
+            "peak_vram_gib": memory["peak_allocated_gib"] or 0.0,
+        }
+        trainable, model_parameters, trainable_ratio = _trainable_parameter_stats(trainer.model)
+        manifest.update({
+            "trainable_parameters": trainable,
+            "model_parameters": model_parameters,
+            "trainable_ratio_percent": trainable_ratio,
+        })
+        manifest.update(run_record)
+        (final_dir / "training_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"✅ GRPO 训练完成，模型已保存: {final_dir}")
+
+    execution.run_on_main(save_final_artifacts)
+
+    if verify:
+        def verify_final():
+            print("\n🔍 运行 GRPO 阶段验证...")
+            verifier = StageVerifier()
+            report = verifier.verify_grpo(model_path=str(final_dir), tokenizer=tokenizer, env=env)
+            verifier.save_report(report, final_dir)
+            print(report.summary())
+            if not report.passed:
+                raise SystemExit(
+                    "\n❌ GRPO 阶段验证失败，模型未达到最低质量阈值。\n"
+                    f"   检查 {final_dir / 'verification_report.json'} 了解详情。\n"
+                    "   跳过验证用 --no-verify。"
+                )
+
+        execution.run_on_main(verify_final)

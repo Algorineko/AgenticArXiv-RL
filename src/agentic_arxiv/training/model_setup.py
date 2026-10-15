@@ -28,9 +28,10 @@ def _qlora_runtime_guard() -> None:
         except Exception as exc:
             raise SystemExit(f"❌ QLoRA依赖缺失: {package}: {exc}") from exc
     print("🧩 QLoRA依赖: " + ", ".join(f"{k}={v}" for k, v in installed.items()))
-    free, total = torch.cuda.mem_get_info()
+    device = torch.cuda.current_device()
+    free, total = torch.cuda.mem_get_info(device)
     print(
-        f"🎮 GPU: {torch.cuda.get_device_name(0)} | "
+        f"🎮 GPU {device}: {torch.cuda.get_device_name(device)} | "
         f"空闲 {free / 2**30:.2f} / {total / 2**30:.2f} GiB"
     )
     if total < 20 * 2**30:

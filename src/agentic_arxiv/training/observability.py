@@ -175,6 +175,8 @@ class RewardComponentTracker:
         self,
         task_ids: Sequence[Optional[str]],
         rewards: Sequence[float],
+        *,
+        num_generations: Optional[int] = None,
     ) -> None:
         """记录同一 prompt 各 generation 的组内奖励分布。
 
@@ -182,14 +184,27 @@ class RewardComponentTracker:
         不同任务之间的 reward 即使差异很大，也不能替代组内方差；同一任务
         的所有 generation 奖励相同时，这一组基本不产生策略梯度。
         """
-        grouped: Dict[str, List[float]] = {}
-        for task_id, reward in zip(task_ids, rewards):
-            if task_id is None:
-                continue
-            tid = str(task_id)
-            grouped.setdefault(tid, []).append(float(reward))
+        if len(task_ids) != len(rewards):
+            raise ValueError("GRPO group 的 task_ids/rewards 长度不一致")
+        groups = []
+        if num_generations is not None:
+            if num_generations < 1 or len(task_ids) % num_generations:
+                raise ValueError("全局 GRPO batch 必须包含完整 generation 组")
+            for start in range(0, len(task_ids), num_generations):
+                ids = task_ids[start:start + num_generations]
+                if len(set(ids)) != 1:
+                    raise ValueError("同一 generation 组包含不同 task_id")
+                if ids[0] is not None:
+                    groups.append((str(ids[0]), list(rewards[start:start + num_generations])))
+        else:
+            # 保留外部逐任务探针接口；正式 GRPO 总是明确提供 G。
+            grouped: Dict[str, List[float]] = {}
+            for task_id, reward in zip(task_ids, rewards):
+                if task_id is not None:
+                    grouped.setdefault(str(task_id), []).append(float(reward))
+            groups = list(grouped.items())
 
-        for tid, values in grouped.items():
+        for tid, values in groups:
             mean = sum(values) / len(values)
             variance = sum((value - mean) ** 2 for value in values) / len(values)
             std = math.sqrt(variance)

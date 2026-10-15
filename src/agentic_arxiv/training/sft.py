@@ -18,6 +18,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from agentic_arxiv.training.observability import describe_logging, resolve_report_to
+from agentic_arxiv.training.distributed import TrainingContext
 from agentic_arxiv.training.stage_verifier import StageVerifier
 from agentic_arxiv.training.mainline_config import (
     config_file_path,
@@ -271,6 +272,7 @@ def main(
     from datasets import Dataset
 
     configured = stage_config("sft", config_path)
+    execution = TrainingContext.from_environment()
     if configured["trainer_parameters"].get("completion_only_loss") is not True:
         raise SystemExit("SFT 主线必须仅监督当前 assistant completion")
 
@@ -335,10 +337,10 @@ def main(
     # --- 长度守卫 ---
     _check_lengths(tokenizer, train_dataset, max_length)
 
-    effective_batch = batch_size * grad_accum
+    effective_batch = execution.effective_batch_size(batch_size, grad_accum)
     print(
         f"🧮 训练计划: rows={len(train_dataset)}, micro_batch={batch_size}, "
-        f"grad_accum={grad_accum}, effective_batch={effective_batch}, "
+        f"grad_accum={grad_accum}, world_size={execution.world_size}, effective_batch={effective_batch}, "
         f"max_length={max_length}, max_steps={max_steps}, epochs={epochs}"
     )
     if inspect_only:
@@ -348,9 +350,9 @@ def main(
     quantization_config = None
     peft_config = None
     policy = resolved_model
-    from agentic_arxiv.training.precision import assert_quantization_is_single_process
+    from agentic_arxiv.training.precision import quantized_model_device_map
 
-    assert_quantization_is_single_process(qlora)
+    execution.prepare_device(qlora=qlora, allow_sharded=not qlora)
     if qlora:
         _qlora_runtime_guard()
         quantization_config, peft_config = _build_qlora_configs(
@@ -368,7 +370,7 @@ def main(
         policy = AutoModelForCausalLM.from_pretrained(
             resolved_model,
             quantization_config=quantization_config,
-            device_map={"": 0},
+            device_map=quantized_model_device_map(),
             dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
             local_files_only=Path(resolved_model).exists(),
@@ -422,6 +424,7 @@ def main(
         "run_name": run_name or out_path.name,
         **_precision_flags(),  # 只有 CUDA 才开混合精度
     }
+    config_kwargs.update(execution.trainer_kwargs(stage="sft"))
     require_supported_config(SFTConfig, config_kwargs)
     config = SFTConfig(**config_kwargs)
 
@@ -440,6 +443,7 @@ def main(
         "processing_class": tokenizer,
     }
     trainer = SFTTrainer(**trainer_kwargs)
+    execution.validate_trainer(trainer, stage="sft", allow_sharded=not qlora)
 
     trainable, total, ratio = _trainable_parameter_stats(trainer.model)
     if qlora:
@@ -451,13 +455,19 @@ def main(
     if torch.cuda.is_available():
         print(f"   Trainer初始化显存: {torch.cuda.memory_allocated() / 2**30:.2f} GiB")
 
-    def save_run_diagnostic(reason: str) -> dict:
+    memory = None
+
+    def save_run_diagnostic(reason: str) -> dict | None:
         """保存实际可得的运行事实；异常记录不产生成功 final。"""
+        if not execution.is_main:
+            return None
         record = build_run_manifest(
             requested_config=requested_config,
             resolved_config=config.to_dict(),
             derived_values={
                 "effective_batch_size": effective_batch,
+                "distributed_training": execution.metadata(),
+                "memory": memory,
                 "trainable_parameters": trainable,
                 "model_parameters": total,
                 "trainer_planned_steps": getattr(trainer.state, "max_steps", None),
@@ -473,6 +483,7 @@ def main(
                 "execution_source": source_fingerprint(
                     [Path(__file__), Path(__file__).with_name("mainline_config.py"),
                      Path(__file__).with_name("model_setup.py"),
+                     Path(__file__).with_name("distributed.py"),
                      Path(__file__).with_name("precision.py")],
                     repo_root=get_workspace(),
                 ),
@@ -486,12 +497,12 @@ def main(
                 ),
                 "mainline_configuration": file_fingerprint(config_file_path(config_path)),
             },
-            resource_overrides={
+            resource_overrides={**execution.resource_overrides(), **{
                 key: {"baseline": SFT_DEFAULTS[key], "requested": requested_config[key]}
                 for key in ("qlora", "batch_size", "grad_accum", "gradient_checkpointing",
                             "optim", "lora_r", "lora_alpha", "lora_dropout")
                 if requested_config[key] != SFT_DEFAULTS[key]
-            },
+            }},
             requested_steps=max_steps,
             protocol_metadata=current_protocol,
             actual_steps=getattr(trainer.state, "global_step", None),
@@ -531,81 +542,88 @@ def main(
         if planned_steps and actual_steps < planned_steps
         else "max_steps_or_epochs_completed"
     )
-    run_record = save_run_diagnostic(stop_reason)
+    memory = execution.memory_summary()
+    run_record = execution.run_on_main(lambda: save_run_diagnostic(stop_reason))
 
     final_output_dir = out_path / "final"
     trainer.save_model(str(final_output_dir))
-    tokenizer.save_pretrained(str(final_output_dir))
-    if qlora:
-        required_adapter_files = (
-            final_output_dir / "adapter_config.json",
-            final_output_dir / "adapter_model.safetensors",
-        )
-        missing = [str(path) for path in required_adapter_files if not path.exists()]
-        if missing:
-            raise SystemExit(f"❌ QLoRA训练结束但适配器文件缺失: {missing}")
 
-    peak_vram = (
-        torch.cuda.max_memory_allocated() / 2**30 if torch.cuda.is_available() else None
-    )
-    training_manifest = {
-        "stage": "sft_qlora" if qlora else "sft_full",
-        "base_model": resolved_model,
-        "data": str(train_data_path),
-        "data_sha256": _sha256_file(train_data_path),
-        "data_manifest_kind": manifest.get("kind") if manifest else None,
-        "output": str(final_output_dir),
-        "max_steps": max_steps,
-        "epochs": epochs,
-        "batch_size": batch_size,
-        "gradient_accumulation_steps": grad_accum,
-        "effective_batch_size": effective_batch,
-        "learning_rate": lr,
-        "max_length": max_length,
-        "optimizer": optim,
-        "seed": seed,
-        "train_loss": train_loss,
-        "trainable_parameters": trainable,
-        "model_parameters_seen_by_trainer": total,
-        "trainable_ratio_percent": ratio,
-        "peak_vram_gib": peak_vram,
-        "qlora": {
-            "load_in_4bit": qlora,
-            "quant_type": "nf4" if qlora else None,
-            "double_quant": qlora,
-            "compute_dtype": "bfloat16" if qlora else None,
-            "r": lora_r if qlora else None,
-            "alpha": lora_alpha if qlora else None,
-            "dropout": lora_dropout if qlora else None,
-            "target_modules": list(QLORA_TARGET_MODULES) if qlora else [],
-        },
-        "versions": {
-            package: version(package)
-            for package in ("torch", "transformers", "trl", "peft", "bitsandbytes")
-            if qlora or package not in ("peft", "bitsandbytes")
-        },
-    }
-    training_manifest.update(run_record)
-    final_output_dir.mkdir(parents=True, exist_ok=True)
-    (final_output_dir / "training_manifest.json").write_text(
-        json.dumps(training_manifest, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    print(
-        f"✅ SFT训练完成: loss={train_loss:.6f}, "
-        + (f"peak_vram={peak_vram:.2f} GiB, " if peak_vram is not None else "")
-        + f"模型已保存: {final_output_dir}"
-    )
-
-    # --- 阶段验证：检查模型是否能产出可解析的输出 ---
-    if verify:
-        print(f"\n🔍 运行 SFT 阶段验证...")
-        verifier = StageVerifier(sft_min_parse_rate=min_parse_rate)
-        report = verifier.verify_sft(model_path=str(final_output_dir))
-        verifier.save_report(report, final_output_dir)
-        print(report.summary())
-        if not report.passed:
-            print(
-                f"\n⚠️  SFT 阶段验证未通过，但模型已保存。"
-                f"请在继续 GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
+    def save_final_artifacts():
+        # Trainer.save_model 由所有 rank 参加，其余文件只由主进程写入。
+        tokenizer.save_pretrained(str(final_output_dir))
+        peak_vram = memory["peak_allocated_gib"]
+        if qlora:
+            required_adapter_files = (
+                final_output_dir / "adapter_config.json",
+                final_output_dir / "adapter_model.safetensors",
             )
+            missing = [str(path) for path in required_adapter_files if not path.exists()]
+            if missing:
+                raise SystemExit(f"❌ QLoRA训练结束但适配器文件缺失: {missing}")
+
+        training_manifest = {
+            "stage": "sft_qlora" if qlora else "sft_full",
+            "base_model": resolved_model,
+            "data": str(train_data_path),
+            "data_sha256": _sha256_file(train_data_path),
+            "data_manifest_kind": manifest.get("kind") if manifest else None,
+            "output": str(final_output_dir),
+            "max_steps": max_steps,
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "gradient_accumulation_steps": grad_accum,
+            "effective_batch_size": effective_batch,
+            "learning_rate": lr,
+            "max_length": max_length,
+            "optimizer": optim,
+            "seed": seed,
+            "train_loss": train_loss,
+            "trainable_parameters": trainable,
+            "model_parameters_seen_by_trainer": total,
+            "trainable_ratio_percent": ratio,
+            "peak_vram_gib": peak_vram,
+            "qlora": {
+                "load_in_4bit": qlora,
+                "quant_type": "nf4" if qlora else None,
+                "double_quant": qlora,
+                "compute_dtype": "bfloat16" if qlora else None,
+                "r": lora_r if qlora else None,
+                "alpha": lora_alpha if qlora else None,
+                "dropout": lora_dropout if qlora else None,
+                "target_modules": list(QLORA_TARGET_MODULES) if qlora else [],
+            },
+            "versions": {
+                package: version(package)
+                for package in ("torch", "transformers", "trl", "peft", "bitsandbytes")
+                if qlora or package not in ("peft", "bitsandbytes")
+            },
+        }
+        training_manifest.update(run_record)
+        final_output_dir.mkdir(parents=True, exist_ok=True)
+        (final_output_dir / "training_manifest.json").write_text(
+            json.dumps(training_manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(
+            f"✅ SFT训练完成: loss={train_loss:.6f}, "
+            + (f"peak_vram={peak_vram:.2f} GiB, " if peak_vram is not None else "")
+            + f"模型已保存: {final_output_dir}"
+        )
+
+    execution.run_on_main(save_final_artifacts)
+
+    # 其余 rank 等待结果；主进程验证失败也必须通知它们，不能挂在 barrier。
+    if verify:
+        def verify_final():
+            print("\n🔍 运行 SFT 阶段验证...")
+            verifier = StageVerifier(sft_min_parse_rate=min_parse_rate)
+            report = verifier.verify_sft(model_path=str(final_output_dir))
+            verifier.save_report(report, final_output_dir)
+            print(report.summary())
+            if not report.passed:
+                print(
+                    "\n⚠️  SFT 阶段验证未通过，但模型已保存。"
+                    f"请在继续 GRPO 前检查 {final_output_dir / 'verification_report.json'}。"
+                )
+
+        execution.run_on_main(verify_final)

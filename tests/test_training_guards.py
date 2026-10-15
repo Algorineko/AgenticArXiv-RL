@@ -17,7 +17,7 @@ from agentic_arxiv.tasks.splits import load_split
 from agentic_arxiv.tasks.tasks import get_all_tasks
 from agentic_arxiv.tasks.tasks_expanded import get_expanded_tasks
 from agentic_arxiv.training.precision import (
-    assert_quantization_is_single_process,
+    quantized_model_device_map,
     cuda_supports_bf16,
     is_distributed_launch,
     pin_single_gpu,
@@ -528,7 +528,7 @@ class TrainableModelDtypeTest(unittest.TestCase):
             self.assertEqual(trainable_model_load_kwargs(old_loader), {"torch_dtype": torch.float32})
 
 class DistributedLaunchGuardTest(unittest.TestCase):
-    """多卡启动下不能再钉单卡，QLoRA 也不能静默按单卡跑。"""
+    """DDP 不强行钉单卡；量化模型使用进程已选择的本地 GPU。"""
 
     def _env(self, **values):
         import os
@@ -565,14 +565,17 @@ class DistributedLaunchGuardTest(unittest.TestCase):
             pin_single_gpu(config)
         self.assertEqual(config._n_gpu, 1)
 
-    def test_qlora_is_rejected_under_launch(self):
-        with self._env(LOCAL_RANK="0"):
-            with self.assertRaises(SystemExit):
-                assert_quantization_is_single_process(True)
+    def test_quantized_model_uses_selected_device_not_cuda_zero(self):
+        from unittest.mock import patch
+        torch = pytest.importorskip("torch")
+        with patch.object(torch.cuda, "current_device", return_value=2):
+            self.assertEqual(quantized_model_device_map(), {"": 2})
 
-    def test_full_precision_is_allowed_under_launch(self):
-        with self._env(LOCAL_RANK="0"):
-            assert_quantization_is_single_process(False)
+    def test_quantized_single_gpu_keeps_device_zero(self):
+        from unittest.mock import patch
+        torch = pytest.importorskip("torch")
+        with patch.object(torch.cuda, "current_device", return_value=0):
+            self.assertEqual(quantized_model_device_map(), {"": 0})
 
 
 class MainlineAlgorithmDefaultsTest(unittest.TestCase):

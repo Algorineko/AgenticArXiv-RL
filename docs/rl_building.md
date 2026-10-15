@@ -111,7 +111,7 @@ accelerate launch --config_file configs/accelerate/ddp_2gpu.yaml \
 
 全参目录应包含完整模型及必要元数据；适配器目录按其基座信息加载基座和适配器。缺少指定模型、权重或必要 manifest 时必须在采样前失败，不扫描“最新目录”、退回基座、其他本地模型或远程 API。真实 checkpoint 加载和多卡运行本次未验证。
 
-未来数据/manifest/长度预检可用 `agentic-arxiv train sft --inspect-only`，但仍需实际 tokenizer，不能作为本次必须补资产的检查。日志可显式加 `--report-to tensorboard` 或 `wandb`，后端依赖与 API 凭据按需准备；资源覆盖必须记入运行指纹，不伪装成原配方。DDP/FSDP YAML 仍在 `configs/accelerate/` 且内容未变，QLoRA 不支持多进程，显式全参使用 `--no-qlora`。launcher 的 `--config_file` 属于 accelerate，应用参数仍使用连字符；这里只核对入口接线/帮助，不启动多卡训练。
+未来数据/manifest/长度预检可用 `agentic-arxiv train sft --inspect-only`，但仍需实际 tokenizer，不能作为本次必须补资产的检查。日志可显式加 `--report-to tensorboard` 或 `wandb`，后端依赖与 API 凭据按需准备；资源覆盖必须记入运行指纹，不伪装成原配方。SFT/GRPO QLoRA 已增加单机 DDP 路径与独立启动器，四卡配置为 `configs/accelerate/ddp_4gpu.yaml`；全参仍显式使用 `--no-qlora`。QLoRA 分片与 GRPO FSDP/vLLM 不在支持范围内；原有非量化 SFT 分片入口未在本次验证。launcher 的 `--config_file` 属于 accelerate，应用参数仍使用连字符。详见 [多卡训练指南](training_distributed.md)；本次只做工程回归，不启动真实多卡训练。
 
 ## 消息、监督与采样责任
 
