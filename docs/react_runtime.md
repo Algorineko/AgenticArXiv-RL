@@ -98,9 +98,9 @@ SFT 转换把此前完整消息作为 prompt，仅最后一条当前 assistant �
 
 DPO 为离线消息偏好，不冒充 GRPO 原始 token 重放。训练前使用实际 tokenizer/chat template 审计共同 token 前缀、单条 assistant 目标与完整长度；历史、setup 和环境消息不参与 completion log-prob。模板改变前缀或任一完整序列超预算必须失败，不通过左右截断、删历史或删动作继续训练。`train dpo --inspect-only` 完成同一审计而不加载策略权重或创建 checkpoint；仍需真实本地 tokenizer，本次没有执行真实 tokenizer 集成。
 
-GRPO 保留原始采样 token ID，不 decode/re-encode 响应。`_append_environment_tokens` 对聊天模板的完整候选前缀逐 token 比较，只有完全兼容才追加 suffix；环境与运行时消息边界 mask 为 0，原始 policy token 为 1。已采样 EOS 属于原前缀，不重复插入；不兼容模板明确失败。总 completion 预算包含环境片段，首次没有合法 token 失败，后续空结束记录 MODEL_END。G 的采样数量由训练器/适配接口保证，rollout 不再扩增一次。
+GRPO 保留原始采样 token ID，不用 decode/re-encode 替换响应。`_append_environment_tokens` 优先验证完整候选 token 前缀；合法采样的 BPE 分词与标准重编码不同时，验证模板文本仍是原历史加当前策略文本，再单独编码环境 suffix。原始 policy ID 始终不变，环境与运行时边界 mask 为 0，policy mask 为 1。解码禁用空格清理；已采样 EOS 不重复插入。历史被模板改写、非末尾 EOS 的控制 token、采样与文本不符或 suffix 不能无损编码时仍明确失败。总 completion 预算包含环境片段，首次没有合法 token 失败，后续空结束记录 MODEL_END。G 的采样数量由训练器/适配接口保证，rollout 不再扩增一次。
 
-以上是转换、接线与保护代码的契约，不是实际 tokenizer、EOS 前缀或梯度验证。已有固定 token 输入只支持对应回归，不能替代本次未执行的真实 tokenizer/模型/训练集成。
+前缀回归覆盖非标准 BPE 分段、多轮追加、EOS 去重、Observation 截断、预算和 mask，以及对历史改写和控制 token 的拒绝。实际本地 tokenizer 可显式运行 `AGENTIC_ARXIV_TEST_TOKENIZER=/已有/tokenizer目录 python -m pytest tests/test_grpo_token_prefix.py`；该检查离线、仅 CPU，不加载策略权重或启动训练。tokenizer 验证不替代模型梯度、on-policy 或真实四卡 GRPO 重跑验收。
 
 来源：`runtime/react_contract.py::build_react_messages/append_react_turn/validate_react_messages`、`runtime/agent_engine.py::build_messages`、`data_pipeline/generate_sft_data.py::build_sft_samples_from_history`、`training/train_sft.py::_to_prompt_completion`、`training/grpo_reward.py::_chat_template_ids/_append_environment_tokens/make_multiturn_rollout_func`。
 

@@ -170,7 +170,7 @@ class RolloutSetupTest(unittest.TestCase):
             def __call__(self, text, add_special_tokens=False):
                 return {"input_ids": [200 + i for i, _ in enumerate(text)]}
 
-            def decode(self, ids, skip_special_tokens=True):
+            def decode(self, ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
                 if ids and ids[0] == 101:
                     return (
                         "Thought: use the prepared search state\n"

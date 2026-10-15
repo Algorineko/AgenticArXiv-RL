@@ -340,18 +340,54 @@ def _chat_template_ids(tokenizer: Any, messages: Sequence[Mapping[str, Any]]) ->
 def _append_environment_tokens(
     tokenizer: Any, messages: Sequence[Mapping[str, Any]], policy_text: str,
     observation: str, sampled_prefix: Sequence[int],
+    *, sampled_policy_ids: Optional[Sequence[int]] = None,
 ) -> tuple[List[int], List[Dict[str, Any]]]:
-    """比较模板候选前缀，只返回可追加尾片段，绝不替换采样 token。"""
+    """只编码环境 suffix，保留策略实际采样 ID（不要求 BPE 重编码唯一）。"""
     appended = append_react_turn(messages, policy_text, observation)
     candidate = _chat_template_ids(tokenizer, appended)
     prefix = list(sampled_prefix)
-    if candidate[:len(prefix)] != prefix:
+    if candidate[:len(prefix)] == prefix:
+        # A matching canonical encoding already exposes an unambiguous suffix.
+        return candidate[len(prefix):], appended
+
+    def incompatible(reason: str) -> None:
         raise ValueError(
             "GRPO chat template 无法保留原始采样 token 前缀；"
-            "不能通过 decode/re-encode 替换策略输出"
+            f"不能通过 decode/re-encode 替换策略输出（{reason}）"
         )
-    # 模板候选已包括策略实际采样的 EOS，前缀扣除后不会再次插入它。
-    return candidate[len(prefix):], appended
+
+    sampled = list(sampled_policy_ids) if sampled_policy_ids is not None else []
+    if not sampled or prefix[-len(sampled):] != sampled:
+        incompatible("缺少当前轮原始采样 ID 或其不是原前缀的尾部")
+
+    # Generators can emit a noncanonical BPE segmentation of the same text.
+    # Derive the boundary from template *text*, never replace sampled IDs with
+    # the canonical IDs produced by encoding the complete transcript again.
+    before = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    after = tokenizer.apply_chat_template(appended, tokenize=False, add_generation_prompt=True)
+    if not isinstance(before, str) or not isinstance(after, str) or not after.startswith(before + policy_text):
+        incompatible("模板改写了历史或 assistant 文本，无法确定追加边界")
+    suffix_text = after[len(before + policy_text):]
+
+    eos = getattr(tokenizer, "eos_token_id", None)
+    eos_ids = set(eos if isinstance(eos, (list, tuple)) else [eos]) - {None}
+    sampled_eos = sampled[-1] if sampled[-1] in eos_ids else None
+    content_ids = sampled[:-1] if sampled_eos is not None else sampled
+    special_ids = set(getattr(tokenizer, "all_special_ids", []) or []) | eos_ids
+    if any(token in special_ids for token in content_ids):
+        incompatible("策略文本中包含非末尾 EOS 的控制 token")
+    decoded = tokenizer.decode(content_ids, skip_special_tokens=False, clean_up_tokenization_spaces=False)
+    if decoded != policy_text:
+        incompatible("原始采样 ID 与策略文本不一致")
+
+    suffix_ids = [int(t) for t in tokenizer(suffix_text, add_special_tokens=False)["input_ids"]]
+    if tokenizer.decode(suffix_ids, skip_special_tokens=False, clean_up_tokenization_spaces=False) != suffix_text:
+        incompatible("环境 suffix 编码改变了模板文本")
+    if sampled_eos is not None:
+        if not suffix_ids or suffix_ids[0] != sampled_eos:
+            incompatible("已采样 EOS 与模板的 assistant 结束边界不一致")
+        suffix_ids = suffix_ids[1:]
+    return suffix_ids, appended
 
 
 def make_multiturn_rollout_func(
@@ -450,19 +486,19 @@ def make_multiturn_rollout_func(
                 # turn_ids 是 TRL 返回的完成 token；可能是 tensor，统一转成 int 列表，
                 # 否则下一轮拼进 full_ids 后 torch.tensor() 无法处理
                 generated = [int(t) for t in turn_ids[batch_index]]
-                raw_text = tokenizer.decode(generated, skip_special_tokens=True)
+                raw_text = tokenizer.decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=False)
                 raw_assistant_turns[index].append(raw_text)
                 # Match inference's Observation stop before applying the budget:
                 # the budget itself may split the stop marker across tokens.
                 policy_text = parse_react_response(raw_text).policy_text
                 generated = generated[:budget]
-                text = tokenizer.decode(generated, skip_special_tokens=True)
+                text = tokenizer.decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=False)
                 if policy_text != raw_text:
                     # Keep only an original sampled prefix, never re-tokenize it.
                     # A token overlapping the boundary must be dropped whole.
                     while generated and not policy_text.startswith(text):
                         generated.pop()
-                        text = tokenizer.decode(generated, skip_special_tokens=True)
+                        text = tokenizer.decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=False)
                 if not text.strip() and not completion_ids[index]:
                     raise ValueError("GRPO 首轮没有合法策略 token，不能保留伪造 Observation 或补造 token")
                 completion_ids[index].extend(generated)
@@ -506,6 +542,7 @@ def make_multiturn_rollout_func(
                 sampled_prefix = prompt_ids[index] + completion_ids[index]
                 suffix_ids, messages[index] = _append_environment_tokens(
                     tokenizer, messages[index], text, observation, sampled_prefix,
+                    sampled_policy_ids=generated,
                 )
                 suffix_ids = suffix_ids[: max(0, trainer.max_completion_length - len(completion_ids[index]))]
                 completion_ids[index].extend(suffix_ids)

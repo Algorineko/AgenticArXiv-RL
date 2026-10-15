@@ -22,7 +22,7 @@ class _CharacterTokenizer:
             text += "<assistant>"
         return [ord(ch) + 10 for ch in text] if tokenize else text
 
-    def decode(self, ids, skip_special_tokens=True):
+    def decode(self, ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
         return "".join(chr(int(token) - 10) for token in ids if int(token) >= 10)
 
     def batch_decode(self, values, skip_special_tokens=True):

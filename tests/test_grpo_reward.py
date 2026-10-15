@@ -158,7 +158,7 @@ class TestMultiTurnTrajectory(unittest.TestCase):
             def __call__(self, text, add_special_tokens=False):
                 return {"input_ids": [200 + i for i, _ in enumerate(text)]}
 
-            def decode(self, ids, skip_special_tokens=True):
+            def decode(self, ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
                 if ids and ids[0] == 101:
                     return CORRECT
                 return BARE_FINISH
@@ -259,7 +259,7 @@ class TestMultiTurnTrajectory(unittest.TestCase):
                                 ids.extend(self(content)["input_ids"])
                         return ids
 
-                    def decode(self, ids, skip_special_tokens=True):
+                    def decode(self, ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
                         return "".join(self.tokens.get(t, chr(t)) for t in ids)
 
                 class Trainer:
@@ -476,7 +476,7 @@ class MultiTurnRolloutCardinalityTest(unittest.TestCase):
             def apply_chat_template(self, prompt, tokenize=True, add_generation_prompt=True):
                 return [4, 5]
 
-            def decode(self, ids, skip_special_tokens=True):
+            def decode(self, ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
                 return "Thought: 完成\nAction: FINISH"
         return Tok()
 
@@ -520,7 +520,7 @@ class MultiTurnRolloutCardinalityTest(unittest.TestCase):
                 self.seen_prompts.append(prompt)
                 return [4, 5]
 
-            def decode(self, ids, skip_special_tokens=True):
+            def decode(self, ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
                 return "Thought: 完成\nAction: FINISH"
 
         class Environment:

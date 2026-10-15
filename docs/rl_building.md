@@ -203,9 +203,9 @@ assistant  next Thought / Action or FINISH
 - 训练器已完成 prompt 分组/采样数量契约，rollout 不再次按 G 扩增；每条实际轨迹与奖励一对一，回调不再做第二次组归一化。
 - FINISH、解析失败、执行错误与轮数/token 截断分开；耗尽预算不合成成功。语法正确但未知工具/非法业务参数返回执行前错误，不调用后端。
 
-`grpo_reward.py::_append_environment_tokens` 按完整原始 token 前缀逐项比较，只追加模板 suffix；EOS 已属于原前缀时不再插一次。`max_completion_length` 包含 policy 与环境片段，环境追加也受剩余预算限制；首轮没有合法采样 token 明确失败，后续模型结束但没有 FINISH 记录 MODEL_END，不当作任务完成。
+`grpo_reward.py::_append_environment_tokens` 只追加环境与消息边界 suffix，不替换原始策略 token。标准重编码的候选前缀若不同，不能据此认定合法采样不兼容：BPE 允许同一文本有不同 token 分段。此时验证模板文本保持历史和当前策略文本不变，单独编码并核验 suffix，且不重复已采样 EOS；模板改写历史、意外控制 token 或有损 suffix 仍失败。策略解码禁用空格清理。`max_completion_length` 包含 policy 与环境片段，环境追加也受剩余预算限制；首轮没有合法采样 token 明确失败，后续模型结束但没有 FINISH 记录 MODEL_END，不当作任务完成。
 
-模板哈希只计算实际文本：`prompt_template_hash` 是当前 `REACT_PROMPT_TEMPLATE` 的 UTF-8 SHA256，`chat_template_hash` 是 tokenizer 实际选定模板的哈希，没有 tokenizer 时为 None。当前 prompt 哈希为 `80d5bd11f77feb3764041b05aea2e8e6dc1abcbb1e07ce0131fe0693ed4717cb`。真实 tokenizer 前缀/EOS 集成、梯度和 on-policy 行为本次未验证；已有测试输入只证明对应代码回归，不替代真实集成。
+模板哈希只计算实际文本：`prompt_template_hash` 是当前 `REACT_PROMPT_TEMPLATE` 的 UTF-8 SHA256，`chat_template_hash` 是 tokenizer 实际选定模板的哈希，没有 tokenizer 时为 None。当前 prompt 哈希为 `80d5bd11f77feb3764041b05aea2e8e6dc1abcbb1e07ce0131fe0693ed4717cb`。真实 tokenizer 前缀/EOS 可按 [运行时指南](react_runtime.md) 显式离线验证；该验证不加载策略权重，不能替代梯度、on-policy 或四卡训练验收。
 
 新 SFT 数据及 manifest 必须声明 runtime/context/training_protocol/prompt hash；无 tokenizer 的数据允许 chat hash 未知，已有明确 chat hash 则必须与实际模板匹配。继续训练的既有产物、适配器和 GRPO 起点还要求真实模型 manifest 及兼容的 chat hash，旧/未知/不匹配输入严格失败，`--skip-data-manifest-check` 不跳过协议检查。显式初始化原始基座可以缺少先前训练协议，只记录其实际来源为未知/未分类，不宣称历史兼容。
 
