@@ -1,0 +1,113 @@
+{
+  "version": 2,
+  "kind": "figure_qa_v2",
+  "seed_data": "data/vlm/figureqa_seed.jsonl",
+  "seed_sha256": "b0d90b6b4d1c508a110ecae3dd2f2d2087a3d95de2f22539dfe276d675614e0d",
+  "extraction": "data/vlm/figureqa_v2_extraction.json",
+  "extraction_sha256": "315a544ce142c85f022c17a93203fc6db2ad174364fb72ca00a742a35fc50f8f",
+  "output": "data/vlm/figureqa_v2.jsonl",
+  "output_sha256": "f54abf2dc16b25cad6dc3e059e87fc3f058c9a81bc4479558b7c72d670513a6f",
+  "discipline": {
+    "seed_rows_verbatim": true,
+    "seed_val_rows": 94,
+    "val_papers_frozen": [
+      "2608.27909v1",
+      "2609.05682v1",
+      "2609.05760v1",
+      "2609.11155v1",
+      "2609.14827v1",
+      "2609.24537v1",
+      "2609.24656v1",
+      "2609.24903v1",
+      "2609.24932v1",
+      "2609.24954v1",
+      "2609.24967v1"
+    ],
+    "val2_never_trained": true
+  },
+  "v2_question_prompts": {
+    "figure_type": "Classify this figure into exactly one type from: line plot, bar chart, scatter plot, heatmap, pie chart, table, schematic diagram, photograph, map. Answer with the type name only, no other words.",
+    "reading": "What are the key numbers or quantities reported for this figure? Answer in one sentence.",
+    "caption": "Reproduce the caption of this figure as written in the paper."
+  },
+  "figure_type_keywords": {
+    "heatmap": [
+      "heat map",
+      "heatmap"
+    ],
+    "pie chart": [
+      "pie chart",
+      "pie graph"
+    ],
+    "bar chart": [
+      "bar chart",
+      "bar graph",
+      "histogram",
+      "bar plot"
+    ],
+    "scatter plot": [
+      "scatter"
+    ],
+    "line plot": [
+      "line plot",
+      "line chart",
+      "line graph",
+      "learning curve",
+      "curves"
+    ],
+    "table": [
+      " table",
+      "tables"
+    ],
+    "photograph": [
+      "photograph",
+      "photo of",
+      "microscop",
+      "camera capture",
+      "real-world image"
+    ],
+    "map": [
+      "map of",
+      "map showing",
+      "map visualizing",
+      "geographic"
+    ],
+    "schematic diagram": [
+      "diagram",
+      "schematic",
+      "architecture",
+      "pipeline",
+      "framework",
+      "workflow",
+      "flowchart",
+      "overview of",
+      "illustration of"
+    ]
+  },
+  "summary": {
+    "rows_total": 1046,
+    "rows_train": 920,
+    "rows_val_frozen": 94,
+    "rows_val2": 32,
+    "counts": {
+      "train": {
+        "describe": 106,
+        "axes": 29,
+        "figure_type": 33,
+        "reading": 106,
+        "caption": 106,
+        "trend": 4
+      },
+      "val2": {
+        "describe": 10,
+        "axes": 2,
+        "reading": 10,
+        "caption": 10
+      }
+    },
+    "figures_v2_total": 240,
+    "figures_v2_dup_of_seed": 110,
+    "figures_v2_used": 116,
+    "rows_skipped_no_target": 280
+  }
+}
