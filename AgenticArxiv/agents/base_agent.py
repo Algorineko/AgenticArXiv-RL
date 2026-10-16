@@ -1,8 +1,10 @@
 # AgenticArxiv/agents/base_agent.py
 import json
+import re
 import time
 import uuid
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 
 from utils.llm_client import LLMClient
@@ -50,6 +52,11 @@ class BaseAgent(ABC):
     # Observation: 作分隔，故在此统一设置。
     stop_sequences: Tuple[str, ...] = ("Observation:",)
 
+    #: vision_policy 开启时，analyze_figure 的观察串会附 ``[figure:relpath]``
+    #: 标记，下一次策略请求把标记替换成真正的图片消息部件（策略侧多模态，
+    #: README P0）。只在 VLM 策略模型上开启；纯文本模型保持默认关闭。
+    FIGURE_MARKER_RE = re.compile(r"\[figure:([^\]\n]+)\]")
+
     def __init__(
         self,
         llm_client: LLMClient,
@@ -59,6 +66,7 @@ class BaseAgent(ABC):
         llm_extra: Optional[Dict[str, Any]] = None,
         tool_router: Optional[Any] = None,
         router_argument_mode: str = "legacy",
+        vision_policy: bool = False,
     ):
         """
         Args:
@@ -91,6 +99,7 @@ class BaseAgent(ABC):
                 "router_argument_mode must be 'legacy' or 'guided'"
             )
         self.router_argument_mode = argument_mode
+        self.vision_policy = bool(vision_policy) and bool(getattr(llm_client, "is_vlm", False))
         self.session_id = "default"
 
     # ---------- 子类必须实现 ----------
@@ -425,6 +434,10 @@ class BaseAgent(ABC):
                 t1 = time.time()
                 observation = self._execute_with_side_effects(action_dict)
                 tool_ms = int((time.time() - t1) * 1000)
+                if self.vision_policy and action_dict.get("name") == "analyze_figure":
+                    marker = self._figure_marker(action_dict.get("args") or {}, observation)
+                    if marker:
+                        observation = f"{observation}\n{marker}"
                 log.info(f"Observation: {observation[:200]}...")
 
                 step_timings.append(
@@ -511,6 +524,59 @@ class BaseAgent(ABC):
 
     # ---------- LLM 请求参数 ----------
 
+    def _figure_marker(self, args: Dict[str, Any], observation: str) -> str:
+        """从 analyze_figure 的观察里还原图文件路径，产出 [figure:relpath] 标记。
+
+        T5 观察串（JSON）带 ``paper_id``/``figure_no``，与 T4 的输出目录约定
+        （``output/pdf_figures/<paper_id>/fig_<n>.jpg``）拼回仓库相对路径；
+        文件不存在就不加标记（避免客户端在图片部件上报错）。
+        """
+        paper_id = figure_no = None
+        try:
+            result = json.loads(observation)
+            if isinstance(result, dict):
+                paper_id = result.get("paper_id")
+                figure_no = result.get("figure_no")
+        except (ValueError, TypeError):
+            pass
+        paper_id = paper_id or args.get("paper_id") or args.get("ref")
+        figure_no = figure_no or args.get("figure_no")
+        if not paper_id or not figure_no:
+            return ""
+        relpath = (
+            Path("AgenticArxiv") / "output" / "pdf_figures" / str(paper_id) / f"fig_{figure_no}.jpg"
+        )
+        if not relpath.exists():
+            return ""
+        return f"[figure:{relpath.as_posix()}]"
+
+    def _inject_vision_parts(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """把消息文本里的 [figure:...] 标记替换成图片消息部件。"""
+        if not self.vision_policy:
+            return messages
+        out: List[Dict[str, Any]] = []
+        replaced = 0
+        for message in messages:
+            content = message.get("content")
+            if isinstance(content, str) and "[figure:" in content:
+                parts: List[Dict[str, Any]] = []
+                last = 0
+                for match in self.FIGURE_MARKER_RE.finditer(content):
+                    head = content[last:match.start()]
+                    if head.strip():
+                        parts.append({"type": "text", "text": head})
+                    parts.append({"type": "image_path", "path": match.group(1)})
+                    last = match.end()
+                    replaced += 1
+                tail = content[last:]
+                if tail.strip():
+                    parts.append({"type": "text", "text": tail})
+                if replaced:
+                    out.append({**message, "content": parts})
+                    continue
+            out.append(message)
+        return out if replaced else messages
+
     def _request_policy_action(
         self,
         *,
@@ -521,6 +587,7 @@ class BaseAgent(ABC):
     ) -> Tuple[str, Optional[Dict[str, Any]], int, Dict[str, int]]:
         """Generate and parse one policy action, preserving the original API path."""
         messages, extra = self.build_messages(task, tools_description, history_text)
+        messages = self._inject_vision_parts(messages)
         extra = self._merge_llm_extra(extra)
         eff_temperature = float(extra.pop("temperature", 0.1))
         started = time.time()
@@ -555,6 +622,7 @@ class BaseAgent(ABC):
         messages, extra = self.build_routed_messages(
             task, selected_tool, tool_description, history_text
         )
+        messages = self._inject_vision_parts(messages)
         extra = self._merge_llm_extra(extra)
         eff_temperature = float(extra.pop("temperature", 0.1))
         started = time.time()

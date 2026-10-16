@@ -51,6 +51,9 @@ STOPWORDS = frozenset(
 _CONTENT_CUTOFF = 6000
 _ABSTRACT_RE = re.compile(r"\n\s*Abstract\s*\n(.*?)(?=\n\s*(?:1\s+Introduction|1\.?\s+INTRODUCTION|Index Terms|Keywords|CCS Concepts)\b|\Z)",
                           re.IGNORECASE | re.DOTALL)
+# 切句前先护住缩写点，避免 "e.g." / "Fig. 3" 被当成句界
+_ABBREV_SAFE_RE = re.compile(
+    r"\b(e\.g|i\.e|etc|vs|cf|Fig|Figs|Eq|Eqs|Tab|Sec|al)\." , re.IGNORECASE)
 
 
 def content_words(text: str) -> Set[str]:
@@ -68,13 +71,15 @@ def extract_abstract(content: str) -> str:
 
 
 def passes_filters(target: str, source: str, abstract: str, style: str, budget: int,
-                   max_gram_overlap: float, min_grounding: float) -> str | None:
+                   max_gram_overlap: float, min_grounding: float,
+                   budget_tolerance: float = 1.1) -> str | None:
     """Return a rejection reason, or None when the summary passes all hard rules."""
     words = target.split()
-    if not (5 <= len(words) <= budget):
+    if not (5 <= len(words) <= budget * budget_tolerance):
         return f"word_budget({len(words)}>{budget})"
     if style == "tldr":
-        sentences = re.split(r"(?<=[.!?])\s+", target.strip())
+        guarded = _ABBREV_SAFE_RE.sub(r"\1<DOT>", target.strip())
+        sentences = [s for s in re.split(r"(?<=[.!?])\s+", guarded) if s.strip()]
         if len(sentences) > 2:
             return "tldr_not_single_sentence"
     if style == "bullet" and sum(1 for line in target.splitlines() if line.strip().startswith("-")) < 3:
@@ -145,15 +150,30 @@ def main(argv=None) -> None:
     model.config.use_cache = True
 
     def generate(prompt: str, budget: int) -> str:
-        text = processor.apply_chat_template(
-            [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
-            add_generation_prompt=True, tokenize=False,
-        )
+        try:
+            text = processor.apply_chat_template(
+                [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+                add_generation_prompt=True, tokenize=False,
+                enable_thinking=False,  # Qwen3.5 thinking 会淹没短总结的预算与形状
+            )
+        except TypeError:  # 模板不支持该开关
+            text = processor.apply_chat_template(
+                [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+                add_generation_prompt=True, tokenize=False,
+            )
         enc = processor(text=[text], return_tensors="pt").to("cuda")
         max_new = args.max_new_tokens or int(budget * 2.2) + 24
         with torch.no_grad():
             out = model.generate(**enc, max_new_tokens=max_new, do_sample=False)
-        return processor.batch_decode(out[:, enc["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip()
+        decoded = processor.batch_decode(
+            out[:, enc["input_ids"].shape[1]:], skip_special_tokens=True
+        )[0].strip()
+        # 残余思维链剥离（skip_special_tokens 只去标签不去正文）
+        if "</think>" in decoded:
+            decoded = decoded.split("</think>", 1)[1].strip()
+        elif decoded.startswith("<think>"):
+            return ""
+        return decoded
 
     rows: List[Dict[str, Any]] = []
     rejections: Dict[str, int] = {}
@@ -207,8 +227,12 @@ def main(argv=None) -> None:
                     "split": split,
                     "source": "v2_summary",
                 })
-        if index % 10 == 0 or index == len(paper_ids):
-            print(f"  [{index}/{len(paper_ids)}] kept {kept}/{total}")
+        if index % 5 == 0 or index == len(paper_ids):
+            print(f"  [{index}/{len(paper_ids)}] kept {kept}/{total}", flush=True)
+        # 逐篇落盘：长跑中断后 resume 粒度 = 单篇（9 个目标）
+        with output_path.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
