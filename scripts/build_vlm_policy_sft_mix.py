@@ -40,6 +40,17 @@ def load_jsonl(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
+def is_clipart(relpath: str, image_root: Path, min_side: int) -> bool:
+    """T4 会把 PDF 里的装饰性 clipart（UI 图标等）当图抽出来，caption 却
+    属于另一张真图——这种对教模型学会「对着图标背 caption」。小图过滤。"""
+    from PIL import Image
+
+    try:
+        return max(Image.open(image_root / relpath).size) < min_side
+    except Exception:  # noqa: BLE001 - 读不出的图按垃圾处理
+        return True
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -57,6 +68,8 @@ def main() -> None:
     parser.add_argument("--summary-sft", default="data/vlm/paper_summary_sft.jsonl")
     parser.add_argument("--output", default="data/vlm/vlm_policy_sft_v1.jsonl")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--min-image-side", type=int, default=0,
+                        help=">0 时剔除 max 边小于该值的图文行（滤 clipart）")
     parser.add_argument("--max-tool", type=int, default=0, help="消融：限制工具轨迹条数（0=全量）")
     parser.add_argument("--max-figureqa", type=int, default=0)
     parser.add_argument("--max-summary", type=int, default=0)
@@ -106,6 +119,10 @@ def main() -> None:
         v2_rows = v2_rows + load_jsonl(backfill_path)
     for row in v2_rows:
         if row.get("split") != "train":
+            continue
+        if args.min_image_side and is_clipart(row["image_relpath"], REPO_ROOT / "AgenticArxiv", args.min_image_side):
+            counts.setdefault("figureqa_v2", {}).setdefault("dropped_clipart", 0)
+            counts["figureqa_v2"]["dropped_clipart"] += 1
             continue
         messages = [
             {"role": "user", "content": [
