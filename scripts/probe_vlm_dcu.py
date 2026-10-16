@@ -35,6 +35,19 @@ from PIL import Image  # noqa: E402
 from tools.figure_analysis_tool import VLM_MAX_IMAGE_SIDE  # noqa: E402
 
 
+def display_path(path_text: str) -> str:
+    """公开报告用：仓库内相对化，仓库外用 ~ 缩写，绝不写个人绝对路径。"""
+    from pathlib import Path
+
+    p = Path(path_text).expanduser()
+    try:
+        return str(p.resolve().relative_to(Path.cwd()))
+    except ValueError:
+        s = str(p)
+        home = str(Path.home())
+        return s.replace(home, "~", 1) if s.startswith(home) else s
+
+
 def cgroup_used_gib() -> float | None:
     import os
 
@@ -126,7 +139,7 @@ def main(argv=None) -> None:
     import torch
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
-    report: dict = {"model": args.model, "device_map": args.device_map}
+    report: dict = {"model": display_path(args.model), "device_map": args.device_map}
     report["versions"] = {
         "torch": torch.__version__,
         "transformers": version("transformers"),

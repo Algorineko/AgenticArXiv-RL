@@ -78,11 +78,15 @@ def main() -> None:
                     path = out_dir / f"fig_{figure_no}.{extension}"
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(payload["image"])
+                    try:
+                        recorded = path.resolve().relative_to(REPO_ROOT).as_posix()
+                    except ValueError:
+                        recorded = str(path)
                     figures.append(
                         {
                             "figure_no": figure_no,
                             "page": page_no,
-                            "path": str(path),
+                            "path": recorded,
                             "width": width,
                             "height": height,
                             "caption": t4._caption_for(document[page_no - 1], bbox),
@@ -102,6 +106,8 @@ def main() -> None:
         "thresholds": {"max_figures": args.max_figures, "min_pixels": args.min_pixels},
         "pdf_dir": pdf_dir.as_posix(),
         "out_root": out_root.as_posix(),
+        # 公开仓库纪律：只记录仓库相对路径（builder 以 image-root 为基准解析）
+        "recorded_relative_to": ".",
         "papers": papers,
     }
     output_path.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")

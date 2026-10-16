@@ -113,11 +113,15 @@ def extract_paper(pdf_path: Path, out_dir: Path, dpi: int = 150) -> List[Dict[st
                 path = out_dir / f"vec_fig_{figure_no}.jpg"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(jpeg)
+                try:
+                    recorded = path.resolve().relative_to(REPO_ROOT).as_posix()
+                except ValueError:
+                    recorded = str(path)
                 figures.append(
                     {
                         "figure_no": figure_no,
                         "page": page_no,
-                        "path": str(path),
+                        "path": recorded,
                         "width": pix.width,
                         "height": pix.height,
                         "caption": cap[4],
