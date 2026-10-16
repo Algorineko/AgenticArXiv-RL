@@ -245,6 +245,16 @@ class TransformersLLMClient:
         if device != "auto":
             self.model.to(device)
         self.model.eval()
+        try:  # 权重 page cache 计入宿主 cgroup 配额（本机 64GiB 墙），读完立逐
+            import sys as _sys
+            from pathlib import Path as _Path
+
+            _sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+            from rl.save_guard import evict_model_dir_page_cache
+
+            evict_model_dir_page_cache(model)
+        except Exception:  # noqa: BLE001 - 逐出失败只降级
+            pass
 
     def start_generation_stream(self, stream_key: str) -> None:
         """Start an order-independent deterministic RNG stream for one rollout.
