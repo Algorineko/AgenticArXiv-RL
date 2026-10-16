@@ -245,6 +245,13 @@ class TransformersLLMClient:
         if device != "auto":
             self.model.to(device)
         self.model.eval()
+        # 评测挂 LoRA 而不合并权重（27B 级 merge 会在宿主重组权重，必爆 cgroup）
+        adapter_path = os.getenv("VLM_ADAPTER_PATH", "").strip()
+        if adapter_path:
+            from peft import PeftModel
+
+            self.model = PeftModel.from_pretrained(self.model, adapter_path)
+            self.model.eval()
         try:  # 权重 page cache 计入宿主 cgroup 配额（本机 64GiB 墙），读完立逐
             import sys as _sys
             from pathlib import Path as _Path
