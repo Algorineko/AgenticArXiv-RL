@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "kind": "paper_summary_sft",
+  "model": "~/data/models/Qwen3.8-27B",
+  "teacher": "base-self-distillation-greedy",
+  "snapshot": "data/mock_arxiv_snapshot.json",
+  "snapshot_sha256": "dcde74d7f86da03d544b6a7e27fee3e07df078be85f1b1c39d8f47e81c34aa3f",
+  "output": "data/vlm/paper_summary_sft.jsonl",
+  "output_sha256": "957427c8c8b243d97b3a0e66632a87b42c356853d9a2693dc1c0655420ea15be",
+  "filters": {
+    "max_gram_overlap": 0.6,
+    "min_grounding": 0.6,
+    "style_rules": {
+      "tldr": "The summary must be a single sentence capturing the paper's core contribution.",
+      "bullet": "The summary must be 3-5 bullet points, each starting with '- '.",
+      "structured": "The summary must have 3-4 short sections, each starting with a '## ' header."
+    },
+    "budgets": [
+      60,
+      120,
+      250
+    ]
+  },
+  "summary": {
+    "papers": 95,
+    "generated": 855,
+    "kept": 474,
+    "kept_ratio": 0.554,
+    "rejections": {
+      "hallucinatio": 131,
+      "tldr_not_sin": 2,
+      "copying063": 1,
+      "word_budget8": 27,
+      "word_budget1": 80,
+      "word_budget2": 35,
+      "word_budget7": 54,
+      "word_budget3": 28,
+      "word_budget6": 12,
+      "word_budget9": 11
+    },
+    "rows_val2": 66
+  }
+}
