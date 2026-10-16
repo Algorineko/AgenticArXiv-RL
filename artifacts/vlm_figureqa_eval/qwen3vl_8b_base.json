@@ -1,0 +1,976 @@
+{
+  "tag": "qwen3vl_8b_base",
+  "model": "~/data/models/Qwen3-VL-8B-Instruct",
+  "data": "data/vlm/figureqa_seed.jsonl",
+  "aggregate": {
+    "n": 94,
+    "rouge1_f": 0.0939,
+    "rougeL_f": 0.0724,
+    "empty_or_error": 2,
+    "per_question": {
+      "axes": {
+        "n": 24,
+        "rouge1_f": 0.0609,
+        "rougeL_f": 0.05,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 26.8
+      },
+      "describe": {
+        "n": 65,
+        "rouge1_f": 0.1032,
+        "rougeL_f": 0.0785,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 48.1
+      },
+      "trend": {
+        "n": 5,
+        "rouge1_f": 0.132,
+        "rougeL_f": 0.1005,
+        "empty_or_error": 0,
+        "avg_answer_tokens": 28.0
+      }
+    }
+  },
+  "results": [
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This icon depicts a stack of documents or papers, commonly used to represent files, reports, or written content in digital interfaces. The layered design suggests multiple pages or items grouped together.",
+      "rouge1_f": 0.0816,
+      "rougeL_f": 0.0816,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This icon depicts a stack of papers or documents, with the top sheet partially torn or ripped along a jagged edge, suggesting a torn receipt, invoice, or document. The design implies a theme of financial records, transactions, or administrative paperwork that has been damaged or separated.",
+      "rouge1_f": 0.0312,
+      "rougeL_f": 0.0312,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This icon depicts a stack of documents or papers, commonly used to represent files, reports, or written content. The layered design suggests multiple pages or items grouped together.",
+      "rouge1_f": 0.087,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This icon depicts a stack of documents or papers, commonly used to represent files, reports, or records. The layered design suggests multiple pages or items grouped together, often symbolizing paperwork, data, or information storage.",
+      "rouge1_f": 0.0769,
+      "rougeL_f": 0.0769,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This is a simple, bold red \"X\" symbol on a plain black background. It universally represents concepts like cancellation, deletion, incorrectness, or a \"no\" response.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "The image is completely blank, showing only a solid black background with no visible figures, text, or any other elements.",
+      "rouge1_f": 0.0526,
+      "rougeL_f": 0.0526,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This is a simple, bold red \"X\" symbol on a plain black background. It is a universally recognized icon commonly used to indicate cancellation, deletion, error, or \"no\" in user interfaces and signage.",
+      "rouge1_f": 0.0784,
+      "rougeL_f": 0.0784,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This icon depicts a stack of documents or papers, commonly used to represent files, reports, or written content. The layered design suggests multiple pages or items grouped together.",
+      "rouge1_f": 0.087,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This is a stylized, abstract logo featuring a central teal circle surrounded by concentric green and orange curved bands, evoking a sense of motion or growth. The design is minimalist and modern, often associated with technology or innovation.",
+      "rouge1_f": 0.1304,
+      "rougeL_f": 0.0652,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses no quantities or axes—it is an abstract, pixelated color composition without a coordinate system or measurable variables.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The image is a solid, uniform field of reddish-orange color with no discernible shapes, patterns, or objects. It appears to be a plain background or a single-color fill.",
+      "rouge1_f": 0.0952,
+      "rougeL_f": 0.0476,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses no quantities or axes, as it is a solid, uniform red color with no graphical representation of data.",
+      "rouge1_f": 0.0588,
+      "rougeL_f": 0.0588,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This is a pixelated, abstract graphic featuring concentric, curved bands of color—green, orange, and red—on a solid red background, resembling a stylized, partial circular or oval shape. The design has a retro, digital aesthetic, possibly representing a simplified logo or icon.",
+      "rouge1_f": 0.1031,
+      "rougeL_f": 0.0619,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses no quantities or axes—it is an abstract, pixelated color composition without a coordinate system or data representation.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This is a simple, stylized graphic of a donut, featuring a bright orange outer ring and a solid green center, set against a red background. The pixelated, low-resolution style gives it a retro or digital art appearance.",
+      "rouge1_f": 0.1087,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses no quantities or axes—it is a simple, abstract pixelated graphic with no coordinate system or numerical representation.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This is a simple, abstract graphic composed of two curved bands — a warm orange-yellow arc above a cool teal-green arc — set against a solid red background. The design suggests a stylized wave, horizon, or abstract landscape, with a clean, modern aesthetic.",
+      "rouge1_f": 0.1443,
+      "rougeL_f": 0.1031,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses no quantities or axes—it is a simple abstract graphic with color gradients.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This abstract graphic displays a smooth, curved transition between three distinct colors: a warm red-orange in the upper left, a vibrant green in the lower right, and a teal-green filling the bottom portion. The flowing, diagonal lines suggest movement or a gradient, creating a modern, minimalist design often used for branding or decorative purposes.",
+      "rouge1_f": 0.1091,
+      "rougeL_f": 0.0545,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses no quantities or axes—it is a simple abstract color gradient with no coordinate system or data representation.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This is a pixelated, stylized graphic of a location pin or map marker, featuring a layered design with a teal center, a green middle ring, and an orange outer border, all set against a solid red background. It resembles a simplified, digital representation of a GPS or map location indicator.",
+      "rouge1_f": 0.1154,
+      "rougeL_f": 0.0962,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses two axes: one for the horizontal position (x-axis) and one for the vertical position (y-axis).",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This is a stylized, abstract logo featuring a large teal oval set against a background of curved bands in orange and red, evoking a sense of motion or a dynamic, modern design. The clean lines and bold colors suggest it could represent a brand or organization focused on energy, technology, or creativity.",
+      "rouge1_f": 0.0943,
+      "rougeL_f": 0.0566,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "This figure uses two axes: one for the quantity of interest (e.g., temperature or pressure) and another for the spatial or temporal dimension, with color intensity representing the magnitude of the quantity at each point.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "This figure illustrates a comparison between a premise (P) and a hypothesis (H) using two matrices: one for lexical similarities (L-features) and one for entity and attribute similarities (E-features). The L-feature matrix highlights shared word-level semantics (e.g., \"woman,\" \"dress,\" \"instrument\"), while the E-feature matrix focuses on semantic roles and actions, showing that the hypothesis omits key attributes like \"red\" and \"putting away,\" which are",
+      "rouge1_f": 0.1379,
+      "rougeL_f": 0.092,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "The figure uses two axes: lexical similarities (L-features) and entities & attributes similarities (E-features), each represented by a matrix comparing entities and their properties.",
+      "rouge1_f": 0.0465,
+      "rougeL_f": 0.0465,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file './AgenticArxiv/output/pdf_figures/2609.24932v1/fig_2.png'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file './AgenticArxiv/output/pdf_figures/2609.24932v1/fig_2.png'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK corpus. The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "This bar chart compares the performance of two metrics—Accuracy (light blue) and Macro F1 (dark blue)—across five different configurations (L10, E8, E1, E6, L9). Accuracy consistently outperforms Macro F1 across all configurations, with the highest accuracy (0.75 for L10) and the lowest Macro F1 (0.47 for E6 and L9).",
+      "rouge1_f": 0.2564,
+      "rougeL_f": 0.1795,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "This figure uses a vertical y-axis labeled \"Performance\" (ranging from 0.0 to 1.0) and a horizontal x-axis labeled with categories L10, E8, E1, E6, and L9.",
+      "rouge1_f": 0.0455,
+      "rougeL_f": 0.0455,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK-CE corpus. A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "This bar chart compares the performance of two metrics—Accuracy (light blue) and Macro F1 (dark blue)—across five different configurations (L14, L17, E8, L13, L10). In all cases, Accuracy is slightly higher than Macro F1, with the largest gap observed in L10 (0.89 vs. 0.88). Performance values are very close across all configurations, ranging from 0",
+      "rouge1_f": 0.2588,
+      "rougeL_f": 0.1412,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "This figure uses a vertical y-axis labeled \"Performance\" (ranging from 0.0 to 1.0) and a horizontal x-axis labeled with categories L14, L17, E8, L13, and L10.",
+      "rouge1_f": 0.0909,
+      "rougeL_f": 0.0909,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This bar chart displays the values of various entities (labeled E1 through E7, L13, L16, etc.) on a horizontal axis, with positive values shown in green and a single negative value (E3) shown in red. The bars are arranged vertically, with longer bars indicating larger magnitudes, and the scale ranges from -0.2 to 1.2. The values generally increase in magnitude from top to bottom, with E7 having",
+      "rouge1_f": 0.0619,
+      "rougeL_f": 0.0412,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This figure uses a vertical bar chart with categories (E1, E2, ..., E7, L15, etc.) on the y-axis and numerical quantities ranging from -0.2 to 1.2 on the x-axis.",
+      "rouge1_f": 0.0851,
+      "rougeL_f": 0.0426,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The figure shows a positive trend across most categories, with E7 having the highest value and E3 being the only negative value.",
+      "rouge1_f": 0.1,
+      "rougeL_f": 0.1,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This is a horizontal bar chart comparing values for different categories (labeled E1, E2, L11, etc.) on the y-axis, with their magnitudes shown on the x-axis. Green bars represent positive values, while red bars represent negative values, indicating a comparison of performance, scores, or some metric across these categories, with L13 having the highest positive value and E7 having the lowest (most negative).",
+      "rouge1_f": 0.086,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This figure uses a horizontal bar chart with categories (E1, E2, L11, etc.) on the y-axis and numerical values on the x-axis, where green bars represent positive quantities and red bars represent negative quantities.",
+      "rouge1_f": 0.0784,
+      "rougeL_f": 0.0392,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The figure shows that L13 has the highest positive value, while E7 has the lowest negative value, indicating a strong contrast in magnitude and direction across the categories.",
+      "rouge1_f": 0.1739,
+      "rougeL_f": 0.1304,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This bar chart displays values for various labeled categories (E1, E2, E3, etc.) along the y-axis, with their magnitudes shown on the x-axis. Positive values are represented by green bars extending to the right, while negative values are shown as red bars extending to the left. The chart highlights that L16 has the highest positive value (around 21), followed by L10 (around 9.5), while E4 has the",
+      "rouge1_f": 0.0408,
+      "rougeL_f": 0.0408,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This figure uses a horizontal bar chart with categories (E1, E3, L14, etc.) on the y-axis and numerical values on the x-axis, where green bars represent positive quantities and red bars represent negative quantities.",
+      "rouge1_f": 0.0784,
+      "rougeL_f": 0.0392,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The figure shows that L16 has the highest positive value, while E4 has the lowest negative value, indicating a strong contrast in magnitude and direction across the categories.",
+      "rouge1_f": 0.1739,
+      "rougeL_f": 0.1304,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This is a horizontal bar chart displaying values for various labeled categories (E1, E2, E3, etc.) along the y-axis, with their corresponding numerical values shown along the x-axis ranging from -2 to 10. Red bars indicate negative values, while green bars indicate positive values, with the length of each bar representing the magnitude of the value.",
+      "rouge1_f": 0.1163,
+      "rougeL_f": 0.0698,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "This figure uses a horizontal bar chart with categories (E1, E6, etc.) on the vertical axis and numerical values on the horizontal axis, where red bars indicate negative values and green bars indicate positive values.",
+      "rouge1_f": 0.08,
+      "rougeL_f": 0.04,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The figure shows that most categories (E1–E7, L10–L17) have negative values, while a few (L14–L16, E4–E5) have positive values, indicating a general downward trend with some upward exceptions.",
+      "rouge1_f": 0.12,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "This figure displays four spectrograms (or MFCC coefficient plots) for different tones (Tone 1 to Tone 4), each showing how the acoustic features evolve over time frames. The visual patterns reveal distinct temporal dynamics for each tone, with variations in the distribution and intensity of the coefficients, which can be used to distinguish between them.",
+      "rouge1_f": 0.2041,
+      "rougeL_f": 0.1837,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "This figure displays four spectrograms (labeled Tone 1 to Tone 4) showing the Mel-frequency cepstral coefficients (MFCCs) over time, with each plot illustrating how the spectral characteristics of a tone evolve across 30 time frames. The color intensity represents the magnitude of MFCC coefficients, revealing distinct patterns and variations in the tonal structure across the four tones.",
+      "rouge1_f": 0.2178,
+      "rougeL_f": 0.1386,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "This figure displays four spectrograms (labeled Tone 1 to Tone 4) showing the Mel-frequency cepstral coefficients (MFCCs) over time for different audio tones. Each plot visualizes how the MFCC values change across 30 time frames, with Tone 1 and Tone 2 showing relatively stable patterns, while Tone 3 and Tone 4 exhibit more complex, wavy variations, indicating different timbral or pitch characteristics.",
+      "rouge1_f": 0.2453,
+      "rougeL_f": 0.1509,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "This figure displays four spectrograms (labeled Tone 1 through Tone 4) showing the Mel-frequency cepstral coefficients (MFCCs) over time for different audio tones. Each plot visualizes how the MFCC features evolve across 50 time frames, with color intensity representing coefficient magnitude, revealing distinct patterns for each tone.",
+      "rouge1_f": 0.1758,
+      "rougeL_f": 0.1319,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "This figure shows a simple, stylized wave or zigzag line rendered in light blue against a black background. It resembles a sine wave or a decorative wavy pattern, often used to represent sound, vibration, or a generic waveform.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "This figure shows a simple, stylized blue wave or sine-like curve against a black background, likely representing a wave pattern, signal, or oscillation.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "This figure shows a simple, stylized green waveform or zigzag line against a black background, resembling a sine wave or a decorative squiggle. It could represent sound waves, a signal, or simply be an abstract graphic element.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "This figure shows a simple, stylized wave or sine-like curve rendered in light blue against a black background. It consists of four repeating, smooth, undulating segments, resembling a simplified representation of a wave pattern or a decorative wavy line.",
+      "rouge1_f": 0.0426,
+      "rougeL_f": 0.0426,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24656v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Flow diagram of a fake base station attack vector implementation",
+      "answer": "This image displays a simple, bold red \"X\" symbol set against a plain black background. It is a universally recognized mark indicating negation, cancellation, or \"no,\" often used to signify an error, prohibition, or incorrect choice.",
+      "rouge1_f": 0.0435,
+      "rougeL_f": 0.0435,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "This grouped bar chart compares the Average Precision (AP) and Average Recall (AR) scores for object detection across different movement, body count, and proximity conditions. It shows that both metrics generally improve with more bodies or closer proximity, with the highest scores observed in the \"Close\" proximity and \"2 Bodies\" conditions, while \"Camera Mov.\" and \"Far\" proximity show the lowest performance.",
+      "rouge1_f": 0.1316,
+      "rougeL_f": 0.0789,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "This figure illustrates the trade-off between precision and recall (both Pareto frontiers) as a function of average processing time per clip, showing that higher accuracy (IoU=0.5) is achievable with longer processing times, while precision plateaus at around 95% after about 20 seconds.",
+      "rouge1_f": 0.0667,
+      "rougeL_f": 0.0333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Pixel-level redaction quality: standard mask IoU and person coverage (|𝑀pred ∩𝑀gt|/|𝑀gt|).",
+      "answer": "This grouped bar chart compares two metrics—Mask IoU (light green) and Person Coverage (orange striped)—across different scenarios related to human movement and proximity. It shows that Person Coverage consistently remains high (around 0.9–1.0) across all conditions, while Mask IoU varies more, generally increasing with more bodies or greater proximity, but remaining below 0.7 in most cases.",
+      "rouge1_f": 0.1333,
+      "rougeL_f": 0.1333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Tier 1 energy per 10-s clip on RPi 5 at 𝑛= 5.",
+      "answer": "This chart compares energy consumption (in Joules) under four conditions — Baseline, Privacy+Conditioning, Privacy Energy, and Overhead (%) — across various user proximity scenarios (from “Close” to “No Person”). It shows that “Privacy+Conditioning” generally consumes more energy than the baseline, while “Privacy Energy” is lower, and “Overhead (%)” (plotted on a secondary y-axis) increases significantly as user proximity decreases, especially near “No",
+      "rouge1_f": 0.0548,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Additional recovery and conditioning payload per 10-s clip.",
+      "answer": "This chart compares storage size per 10s clip (in MB) across different scenarios (e.g., 1 Body, 2 Bodies, Close, Far, etc.) for three tiers (Baseline, Tier 1, Tier 2), while also showing the total storage overhead percentage on the right y-axis. It illustrates how storage requirements and overhead vary with different configurations, with Tier 1 and Tier 2 generally requiring less storage than the Baseline, and overhead increasing",
+      "rouge1_f": 0.0759,
+      "rougeL_f": 0.0506,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.99.",
+      "answer": "This figure displays three time-series plots showing how individual firm quantity, price, and revenue evolve over 10,000 episodes in a duopoly game with K_state=2 and We=1, comparing the performance of two firms using DQN (Deep Q-Network) agents against Nash equilibrium and collusive benchmarks. The DQN agents' strategies lead to significantly higher quantities and lower prices than the benchmarks, resulting in lower revenue for each firm, illustrating the competitive dynamics",
+      "rouge1_f": 0.1739,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "This figure displays three related plots showing how equilibrium quantity, price, and revenue in a Bertrand competition with congestion change as the number of past rounds (K_state) in a state increases, under three different market structures: DQN firms (blue), Nash benchmark (purple), and Collusive benchmark (red). The results indicate that as K_state increases, quantity and revenue tend to decrease for DQN firms while price increases, with the collusive benchmark consistently yielding the highest revenue and",
+      "rouge1_f": 0.1277,
+      "rougeL_f": 0.0851,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "The figure uses three subplots showing equilibrium quantity, price, and revenue on the y-axis, with the number of past rounds in state (K_state) on the x-axis.",
+      "rouge1_f": 0.1304,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "This figure displays three time-series plots showing how individual firm quantity, price, and revenue evolve over 30,000 episodes in a duopoly game, comparing the performance of two firms using DQN (Deep Q-Network) reinforcement learning against Nash and collusive benchmarks. The DQN agents initially exhibit high output and low prices, leading to high revenue, but quickly converge to stable, near-benchmark levels, indicating successful learning and adaptation to the competitive environment.",
+      "rouge1_f": 0.1031,
+      "rougeL_f": 0.0619,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "The figure uses three subplots showing individual firm quantity, price, and revenue over episodes, with the x-axis representing episode number and y-axis representing the respective metric.",
+      "rouge1_f": 0.1154,
+      "rougeL_f": 0.1154,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Impact of The Number of Agents on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 3, K = 1, δ = 0.99.",
+      "answer": "This figure displays three bar charts tracking how individual firm quantity, price, and revenue evolve over episodes in a dynamic oligopoly model, comparing outcomes under different strategies (DQN, Nash, and Collusive benchmarks) for three firms. The charts show that DQN strategies lead to higher quantities and revenues compared to Nash and collusive benchmarks, while prices are generally lower under DQN, indicating more competitive behavior.",
+      "rouge1_f": 0.1124,
+      "rougeL_f": 0.0449,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This is a stylized 3D architectural model of a modern urban district, featuring a mix of high-rise and mid-rise buildings, a central green park, and a network of roads with small vehicles and pedestrians, all presented in a minimalist, isometric view.",
+      "rouge1_f": 0.1935,
+      "rougeL_f": 0.1613,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This figure shows a black silhouette of a quadcopter drone flying above a stylized green tree, with a partial view of a clock face in the background, suggesting a theme of time or surveillance.",
+      "rouge1_f": 0.1132,
+      "rougeL_f": 0.1132,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This stylized graphic depicts a black drone flying over a purple car on a road, with dashed lines suggesting a path or trajectory. The image likely represents a drone being used for surveillance, delivery, or monitoring in an urban or roadside setting.",
+      "rouge1_f": 0.0656,
+      "rougeL_f": 0.0656,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This figure illustrates a drone flying over a stylized cityscape, with a person standing on a green area, possibly representing a park or open space. The image suggests themes of urban surveillance, aerial delivery, or drone-based services in a modern city environment.",
+      "rouge1_f": 0.0968,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This is a simple black silhouette of a quadcopter drone, shown flying over a stylized representation of roads or highways, suggesting aerial surveillance, delivery, or mapping in an urban or suburban environment.",
+      "rouge1_f": 0.1176,
+      "rougeL_f": 0.1176,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This figure shows a stylized black silhouette of a quadcopter drone, depicted with four rotors and landing gear, positioned next to a partial view of a box labeled \"UA,\" likely representing a delivery or logistics context.",
+      "rouge1_f": 0.1455,
+      "rougeL_f": 0.1091,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This stylized, isometric illustration depicts a futuristic cityscape with drones flying overhead, people walking on roads, and vehicles like a yellow car and a green truck. The scene is set against a backdrop of clouds and simplified buildings, suggesting a modern or sci-fi urban environment with integrated aerial technology.",
+      "rouge1_f": 0.1739,
+      "rougeL_f": 0.1449,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "This is a stylized, black silhouette of a quadcopter drone, shown against a split gray and light gray background with partial gear-like shapes at the top. The design is minimalist and symbolic, likely representing technology, automation, or aerial surveillance.",
+      "rouge1_f": 0.1695,
+      "rougeL_f": 0.1695,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This is a stylized, bright orange model of a modern fighter jet, likely a conceptual or toy design, shown in a three-quarter view against a plain white background. Its sharp, angular lines and transparent-like finish give it a futuristic, almost crystalline appearance, emphasizing its aerodynamic form.",
+      "rouge1_f": 0.0702,
+      "rougeL_f": 0.0702,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This is a stylized, translucent turquoise model of a modern stealth fighter jet, likely inspired by aircraft like the F-22 Raptor or F-35 Lightning II, shown from a three-quarter rear view against a plain white background. The design emphasizes sharp, angular lines and a faceted, almost crystalline appearance, with white outlines highlighting its structural details and twin engine nozzles at the tail.",
+      "rouge1_f": 0.0811,
+      "rougeL_f": 0.0811,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This figure presents a list of key kinematic and geometric parameters used to describe the state of an \"Enemy\" target in a tracking or engagement context, including relative distance, azimuth, velocity difference, closing speed, aspect angle, altitude difference, and heading deviation.",
+      "rouge1_f": 0.12,
+      "rougeL_f": 0.12,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This figure presents a list of variables and their definitions related to an \"Ally\" entity, likely in a tracking, combat, or simulation context. It includes parameters such as slant distance, relative azimuth, speed difference, heading deviation, closing speed, and the number of ally missiles.",
+      "rouge1_f": 0.1132,
+      "rougeL_f": 0.0755,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This figure presents a list of state variables for an agent or vehicle, labeled \"Self,\" including its 3D position (x, y, z), velocity (v), orientation angles (pitch θ, roll φ, yaw ψ), missile status (remaining missiles n_m, detection flag δ_det, last missile status σ_m), which are typical in robotics or autonomous systems.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This is a sleek, black, stylized illustration of a modern air-to-air missile, likely a high-speed, long-range weapon, shown against a plain white background. Its design features a pointed nose cone, swept-back wings, and a tail fin assembly, suggesting advanced aerodynamics for high-performance flight.",
+      "rouge1_f": 0.069,
+      "rougeL_f": 0.069,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This is a stylized, blue 3D model of a modern stealth fighter jet, likely representing an aircraft like the Su-57 or F-22 Raptor, shown in a dynamic, angled pose against a plain white background. The model features sharp, angular lines characteristic of stealth design, with visible panel lines and twin engine nozzles, emphasizing its aerodynamic and tactical form.",
+      "rouge1_f": 0.1159,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "This is a stylized, solid blue silhouette of a fighter jet, shown in profile against a black background. The design is simplified and abstract, emphasizing the aircraft's aerodynamic shape with sharp angles and a pointed nose, likely intended as an icon or graphic symbol.",
+      "rouge1_f": 0.1111,
+      "rougeL_f": 0.1111,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "shows an overview of our rule-guided LLM solution for OUD CP using structured EHR data and clinical narratives from UF Health. Physician chart-reviewed labels are used as the gold standard.",
+      "answer": "This figure illustrates a machine learning pipeline for predicting Opioid Use Disorder (OUD) risk in patients. It begins with clinical narratives and an evidence rubric, which are processed by GPT-oss-120b to extract evidence judgments, then fed into a logistic regression model to generate an OUD probability and a performance score (F1).",
+      "rouge1_f": 0.1647,
+      "rougeL_f": 0.1176,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The proposed LLM-based CP is composed of three components: an LLM engine (gpt-oss-120b15) that extracts evidence and determines the met/not-met binary judgments with supporting text evidence, and then a logistic regression model that uses the LLM- extracted indicators to generate patient-level OUD probabilities.",
+      "answer": "The figure uses a vertical axis for logistic regression probability (0–1) and a horizontal axis for performance score (F1).",
+      "rouge1_f": 0.1739,
+      "rougeL_f": 0.1159,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "trend",
+      "target": "We compared our LLM-based CP with a diagnosis code–based phenotype, a machine learning-based CP using structured EHR features, NLP-derived features, and their combination, and a zero- shot LLM without rule guidance.",
+      "answer": "This figure conveys a trend of using AI-driven evidence extraction from clinical narratives to predict patient-level Opioid Use Disorder risk via logistic regression, with performance refined through OPRO.",
+      "rouge1_f": 0.0923,
+      "rougeL_f": 0.0615,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Workflow comparison: standalone LLM vs. RAG.",
+      "answer": "This figure compares how a Large Language Model (LLM) alone versus a Retrieval-Augmented Generation (RAG) system responds to a user question about Wimbledon winners. The LLM-only approach hallucinates incorrect results, while the RAG system retrieves accurate, factually correct information from a text database.",
+      "rouge1_f": 0.0784,
+      "rougeL_f": 0.0784,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Workflow comparison: standalone LLM vs.",
+      "answer": "The figure uses no explicit quantities or axes; it is a conceptual diagram comparing two systems (LLM Only vs. RAG) using qualitative outcomes (hallucinated vs. factually correct) to illustrate their performance.",
+      "rouge1_f": 0.1111,
+      "rougeL_f": 0.1111,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "This bar chart compares the inference time (in seconds) for different LLM models (L3.2-1B, L3.2-3B, L3-8B) across various QA datasets (HotpotQA, NaturalQ, SQUAD, TriviaQA, WebQA) and retrieval settings (topk=0 to topk=10), showing how time varies by model size, dataset, and retrieval strategy. The chart reveals that larger",
+      "rouge1_f": 0.0952,
+      "rougeL_f": 0.0635,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "This figure uses time (in seconds) on the y-axis and model stages (Embed, Rerank, TTFT, Decode) along with different models (L3.2-1B, L3-8B, L3.2-3B) and datasets (HotpotQA, NaturalQ, SQUAD, TriviaQA, WebQA) on the x-axis, with top-k values as subplot titles.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "This figure compares the computational time (in seconds) across four different values of 'topk' (1, 3, 5, 10) for various stages of a model (TTFT, FAISS, Embed, Compress, Decode, and L3-8B) as a function of the parameter 'r'. It shows that decoding time (dark blue) and TTFT time (green) are the most significant contributors to overall latency, with decoding time",
+      "rouge1_f": 0.08,
+      "rougeL_f": 0.0533,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "This figure uses \"Time (s)\" on the vertical axis and \"r\" on the horizontal axis, with subplots varying by \"topk\" value and a legend indicating different \"Stage\" components.",
+      "rouge1_f": 0.1429,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "This figure compares the time (in seconds) required for different stages of a search process across four models (Llmng2, SC, L3.2-1B, L3.2-3B) and varying top-k values (1, 3, 5, 10). It shows that as top-k increases, overall search time grows, with the \"Compress\" stage dominating the runtime for larger models like L3.2-3B",
+      "rouge1_f": 0.087,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "This figure uses time in seconds (y-axis) and stage or model (x-axis) to show the time taken by different stages and models for various top-k values.",
+      "rouge1_f": 0.0526,
+      "rougeL_f": 0.0526,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Iterative Pipeline Analysis.",
+      "answer": "This figure displays the time breakdown for two iterations (iter 0 and iter 1) of the hotpotqa task under four different top-k settings (1, 3, 5, 10), showing that as top-k increases, the overall time increases significantly due to longer decoding times, while embedding and FAISS times remain relatively constant.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "This figure compares retrieval performance (speed and recall) across different index types (IVF1000 and IVF300 with various quantization formats) and hardware configurations (CPU, 1 GPU, 2 GPUs) under two batch sizes (1 and 12). It shows that larger batch sizes significantly improve retrieval speed, especially on GPU configurations, while recall generally decreases with larger batch sizes.",
+      "rouge1_f": 0.1493,
+      "rougeL_f": 0.0896,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "The figure uses “Index type” as the vertical axis and “Retrieval time (s)” as the horizontal axis, with two separate plots for batch size=1 and batch size=12.",
+      "rouge1_f": 0.1,
+      "rougeL_f": 0.1,
+      "error": null
+    }
+  ]
+}
