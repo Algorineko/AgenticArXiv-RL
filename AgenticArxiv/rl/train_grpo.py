@@ -186,7 +186,49 @@ def _load_policy(
 
     local = Path(model_path)
     is_adapter = local.is_dir() and (local / "adapter_config.json").exists()
+    arch_model = (
+        _adapter_base_model(local, base_model) if is_adapter else (
+            str(Path(base_model).resolve()) if base_model and Path(base_model).exists()
+            else base_model or model_path
+        )
+    )
+    from utils.llm_client import _is_vlm_model_path
+
+    is_vlm = _is_vlm_model_path(str(arch_model))
+    if is_vlm and qlora:
+        print("⚠️ VLM 策略在 DCU 上没有可用的 bitsandbytes（das 构建），改走 bf16 LoRA")
+        qlora = False
     if not qlora:
+        if is_vlm:
+            # 27B 级 VLM 单卡装不下，双卡 device_map；LoRA 目标必须含视觉-语言投影层
+            from transformers import AutoModelForImageTextToText
+
+            from rl.train_vlm_sft import resolve_lora_targets
+
+            model_cls = AutoModelForImageTextToText
+            print(f"🌐 GRPO VLM 策略（bf16, device_map=auto）: {arch_model}")
+            policy = model_cls.from_pretrained(
+                arch_model, dtype=torch.bfloat16, device_map="auto",
+                max_memory={0: "56GiB", 1: "56GiB"},
+                local_files_only=Path(arch_model).exists(),
+            )
+            if is_adapter:
+                from peft import PeftModel
+
+                policy = PeftModel.from_pretrained(policy, model_path, is_trainable=True)
+            else:
+                from peft import LoraConfig, get_peft_model
+
+                target_modules = resolve_lora_targets(policy, "language+projector")
+                policy = get_peft_model(policy, LoraConfig(
+                    r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
+                    target_modules=target_modules, task_type="CAUSAL_LM",
+                ))
+            policy.config.use_cache = False
+            trainable, total, ratio = _assert_lora_only_trainable(policy)
+            print(f"🔧 参数统计: trainable={trainable:,}, model_parameters={total:,}, trainable_ratio={ratio:.4f}%")
+            return policy
+        print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
         print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
         policy = AutoModelForCausalLM.from_pretrained(
             model_path, local_files_only=local.exists()
@@ -640,7 +682,11 @@ def main(
         "per_device_train_batch_size": batch_size,
         "gradient_accumulation_steps": grad_accum,
         "learning_rate": lr,
-        "beta": beta,
+        # 27B 级策略的 ref model 再要一份等量权重，2×64GiB 放不下：
+        # 大模型走 beta=0（无 KL，DAPO/Dr.GRPO 同款口径）
+        "beta": 0.0 if (
+            beta > 0 and getattr(policy, "num_parameters", lambda: 0)() > 15_000_000_000
+        ) else beta,
         "num_generations": num_generations,
         "max_completion_length": max_completion_length,
         "temperature": temperature,
