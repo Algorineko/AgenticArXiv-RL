@@ -242,6 +242,7 @@ def generate_dpo_dataset(
         side_effect_mgr=LocalSideEffectManager(),
         env=env,
         llm_extra={"temperature": temperature},
+        vision_policy=bool(args.vision_policy),
     )
 
     reward_calc = RewardCalculator()
@@ -341,6 +342,8 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--min_reward_gap", type=float, default=0.05)
+    parser.add_argument("--vision-policy", action="store_true",
+                        help="VLM 策略：analyze_figure 观察附图标记，策略请求注入图片部件")
     parser.add_argument(
         "--task_set", choices=["basic", "expanded"], default="basic"
     )

@@ -221,10 +221,19 @@ def _load_vlm(model_path: str):
         ) from exc
 
     processor = AutoProcessor.from_pretrained(model_path)
-    model = AutoModelForImageTextToText.from_pretrained(
-        model_path, dtype=torch.bfloat16
-    )
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    # 27B 级模型放不进单卡 whole-model .to()，且评测要挂 adapter 而非合并权重
+    adapter = os.getenv("VLM_ADAPTER_PATH", "").strip() or None
+    device_map = os.getenv("VLM_DEVICE_MAP", "").strip() or None
+    load_kwargs: dict = {"dtype": torch.bfloat16}
+    if device_map:
+        load_kwargs["device_map"] = device_map
+    model = AutoModelForImageTextToText.from_pretrained(model_path, **load_kwargs)
+    if device_map is None:
+        model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    if adapter:
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, adapter)
     model.eval()
     _VLM_CACHE[model_path] = (processor, model)
     return processor, model
@@ -261,9 +270,15 @@ def _vlm_answer(figure: Dict[str, Any], question: str) -> str:
             ],
         }
     ]
-    text = processor.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
+    try:
+        text = processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+            enable_thinking=False,  # thinking 会吃掉 96 token 预算，留在答案里
+        )
+    except TypeError:  # 模板不支持该开关
+        text = processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
     inputs = processor(text=[text], images=[image], return_tensors="pt").to(model.device)
 
     with torch.no_grad():
@@ -272,6 +287,8 @@ def _vlm_answer(figure: Dict[str, Any], question: str) -> str:
 
     completion = generated[:, inputs["input_ids"].shape[1]:]
     answer = processor.batch_decode(completion, skip_special_tokens=True)[0].strip()
+    if "</think>" in answer:
+        answer = answer.split("</think>", 1)[1].strip()
     if not answer:
         raise ValueError("vision-language model produced an empty answer")
     return answer
