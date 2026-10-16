@@ -235,6 +235,12 @@ def _load_vlm(model_path: str):
 
         model = PeftModel.from_pretrained(model, adapter)
     model.eval()
+    try:  # 权重 page cache 计入宿主 cgroup 配额（本机 64GiB 墙），读完立逐
+        from rl.save_guard import evict_model_dir_page_cache
+
+        evict_model_dir_page_cache(model_path)
+    except Exception:  # noqa: BLE001 - 逐出失败只降级
+        pass
     _VLM_CACHE[model_path] = (processor, model)
     return processor, model
 
