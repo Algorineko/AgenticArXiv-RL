@@ -145,7 +145,7 @@ def main() -> None:
 
     payload = {
         "tag": args.tag,
-        "model": args.model,
+        "model": args.model if not str(args.model).startswith("/") else "~" + str(args.model).replace(str(Path.home()), "", 1),
         "data": data_path.as_posix(),
         "aggregate": aggregate(results),
         "results": results,

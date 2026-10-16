@@ -1,0 +1,82 @@
+{
+  "tag": "qwen38_27b_base",
+  "model": "~/data/models/Qwen3.8-27B",
+  "data": "data/vlm/figureqa_seed.jsonl",
+  "aggregate": {
+    "n": 6,
+    "rouge1_f": 0.0713,
+    "rougeL_f": 0.0603,
+    "empty_or_error": 0,
+    "per_question": {
+      "describe": {
+        "n": 6,
+        "rouge1_f": 0.0713,
+        "rougeL_f": 0.0603,
+        "empty_or_error": 0,
+        "avg_answer_tokens": 41.3
+      }
+    }
+  },
+  "results": [
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This image shows a simple, flat-style icon of a stack of documents or papers. The top sheet is white with a light blue header and three horizontal lines representing text, while two additional sheets are visible behind it, suggesting multiple pages.",
+      "rouge1_f": 0.1,
+      "rougeL_f": 0.0667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This illustration shows a stack of three overlapping cards or tickets, with the topmost card featuring a jagged, torn bottom edge and the bottom card displaying horizontal lines that suggest text. The design uses a simple, flat style with light blue and white colors, evoking the concept of multiple items, such as coupons, passes, or digital cards, layered together.",
+      "rouge1_f": 0.0519,
+      "rougeL_f": 0.0519,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This image shows a simple, flat-style icon of three overlapping documents or pages. The front page features a blank header area and several horizontal lines representing text, suggesting a generic document or form.",
+      "rouge1_f": 0.0769,
+      "rougeL_f": 0.0769,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This image shows a simple, flat-style icon of three overlapping documents or pages. The frontmost page is white with a light blue header and three horizontal lines representing text, while the two pages behind it are slightly offset to suggest a stack.",
+      "rouge1_f": 0.1311,
+      "rougeL_f": 0.0984,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "This image shows a bold, red \"X\" symbol centered on a solid black background. The \"X\" is composed of two thick, rounded diagonal strokes that intersect at the center, creating a clear and universally recognized mark of negation, error, or cancellation.",
+      "rouge1_f": 0.0678,
+      "rougeL_f": 0.0678,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Based on the image provided, here is a description:\n\nThe image is a solid black square. It contains no visible objects, text, patterns, or variations in color or light.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    }
+  ]
+}
