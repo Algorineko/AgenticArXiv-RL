@@ -124,10 +124,10 @@ def main() -> None:
         if "</think>" in a2:
             a2 = a2.split("</think>", 1)[1].strip()
         labels = [label for label, _ in _FIGURE_TYPE_KEYWORDS]
-        hits1 = [label for label in labels if label in a1]
-        hits2 = [label for label in labels if label in a2]
-        if len(hits1) == 1 and hits1 == hits2:
-            return hits1[0]
+        # 封闭枚举：答案（规整空白后）须精确等于某类型名
+        a1_norm, a2_norm = " ".join(a1.split()), " ".join(a2.split())
+        if a1_norm in labels and a1_norm == a2_norm:
+            return a1_norm
         return ""
 
     rows: List[Dict[str, Any]] = []
