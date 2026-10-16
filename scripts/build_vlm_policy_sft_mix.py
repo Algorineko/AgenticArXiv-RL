@@ -52,6 +52,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="构建策略侧多模态 SFT 混合集")
     parser.add_argument("--tool-trajectories", default="data/sft/sft_v3_t5_parametric_linguistic.jsonl")
     parser.add_argument("--figureqa-v2", default="data/vlm/figureqa_v2.jsonl")
+    parser.add_argument("--figureqa-backfill", default="data/vlm/figure_type_backfill.jsonl",
+                        help="figure_type 模型回填行（并入 figureqa_v2 源；不存在则跳过）")
     parser.add_argument("--summary-sft", default="data/vlm/paper_summary_sft.jsonl")
     parser.add_argument("--output", default="data/vlm/vlm_policy_sft_v1.jsonl")
     parser.add_argument("--seed", type=int, default=42)
@@ -94,22 +96,28 @@ def main() -> None:
     v2_path = Path(args.figureqa_v2)
     if v2_path.exists():
         inputs["figureqa_v2"] = sha256_file(v2_path)
-        for row in load_jsonl(v2_path):
-            if row.get("split") != "train":
-                continue
-            messages = [
-                {"role": "user", "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": row["prompt"]},
-                ]},
-                {"role": "assistant", "content": [
-                    {"type": "text", "text": row["target"]},
-                ]},
-            ]
-            add("figureqa_v2", {**row, "messages": messages, "images": [row["image_relpath"]]},
-                max_n=args.max_figureqa)
+        v2_rows = load_jsonl(v2_path)
     else:
         print(f"⚠️ figureqa v2 缺失，跳过: {v2_path}")
+        v2_rows = []
+    backfill_path = Path(args.figureqa_backfill)
+    if backfill_path.exists():
+        inputs["figureqa_backfill"] = sha256_file(backfill_path)
+        v2_rows = v2_rows + load_jsonl(backfill_path)
+    for row in v2_rows:
+        if row.get("split") != "train":
+            continue
+        messages = [
+            {"role": "user", "content": [
+                {"type": "image"},
+                {"type": "text", "text": row["prompt"]},
+            ]},
+            {"role": "assistant", "content": [
+                {"type": "text", "text": row["target"]},
+            ]},
+        ]
+        add("figureqa_v2", {**row, "messages": messages, "images": [row["image_relpath"]]},
+            max_n=args.max_figureqa)
 
     summary_path = Path(args.summary_sft)
     if summary_path.exists():
