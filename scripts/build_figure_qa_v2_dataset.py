@@ -35,7 +35,7 @@ PACKAGE_ROOT = REPO_ROOT / "AgenticArxiv"
 sys.path.insert(0, str(PACKAGE_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from build_figure_qa_dataset import build_target, clean_text  # noqa: E402
+from build_figure_qa_dataset import FIGURE_PREFIX_RE, build_target, clean_text  # noqa: E402
 from tools.figure_analysis_tool import (  # noqa: E402
     _AXES_HINTS,
     _TREND_HINTS,
@@ -54,6 +54,9 @@ _V2_QUESTION_PROMPTS = {
     "reading": (
         "What are the key numbers or quantities reported for this figure? "
         "Answer in one sentence."
+    ),
+    "caption": (
+        "Reproduce the caption of this figure as written in the paper."
     ),
 }
 
@@ -104,11 +107,24 @@ def reading_target(caption: str) -> str:
     return best.strip()
 
 
+def caption_target(caption: str) -> str:
+    """caption 全文（≤4 句，去 Figure N 前缀）——图→文的完整接地监督。"""
+    from build_figure_qa_dataset import describe_target
+
+    cleaned = FIGURE_PREFIX_RE.sub("", clean_text(caption))
+    sentences = _sentences(cleaned)
+    if not sentences:
+        return cleaned
+    return " ".join(sentences[:4])
+
+
 def build_v2_target(caption: str, question: str) -> str:
     if question == "figure_type":
         return figure_type_target(caption)
     if question == "reading":
         return reading_target(caption)
+    if question == "caption":
+        return caption_target(caption)
     return build_target(caption, question)
 
 
@@ -129,7 +145,7 @@ def main() -> None:
     parser.add_argument("--output", default="data/vlm/figureqa_v2.jsonl")
     parser.add_argument("--image-root", default="AgenticArxiv")
     parser.add_argument("--seed-questions", nargs="+", default=["describe", "axes", "trend"])
-    parser.add_argument("--v2-questions", nargs="+", default=["figure_type", "reading"])
+    parser.add_argument("--v2-questions", nargs="+", default=["figure_type", "reading", "caption"])
     args = parser.parse_args()
 
     seed_path = Path(args.seed_data)
