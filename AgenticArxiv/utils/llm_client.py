@@ -119,6 +119,75 @@ class LLMClient:
             return None
 
 
+def _is_vlm_model_path(model: str) -> bool:
+    """按 config 判定是否视觉语言模型（arch 带 ConditionalGeneration 且有 vision 塔）。"""
+    from pathlib import Path
+
+    import json
+
+    config_path = Path(model) / "config.json"
+    if not config_path.exists():
+        return False
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    archs = config.get("architectures") or []
+    return bool(
+        config.get("vision_config")
+        or any(str(a).endswith("ForConditionalGeneration") for a in archs)
+    )
+
+
+def _split_image_parts(messages: List[Dict[str, Any]]):
+    """把消息里的图片部件抽成 PIL 列表，返回 (可入模板的 messages, images)。
+
+    支持的图片部件：``{"type": "image_path", "path": ...}``（内部约定）与
+    OpenAI 风格 ``{"type": "image_url", "image_url": {"url": "file://..."}}``。
+    纯文本消息原样返回（images 为空 → 走纯文本路径，行为不变）。
+    """
+    from pathlib import Path
+
+    from PIL import Image
+
+    max_side = 1024  # 与 tools.figure_analysis_tool.VLM_MAX_IMAGE_SIDE 口径一致
+
+    def _load(path_text: str) -> Image.Image:
+        image = Image.open(Path(path_text)).convert("RGB")
+        longest = max(image.size)
+        if longest > max_side:
+            scale = max_side / longest
+            image = image.resize(
+                (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+                Image.LANCZOS,
+            )
+        return image
+
+    images: List[Any] = []
+    normalized: List[Dict[str, Any]] = []
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, list):
+            normalized.append(message)
+            continue
+        parts = []
+        for part in content:
+            if not isinstance(part, dict):
+                parts.append(part)
+                continue
+            if part.get("type") == "image_path":
+                images.append(_load(part["path"]))
+                parts.append({"type": "image"})
+            elif part.get("type") == "image_url":
+                url = (part.get("image_url") or {}).get("url", "")
+                images.append(_load(url.removeprefix("file://")))
+                parts.append({"type": "image"})
+            else:
+                parts.append(part)
+        normalized.append({**message, "content": parts})
+    return normalized, images
+
+
 class TransformersLLMClient:
     """Expose a local Hugging Face causal LM through the small client contract.
 
@@ -126,6 +195,10 @@ class TransformersLLMClient:
     not need to import the training stack unless local inference is requested.
     The returned object mirrors the subset of OpenAI's chat-completions response
     consumed by :class:`BaseAgent`.
+
+    视觉语言模型（config 带 vision 塔）走 ``AutoModelForImageTextToText`` +
+    ``AutoProcessor``：消息 content 里可携带 ``image_path``/``image_url``
+    图片部件，纯文本行为与纯 LM 路径完全一致。
     """
 
     def __init__(
@@ -136,13 +209,23 @@ class TransformersLLMClient:
         seed: Optional[int] = None,
     ) -> None:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.model_name = model
         self.seed = seed
         self._stream_seed = seed
         self._calls = 0
-        self.tokenizer = AutoTokenizer.from_pretrained(model)
+        self.is_vlm = _is_vlm_model_path(model)
+        if self.is_vlm:
+            from transformers import AutoModelForImageTextToText, AutoProcessor
+
+            self.processor = AutoProcessor.from_pretrained(model)
+            self.tokenizer = self.processor.tokenizer
+            model_cls = AutoModelForImageTextToText
+        else:
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+
+            self.tokenizer = AutoTokenizer.from_pretrained(model)
+            model_cls = AutoModelForCausalLM
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -158,7 +241,7 @@ class TransformersLLMClient:
         self.device = device
         if device == "auto":
             load_kwargs["device_map"] = "auto"
-        self.model = AutoModelForCausalLM.from_pretrained(model, **load_kwargs)
+        self.model = model_cls.from_pretrained(model, **load_kwargs)
         if device != "auto":
             self.model.to(device)
         self.model.eval()
@@ -179,6 +262,27 @@ class TransformersLLMClient:
         offset = int.from_bytes(digest[:8], "big") % (2**31)
         self._stream_seed = self.seed + offset
 
+    def _prepare_inputs(self, messages: List[Dict[str, Any]]):
+        """构造 generate 的输入；VLM 且消息带图片部件时走图文路径。"""
+        import torch
+        from PIL import Image
+
+        if self.is_vlm:
+            normalized, images = _split_image_parts(messages)
+            if images:
+                prompt = self.processor.apply_chat_template(
+                    normalized, tokenize=False, add_generation_prompt=True
+                )
+                inputs = self.processor(
+                    text=[prompt], images=images, return_tensors="pt"
+                )
+                return inputs, images
+        prompt = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        return inputs, []
+
     def chat_completions(
         self,
         model: str,
@@ -195,15 +299,9 @@ class TransformersLLMClient:
         extra = dict(extra or {})
         stop = extra.pop("stop", []) or []
         template_kwargs = extra.pop("chat_template_kwargs", {}) or {}
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            **template_kwargs,
-        )
-        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs, _images = self._prepare_inputs(messages)
         target = next(self.model.parameters()).device
-        inputs = {key: value.to(target) for key, value in inputs.items()}
+        inputs = {key: value.to(target) if hasattr(value, "to") else value for key, value in inputs.items()}
         do_sample = temperature is not None and temperature > 0
         generation_kwargs: Dict[str, Any] = {
             "max_new_tokens": max_tokens,
