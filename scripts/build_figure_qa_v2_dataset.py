@@ -47,9 +47,9 @@ from utils.io_utils import write_jsonl  # noqa: E402
 # 新题型：prompt 本地定义（不进 env 工具冻结面），target 仍是 caption 确定性规则。
 _V2_QUESTION_PROMPTS = {
     "figure_type": (
-        "What type of figure is this? Answer with only the figure type "
-        "(for example: line plot, bar chart, scatter plot, heatmap, table, "
-        "schematic diagram, photograph)."
+        "Classify this figure into exactly one type from: line plot, bar chart, "
+        "scatter plot, heatmap, pie chart, table, schematic diagram, photograph, map. "
+        "Answer with the type name only, no other words."
     ),
     "reading": (
         "What are the key numbers or quantities reported for this figure? "
