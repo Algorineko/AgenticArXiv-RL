@@ -36,6 +36,7 @@ from PIL import Image  # noqa: E402  # 提前加载，避免 dataloader worker �
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PACKAGE_ROOT))
 
 LANGUAGE_PROJECTIONS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 PROJECTOR_PATTERNS = ("merger", "projector", "multi_modal")
@@ -80,6 +81,17 @@ def load_image(relpath: str, image_root: Path, *, max_side: int = 1024) -> Image
     return image
 
 
+def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """工具轨迹是纯字符串 content、图文行是分段 content；arrow 列必须同型。"""
+    out = []
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            content = [{"type": "text", "text": content}]
+        out.append({"role": message["role"], "content": content})
+    return out
+
+
 def build_hf_dataset(rows: List[Dict[str, Any]], *, image_root: Path):
     from datasets import Dataset
 
@@ -89,7 +101,7 @@ def build_hf_dataset(rows: List[Dict[str, Any]], *, image_root: Path):
         records.append(
             {
                 "images": [load_image(rel, image_root) for rel in relpaths],
-                "messages": row["messages"],
+                "messages": _normalize_messages(row["messages"]),
             }
         )
     return Dataset.from_list(records)
@@ -131,6 +143,68 @@ def resolve_lora_targets(model, preset: str, *, include_experts: bool) -> List[s
     if not selected:
         raise SystemExit(f"LoRA 预设 {preset} 没有命中任何模块；检查模型结构")
     return sorted(selected)
+
+
+class MaskedLMHeadSFTTrainer:
+    """只对 label≠-100 的位置计算 lm_head/loss 的 SFTTrainer。
+
+    248k 词表上 TRL 默认的全序列 logits（bf16→fp32→CE）要吃 ~10GB 级
+    瞬时显存；本数据集的监督密度只有 ~5%（识图 target ~40 token、总结
+    ~250、工具轨迹 argument 数十字），把 lm_head 限制在目标位置后词表
+    维度开销降两个数量级。任何一步失败都自动回退 TRL 默认路径。
+    """
+
+    def __new__(cls, *args, **kwargs):  # pragma: no cover - 见 install()
+        raise TypeError("use install()")
+
+    @staticmethod
+    def install(trainer_cls):
+        class _Impl(trainer_cls):
+            def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+                try:
+                    loss = self._sliced_loss(model, inputs)
+                    if loss is not None:
+                        return (loss, {"loss": loss}) if return_outputs else loss
+                except Exception as exc:  # noqa: BLE001 - 结构不符时回退默认路径
+                    if not getattr(self, "_sliced_loss_warned", False):
+                        print(f"⚠️ sliced lm_head loss 不可用（{exc}），回退 TRL 默认 loss")
+                        self._sliced_loss_warned = True
+                return super().compute_loss(
+                    model, inputs, return_outputs=return_outputs,
+                    num_items_in_batch=num_items_in_batch,
+                )
+
+            def _sliced_loss(self, model, inputs):
+                import torch
+
+                labels = inputs.get("labels")
+                if labels is None:
+                    raise AttributeError("no labels")
+                base = model.get_base_model() if hasattr(model, "get_base_model") else model
+                backbone = base.model
+                lm_head = base.get_output_embeddings()
+                if backbone is None or lm_head is None:
+                    raise AttributeError("backbone or lm_head missing")
+                model_inputs = {
+                    k: v for k, v in inputs.items()
+                    if k not in ("labels",) and hasattr(v, "to")
+                }
+                outputs = backbone(**model_inputs)
+                hidden = outputs.last_hidden_state if hasattr(outputs, "last_hidden_state") else outputs[0]
+                shift_hidden = hidden[:, :-1, :]
+                shift_labels = labels[:, 1:]
+                mask = shift_labels != -100
+                if mask.sum() == 0:
+                    raise ValueError("empty target positions")
+                sel_hidden = shift_hidden[mask]
+                sel_labels = shift_labels[mask]
+                logits = lm_head(sel_hidden).float()
+                loss = torch.nn.functional.cross_entropy(
+                    logits, sel_labels, ignore_index=-100
+                )
+                return loss
+
+        return _Impl
 
 
 def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
@@ -285,7 +359,8 @@ def main(argv: List[str] | None = None) -> None:
     # device_map=auto 时 Trainer 看到 hf_device_map 不搬移不加 DP；单卡路径按仓库惯例钉住。
     pin_single_gpu(config)
 
-    trainer = SFTTrainer(
+    trainer_cls = MaskedLMHeadSFTTrainer.install(SFTTrainer)
+    trainer = trainer_cls(
         model=model,
         args=config,
         train_dataset=dataset,
