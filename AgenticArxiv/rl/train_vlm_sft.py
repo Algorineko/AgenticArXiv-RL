@@ -68,9 +68,21 @@ def load_rows(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
-def load_image(relpath: str, image_root: Path, *, max_side: int = 1024) -> Image.Image:
+def load_image(relpath: str, image_root: Path, *, max_side: int = 1024) -> Image.Image | None:
+    """全解码加载；截断图先按 PIL 截断容错重试，仍失败返回 None（调用方剔除该行）。"""
+    from PIL import ImageFile
+
     path = (image_root / relpath).resolve()
-    image = Image.open(path).convert("RGB")
+    try:
+        image = Image.open(path)
+        image.load()
+        image = image.convert("RGB")
+    except OSError:
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        try:
+            image = Image.open(path).convert("RGB")
+        except Exception:  # noqa: BLE001 - 坏图按缺失处理
+            return None
     longest = max(image.size)
     if longest > max_side:
         scale = max_side / longest
@@ -96,14 +108,21 @@ def build_hf_dataset(rows: List[Dict[str, Any]], *, image_root: Path):
     from datasets import Dataset
 
     records = []
+    dropped = 0
     for row in rows:
         relpaths = row.get("images") or []
+        images = [img for img in (load_image(rel, image_root) for rel in relpaths) if img is not None]
+        if relpaths and not images:
+            dropped += 1  # 整行图文全坏：剔除而不是让 Trainer 在数小时后炸掉
+            continue
         records.append(
             {
-                "images": [load_image(rel, image_root) for rel in relpaths],
+                "images": images,
                 "messages": _normalize_messages(row["messages"]),
             }
         )
+    if dropped:
+        print(f"⚠️ 剔除坏图整行: {dropped} 行")
     return Dataset.from_list(records)
 
 
