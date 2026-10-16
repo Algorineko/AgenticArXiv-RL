@@ -111,23 +111,22 @@ def main() -> None:
         inputs = processor(text=[text], images=[image], return_tensors="pt").to(model.device)
         gen_kwargs = dict(max_new_tokens=24, do_sample=args.temperature > 0,
                           temperature=args.temperature, top_p=0.9)
-        torch.manual_seed(42)
-        with torch.no_grad():
-            out1 = model.generate(**inputs, **gen_kwargs)
-        torch.manual_seed(43)
-        with torch.no_grad():
-            out2 = model.generate(**inputs, **gen_kwargs)
-        a1 = processor.batch_decode(out1[:, inputs["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip().lower()
-        a2 = processor.batch_decode(out2[:, inputs["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip().lower()
-        if "</think>" in a1:
-            a1 = a1.split("</think>", 1)[1].strip()
-        if "</think>" in a2:
-            a2 = a2.split("</think>", 1)[1].strip()
         labels = [label for label, _ in _FIGURE_TYPE_KEYWORDS]
-        # 封闭枚举：答案（规整空白后）须精确等于某类型名
-        a1_norm, a2_norm = " ".join(a1.split()), " ".join(a2.split())
-        if a1_norm in labels and a1_norm == a2_norm:
-            return a1_norm
+        votes: Dict[str, int] = {}
+        for seed in (42, 43, 44):  # 3 采多数决：歧义图的自洽门槛 ≥2/3
+            torch.manual_seed(seed)
+            with torch.no_grad():
+                out = model.generate(**inputs, **gen_kwargs)
+            a = processor.batch_decode(out[:, inputs["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip().lower()
+            if "</think>" in a:
+                a = a.split("</think>", 1)[1].strip()
+            a_norm = " ".join(a.split())
+            if a_norm in labels:
+                votes[a_norm] = votes.get(a_norm, 0) + 1
+        if votes:
+            best, count = max(votes.items(), key=lambda kv: kv[1])
+            if count >= 2:
+                return best
         return ""
 
     rows: List[Dict[str, Any]] = []
