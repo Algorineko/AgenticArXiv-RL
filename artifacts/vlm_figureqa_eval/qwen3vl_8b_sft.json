@@ -1,0 +1,976 @@
+{
+  "tag": "qwen3vl_8b_sft",
+  "model": "~[LOCAL_PATH_WITHHELD]",
+  "data": "data/vlm/figureqa_seed.jsonl",
+  "aggregate": {
+    "n": 94,
+    "rouge1_f": 0.0876,
+    "rougeL_f": 0.0786,
+    "empty_or_error": 2,
+    "per_question": {
+      "axes": {
+        "n": 24,
+        "rouge1_f": 0.0646,
+        "rougeL_f": 0.0578,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 12.9
+      },
+      "describe": {
+        "n": 65,
+        "rouge1_f": 0.0987,
+        "rougeL_f": 0.0882,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 21.9
+      },
+      "trend": {
+        "n": 5,
+        "rouge1_f": 0.0528,
+        "rougeL_f": 0.0528,
+        "empty_or_error": 0,
+        "avg_answer_tokens": 16.4
+      }
+    }
+  },
+  "results": [
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0417,
+      "rougeL_f": 0.0417,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0417,
+      "rougeL_f": 0.0417,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.15,
+      "rougeL_f": 0.15,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.15,
+      "rougeL_f": 0.15,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.15,
+      "rougeL_f": 0.15,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.1622,
+      "rougeL_f": 0.1081,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.1622,
+      "rougeL_f": 0.1081,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.15,
+      "rougeL_f": 0.15,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The pruner uses learned queries to score and progressively select informative slide tokens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.0822,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The pruner uses learned queries to score and progressively select informative slide tokens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The pruner uses learned queries to score and progressively select informative slide tokens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.0822,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The pruner uses learned queries to score and progressively select informative slide tokens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Model-generated CDPs are then evaluated through a two-stage procedure for measuring pathway consistency.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Model-generated CDPs are then evaluated through a two-stage procedure for measuring pathway consistency.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The pruner uses learned queries to score and progressively select informative slide tokens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The pruner uses learned queries to score and progressively select informative slide tokens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "Semantic similarity between the premise and the hypothesis is computed by aggregating lexical and entity similarities.",
+      "rouge1_f": 0.1818,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "The adapted LLM-CDP framework.",
+      "rouge1_f": 0.087,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file '[LOCAL_PATH_WITHHELD]'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file '[LOCAL_PATH_WITHHELD]'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK corpus. The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "Performance of the proposed framework on the MovieLens dataset.",
+      "rouge1_f": 0.2353,
+      "rougeL_f": 0.2353,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "Performance of the proposed framework on the MovieLens dataset.",
+      "rouge1_f": 0.1739,
+      "rougeL_f": 0.1739,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK-CE corpus. A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "Performance of the proposed framework on the five held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out held-out",
+      "rouge1_f": 0.0984,
+      "rougeL_f": 0.0656,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "Performance of the two-class classifier on the held-out test set.",
+      "rouge1_f": 0.1538,
+      "rougeL_f": 0.1538,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The pruner removes insubstantial branches, leaving only those that contribute to the final label.",
+      "rouge1_f": 0.069,
+      "rougeL_f": 0.069,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "| Model | E1 | E2 | E5 | L14 | L9 | L6 | L11 | L12 | E3 | L15 | E8 | L7 | E4 | L16 | L13 | L10 | E7 |",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The pruner removes insubstantial branches from the search tree.",
+      "rouge1_f": 0.0833,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The effectiveness of the learned representations across tasks.",
+      "rouge1_f": 0.2308,
+      "rougeL_f": 0.2308,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The pruner removes insubstantial branches from the search tree.",
+      "rouge1_f": 0.0833,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "| Model | Deviation from Human Judgement (%) | Model Preference (%) | Human Preference (%) | Grounded Description (%) | Correct Prediction (%) |",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The pruner removes insubstantial branches from the search tree.",
+      "rouge1_f": 0.0833,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "| Model | E1 | E6 | E2 | L11 | L12 | L14 | L9 | L15 | E5 | E8 | L16 | E4 | E3 | L17 | L13 | L10 | E7 |",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "Spectrogram of the four tones.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "Spectrogram of the four tones.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "Spectrogram of the four tones.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "Spectrogram of the four tones.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0541,
+      "rougeL_f": 0.0541,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0541,
+      "rougeL_f": 0.0541,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0541,
+      "rougeL_f": 0.0541,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0541,
+      "rougeL_f": 0.0541,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24656v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Flow diagram of a fake base station attack vector implementation",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.1379,
+      "rougeL_f": 0.1379,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "Qualitative comparison of the two methods on the Human3.6M dataset.",
+      "rouge1_f": 0.1538,
+      "rougeL_f": 0.1538,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "| Precision-Recall Pareto frontier for the 100-clip held-out test set.",
+      "rouge1_f": 0.0741,
+      "rougeL_f": 0.0741,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Pixel-level redaction quality: standard mask IoU and person coverage (|𝑀pred ∩𝑀gt|/|𝑀gt|).",
+      "answer": "Qualitative comparisons of the two agents. (a) shows example trajectories for each agent in the same four scenes.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Tier 1 energy per 10-s clip on RPi 5 at 𝑛= 5.",
+      "answer": "| (a) Energy consumption (left y-axis) and overhead (right y-axis) of the three privacy configurations.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Additional recovery and conditioning payload per 10-s clip.",
+      "answer": "| Model | Dataset | Metric | Value |\n|---|---|---|---|\n| Minimax M3 | VideoQA | Accuracy | 66.7% |\n| Minimax M3 | VideoQA | F1 | 66.7% |\n| Minimax M3 | VideoWorld | Success Rate | 66.7% |\n| Minimax M3 | VideoWorld | Average Episode Length | 10.0 steps |\n| Min",
+      "rouge1_f": 0.0476,
+      "rougeL_f": 0.0476,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.99.",
+      "answer": "Individual firm quantity, price, and revenue over episodes.",
+      "rouge1_f": 0.16,
+      "rougeL_f": 0.16,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "Bertrand with Congestion: Equilibrium Quantity, Price, and Revenue vs. K_state (We=1).",
+      "rouge1_f": 0.3333,
+      "rougeL_f": 0.2667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "The three panels report the equilibrium quantity, price, and revenue for the three treatments.",
+      "rouge1_f": 0.0645,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "Individual firm quantity, price, and revenue over episodes.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.125,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "The three panels show the mean quantity, price, and revenue of each firm over the 30,000 episodes of the experiment.",
+      "rouge1_f": 0.1778,
+      "rougeL_f": 0.1333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Impact of The Number of Agents on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 3, K = 1, δ = 0.99.",
+      "answer": "Individual firm quantity, price, and revenue over episodes.",
+      "rouge1_f": 0.1212,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Overview of the Multi-Agent Framework for Urban Mobility Planning. MA-CDP-Agent balances exploration and exploitation using a hybrid memory system, while the Vehicle Agents use a one-against-all multi-class setup for trajectory generation.",
+      "rouge1_f": 0.1429,
+      "rougeL_f": 0.1071,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Qualitative demonstrations of PredActor. (a) Joystick steering redirects walking and run- ning; (b) PredActor responds to external interference during walk and stand commands; (c) semantic interpolation connects standing with raising a hand and with running; and (d) text commands trigger stand, walk, jog, and squat sequences.",
+      "rouge1_f": 0.1538,
+      "rougeL_f": 0.1538,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0976,
+      "rougeL_f": 0.0976,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0976,
+      "rougeL_f": 0.0976,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0976,
+      "rougeL_f": 0.0976,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0976,
+      "rougeL_f": 0.0976,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Overview of the Multi-Agent Framework for Autonomous Driving at City-Scale. The framework integrates perception, prediction, and planning into one unified representation, enabling multi-agent coordination for scalable autonomous driving.",
+      "rouge1_f": 0.08,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Cascade framework for hierarchical recoverability control. Cascade formulates LLM unlearning as constrained internal identifiability minimization and weakens target recovery through path-level routing, hyperbolic representation compression, and decoding-level control.",
+      "rouge1_f": 0.0816,
+      "rougeL_f": 0.0816,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Qualitative demonstrations of PredActor. (a) Joystick steering redirects walking and run- ning; (b) PredActor responds to external interference during walk and stand commands; (c) a single predicted trajectory can be executed repeatedly in similar conditions; and (d) when asked to switch between commands mid-sequence, the model can adapt to the resulting motion.",
+      "rouge1_f": 0.0968,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Qualitative demonstrations of PredActor. (a) Joystick steering redirects walking and run- ning; (b) PredActor responds to external interference during walk and stand commands; (c) semantic interpolation connects standing with raising a hand and with running; and (d) text commands trigger stand, walk, jog, and squat sequences.",
+      "rouge1_f": 0.0727,
+      "rougeL_f": 0.0727,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Enemy state variables.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Specter of the paper. The paper introduces a unified framework for multi-target interception under uncertainty.",
+      "rouge1_f": 0.16,
+      "rougeL_f": 0.16,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "SpectRobot framework. (a) Example of a 224 × 224 grayscale input spectrogram.",
+      "rouge1_f": 0.1,
+      "rougeL_f": 0.1,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Qualitative demonstrations of PredActor. (a) Joystick steering redirects walking and run- ning; (b) PredActor responds to external interference during walk and stand commands; (c) semantic interpolation connects standing with raising a hand and with running; and (d) text commands trigger stand, walk, jog, and squat sequences.",
+      "rouge1_f": 0.0727,
+      "rougeL_f": 0.0727,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Qualitative demonstrations of PredActor. (a) Joystick steering redirects walking and run- ning; (b) PredActor responds to external interference during walk and stand commands; (c) a single predicted trajectory can be executed repeatedly in identical surroundings and after a fall, or with changing observations during stand and run; and (d) PredActor supports interruptible commands such as squat followed by stand, where the stand command is issued while the robot is in mid-air.",
+      "rouge1_f": 0.0741,
+      "rougeL_f": 0.0494,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Three-Layer Model of IoT Systems Across Consumer, Commercial, Industrial, and Infrastructure Domains",
+      "rouge1_f": 0.1818,
+      "rougeL_f": 0.1818,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "shows an overview of our rule-guided LLM solution for OUD CP using structured EHR data and clinical narratives from UF Health. Physician chart-reviewed labels are used as the gold standard.",
+      "answer": "Overview of the OPRO pipeline. Clinical narratives and evidence rubrics are fed into a language model (here, GPT-oss-120b) via a prompt that asks for item-level judgments.",
+      "rouge1_f": 0.2623,
+      "rougeL_f": 0.1639,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The proposed LLM-based CP is composed of three components: an LLM engine (gpt-oss-120b15) that extracts evidence and determines the met/not-met binary judgments with supporting text evidence, and then a logistic regression model that uses the LLM- extracted indicators to generate patient-level OUD probabilities.",
+      "answer": "A 2-stage framework for evidence-level OUD detection.",
+      "rouge1_f": 0.1379,
+      "rougeL_f": 0.1034,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "trend",
+      "target": "We compared our LLM-based CP with a diagnosis code–based phenotype, a machine learning-based CP using structured EHR features, NLP-derived features, and their combination, and a zero- shot LLM without rule guidance.",
+      "answer": "OPRO is applied to the evidence-extraction stage of a clinical decision-making pipeline, where it refines the extracted evidence items before patient-level prediction.",
+      "rouge1_f": 0.0333,
+      "rougeL_f": 0.0333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Workflow comparison: standalone LLM vs. RAG.",
+      "answer": "RAG framework. The top panel shows how an LLM-only system may hallucinate, while the bottom panel shows how RAG retrieves relevant context before generating a factually correct answer.",
+      "rouge1_f": 0.1143,
+      "rougeL_f": 0.1143,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Workflow comparison: standalone LLM vs.",
+      "answer": "A retrieval-augmented generation (RAG) pipeline retrieves relevant evidence before generating a factual answer, contrasting with a pure large language model (LLM) approach that may hallucinate.",
+      "rouge1_f": 0.0645,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "| Model | Top-k | Embed | Rerank | TTFT | Decode | Total |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n| L3.2-1B | 0 | 0.011 | 0.007 | 0.022 | 0.011 | 0.051 |\n| L3.2-1B",
+      "rouge1_f": 0.0588,
+      "rougeL_f": 0.0588,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "The time cost of RAG in the three-stage pipeline.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "| Model | Top-k | Runtime (s) | Throughput (req/s) | Latency (s) | Memory (GB) |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| L3-8B | 1 | 0.11 | 8,182 | 0.0001 | 12.0 |\n| L3-8B | 3 |",
+      "rouge1_f": 0.05,
+      "rougeL_f": 0.05,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "The four panels show the time cost of each stage of the search pipeline for different top-k values.",
+      "rouge1_f": 0.1212,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "| (a) Search time breakdown.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "The four panels show the time cost of each stage of the search pipeline, with the y-axis representing time in seconds.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Iterative Pipeline Analysis.",
+      "answer": "| Model | Top-k | Iteration | Time (s) | Component |\n| :--- | :--- | :--- | :--- | :--- |\n| hotpotqa | 1 | 0 | 0.99 | Decode |\n| hotpotqa | 1 | 1 | 0.06 | Decode |\n| hotpotqa | 3 | 0 | 1.00 | Decode |\n| hotpotqa | 3",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "Comparison of IVF search performance for the same index.",
+      "rouge1_f": 0.1,
+      "rougeL_f": 0.1,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "The recall and retrieval time of the IVF index under different batch sizes.",
+      "rouge1_f": 0.25,
+      "rougeL_f": 0.1667,
+      "error": null
+    }
+  ]
+}
