@@ -1,0 +1,44 @@
+{
+  "model": "~/data/models/Qwen3.8-27B",
+  "device_map": "auto",
+  "versions": {
+    "torch": "2.4.1",
+    "transformers": "5.14.1",
+    "trl": "0.29.1",
+    "peft": "0.21.2"
+  },
+  "fla": null,
+  "cgroup_before_gib": 57.73,
+  "load_seconds": 17.2,
+  "attn_implementation": "sdpa",
+  "forward_seconds": 12.3,
+  "forward_loss": 2.6625,
+  "trainable": 79691776,
+  "trainable_ratio_percent": 0.2905,
+  "train_steps": 8,
+  "train_seconds": 37.88,
+  "train_samples_per_sec": 0.211,
+  "train_losses": [
+    2.6625,
+    2.0591,
+    2.0546,
+    1.6195,
+    1.4021,
+    1.0092,
+    0.8328,
+    0.3161
+  ],
+  "peak_vram_gib_per_device": [
+    24.6,
+    27.8
+  ],
+  "peak_vram_reserved_gib_per_device": [
+    26.9,
+    33.5
+  ],
+  "gen_seconds": 4.43,
+  "gen_tokens_per_sec": 7.23,
+  "gen_sample": "The user wants a concise description of the image in one or two sentences. Let me look carefully at the image.\n\nIt's a line drawing (black and",
+  "cgroup_after_gib": 63.93,
+  "ok": true
+}

@@ -160,9 +160,19 @@ def main(argv=None) -> None:
     attn = getattr(model.config, "_attn_implementation", None)
     report["attn_implementation"] = attn
     print(f"⚡ loaded in {report['load_seconds']}s | attn: {attn}")
+    # 装载读入的 50GB page cache 计入宿主 cgroup 配额且对已上卡权重无用，读完立逐
+    try:
+        from rl.save_guard import evict_model_dir_page_cache
+
+        evicted = evict_model_dir_page_cache(model_dir)
+        report["page_cache_evicted_files"] = evicted
+        print(f"🧹 evicted page cache for {evicted} model files")
+    except Exception as exc:  # noqa: BLE001 - 逐出失败只降级不致命
+        print(f"⚠️ page cache eviction skipped: {exc}")
 
     rows = load_probe_rows(Path(args.data), Path(args.image_root).resolve(), args.samples)
-    batch = build_batch(processor, rows[:2])
+    # 大词表（~250k）模型的 logits+CE 在 fp32 上会膨胀数 GB，探针一律单样本 forward
+    batch = build_batch(processor, rows[:1])
     batch = {k: (v.to("cuda") if hasattr(v, "to") else v) for k, v in batch.items()}
 
     t0 = time.time()
@@ -183,6 +193,9 @@ def main(argv=None) -> None:
     report["trainable"] = trainable
     report["trainable_ratio_percent"] = round(100.0 * trainable / total, 4)
     model.print_trainable_parameters()
+
+    # 27B 级模型无梯度检查点时，训练步的全量激活会顶爆权重所在卡
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
 
     model.train()
     torch.cuda.empty_cache()

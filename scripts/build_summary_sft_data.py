@@ -158,6 +158,19 @@ def main(argv=None) -> None:
     rows: List[Dict[str, Any]] = []
     rejections: Dict[str, int] = {}
     total, kept = 0, 0
+    # 断点续跑：输出已存在的 (paper, style, budget) 直接继承，不再生成
+    output_path = Path(args.output)
+    done: Set[tuple] = set()
+    if output_path.exists():
+        with output_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line:
+                    row = json.loads(line)
+                    rows.append(row)
+                    done.add((row["paper_id"], row["style"], row["budget"]))
+                    kept += 1
+        print(f"♻️ 续跑：已有 {len(done)} 条，跳过对应生成")
     for index, paper_id in enumerate(paper_ids, 1):
         record = records[paper_id]
         source = record["content"][: args.content_cutoff]
@@ -166,6 +179,8 @@ def main(argv=None) -> None:
         for style in STYLES:
             for budget in BUDGETS:
                 total += 1
+                if (paper_id, style, budget) in done:
+                    continue
                 prompt = (
                     "You are building a paper-reading assistant. Read the arXiv paper "
                     f"content below and write a {style} summary in at most {budget} words.\n\n"
