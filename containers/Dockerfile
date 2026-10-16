@@ -9,15 +9,21 @@ LABEL org.opencontainers.image.title="agentic-arxiv-training" \
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
     WANDB_MODE=disabled TOKENIZERS_PARALLELISM=false
+# Managed containers use a host UID that need not exist in /etc/passwd.
+# PyTorch's cache setup calls getpass.getuser(); this is a name, not a UID grant.
+ENV USER=agentic-arxiv LOGNAME=agentic-arxiv
 
 COPY containers/requirements-linux-py310-cu126.lock /opt/agentic-build/requirements.lock
 COPY containers/base-image.json /opt/agentic-build/base-image.json
 COPY containers/lock-resolution.json /opt/agentic-build/lock-resolution.json
 COPY build-identity.json /opt/agentic-build/build-identity.json
 RUN CODE_IDENTITY="${CODE_IDENTITY}" python -c 'import json, os; m=json.load(open("/opt/agentic-build/build-identity.json")); assert m["tree_sha256"] == os.environ["CODE_IDENTITY"], "构建身份必须显式匹配清单"'
-RUN python -m pip install --no-cache-dir --only-binary=:all: --require-hashes \
-    --extra-index-url https://download.pytorch.org/whl/cu126 \
-    -r /opt/agentic-build/requirements.lock
+# A lock's --index-url resets pip's CLI extra indexes. Keep the audited lock
+# untouched and append the CUDA index to the effective installation input.
+RUN cp /opt/agentic-build/requirements.lock /opt/agentic-build/install-requirements.lock \
+    && printf '\n--extra-index-url https://download.pytorch.org/whl/cu126\n' >> /opt/agentic-build/install-requirements.lock \
+    && python -m pip install --no-cache-dir --only-binary=:all: --require-hashes \
+    -r /opt/agentic-build/install-requirements.lock
 
 COPY pyproject.toml README.md LICENSE /tmp/project/
 COPY src/agentic_arxiv /tmp/project/src/agentic_arxiv

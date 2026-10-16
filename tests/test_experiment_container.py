@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 import pytest
@@ -165,3 +166,56 @@ def test_dockerfile_fixed_base_and_normal_wheel_install():
     assert "pip check" in value
     assert "site-packages" in value
     assert "latest" not in value and "-e ." not in value
+
+
+def test_dockerfile_supplies_username_for_unregistered_numeric_uid(monkeypatch):
+    import getpass
+    import pwd
+
+    value = (ROOT / "containers/Dockerfile").read_text()
+    line = next(line for line in value.splitlines() if line.startswith("ENV USER="))
+    for name in ("LOGNAME", "USER", "LNAME", "USERNAME"):
+        monkeypatch.delenv(name, raising=False)
+
+    def missing_user(uid):
+        raise KeyError(f"uid not found: {uid}")
+
+    monkeypatch.setattr(pwd, "getpwuid", missing_user)
+    with pytest.raises((KeyError, OSError)):
+        getpass.getuser()
+    for setting in shlex.split(line.removeprefix("ENV ")):
+        name, value = setting.split("=", 1)
+        monkeypatch.setenv(name, value)
+    assert getpass.getuser() == "agentic-arxiv"
+
+
+def test_dockerfile_installation_retains_cuda_index_after_parsing_lock(tmp_path):
+    pytest.importorskip("pip")
+    from pip._internal.commands import create_command
+    from pip._internal.network.session import PipSession
+    from pip._internal.req.req_file import parse_requirements
+
+    original = (ROOT / "containers/requirements-linux-py310-cu126.lock").read_bytes()
+    source = tmp_path / "requirements.lock"
+    source.write_bytes(original)
+    dockerfile = (ROOT / "containers/Dockerfile").read_text().replace("\\\n", "")
+    install = next(line for line in dockerfile.splitlines() if line.startswith("RUN cp "))
+    setup, installer = install.removeprefix("RUN ").split("&& python -m pip install", 1)
+    subprocess.run(["sh", "-c", setup.replace("/opt/agentic-build", shlex.quote(str(tmp_path)))], check=True)
+    effective = tmp_path / "install-requirements.lock"
+    assert source.read_bytes() == original
+    assert effective.read_bytes() == original + b"\n--extra-index-url https://download.pytorch.org/whl/cu126\n"
+    assert "-r /opt/agentic-build/install-requirements.lock" in installer
+
+    def indexes_after_parsing(path):
+        command = create_command("install")
+        options, _ = command.parse_args(["--index-url", "https://pypi.org/simple",
+                                        "--extra-index-url", "https://download.pytorch.org/whl/cu126"])
+        with PipSession() as session:
+            finder = command._build_package_finder(options=options, session=session)
+            list(parse_requirements(str(path), session=session, finder=finder, options=options))
+            return finder.index_urls
+
+    # Reproduce the original failure without a network request or download.
+    assert indexes_after_parsing(source) == ["https://pypi.org/simple"]
+    assert indexes_after_parsing(effective) == ["https://pypi.org/simple", "https://download.pytorch.org/whl/cu126"]
