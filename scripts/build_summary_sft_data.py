@@ -148,6 +148,13 @@ def main(argv=None) -> None:
     ).to("cuda")
     model.eval()
     model.config.use_cache = True
+    try:  # 装载读入的 50GB page cache 计入宿主 cgroup 配额，读完立逐
+        sys.path.insert(0, str(REPO_ROOT / "AgenticArxiv"))
+        from rl.save_guard import evict_model_dir_page_cache
+
+        print(f"🧹 evicted page cache: {evict_model_dir_page_cache(model_dir)} files", flush=True)
+    except Exception:  # noqa: BLE001
+        pass
 
     def generate(prompt: str, budget: int) -> str:
         try:
