@@ -207,9 +207,11 @@ def _load_policy(
 
             model_cls = AutoModelForImageTextToText
             print(f"🌐 GRPO VLM 策略（bf16, device_map=auto）: {arch_model}")
+            n_vis = torch.cuda.device_count()
+            max_mem = {i: "56GiB" for i in range(n_vis)}
             policy = model_cls.from_pretrained(
                 arch_model, dtype=torch.bfloat16, device_map="auto",
-                max_memory={0: "56GiB", 1: "56GiB"},
+                max_memory=max_mem,
                 local_files_only=Path(arch_model).exists(),
             )
             if is_adapter:
@@ -225,8 +227,11 @@ def _load_policy(
                     target_modules=target_modules, task_type="CAUSAL_LM",
                 ))
             policy.config.use_cache = False
-            trainable, total, ratio = _assert_lora_only_trainable(policy)
-            print(f"🔧 参数统计: trainable={trainable:,}, model_parameters={total:,}, trainable_ratio={ratio:.4f}%")
+            # bf16 VLM 路径不走 QLoRA 的 4-bit 断言（is_loaded_in_4bit 恒为 False）
+            trainable = sum(p.numel() for p in policy.parameters() if p.requires_grad)
+            total = sum(p.numel() for p in policy.parameters())
+            print(f"🔧 参数统计: trainable={trainable:,}, model_parameters={total:,}, "
+                  f"trainable_ratio={100.0 * trainable / max(total, 1):.4f}%")
             return policy
         print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
         print("⚠️  --no-qlora：加载完整精度策略，不属于单张4090冻结方案")
