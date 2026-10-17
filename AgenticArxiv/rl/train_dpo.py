@@ -11,6 +11,7 @@ DPO（Direct Preference Optimization）：
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -72,13 +73,44 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    # 权重精度跟随 _precision_flags（bf16 卡 bf16，fp16 回退 / CPU 用 fp32），
-    # 否则 Transformers 5 按 checkpoint 的 bf16 加载，pre-Ampere 卡直接崩。
-    from rl.precision import trainable_model_load_kwargs
 
-    load_kwargs = trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained)
-    model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
-    ref_model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)  # reference model
+    from utils.llm_client import _is_vlm_model_path
+
+    is_vlm = _is_vlm_model_path(model_name)
+    adapter_path = os.getenv("DPO_SFT_ADAPTER", "").strip() or None
+
+    if is_vlm:
+        # VLM 策略：base + SFT adapter 以可训练方式挂载（DPO 继续训该 adapter）。
+        # ref_model=None 时 TRL 的 PEFT-DPO 用「停用 adapter 的 base」当参考模型，
+        # 省一份 16GB/51GB 权重副本（KL 锚点为 base 而非 SFT，报告需注明）。
+        from transformers import AutoModelForImageTextToText, AutoProcessor
+
+        processor = AutoProcessor.from_pretrained(model_name)
+        tokenizer = processor.tokenizer
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        from rl.precision import trainable_model_load_kwargs
+
+        load_kwargs = trainable_model_load_kwargs(
+            AutoModelForImageTextToText.from_pretrained
+        )
+        base = AutoModelForImageTextToText.from_pretrained(model_name, **load_kwargs)
+        if adapter_path:
+            from peft import PeftModel
+
+            model = PeftModel.from_pretrained(base, adapter_path, is_trainable=True)
+            print(f"🧩 SFT adapter 已挂载为可训练: {adapter_path}")
+        else:
+            model = base
+        ref_model = None  # PEFT-DPO：参考 = 停用 adapter 的 base
+    else:
+        # 权重精度跟随 _precision_flags（bf16 卡 bf16，fp16 回退 / CPU 用 fp32），
+        # 否则 Transformers 5 按 checkpoint 的 bf16 加载，pre-Ampere 卡直接崩。
+        from rl.precision import trainable_model_load_kwargs
+
+        load_kwargs = trainable_model_load_kwargs(AutoModelForCausalLM.from_pretrained)
+        model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
+        ref_model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)  # reference model
 
     # 2. 加载 DPO 数据集
     print(f"📚 加载 DPO 数据集: {train_data_path}")
@@ -88,6 +120,16 @@ def main(
         return
 
     train_dataset = load_dataset("json", data_files=str(train_data_path), split="train")
+    if is_vlm:
+        # 字符串 prompt/chosen/rejected → 对话式分段格式，让 TRL 走 chat template
+        # （否则纯文本直通会造成训练/推理模板错位）
+        def _to_conversational(row):
+            return {
+                "prompt": [{"role": "user", "content": [{"type": "text", "text": row["prompt"]}]}],
+                "chosen": [{"role": "assistant", "content": [{"type": "text", "text": row["chosen"]}]}],
+                "rejected": [{"role": "assistant", "content": [{"type": "text", "text": row["rejected"]}]}],
+            }
+        train_dataset = train_dataset.map(_to_conversational, remove_columns=train_dataset.column_names)
     print(f"   样本数: {len(train_dataset)}")
 
     # 3. 配置 DPO
@@ -162,4 +204,11 @@ if __name__ == "__main__":
         "--run_name", default=None,
         help="本次运行在 TensorBoard / wandb 里的名字，默认取 output_dir 末段",
     )
-    main(**vars(parser.parse_args()))
+    parser.add_argument(
+        "--sft_adapter", default=None,
+        help="VLM 策略：以可训练方式挂载的 SFT adapter 目录（也可用 DPO_SFT_ADAPTER env）",
+    )
+    args = parser.parse_args()
+    if args.sft_adapter:
+        os.environ["DPO_SFT_ADAPTER"] = args.sft_adapter
+    main(**{k: v for k, v in vars(args).items() if k != "sft_adapter"})
