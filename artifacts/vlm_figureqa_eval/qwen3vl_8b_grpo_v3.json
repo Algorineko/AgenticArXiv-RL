@@ -1,0 +1,976 @@
+{
+  "tag": "qwen3vl_8b_grpo_v3",
+  "model": "~~/data/models/Qwen3-VL-8B-Instruct",
+  "data": "data/vlm/figureqa_seed.jsonl",
+  "aggregate": {
+    "n": 94,
+    "rouge1_f": 0.1098,
+    "rougeL_f": 0.0848,
+    "empty_or_error": 2,
+    "per_question": {
+      "axes": {
+        "n": 24,
+        "rouge1_f": 0.0794,
+        "rougeL_f": 0.0552,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 21.2
+      },
+      "describe": {
+        "n": 65,
+        "rouge1_f": 0.1166,
+        "rougeL_f": 0.0913,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 19.1
+      },
+      "trend": {
+        "n": 5,
+        "rouge1_f": 0.1678,
+        "rougeL_f": 0.1418,
+        "empty_or_error": 0,
+        "avg_answer_tokens": 22.0
+      }
+    }
+  },
+  "results": [
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "The Human-Agent Audit Collaboration (HAAC) Workflow in which an AI agent supports human auditors in auditing LLM-generated code. HAAC consists of four phases: (1) a human agent collaboration (HAC) phase, (2) a human-agent planning (HAP) phase, (3) a human-agent evidence retrieval (HAER) phase, and (4) a human-agent evidence review (HAER) phase.",
+      "rouge1_f": 0.0541,
+      "rougeL_f": 0.0541,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "The Human-Agent Audit Collaboration (HAAC) Workflow. HAAC provides a structured framework for human-AI collaboration during LLM audits, enabling auditors to efficiently manage evidence, track assertions, and maintain audit trails.",
+      "rouge1_f": 0.0816,
+      "rougeL_f": 0.0816,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "The Human-Agent Audit Collaboration (HAAC) Workflow. HAAC provides a structured framework for human-AI collaboration during LLM-generated report audits, enabling systematic detection of hallucinations and factual inaccuracies.",
+      "rouge1_f": 0.0851,
+      "rougeL_f": 0.0851,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "The Human-Agent Audit Collaboration (HAAC) Workflow. HAAC provides a shared workspace for human auditors and AI assistants, enabling the auditor to track the audit state, view the evidence, and issue commands to the assistant, which then responds with actions and observations that are persisted in the workspace state.",
+      "rouge1_f": 0.0896,
+      "rougeL_f": 0.0597,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "The 2D-2D pipeline. Given two input views, we jointly learn a compact appearance embedding and a shared 3D Gaussian scene representation. During inference, we render the target view from the shared scene and use CLIP to compare the rendered appearance with the query view.",
+      "rouge1_f": 0.0635,
+      "rougeL_f": 0.0317,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "| LayoutGPT",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate (left) and the recovered (right) for the 200-dimensional 2-MMD-200-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate (left) and the recovered (right) for the 200-250 Hz band.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate (left) and the recovered (right) for a 224 × 224 input.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "It uses the same 224 × 224 grayscale input as the radiology reports and returns a 128-dimensional hidden state hθ(x) ∈ R128.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0339,
+      "rougeL_f": 0.0339,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate (left) and the recovered (right) for the 200-dimensional 2-MMD-200-1000-200-1000-200-1000-200-1000-200-1000-200-1000-200-1000-200-1000-2",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "The two-stage LLM-guided alignment. (a) The L-features are extracted from the premise and the hypothesis, and the E-features are extracted from the premise and the hypothesis.",
+      "rouge1_f": 0.1277,
+      "rougeL_f": 0.0851,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "The figure uses a two-dimensional grid with axes representing entities (woman, dress, sit, play, Instrument) and attributes (red, put, away) to compare lexical (L-features) and entity-attribute (E-features) similarities between two sentences.",
+      "rouge1_f": 0.0755,
+      "rougeL_f": 0.0755,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file './AgenticArxiv/output/pdf_figures/2609.24932v1/fig_2.png'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file './AgenticArxiv/output/pdf_figures/2609.24932v1/fig_2.png'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK corpus. The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "Performance of the proposed method on the MovieLens dataset.",
+      "rouge1_f": 0.2353,
+      "rougeL_f": 0.2353,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "The figure uses a horizontal axis for the five datasets (L10, E8, E1, E6, L9) and a vertical axis for Performance, ranging from 0.0 to 1.0.",
+      "rouge1_f": 0.1905,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK-CE corpus. A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "Performance of the proposed method on the MovieLens dataset.",
+      "rouge1_f": 0.2857,
+      "rougeL_f": 0.2286,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "Performance of the proposed method on the 5-way 1-shot Omniglot dataset.",
+      "rouge1_f": 0.1481,
+      "rougeL_f": 0.1481,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The top-k accuracy (left) and the percentage of correct top-k predictions (right) for each layer.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0625,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The top-k accuracy (left) and the percentage of selected items (right) for the three methods.",
+      "rouge1_f": 0.1765,
+      "rougeL_f": 0.1765,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "SpectRobot framework. (a) Example of a spectrogram (left) and the corresponding 224 × 224 grayscale input (right).",
+      "rouge1_f": 0.1364,
+      "rougeL_f": 0.0909,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The relative improvement of the proposed method over the strongest baseline.",
+      "rouge1_f": 0.0769,
+      "rougeL_f": 0.0769,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The top-k accuracy (left) and the percentage of selected tokens (right) for each layer.",
+      "rouge1_f": 0.1818,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The relative change in the number of parameters (left) and the relative change in the number of FLOPs (right) for each layer.",
+      "rouge1_f": 0.1081,
+      "rougeL_f": 0.0541,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The top-k accuracy of the proposed method on the 2022 MMLU benchmark.",
+      "rouge1_f": 0.1935,
+      "rougeL_f": 0.1935,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The top-k accuracy (left) and the percentage of correct top-k predictions (right) for each layer.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0625,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The top panel of the figure shows the relative performance of the two models across 15 tasks, with the red bar indicating the model that achieves the higher score on each task.",
+      "rouge1_f": 0.2,
+      "rougeL_f": 0.16,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms for the four tones of the target word. The four tones are level, rising, falling, and dipping, respectively.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.1905,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms for the four tones.",
+      "rouge1_f": 0.1633,
+      "rougeL_f": 0.1224,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "Spectrogram of the four tones.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.0833,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms for the four tones. The four tones are generated by applying the same pitch-shifting procedure to the same reference audio clip.",
+      "rouge1_f": 0.209,
+      "rougeL_f": 0.1791,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "The 2D-2D pipeline. Given a query 2D image and a set of candidate 2D images, the encoder extracts local and global features for each image.",
+      "rouge1_f": 0.1212,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24656v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Flow diagram of a fake base station attack vector implementation",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "The 2D-3D matching pipeline. Given a 2D detection, a 3D proposal is generated by projecting the 2D bounding box into 3D space using the camera intrinsics and extrinsics.",
+      "rouge1_f": 0.1364,
+      "rougeL_f": 0.0909,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "The Pareto frontier for the 2024 dataset. The top curve shows the trade-off between accuracy and average processing time.",
+      "rouge1_f": 0.1714,
+      "rougeL_f": 0.1143,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Pixel-level redaction quality: standard mask IoU and person coverage (|𝑀pred ∩𝑀gt|/|𝑀gt|).",
+      "answer": "| 2026 IEEE Winter Conference on Applications of Computer Vision (WACV) 2026 IEEE Winter Conference on Applications of Computer Vision (WACV) 2026 IEEE Winter Conference on Applications of Computer Vision (WACV) 2026 IEEE Winter Conference on Applications of Computer Vision (WACV) 2026 IEEE Winter Conference on Applications of Computer Vision (WACV) 2026",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Tier 1 energy per 10-s clip on RPi 5 at 𝑛= 5.",
+      "answer": "The energy cost of privacy is a function of the attacker’s distance to the camera. The attacker’s distance to the camera is the dominant factor in determining the energy cost of privacy.",
+      "rouge1_f": 0.087,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Additional recovery and conditioning payload per 10-s clip.",
+      "answer": "The storage overhead of the three-tiered clip.",
+      "rouge1_f": 0.1176,
+      "rougeL_f": 0.1176,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.99.",
+      "answer": "Individual firm quantity, price, and revenue over 10,000 episodes for K = 2 and W = 1.",
+      "rouge1_f": 0.3636,
+      "rougeL_f": 0.2424,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "Bertrand with Congestion: Equilibrium Quantity vs K_state (We=1) Bertrand with Congestion: Equilibrium Price vs K_state (We=1) Bertrand with Congestion: Equilibrium Revenue vs K_state (We=1)",
+      "rouge1_f": 0.2128,
+      "rougeL_f": 0.2128,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "The three panels report the equilibrium quantity, price, and revenue for the three Bertrand with congestion benchmarks as a function of K_state.",
+      "rouge1_f": 0.25,
+      "rougeL_f": 0.15,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "Individual firm quantity, price, and revenue over 30,000 episodes for K = 2 and W = 1.",
+      "rouge1_f": 0.3,
+      "rougeL_f": 0.2,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "Figure 2: Individual firm quantity, price, and revenue over 30,000 episodes for K=2 firms with a state dimension of 2 and a weight of 1.",
+      "rouge1_f": 0.3137,
+      "rougeL_f": 0.1569,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Impact of The Number of Agents on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 3, K = 1, δ = 0.99.",
+      "answer": "Individual firm quantity, price, and revenue over 30,000 episodes for K = 1, W = 1.",
+      "rouge1_f": 0.3,
+      "rougeL_f": 0.2,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Overview of the 3D scene generation pipeline. Given a 2D grayscale input, the model generates a 3D scene with geometry, camera, and appearance, which is then rendered from a target viewpoint.",
+      "rouge1_f": 0.16,
+      "rougeL_f": 0.16,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Qualitative comparison of the three methods on the 224 × 224 input.",
+      "rouge1_f": 0.1333,
+      "rougeL_f": 0.0667,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "SpectRobot framework. (a) Example of a 224 × 224 grayscale input spectrogram.",
+      "rouge1_f": 0.2,
+      "rougeL_f": 0.1333,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Overview of the proposed framework. (a) The 2D top-down view of the scene.",
+      "rouge1_f": 0.1212,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "The 2D top-down view of the scene.",
+      "rouge1_f": 0.0741,
+      "rougeL_f": 0.0741,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "SpectRobot framework. (a) Example of a 224 × 224 grayscale input spectrogram.",
+      "rouge1_f": 0.2,
+      "rougeL_f": 0.1333,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Overview of the proposed framework. (a) The 224 × 224 grayscale input spectrogram.",
+      "rouge1_f": 0.129,
+      "rougeL_f": 0.129,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "The 2026 CDP World Model (left) and the CDP-CDIP Model (right) share a common 2026 CDP backbone. The CDP-CDIP Model incorporates CDIP losses during pretraining and integrates CDIP-selected hard negatives into multi-task training, enhancing specialization for defense against IPFT attacks.",
+      "rouge1_f": 0.0952,
+      "rougeL_f": 0.0635,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The 224-class framework. (a) The framework consists of a world model, a task router, and a task executor.",
+      "rouge1_f": 0.2143,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The 224-class framework. (a) The framework consists of a world model, a task router, and a task executor.",
+      "rouge1_f": 0.2143,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Spectator-relative states for the three-agent scenario. The spectator-relative states for the three-agent scenario are shown in this figure.",
+      "rouge1_f": 0.0645,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Spectator states. The spectator is either an ally or an enemy, and the states are the same for both.",
+      "rouge1_f": 0.1429,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Observation space for the pursuer. The state is composed of the pursuer’s position, velocity, and Euler angles, the number of remaining missiles, a detection flag, and the status of the last missile.",
+      "rouge1_f": 0.2381,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The 2026 IJCAI Best Paper Award is awarded to “M3D-POSE: MULTI-AGENT MULTI-OBJECT 3D POSE ESTIMATION FROM A SINGLE RGB IMAGE” by Yuhang Cao, Yufei Wang, and Jiayu Zhou. The paper introduces M3D-POSE, a multi-agent multi-object 3D pose estimation framework that leverages a multi-agent reinforcement learning paradigm to estimate the 3D",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The 2026 Jester 220mm 2.4GHz 6-Channel 3D F-16 Fighter Jet RC Plane with 2000mAh Rechargeable Battery and 2x 1000mAh Backup Batteries.",
+      "rouge1_f": 0.1212,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The Human-Agent Audit Collaboration (HAAC) Workflow. HAAC provides a structured framework for human-AI collaboration during audit evaluations, enabling the AI assistant to support auditors by retrieving relevant evidence, extracting assertions, and identifying potential weaknesses or missing information, while leaving the final judgment of evidence quality and reliability to the human auditor.",
+      "rouge1_f": 0.0968,
+      "rougeL_f": 0.0645,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "shows an overview of our rule-guided LLM solution for OUD CP using structured EHR data and clinical narratives from UF Health. Physician chart-reviewed labels are used as the gold standard.",
+      "answer": "Overview of the OPRO framework. Clinical narratives and evidence rubrics are used to generate extraction prompts, which are then processed by GPT-oss-120b to produce item-level judgments.",
+      "rouge1_f": 0.2623,
+      "rougeL_f": 0.1967,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The proposed LLM-based CP is composed of three components: an LLM engine (gpt-oss-120b15) that extracts evidence and determines the met/not-met binary judgments with supporting text evidence, and then a logistic regression model that uses the LLM- extracted indicators to generate patient-level OUD probabilities.",
+      "answer": "The OPRO pipeline extracts evidence items from clinical narratives, converts them into binary judgments, and uses logistic regression to predict a patient-level OUD probability, which is then converted into a performance score.",
+      "rouge1_f": 0.3902,
+      "rougeL_f": 0.2927,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "trend",
+      "target": "We compared our LLM-based CP with a diagnosis code–based phenotype, a machine learning-based CP using structured EHR features, NLP-derived features, and their combination, and a zero- shot LLM without rule guidance.",
+      "answer": "The OPRO framework extracts evidence items from clinical narratives, converts them into item-level judgments, and uses logistic regression to predict a patient-level OUD probability, which is then converted into a performance score.",
+      "rouge1_f": 0.087,
+      "rougeL_f": 0.058,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Workflow comparison: standalone LLM vs. RAG.",
+      "answer": "RAG vs. LLM-only retrieval. The RAG pipeline retrieves relevant documents from a text database before the LLM processes the user question, resulting in factually correct answers.",
+      "rouge1_f": 0.1818,
+      "rougeL_f": 0.1212,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Workflow comparison: standalone LLM vs.",
+      "answer": "The RAG pipeline retrieves relevant documents from a text database, which are then used by the LLM to generate factually correct answers, as opposed to the LLM-only approach that may produce hallucinated responses.",
+      "rouge1_f": 0.0513,
+      "rougeL_f": 0.0513,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "Runtime of the RAG pipeline for HotpotQA, NaturalQ, SQuAD, TriviaQA, and WebQA.",
+      "rouge1_f": 0.1905,
+      "rougeL_f": 0.0952,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "The top-k effect on the runtime of the three-stage pipeline.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "Runtime of the L3-8B model with different topk values.",
+      "rouge1_f": 0.1667,
+      "rougeL_f": 0.1667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "Latency (s) for L3-8B.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "Runtime breakdown of the LLM-native search pipeline. The pipeline is evaluated on Llmng2 and SC datasets, with top-k ranging from 1 to 10.",
+      "rouge1_f": 0.1176,
+      "rougeL_f": 0.0588,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "(a) Runtime breakdown of the LLM-native search pipeline.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Iterative Pipeline Analysis.",
+      "answer": "Runtime breakdown for HotpotQA.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "Comparison of IVF search time and recall across index types and batch sizes.",
+      "rouge1_f": 0.25,
+      "rougeL_f": 0.1667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "The left panel shows the trade-off between retrieval time and recall for a single GPU, while the right panel shows the same trade-off for 12 GPUs.",
+      "rouge1_f": 0.0513,
+      "rougeL_f": 0.0513,
+      "error": null
+    }
+  ]
+}
