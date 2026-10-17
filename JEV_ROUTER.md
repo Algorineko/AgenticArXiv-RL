@@ -213,7 +213,14 @@ JEV_MIN_CONFIDENCE=0.80
 - Jev confidence 低于阈值；
 - TLS、超时、429/5xx 或响应格式错误；
 - Jev 返回未知工具；
+- guided 参数解析发现所选工具的显式论文引用已出现在历史动作中；
 - Qwen 生成的 routed arguments 无法通过 schema 检查。
+
+“该工具的引用已用完”只说明这些引用曾被调用，不保证调用成功，也不表示整个请求已完成。
+例如“下载论文，然后总结”仍可能有总结步骤需要执行。因此这时恢复完整工具列表与真实历史，
+由原 policy 决定继续执行、处理失败，或输出 `FINISH`。路由记录使用
+`fallback_reason=deterministic_references_exhausted`，该轮 policy 的 token 和延迟照常计入。
+这条回退可能增加一次 policy 调用；Jev 明确选择 `FINISH` 的路径仍按原逻辑处理。
 
 明确非法的参数不会回退后继续尝试，而是给出具体原因并安全结束；`ref=0` 就属于这一类。
 

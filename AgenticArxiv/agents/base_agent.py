@@ -300,20 +300,13 @@ class BaseAgent(ABC):
                             f"schema_validation:{validation_reason}"
                         )
                 elif resolution.status == "complete":
-                    route_record["fallback_reason"] = "deterministic_task_complete"
-                    thought = "显式参数已全部执行，任务完成"
-                    observation = "任务完成"
-                    history.append(
-                        {"thought": thought, "action": "FINISH", "observation": observation}
-                    )
-                    step_timings.append(
-                        {"router_ms": router_ms, "llm_ms": 0, "tool_ms": 0}
-                    )
-                    self._log_step(
-                        msg_id, iteration, thought, "FINISH", "{}",
-                        observation, 0, 0, session_id,
-                    )
-                    break
+                    # Reference exhaustion applies only to this selected tool.
+                    # Earlier attempts may have failed, or the user may still
+                    # need another tool. Let the full policy assess completion.
+                    route_record["fallback_reason"] = "deterministic_references_exhausted"
+                    routed_tool = None
+                    routed_tool_spec = None
+                    tools_description = policy_tools_description
                 elif resolution.status == "blocked":
                     route_record["fallback_reason"] = "deterministic_invalid_arguments"
                     thought = "无法执行：论文索引 ref=0 非法，论文序号必须从 1 开始"
