@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "kind": "vlm_policy_sft_mix",
+  "seed": 42,
+  "inputs_sha256": {
+    "tool_trajectories": "83189debcbef3c5522aaab31b26f9b55de3033545d4cbcb41d0c1ef68a6815cf",
+    "figureqa_v2": "f54abf2dc16b25cad6dc3e059e87fc3f058c9a81bc4479558b7c72d670513a6f",
+    "figureqa_backfill": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "summary_sft": "957427c8c8b243d97b3a0e66632a87b42c356853d9a2693dc1c0655420ea15be"
+  },
+  "output": "data/vlm/vlm_policy_sft_v3_canonical.jsonl",
+  "output_sha256": "78505393efb9648cbebdc61be567221acefe4eb11c9bb7782555e46bef8cc13b",
+  "counts": {
+    "tool": {
+      "rows": 2988,
+      "multimodal": 0
+    },
+    "figureqa_v2": {
+      "rows": 616,
+      "multimodal": 616,
+      "dropped_clipart": 304
+    },
+    "summary_sft": {
+      "rows": 408,
+      "multimodal": 0
+    }
+  },
+  "rows_total": 4012,
+  "val_excluded": "figureqa_v2 的 val/val2 与 summary 的 val2 行一律不进混合集"
+}

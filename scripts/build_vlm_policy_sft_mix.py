@@ -51,6 +51,27 @@ def is_clipart(relpath: str, image_root: Path, min_side: int) -> bool:
         return True
 
 
+def canonicalize_tool_manual(content: str, canonical_desc: str) -> str:
+    """把轨迹 user prompt 里数据生成年代的工具手册段，替换为当前 registry 的
+    逐字节渲染（与 benchmark ``format_tools_for_prompt`` 完全一致）。
+
+    背景：SFT 轨迹来自旧注册表（工具顺序/集合与当前不同），27B SFT 把前缀
+    背得太死后，benchmark 前缀的 53 行顺序差就让它整体回落 base 行为
+    （英文思维链 + args:{}）。训练前缀 ≡ 评测前缀是根治。
+
+    手册段边界：intro 行之后的第一行 ``- tool_name:`` 起，到 ``正确示例：``
+    行之前；正文中没有该标记的行原样返回。
+    """
+    lines = content.split("\n")
+    start = next((i for i, ln in enumerate(lines) if ln.startswith("- ")), None)
+    if start is None:
+        return content
+    end = next((i for i, ln in enumerate(lines) if ln.startswith("正确示例")), len(lines))
+    if end <= start:
+        return content
+    return "\n".join(lines[:start] + canonical_desc.split("\n") + lines[end:])
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -70,6 +91,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--min-image-side", type=int, default=0,
                         help=">0 时剔除 max 边小于该值的图文行（滤 clipart）")
+    parser.add_argument("--canonicalize-tools", action="store_true",
+                        help="把工具轨迹的手册段替换为当前 registry 渲染（训练前缀 ≡ 评测前缀）")
     parser.add_argument("--max-tool", type=int, default=0, help="消融：限制工具轨迹条数（0=全量）")
     parser.add_argument("--max-figureqa", type=int, default=0)
     parser.add_argument("--max-summary", type=int, default=0)
@@ -98,10 +121,35 @@ def main() -> None:
         return True
 
     tool_path = Path(args.tool_trajectories)
+    canonical_desc = None
+    if args.canonicalize_tools:
+        import sys as _sys
+
+        _sys.path.insert(0, str(REPO_ROOT / "AgenticArxiv"))
+        import os as _os
+
+        _os.environ.setdefault("STORE_BACKEND", "memory")
+        from tools.bootstrap import register_all_tools
+        from tools.tool_registry import registry
+        from agents.prompt_templates import format_tool_description
+
+        register_all_tools()
+        canonical_desc = format_tool_description(registry.list_tools())
+        print(f"🧭 工具手册规范化: {len(canonical_desc)} chars")
     if tool_path.exists():
         inputs["tool_trajectories"] = sha256_file(tool_path)
         for row in load_jsonl(tool_path):
-            add("tool", {"messages": row["messages"], "sample_sha256": row.get("sample_sha256")},
+            messages = row["messages"]
+            if canonical_desc is not None:
+                messages = [
+                    {**m, "content": (
+                        canonicalize_tool_manual(m["content"], canonical_desc)
+                        if isinstance(m.get("content"), str) and "现在开始执行任务" in m["content"]
+                        else m["content"]
+                    )}
+                    for m in messages
+                ]
+            add("tool", {"messages": messages, "sample_sha256": row.get("sample_sha256")},
                 max_n=args.max_tool)
     else:
         print(f"⚠️ 工具轨迹缺失，跳过: {tool_path}")
