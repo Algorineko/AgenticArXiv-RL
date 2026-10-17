@@ -1,0 +1,9 @@
+{
+  "kind": "summary_dpo",
+  "version": 1,
+  "output": "data/dpo/summary_dpo.jsonl",
+  "output_sha256": "e77a4a26c21d9713f41c988ce4e533127d4dcddfc6ca81aeb707d626f4995bca",
+  "pairs": 854,
+  "train": 755,
+  "avg_margin": 0.0423
+}
