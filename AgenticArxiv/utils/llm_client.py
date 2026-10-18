@@ -320,6 +320,10 @@ class TransformersLLMClient:
         target = next(self.model.parameters()).device
         inputs = {key: value.to(target) if hasattr(value, "to") else value for key, value in inputs.items()}
         do_sample = temperature is not None and temperature > 0
+        # 大 LoRA 适配（如 27B@0.58%）在 temp>0 采样下会回落 base 行为；
+        # AA_EVAL_GREEDY=1 强制确定性解码，作为大模型本地评测的标准口径。
+        if os.getenv("AA_EVAL_GREEDY") == "1":
+            do_sample = False
         generation_kwargs: Dict[str, Any] = {
             "max_new_tokens": max_tokens,
             "do_sample": do_sample,
