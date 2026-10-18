@@ -1,0 +1,16 @@
+{
+  "kind": "sft_v4_multiturn",
+  "version": 1,
+  "seed_data": "data/sft/sft_v3_t5_parametric_linguistic.jsonl",
+  "seed_sha256": "83189debcbef3c5522aaab31b26f9b55de3033545d4cbcb41d0c1ef68a6815cf",
+  "snapshot": "data/mock_arxiv_snapshot.json",
+  "snapshot_sha256": "dcde74d7f86da03d544b6a7e27fee3e07df078be85f1b1c39d8f47e81c34aa3f",
+  "output": "data/sft/sft_v4_multiturn.jsonl",
+  "output_sha256": "a053590e3e9efa5afa1ee038263cf5b64330f49c8daf6199d70d0b43fa24bdec",
+  "summary": {
+    "chains": 1032,
+    "rows": 2508,
+    "truncated_chains": 1032,
+    "note": "user 内容 = runner 同款 build_messages（含会话状态块与 Observation 历史），与推理逐字节同分布"
+  }
+}

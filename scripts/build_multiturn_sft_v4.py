@@ -142,11 +142,15 @@ def main() -> None:
                 action_json = json.loads(
                     __import__("re").search(r"\{.*\}", decision, __import__("re").DOTALL).group(0)
                 )
-                obs = env.execute_tool(action_json.get("name"), action_json.get("args") or {})
+                chain_args = dict(action_json.get("args") or {})
+                # 链内 session 统一：搜索(不含 session_id，框架同步用默认)与
+                # 下载/翻译(显式 session_id) 必须落在同一会话，否则断链
+                chain_args["session_id"] = session_id
+                obs = env.execute_tool(action_json.get("name"), chain_args)
             except Exception:  # noqa: BLE001 - 快照缺失/解析失败：链到此为止
                 chain_broke = True
                 break
-            obs_text = obs if isinstance(obs, str) else json.dumps(obs, ensure_ascii=False)
+            obs_text = obs if isinstance(obs, str) else json.dumps(obs, ensure_ascii=False, default=str)
             history_text = (
                 f"{history_text}\n\n{decision}\nObservation: {obs_text}".strip()
                 if history_text else f"{decision}\nObservation: {obs_text}"
