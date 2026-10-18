@@ -221,7 +221,8 @@ class MaskedLMHeadSFTTrainer:
                 loss = torch.nn.functional.cross_entropy(
                     logits, sel_labels, ignore_index=-100
                 )
-                return loss
+                # Trainer 要求 loss 落回其记账的原设备（device_map 首分片）
+                return loss.to(next(model.parameters()).device)
 
         return _Impl
 
