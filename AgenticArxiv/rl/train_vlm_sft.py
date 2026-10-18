@@ -211,7 +211,7 @@ class MaskedLMHeadSFTTrainer:
                 outputs = backbone(**model_inputs)
                 hidden = outputs.last_hidden_state if hasattr(outputs, "last_hidden_state") else outputs[0]
                 shift_hidden = hidden[:, :-1, :]
-                shift_labels = labels[:, 1:]
+                shift_labels = labels[:, 1:].to(shift_hidden.device)
                 mask = shift_labels != -100
                 if mask.sum() == 0:
                     raise ValueError("empty target positions")
