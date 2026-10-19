@@ -1,0 +1,976 @@
+{
+  "tag": "qwen38_27b_cap",
+  "model": "~~/data/models/Qwen3.8-27B",
+  "data": "data/vlm/figureqa_seed.jsonl",
+  "aggregate": {
+    "n": 94,
+    "rouge1_f": 0.1621,
+    "rougeL_f": 0.1403,
+    "empty_or_error": 2,
+    "per_question": {
+      "axes": {
+        "n": 24,
+        "rouge1_f": 0.1521,
+        "rougeL_f": 0.1319,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 11.8
+      },
+      "describe": {
+        "n": 65,
+        "rouge1_f": 0.1658,
+        "rougeL_f": 0.1438,
+        "empty_or_error": 1,
+        "avg_answer_tokens": 18.4
+      },
+      "trend": {
+        "n": 5,
+        "rouge1_f": 0.1608,
+        "rougeL_f": 0.1353,
+        "empty_or_error": 0,
+        "avg_answer_tokens": 16.8
+      }
+    }
+  },
+  "results": [
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of the RAGSentinel pipeline. An attacker injects poisoned documents into the knowledge database (left).",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of the RAGSentinel pipeline. An attacker injects poisoned documents into the knowledge database (left).",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of the RAGSentinel pipeline. An attacker injects poisoned documents into the knowledge database (left).",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of the RAGSentinel pipeline. An attacker injects poisoned documents into the knowledge database (left).",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.1622,
+      "rougeL_f": 0.1081,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Geometry-native world generation. Given a reference image, a camera trajectory, and optional text, GAE jointly generates RGB views and 3D geometry from a shared, compact latent space.",
+      "rouge1_f": 0.0435,
+      "rougeL_f": 0.0435,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.1622,
+      "rougeL_f": 0.1081,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24967v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Examples of collusion. Agents are instructed to do their tasks and verify each other’s work via logs.",
+      "answer": "Overview of the RAGSentinel pipeline. An attacker injects poisoned documents into the knowledge database (left).",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.0822,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Semantic similarity (left) vs.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0526,
+      "rougeL_f": 0.0263,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Semantic similarity (left) vs.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Semantic similarity (left) vs. structural coher- ence (right) for a retrieved set of five passages (three gold, two distractors).",
+      "rouge1_f": 0.1096,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate encoder encodes each query-document pair and extracts hidden-state shifts (Phase 1).",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Evaluation at a scientific decision point. The model selects relations from supplied evidence; shared code derives scientific outputs and composes a claim label.",
+      "rouge1_f": 0.1299,
+      "rougeL_f": 0.0779,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate encoder encodes each query-document pair and extracts hidden-state shifts (Phase 1).",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.0822,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Semantic similarity (left) vs.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Framework of MEGA-CDP. The framework consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0526,
+      "rougeL_f": 0.0263,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Semantic similarity (left) vs.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The Human-Agent Audit Collaboration (HAAC) Workflow in which AI agents support a human auditor at each step of a user-engaged audit session. HAAC organizes auditing into three phases and six activities.",
+      "rouge1_f": 0.092,
+      "rougeL_f": 0.069,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "The surrogate encoder encodes each query-document pair and extracts hidden-state shifts (Phase 1).",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Two-dimensional interaction effects for reactant Z conversion, product purity, and cost per unit product be- tween initial reactant concentration [Z0] and catalyst concentration [Cat0] at various fixed values of other parameters, obtained from a JAREX model trained with 40 samples. Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.0822,
+      "rougeL_f": 0.0548,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24954v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Confidence levels: mean pass (yellow), 70% (light green), 95% (dark green), fail (red).",
+      "answer": "Semantic similarity (left) vs.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "An example of L-features and E-features.",
+      "rouge1_f": 0.16,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "The two types of features used in our model.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.2222,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Proposed process for feature generation and extraction. a) Text processing and b) Iden- tification of semantic categories.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file './AgenticArxiv/output/pdf_figures/2609.24932v1/fig_2.png'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "The starred gray box illustrates the case where some entity of H has no matching entity in P.",
+      "answer": "",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": "UnidentifiedImageError: cannot identify image file './AgenticArxiv/output/pdf_figures/2609.24932v1/fig_2.png'"
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK corpus. The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "Comparison of classification performance across different encoder architectures.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "The feature L10 stands out for maintaining superior robustness in the Macro F1-score.",
+      "answer": "Performance comparison across different datasets.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Performance analysis for the top five features on the SICK-CE corpus. A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "Comparison of classification performance across different datasets.",
+      "rouge1_f": 0.1212,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "A high degree of consistency is observed between Accuracy and the Macro F1-score.",
+      "answer": "Performance of the five best hyperparameter combinations across the five evaluation metrics.",
+      "rouge1_f": 0.1538,
+      "rougeL_f": 0.1538,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The magnitude of the coefficients for the 16 selected features.",
+      "rouge1_f": 0.16,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 5,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "The bar plot shows the change in accuracy when the corresponding feature is removed.",
+      "rouge1_f": 0.125,
+      "rougeL_f": 0.125,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 6,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "Comparison of the learned filter bank with the Gabor filter bank.",
+      "rouge1_f": 0.2069,
+      "rougeL_f": 0.1379,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance for MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The magnitude of each element in the difference vector, with red indicating a lower value in the current model and green indicating a higher value.",
+      "rouge1_f": 0.2,
+      "rougeL_f": 0.2,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 7,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "Comparison of the top-1 accuracy changes (percentage points) of the pruned model against the unpruned baseline.",
+      "rouge1_f": 0.1714,
+      "rougeL_f": 0.1714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Qualitative analysis of feature contributions using SHAP additive explanations for four representative cases. Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "Item-level performance of MovieLens.",
+      "rouge1_f": 0.0606,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Each plot illustrates how specific features push the model’s output toward a specific class.",
+      "answer": "The magnitude of the coefficients for the linear (L) and exponential (E) models.",
+      "rouge1_f": 0.0714,
+      "rougeL_f": 0.0714,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24932v1",
+      "figure_no": 8,
+      "question": "trend",
+      "target": "Green bars indicate features that increase the probability of the predicted entailment, while red bars represent counter-evidence.",
+      "answer": "Comparison of the top-10 most discriminative features between the control group and the ALS group.",
+      "rouge1_f": 0.2353,
+      "rougeL_f": 0.1765,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms of the four tone categories.",
+      "rouge1_f": 0.12,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms of the four tone categories in the training set.",
+      "rouge1_f": 0.1481,
+      "rougeL_f": 0.1111,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms of the four tone categories.",
+      "rouge1_f": 0.12,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Random MFCCs for four different Mandarin tones from (a) Google Translate text-to-speech, (b) the Tone Perfect dataset (Catherine Ryu et al., 2022), (c) the THCHS-30 dataset (Wang and Zhang, 2015), and (d) the AISHELL-3 dataset (Shi et al., 2020).",
+      "answer": "MFCC spectrograms for the four tone categories.",
+      "rouge1_f": 0.16,
+      "rougeL_f": 0.12,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "SpectRobot framework. (a) Example of a 224 × 224 grayscale input spectrogram.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.2222,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "Example of a 1D sinusoidal signal.",
+      "rouge1_f": 0.1538,
+      "rougeL_f": 0.1538,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24903v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "The general framework of our proposed approach.",
+      "answer": "SpectRobot framework. (a) Example of a 224 × 224 grayscale input spectrogram.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.2222,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24656v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Flow diagram of a fake base station attack vector implementation",
+      "answer": "Overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.1379,
+      "rougeL_f": 0.1379,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "Comparison of average precision (AP) and average recall (AR) for different movement patterns, number of people in the scene, and proximity to the camera.",
+      "rouge1_f": 0.1026,
+      "rougeL_f": 0.1026,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Matched-protocol full-body detection perfor- mance (AP50 and AR50) across the 11 dataset categories.",
+      "answer": "Accuracy (IoU = 0.5) versus average processing time per clip (seconds) for the full pipeline. The Pareto frontier is shown for both precision (solid line) and recall (dashed line).",
+      "rouge1_f": 0.1364,
+      "rougeL_f": 0.0909,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Pixel-level redaction quality: standard mask IoU and person coverage (|𝑀pred ∩𝑀gt|/|𝑀gt|).",
+      "answer": "Comparison of Mask IoU and Person Coverage across different movement patterns, number of people, and proximity levels.",
+      "rouge1_f": 0.3333,
+      "rougeL_f": 0.3333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Tier 1 energy per 10-s clip on RPi 5 at 𝑛= 5.",
+      "answer": "Energy consumption (J) per inference across all 10 scenes. The baseline (leftmost bar in each group) is the unmodified MobileNetV2.",
+      "rouge1_f": 0.1875,
+      "rougeL_f": 0.1875,
+      "error": null
+    },
+    {
+      "paper_id": "2609.24537v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Additional recovery and conditioning payload per 10-s clip.",
+      "answer": "Storage size per 10s clip (left) and total storage overhead (right) across the ablation study.",
+      "rouge1_f": 0.25,
+      "rougeL_f": 0.1667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.99.",
+      "answer": "Impact of Incumbent Removal on the Learning Dynamics for Bertrand Congestion Model with We = 1, N = 2, K = 2.",
+      "rouge1_f": 0.6667,
+      "rougeL_f": 0.6667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "Impact of Incumbent Removal on the Learning Dynamics for Bertrand Congestion Model when We = 1, N = 2.",
+      "rouge1_f": 0.5882,
+      "rougeL_f": 0.5294,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 2,
+      "question": "axes",
+      "target": "Learning outcomes versus number of states for Bertrand Congestion Model with We = 1, N = 2, δ = 0.99.",
+      "answer": "Impact of State Design on the Learning Dynamics for Bertrand Congestion Model when We = 1, N = 2.",
+      "rouge1_f": 0.5882,
+      "rougeL_f": 0.5294,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "Impact of Incumbent Removal on the Learning Dynamics for Bertrand Congestion Model with We = 1, N = 2, K = 2.",
+      "rouge1_f": 0.7442,
+      "rougeL_f": 0.7442,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 3,
+      "question": "axes",
+      "target": "Impact of Exploration Decay Rate on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2, δ = 0.9.",
+      "answer": "Impact of Incumbent Removal on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 2, K = 2.",
+      "rouge1_f": 0.8444,
+      "rougeL_f": 0.8444,
+      "error": null
+    },
+    {
+      "paper_id": "2609.14827v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Impact of The Number of Agents on the Learning Dynamics for Bertrand Congestion Model over episodes when We = 1, N = 3, K = 1, δ = 0.99.",
+      "answer": "Impact of Incumbent Removal on the Learning Dynamics for Bertrand Congestion Model with We = 1, N = 2, K = 1.",
+      "rouge1_f": 0.6818,
+      "rougeL_f": 0.6818,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "WorldCrafter enables consistent, camera-controlled exploration. It preserves scene appearance and structure across revisits in static (a) and dynamic (b) scenes, as illustrated by reconstructed point clouds.",
+      "rouge1_f": 0.1304,
+      "rougeL_f": 0.087,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Geometry-native world generation. Given a reference image, a camera trajectory, and optional text, GAE jointly generates RGB views and 3D geometry from a shared, compact latent space.",
+      "rouge1_f": 0.1702,
+      "rougeL_f": 0.1702,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "The overview of the RAGSentinel pipeline. An attacker injects poisoned documents into the knowledge database (left).",
+      "rouge1_f": 0.0571,
+      "rougeL_f": 0.0571,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Our framework consists of three stages: (1) Geometry-native world generation, where a geometry-native world model generates a consistent, camera-controlled world; (2) Hierarchical path planning, where a lightweight path planner proposes a coarse trajectory that is refined through multi-view geometry and collision checks; and (3) Geometry-aware control, where a geometry-aware controller tracks the reference path while avoiding obstacles and respecting the drone’s kinematic constraints.",
+      "rouge1_f": 0.1124,
+      "rougeL_f": 0.1124,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "The overview of the RAG pipeline. Retrieved passages are converted into directed heterogeneous entity graphs, reweighted by min-out-degree to emphasize factual anchors (highlighted nodes), encoded via R-GCN into graph-level embeddings, and scored using a fused objective combining query relevance with pairwise structural coherence.",
+      "rouge1_f": 0.0909,
+      "rougeL_f": 0.0606,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "The overview of MEGA-CDP. The pipeline consists of guideline collection, guideline-to-case construction, down- stream task settings, and CDP-oriented evaluation.",
+      "rouge1_f": 0.0952,
+      "rougeL_f": 0.0952,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "Training pipeline. Instance masks of each view become 2D signed-distance potentials (SDFs; attractive for the goal and repulsive for obstacles) whose gradients supervise the SE(3) potential network: a pose is expanded to the three gripper points, ψθ is evaluated at each, and the projected 3D gradients are aggregated along rays by density-weighted rendering.",
+      "rouge1_f": 0.1351,
+      "rougeL_f": 0.1081,
+      "error": null
+    },
+    {
+      "paper_id": "2608.27909v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Illustration of a low-altitude FA network (Subfig. a), and conceptual comparison between traditional MIMO and FA MIMO (Subfigs.",
+      "answer": "GLIDE converts task descriptions into runtime guardrails that constrain error-prone naive teleoperation, enabling reliable data col- lection and policy learning for tasks that are dif- ficult to demonstrate directly.",
+      "rouge1_f": 0.0408,
+      "rougeL_f": 0.0408,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The overview of CPI-Bench. CPI-Bench decomposed into three distinct dimensions: CPI- General-Bench for comprehensive editing performance, CPI-Practical-Bench for real-world deployment efficacy, and CPI-Intelligent-Bench for reasoning-based editing tasks.",
+      "rouge1_f": 0.1778,
+      "rougeL_f": 0.1333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 2,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "Geometry-native world generation. Given a reference image, a camera trajectory, and optional text, GAE jointly generates RGB views and 3D geometry from a shared, compact latent space.",
+      "rouge1_f": 0.1622,
+      "rougeL_f": 0.1622,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 3,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "State variables for the enemy aircraft.",
+      "rouge1_f": 0.1333,
+      "rougeL_f": 0.1333,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "State variables for the ally.",
+      "rouge1_f": 0.1429,
+      "rougeL_f": 0.1429,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The state variables of the aircraft.",
+      "rouge1_f": 0.2667,
+      "rougeL_f": 0.2667,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The complete pipeline, from initial geometry extraction to the final high-fidelity render. (a) The raw point cloud; (b) the reconstructed triangular mesh; (c) the mesh with predicted UV coordinates; (d) the resulting albedo map; (e) the normal map; and (f) the final rendered view.",
+      "rouge1_f": 0.1111,
+      "rougeL_f": 0.1111,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The complete model of the F-22 fighter jet.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.2222,
+      "error": null
+    },
+    {
+      "paper_id": "2609.11155v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Overview of the battlefield tactical geometry and observation space.",
+      "answer": "The overview of CAMFT. CAMFT constructs a shared SVD coordinate system and uses gradient probing to quantify cross-task conflicts.",
+      "rouge1_f": 0.2759,
+      "rougeL_f": 0.2069,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "shows an overview of our rule-guided LLM solution for OUD CP using structured EHR data and clinical narratives from UF Health. Physician chart-reviewed labels are used as the gold standard.",
+      "answer": "Overview of the OPRO framework. Clinical narratives are converted into structured evidence by a large language model (GPT-oss-120b) guided by an extraction prompt and a domain-specific evidence rubric.",
+      "rouge1_f": 0.3175,
+      "rougeL_f": 0.1587,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "The proposed LLM-based CP is composed of three components: an LLM engine (gpt-oss-120b15) that extracts evidence and determines the met/not-met binary judgments with supporting text evidence, and then a logistic regression model that uses the LLM- extracted indicators to generate patient-level OUD probabilities.",
+      "answer": "The resulting item-level judgments are then used to train a logistic regression model that predicts the probability of an OUD diagnosis at the patient level.",
+      "rouge1_f": 0.4267,
+      "rougeL_f": 0.2933,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05682v1",
+      "figure_no": 1,
+      "question": "trend",
+      "target": "We compared our LLM-based CP with a diagnosis code–based phenotype, a machine learning-based CP using structured EHR features, NLP-derived features, and their combination, and a zero- shot LLM without rule guidance.",
+      "answer": "The resulting item-level judgments are then used to train a logistic regression model that predicts the probability of an OUD diagnosis at the patient level.",
+      "rouge1_f": 0.0656,
+      "rougeL_f": 0.0656,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "describe",
+      "target": "Workflow comparison: standalone LLM vs. RAG.",
+      "answer": "Comparison of LLM-only and RAG-based approaches. The top path shows an LLM generating a hallucinated answer without external context.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.2222,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 1,
+      "question": "axes",
+      "target": "Workflow comparison: standalone LLM vs.",
+      "answer": "The RAG pipeline retrieves relevant passages from a knowledge database and conditions the LLM on them, yielding a factually correct answer.",
+      "rouge1_f": 0.0769,
+      "rougeL_f": 0.0769,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "describe",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "Latency breakdown of RAGSentinel.",
+      "rouge1_f": 0.3077,
+      "rougeL_f": 0.3077,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 4,
+      "question": "axes",
+      "target": "Latency breakdown and ROUGE scores for reranking (Case 2).",
+      "answer": "Latency breakdown of RAGSentinel under different top-k settings.",
+      "rouge1_f": 0.2222,
+      "rougeL_f": 0.2222,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "describe",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "Latency breakdown of top-k retrieval across different values of k.",
+      "rouge1_f": 0.08,
+      "rougeL_f": 0.08,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 5,
+      "question": "axes",
+      "target": "Impact of compression rate (r) on stage latencies using LLMLingua-2 (LLmng2) compression model.",
+      "answer": "Wall-clock latency breakdown of the top-k = 1, 3, 5, 10 regimes across the four pipeline stages (Embed, Compress, FAISS, TTFT) and Decode for L3-8B.",
+      "rouge1_f": 0.0488,
+      "rougeL_f": 0.0488,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "describe",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "Latency breakdown of LLM and LLM+SC.",
+      "rouge1_f": 0.375,
+      "rougeL_f": 0.25,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 6,
+      "question": "axes",
+      "target": "Compression latency overhead comparison between SC and LLMLingua-2.",
+      "answer": "Latency breakdown of LLM and LLM+SC.",
+      "rouge1_f": 0.375,
+      "rougeL_f": 0.25,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 7,
+      "question": "describe",
+      "target": "Iterative Pipeline Analysis.",
+      "answer": "Latency breakdown of RAGSentinel on HotpotQA.",
+      "rouge1_f": 0.0,
+      "rougeL_f": 0.0,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "describe",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "Average retrieval time (s) for different index types, batch sizes, and number of GPUs.",
+      "rouge1_f": 0.24,
+      "rougeL_f": 0.16,
+      "error": null
+    },
+    {
+      "paper_id": "2609.05760v1",
+      "figure_no": 8,
+      "question": "axes",
+      "target": "Index format impact on latency and accuracy across different device allocations.",
+      "answer": "Average retrieval time (s) of different index types on the MovieLens dataset.",
+      "rouge1_f": 0.2609,
+      "rougeL_f": 0.1739,
+      "error": null
+    }
+  ]
+}
