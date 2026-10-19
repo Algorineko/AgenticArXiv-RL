@@ -92,11 +92,27 @@ def _precision_flags():
     return precision_flags()
 
 
-def _build_reward_calculator(curriculum_steps: int) -> RewardCalculator:
-    """构造本次运行唯一的奖励配置，并拒绝含糊的负步数。"""
+def _build_reward_calculator(
+    curriculum_steps: int, weights_override: Optional[str] = None
+) -> RewardCalculator:
+    """构造本次运行唯一的奖励配置，并拒绝含糊的负步数。
+
+    weights_override: JSON 对象，逐分量覆盖权重（E4 奖励消融用），
+    如 '{"outcome": 0.0}'；分量名以 RewardCalculator.weights 为准。
+    """
     if curriculum_steps < 0:
         raise SystemExit("❌ reward_curriculum_steps 不能为负数")
-    return RewardCalculator(curriculum_steps=curriculum_steps)
+    calc = RewardCalculator(curriculum_steps=curriculum_steps)
+    if weights_override:
+        try:
+            parsed = json.loads(weights_override)
+        except ValueError as exc:
+            raise SystemExit(f"❌ --reward_weights 不是合法 JSON: {exc}")
+        if not isinstance(parsed, dict) or not parsed:
+            raise SystemExit("❌ --reward_weights 须为非空对象, 如 '{\"outcome\": 0.0}'")
+        calc.set_weights({k: float(v) for k, v in parsed.items()})
+        print(f"⚖️  奖励分量覆盖（E4 消融）: {parsed}")
+    return calc
 
 
 def _load_tasks(task_set: str, split: Optional[str]):
@@ -416,6 +432,7 @@ def main(
     lr: float = 1e-5,
     beta: float = DEFAULT_BETA,
     reward_curriculum_steps: int = 30,
+    reward_weights: Optional[str] = None,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -605,7 +622,7 @@ def main(
     print(f"🗂  使用独立离线环境执行多轮工具调用: {snapshot_path}")
     # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
     tracker = RewardComponentTracker()
-    reward_calc = _build_reward_calculator(reward_curriculum_steps)
+    reward_calc = _build_reward_calculator(reward_curriculum_steps, reward_weights)
     initial_weights = reward_calc.schedule(training_step=0)
     print(
         "⚖️  奖励课程: "
@@ -960,6 +977,11 @@ if __name__ == "__main__":
     p.add_argument("--grad_accum", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-5)
     p.add_argument("--beta", type=float, default=0.04)
+    p.add_argument(
+        "--reward_weights", default=None,
+        help="JSON 逐分量覆盖奖励权重（E4 消融），分量名见 RewardCalculator.weights，"
+             '如 {"outcome": 0.0}',
+    )
     p.add_argument(
         "--reward_curriculum_steps", type=int, default=30,
         help="奖励课程持续步数。默认30保持历史实验兼容；SFT后直接优化工具、参数和结果时"
