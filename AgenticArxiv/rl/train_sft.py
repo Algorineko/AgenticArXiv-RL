@@ -94,7 +94,7 @@ def _verify_data_manifest(data_path: Path, manifest_path: Path | None = None) ->
     return manifest
 
 
-def _qlora_runtime_guard() -> None:
+def _qlora_runtime_guard(lora_r=lora_r) -> None:
     """在加载3GB模型前检查GPU和关键依赖，避免晚失败。"""
     import torch
 
@@ -109,6 +109,9 @@ def _qlora_runtime_guard() -> None:
     required = {"transformers": "4.57.6", "trl": "0.29.1", "peft": "0.17.1", "bitsandbytes": "0.45.5"}
     installed = {}
     for package in required:
+        # DCU（das 构建）无 bitsandbytes；全参 SFT（无 LoRA）不需要它——仅 QLoRA 路径需要
+        if package == "bitsandbytes" and lora_r is None:
+            continue
         try:
             installed[package] = version(package)
         except Exception as exc:
@@ -354,7 +357,7 @@ def main(
 
     assert_quantization_is_single_process(qlora)
     if qlora:
-        _qlora_runtime_guard()
+        _qlora_runtime_guard(lora_r=lora_r)
         quantization_config, peft_config = _build_qlora_configs(
             lora_r, lora_alpha, lora_dropout
         )
