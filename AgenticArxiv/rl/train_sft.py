@@ -94,7 +94,7 @@ def _verify_data_manifest(data_path: Path, manifest_path: Path | None = None) ->
     return manifest
 
 
-def _qlora_runtime_guard(lora_r=lora_r) -> None:
+def _qlora_runtime_guard(lora_r=None) -> None:
     """在加载3GB模型前检查GPU和关键依赖，避免晚失败。"""
     import torch
 
