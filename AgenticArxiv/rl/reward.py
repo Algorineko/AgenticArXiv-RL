@@ -114,8 +114,11 @@ class RewardCalculator:
         curriculum_steps: int = 30,
         early_correctness_scale: float = 1.0 / 3.0,
         weights: Optional[Mapping[str, float]] = None,
+        disable_failure_caps: bool = False,
     ) -> None:
         self.curriculum_steps = max(0, curriculum_steps)
+        # E4 消融：True 时跳过非补偿失败封顶（hard_invalid/-0.75、false_finish/-0.25、efficiency/-0.25）
+        self.disable_failure_caps = disable_failure_caps
         self.early_correctness_scale = early_correctness_scale
         self.weights = {
             "format": 1.0,
@@ -470,6 +473,9 @@ class RewardCalculator:
         efficiency: float,
     ) -> float:
         """在原有加权分数之后应用不可补偿的失败上限。"""
+        if self.disable_failure_caps:
+            # E4 消融：保留加权总分，不做非补偿截断
+            return _clip(float(total))
         capped = float(total)
         hard_invalid = (
             metrics.termination_type == "ERROR"
