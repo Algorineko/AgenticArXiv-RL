@@ -12,10 +12,6 @@
   <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL 项目介绍" width="800"/>
 </p>
 
-<p align="center">
-  <img src="imgs/edge-paper-assistant-hero.png" alt="端侧多模态论文助手" width="800"/>
-</p>
-
 ---
 
 ## 🎯 项目定位
@@ -224,9 +220,14 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 Qwen3.8-27B（原生多模态）的图表理解特化 SFT。数据经 clipart 过滤与工具手册规范化两轮
 治理；评测统一 **greedy 确定性协议**、81 任务离线 benchmark + clean-val 图表 ROUGE。
 
-<p align="center">
-  <img src="imgs/edge_results_combined.png" alt="端侧 VLM 后训练结果：(a) 8B 全链路 strict success (b) 图表识别 clean-val ROUGE" width="880"/>
-</p>
+| 阶段 | 81 任务 strict | 完成率 | 工具准确率 | 假结束 | clean ROUGE-1 |
+|---|---|---|---|---|---|
+| 8B base | 24.7% | 80.2% | 32.1% | 22.2% | 0.1139 |
+| 8B SFT v3 | 66.7% | 95.1% | 72.8% | 8.6% | 0.1446（+27%） |
+| 8B DPO v3 | 65.4% | 97.5% | 74.1% | 11.1% | 0.1435 |
+| **8B GRPO v3（主模型）** | **72.8%** | **97.5%** | **82.7%** | **6.2%** | **0.1509（+32%）** |
+| 27B base（对照） | 24.7% | 80.2% | 32.1% | 22.2% | 0.1349 |
+| 27B cap SFT（研究版） | 21.0% | 66.7% | 25.9% | **4.9%** | **0.2164（+60%）** |
 
 **主模型：8B GRPO（strict 72.8%）= 27B base 的 2.9 倍**，全指标（完成率/工具/参数/假结束/token）最优，
 两次独立运行可复现（任务翻转率 4.9%）；图表识别 clean-val ROUGE-1 +32%。
