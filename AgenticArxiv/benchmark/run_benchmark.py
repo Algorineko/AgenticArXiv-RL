@@ -133,11 +133,13 @@ def main():
         ),
     )
     parser.add_argument(
-        "--task-set", choices=["default", "expanded"], default="default",
+        "--task-set", choices=["default", "expanded", "probe"], default="default",
         help=(
             f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
             f"expanded=扩充后的 {len(get_expanded_tasks())} 条"
-            "（指代形态、可选参数、跨步状态、多跳链路、负向约束、不可行请求）"
+            "（指代形态、可选参数、跨步状态、多跳链路、负向约束、不可行请求）；"
+            "probe=E11 泛化探针集（benchmark/tasks_probe.py，3 族 × 5 题，"
+            "标准答案绑定快照，需 --offline 配合 data/splits/v8_probe.json:probe）"
         ),
     )
     args = parser.parse_args()
@@ -164,6 +166,17 @@ def main():
             pool = [t for t in pool if t["id"] not in skip]
             if dropped:
                 print(f"提示：{len(dropped)} 条任务的标准答案绑定快照，"
+                      f"未加 --offline 故跳过，例如 {dropped[:3]}")
+    elif args.task_set == "probe":
+        # E11 泛化探针：独立任务集，不混入 expanded，保证 v7 的切分口径不被扰动
+        from benchmark.tasks_probe import get_probe_tasks, offline_only_ids
+        pool = get_probe_tasks()
+        if not args.offline:
+            skip = set(offline_only_ids())
+            dropped = [t["id"] for t in pool if t["id"] in skip]
+            pool = [t for t in pool if t["id"] not in skip]
+            if dropped:
+                print(f"提示：{len(dropped)} 条探针任务的标准答案绑定快照，"
                       f"未加 --offline 故跳过，例如 {dropped[:3]}")
     else:
         pool = get_all_tasks()
