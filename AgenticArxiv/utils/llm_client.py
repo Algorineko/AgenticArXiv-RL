@@ -45,7 +45,13 @@ class LLMClient:
         extra: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         self.model_name = model
-        url = f"{self.base_url}/v1/chat/completions"
+        # 兼容非 /v1 提供方（如 bigmodel /v4）：base_url 已带版本段则直接拼接；
+        # 亦可用 LLM_CHAT_PATH 完整覆盖。
+        import os as _os, re as _re
+        chat_path = _os.environ.get("LLM_CHAT_PATH") or (
+            "/chat/completions" if _re.search(r"/v\d+$", self.base_url) else "/v1/chat/completions"
+        )
+        url = f"{self.base_url}{chat_path}"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
