@@ -600,14 +600,20 @@ def make_multiturn_rollout_func(
                     result = _dispatch_environment_tool(
                         environments[index], action["name"], args
                     )
-                    observation = str(result)[:1000]
+                    # Scoring needs the complete tool result even when the
+                    # policy receives only a bounded observation.
+                    full_observation = str(result)
+                    observation = full_observation[:1000]
                 except Exception as exc:  # noqa: BLE001
                     observation = f"{TOOL_ERROR_PREFIX}{exc}"
+                    full_observation = observation
 
                 histories[index].append({
                     "thought": thought,
                     "action": json.dumps(action, ensure_ascii=False),
-                    "observation": observation,
+                    "observation": full_observation,
+                    # Character-bounded view, before token-budget clipping.
+                    "model_observation": observation,
                 })
                 suffix = f"\nObservation: {observation}\nThought:"
                 suffix_ids = tokenizer(suffix, add_special_tokens=False)["input_ids"]
