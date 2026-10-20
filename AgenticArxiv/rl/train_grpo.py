@@ -112,6 +112,9 @@ def _build_reward_calculator(
             raise SystemExit("❌ --reward_weights 须为非空对象, 如 '{\"outcome\": 0.0}'")
         calc.set_weights({k: float(v) for k, v in parsed.items()})
         print(f"⚖️  奖励分量覆盖（E4 消融）: {parsed}")
+    if disable_failure_caps:
+        calc.disable_failure_caps = True
+        print("⚖️  非补偿失败封顶已禁用（E4 消融）")
     return calc
 
 
@@ -446,6 +449,7 @@ def main(
     beta: float = DEFAULT_BETA,
     reward_curriculum_steps: int = 30,
     reward_weights: Optional[str] = None,
+    disable_failure_caps: bool = False,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -635,7 +639,7 @@ def main(
     print(f"🗂  使用独立离线环境执行多轮工具调用: {snapshot_path}")
     # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
     tracker = RewardComponentTracker()
-    reward_calc = _build_reward_calculator(reward_curriculum_steps, reward_weights)
+    reward_calc = _build_reward_calculator(reward_curriculum_steps, reward_weights, disable_failure_caps)
     initial_weights = reward_calc.schedule(training_step=0)
     print(
         "⚖️  奖励课程: "
@@ -990,6 +994,8 @@ if __name__ == "__main__":
     p.add_argument("--grad_accum", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-5)
     p.add_argument("--beta", type=float, default=0.04)
+    p.add_argument("--disable_failure_caps", action="store_true",
+        help="E4 消融：禁用非补偿失败封顶（hard_invalid/false_finish/efficiency 三处截断）")
     p.add_argument(
         "--reward_weights", default=None,
         help="JSON 逐分量覆盖奖励权重（E4 消融），分量名见 RewardCalculator.weights，"
