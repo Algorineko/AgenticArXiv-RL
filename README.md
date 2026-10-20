@@ -225,11 +225,7 @@ Qwen3.8-27B（原生多模态）的图表理解特化 SFT。数据经 clipart �
 治理；评测统一 **greedy 确定性协议**、81 任务离线 benchmark + clean-val 图表 ROUGE。
 
 <p align="center">
-  <img src="imgs/edge_chain_benchmark.png" alt="8B 全链路 strict success 演进" width="720"/>
-</p>
-
-<p align="center">
-  <img src="imgs/edge_rouge_evolution.png" alt="图表识别 clean-val ROUGE 演进" width="760"/>
+  <img src="imgs/edge_results_combined.png" alt="端侧 VLM 后训练结果：(a) 8B 全链路 strict success (b) 图表识别 clean-val ROUGE" width="880"/>
 </p>
 
 **主模型：8B GRPO（strict 72.8%）= 27B base 的 2.9 倍**，全指标（完成率/工具/参数/假结束/token）最优，
