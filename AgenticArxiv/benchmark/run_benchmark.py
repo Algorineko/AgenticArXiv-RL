@@ -138,8 +138,9 @@ def main():
             f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
             f"expanded=扩充后的 {len(get_expanded_tasks())} 条"
             "（指代形态、可选参数、跨步状态、多跳链路、负向约束、不可行请求）；"
-            "probe=E11 泛化探针集（benchmark/tasks_probe.py，3 族 × 5 题，"
-            "标准答案绑定快照，需 --offline 配合 data/splits/v8_probe.json:probe）"
+            "probe=E11 泛化探针集（benchmark/tasks_probe.py，3 族 15 模板 × 3 参数组 = "
+            "45 条，标准答案绑定快照，需 --offline 配合 "
+            "data/splits/v8_1_probe.json:probe 或 v8_probe.json:probe 的 15 条 pilot）"
         ),
     )
     args = parser.parse_args()
