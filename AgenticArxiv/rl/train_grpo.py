@@ -93,7 +93,8 @@ def _precision_flags():
 
 
 def _build_reward_calculator(
-    curriculum_steps: int, weights_override: Optional[str] = None
+    curriculum_steps: int, weights_override: Optional[str] = None,
+    disable_failure_caps: bool = False
 ) -> RewardCalculator:
     """构造本次运行唯一的奖励配置，并拒绝含糊的负步数。
 
