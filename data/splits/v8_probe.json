@@ -1,0 +1,73 @@
+{
+  "version": 8,
+  "task_set": "probe",
+  "task_count": 15,
+  "status": "e11_generalization_probe_set",
+  "purpose": "E11 generalization probes: 3 families x 5 tasks (A long-horizon chains, B figure-entry perturbation degraded to caption-text grounding, C multi-task integration). Restores discriminative power that dev(8)/ood(4) lack (E4: one dev-task flip = 12.5pp). Evaluation-only: never trainable, frozen protocol untouched.",
+  "derived_from": "AgenticArXiv-Study/docs/e11-probe-design.md",
+  "tasks_module": "AgenticArxiv/benchmark/tasks_probe.py",
+  "run": "run_benchmark --task-set probe --offline --split data/splits/v8_probe.json:probe",
+  "policy": {
+    "model": "eval-only probe split",
+    "frozen": true,
+    "learning_rate": 0.0,
+    "selection_use": "Diagnostic only. Probes must never enter any training pool (v6/v7/v3 untouched) and must not be used for model selection."
+  },
+  "budget": {
+    "family_A_max_iterations": 12,
+    "note": "Uniform per-family budget so long-chain failures are not confounded with FORCE_STOP budget starvation."
+  },
+  "families": {
+    "probe_long_chain": [
+      "probe_a1_translate_dual_summary",
+      "probe_a2_three_aspect_scan",
+      "probe_a3_bad_id_recovery",
+      "probe_a4_cache_branch_method",
+      "probe_a5_figure_chain_summary"
+    ],
+    "probe_image_entry": [
+      "probe_b1_caption_grounding_describe",
+      "probe_b2_figure_index_grounding",
+      "probe_b3_panel_axes_grounding",
+      "probe_b4_watermark_id_download",
+      "probe_b5_non_paper_image_refusal"
+    ],
+    "probe_integration": [
+      "probe_c1_two_paper_method_contrast",
+      "probe_c2_time_window_contrast",
+      "probe_c3_translate_variants_summarize",
+      "probe_c4_tool_choice_keyword_over_list",
+      "probe_c5_three_paper_abstract_aggregate"
+    ]
+  },
+  "judging": {
+    "strict": "All 15 tasks reuse the existing strict seven-condition gate (metrics.is_strict_success): FINISH + exact tool sequence + arg_score==1 + ref_score==1 + 0 parse failures + 0 tool failures + terminal semantics.",
+    "integration_complete": "C family additionally carries expected_integration_paper_ids on each task dict; evaluate_integration() in benchmark/tasks_probe.py checks the final FINISH thought cites every target id (version-suffix-insensitive). Report-side (+2 keys) extension is deliberately deferred; this split adds no scoring code.",
+    "b5_refusal": "probe_b5_non_paper_image_refusal reuses the existing blocked terminal semantics (expected_terminal_mode=blocked, expected_terminal_reason=unsupported_capability)."
+  },
+  "known_degradations": [
+    "Family B inputs are caption-text descriptions pregenerated from snapshot metadata: the benchmark agent input channel is text-only (BaseAgent.run(task: str)), BenchmarkRunner never enables vision_policy, and the [figure:...] JPG assets live outside this worktree.",
+    "probe_a3_bad_id_recovery carries the deterministic snapshot rejection as user-reported narrative instead of a gold-trajectory step: the oracle replay fails fast on error steps and strict requires zero tool failures, so a gold chain containing a necessarily-failing call could never pass.",
+    "No probe uses get_translated_content: the frozen snapshot records zero pages for it.",
+    "probe_c2_time_window_contrast: replay pools are window-independent, so the two-window difference is deterministically empty; judged on the two windowed search calls plus integration over the intersection."
+  ],
+  "split": {
+    "probe": [
+      "probe_a1_translate_dual_summary",
+      "probe_a2_three_aspect_scan",
+      "probe_a3_bad_id_recovery",
+      "probe_a4_cache_branch_method",
+      "probe_a5_figure_chain_summary",
+      "probe_b1_caption_grounding_describe",
+      "probe_b2_figure_index_grounding",
+      "probe_b3_panel_axes_grounding",
+      "probe_b4_watermark_id_download",
+      "probe_b5_non_paper_image_refusal",
+      "probe_c1_two_paper_method_contrast",
+      "probe_c2_time_window_contrast",
+      "probe_c3_translate_variants_summarize",
+      "probe_c4_tool_choice_keyword_over_list",
+      "probe_c5_three_paper_abstract_aggregate"
+    ]
+  }
+}
