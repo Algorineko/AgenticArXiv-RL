@@ -12,6 +12,10 @@
   <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL 项目介绍" width="800"/>
 </p>
 
+<p align="center">
+  <img src="imgs/edge-paper-assistant-hero.png" alt="端侧多模态论文助手" width="800"/>
+</p>
+
 ---
 
 ## 🎯 项目定位
@@ -211,6 +215,30 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 | [AgenticArXiv-RL-Qwen3.8-27B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3.8-27B-SFT) | Qwen3.8-27B | 图表理解特化研究版（clean-val ROUGE +60%/+87%；工具决策未达标准，见实验文档） |
 
 全部托管于 ModelScope（`Algorineko/AgenticArXiv-RL-*`），model card 含离线评测表与诚实限制说明。
+
+---
+
+## 🏆 端侧 VLM 后训练成果（Qwen3-VL-8B · Qwen3.8-27B）
+
+在 4×64GB 海光 DCU 上完成 Qwen3-VL-8B 的 **SFT → DPO → GRPO 全链路**后训练，以及
+Qwen3.8-27B（原生多模态）的图表理解特化 SFT。数据经 clipart 过滤与工具手册规范化两轮
+治理；评测统一 **greedy 确定性协议**、81 任务离线 benchmark + clean-val 图表 ROUGE。
+
+<p align="center">
+  <img src="imgs/edge_chain_benchmark.png" alt="8B 全链路 strict success 演进" width="720"/>
+</p>
+
+<p align="center">
+  <img src="imgs/edge_rouge_evolution.png" alt="图表识别 clean-val ROUGE 演进" width="760"/>
+</p>
+
+**主模型：8B GRPO（strict 72.8%）= 27B base 的 2.9 倍**，全指标（完成率/工具/参数/假结束/token）最优，
+两次独立运行可复现（任务翻转率 4.9%）；图表识别 clean-val ROUGE-1 +32%。
+27B 容量升级版（r128）图表识别 +60%/+87%（全项目最优）作为研究版一并发布——
+小数据 LoRA 在 27B 强先验上的适配边界与三轮根因分析（clipart 污染 / 注册表漂移 / 采样协议）
+完整记录见 **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**。
+
+---
 端侧 VLM 后训练全记录（选型/数据演进/四轮实验/根因分析）见 [docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)。
 
 ---
