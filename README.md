@@ -207,8 +207,36 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 | [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO) | Qwen2.5-1.5B | DAPO 目标、无动态采样（rl_train 0.667 / dev 0.500 / iid 0.481 / ood 0.500，pass³，三变体最优） |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) | Qwen2.5-1.5B | SFT + `analyze_figure` 四步链（rl_train 0.485 / dev 0.250 / iid 0.278 / ood 0.250，pass³） |
 | [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) | Qwen3-VL-4B | env 侧图表分析 VLM |
+| [AgenticArXiv-RL-Qwen3-VL-8B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-8B-GRPO) | Qwen3-VL-8B | **端侧论文助手主模型**：策略侧多模态，SFT→DPO→GRPO 全链路（81 任务 strict 72.8%，base 2.9 倍；图表 ROUGE-1 +32%） |
+| [AgenticArXiv-RL-Qwen3.8-27B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3.8-27B-SFT) | Qwen3.8-27B | 图表理解特化研究版（clean-val ROUGE +60%/+87%；工具决策未达标准，见实验文档） |
 
 全部托管于 ModelScope（`Algorineko/AgenticArXiv-RL-*`），model card 含离线评测表与诚实限制说明。
+
+---
+
+## 🏆 端侧 VLM 后训练成果（Qwen3-VL-8B · Qwen3.8-27B）
+
+在 4×64GB 海光 DCU 上完成 Qwen3-VL-8B 的 **SFT → DPO → GRPO 全链路**后训练，以及
+Qwen3.8-27B（原生多模态）的图表理解特化 SFT。数据经 clipart 过滤与工具手册规范化两轮
+治理；评测统一 **greedy 确定性协议**、81 任务离线 benchmark + clean-val 图表 ROUGE。
+
+| 阶段 | 81 任务 strict | 完成率 | 工具准确率 | 假结束 | clean ROUGE-1 |
+|---|---|---|---|---|---|
+| 8B base | 24.7% | 80.2% | 32.1% | 22.2% | 0.1139 |
+| 8B SFT v3 | 66.7% | 95.1% | 72.8% | 8.6% | 0.1446（+27%） |
+| 8B DPO v3 | 65.4% | 97.5% | 74.1% | 11.1% | 0.1435 |
+| **8B GRPO v3（主模型）** | **72.8%** | **97.5%** | **82.7%** | **6.2%** | **0.1509（+32%）** |
+| 27B base（对照） | 24.7% | 80.2% | 32.1% | 22.2% | 0.1349 |
+| 27B cap SFT（研究版） | 21.0% | 66.7% | 25.9% | **4.9%** | **0.2164（+60%）** |
+
+**主模型：8B GRPO（strict 72.8%）= 27B base 的 2.9 倍**，全指标（完成率/工具/参数/假结束/token）最优，
+两次独立运行可复现（任务翻转率 4.9%）；图表识别 clean-val ROUGE-1 +32%。
+27B 容量升级版（r128）图表识别 +60%/+87%（全项目最优）作为研究版一并发布——
+小数据 LoRA 在 27B 强先验上的适配边界与三轮根因分析（clipart 污染 / 注册表漂移 / 采样协议）
+完整记录见 **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**。
+
+---
+端侧 VLM 后训练全记录（选型/数据演进/四轮实验/根因分析）见 [docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)。
 
 ---
 

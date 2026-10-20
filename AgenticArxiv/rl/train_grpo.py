@@ -315,12 +315,12 @@ class RewardVarianceGuard(TrainerCallback):
 
     def __init__(self, patience: int = 5, grace_steps: int = 20):
         self.patience = patience
-        # 只有开局 grace_steps 步内的零方差才算故障。此后再出现，通常是策略
-        # 已经在当前任务集上做满了 —— 尤其 --split rl_train 只有十来条中间带
-        # 任务，模型学会之后每组都是满分，方差自然归零。那是「该换任务了」，
-        # 不是「训练坏了」，把它当故障会白扔一个已经练好的 checkpoint。
+        # Keep the constructor argument for caller/manifest compatibility.
+        # Quality, rather than elapsed steps, distinguishes a full-score window
+        # from uniform failure. Early saturation is possible after good SFT.
         self.grace_steps = grace_steps
         self.streak = 0
+        self.ceiling_streak = 0
         self.tripped = False
         self.converged = False
         self.stop_step = None
@@ -337,8 +337,21 @@ class RewardVarianceGuard(TrainerCallback):
         )
         if not dead:
             self.streak = 0
+            self.ceiling_streak = 0
             return
 
+        mean = logs.get("reward")
+        try:
+            value = float(mean)
+            clean = (
+                float(logs.get("rollout/finished", 1.0)) >= 1.0
+                and float(logs.get("rollout/parse_error_rate", 0.0)) == 0.0
+                and float(logs.get("rollout/tool_error_rate", 0.0)) == 0.0
+            )
+            full_score = math.isfinite(value) and value >= 1.0 - 1e-6 and clean
+        except (TypeError, ValueError):
+            full_score = False
+        self.ceiling_streak = self.ceiling_streak + 1 if full_score else 0
         self.streak += 1
         if self.streak < self.patience:
             return
@@ -347,10 +360,10 @@ class RewardVarianceGuard(TrainerCallback):
         mean = logs.get("reward")
         step = _global_step(state)
         self.stop_step = step
-        if step > self.grace_steps:
-            # 训练后段的连续零方差更像局部采样窗口已饱和，而非开局就没有
-            # 可学习信号。正常停止并保留 checkpoint，但不要据此宣称整个任务集
-            # 都已收敛：随机采样可能连续命中已经学会的容易任务。
+        if self.ceiling_streak >= self.patience:
+            # Every group in this zero-variance window has full reward and no
+            # execution failure. Preserve the policy even during early steps;
+            # this describes the sampled window, not global convergence.
             self.converged = True
             print(
                 f"\n⏹  截至第 {step} 步已连续 {self.streak} 次记录到组内奖励方差为 0"
