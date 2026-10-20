@@ -200,6 +200,7 @@ class RewardCalculator:
         total = sum(active[name] * components[name] for name in active) / denominator
         total = self._apply_safety_gates(
             total,
+            disable_caps=self.disable_failure_caps,
             result=result,
             history=history,
             metrics=metrics,
@@ -466,6 +467,7 @@ class RewardCalculator:
     def _apply_safety_gates(
         total: float,
         *,
+        disable_caps: bool = False,
         result: Mapping[str, Any],
         history: Sequence[Dict[str, Any]],
         metrics: TaskMetrics,
@@ -473,7 +475,7 @@ class RewardCalculator:
         efficiency: float,
     ) -> float:
         """在原有加权分数之后应用不可补偿的失败上限。"""
-        if self.disable_failure_caps:
+        if disable_caps:
             # E4 消融：保留加权总分，不做非补偿截断
             return _clip(float(total))
         capped = float(total)
