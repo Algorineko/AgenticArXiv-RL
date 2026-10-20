@@ -23,9 +23,10 @@ import dataclasses
 import json
 import math
 import os
+import random
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
@@ -392,6 +393,123 @@ class RewardVarianceGuard(TrainerCallback):
         )
 
 
+class ZeroVarianceNoiseInjector:
+    """R1.6「方差直接操纵」实验：向零方差组的奖励注入均匀噪声。
+
+    GRPO 的优势来自同一 prompt 若干条轨迹之间的奖励差异；组内奖励完全一致
+    （std==0）的组优势恒为 0，这一步不产生任何梯度。no_format 配置的训练
+    崩溃正是这个机制：format 分量归零后，绝大多数组的全部 rollout 落到同
+    一个语义地板分。
+
+    因果闭环要求证明方向而非仅仅相关：保持奖励语义不变（注入的噪声期望为
+    0，不引入系统性偏置，也不改变任务判定），仅对零方差组叠加
+    ``eps_i ~ Uniform(-delta, +delta)``，恢复组内相对排序信号。若学习随之
+    恢复，则「零方差 -> 学习崩溃」的因果方向成立；若仍不恢复，同样排除
+    「方差不足是唯一瓶颈」的备择解释。
+
+    注入只发生在返回给 trainer 的奖励上：RewardTracker / rollout 审计记录
+    的仍是干净奖励，注入规模由本类的 history / summary 单独提供。
+    """
+
+    def __init__(self, delta: float, num_generations: int, seed: int):
+        self.delta = float(delta)
+        self.num_generations = int(num_generations)
+        # 独立 RNG：噪声序列只由本旗标与 seed 决定，不挤占 trainer 的采样流
+        self.rng = random.Random(seed)
+        self.batches = 0
+        self.groups_total = 0
+        self.groups_injected = 0
+        self.samples_total = 0
+        self.samples_injected = 0
+        self.history: List[Dict[str, Any]] = []
+
+    def inject(self, task_ids, rewards: List[float], step: int) -> List[float]:
+        n = len(rewards)
+        if n == 0:
+            return list(rewards)
+        if task_ids is None or len(task_ids) != n:
+            # 退路：TRL 按 prompt 连续重复 num_generations 次排布，按位置分块
+            keys = [i // max(self.num_generations, 1) for i in range(n)]
+        else:
+            keys = list(task_ids)
+        groups: Dict[Any, List[int]] = {}
+        for i, key in enumerate(keys):
+            groups.setdefault(key, []).append(i)
+        noisy = list(rewards)
+        n_groups_injected = 0
+        n_samples_injected = 0
+        for members in groups.values():
+            values = [rewards[i] for i in members]
+            if max(values) - min(values) > 1e-12:
+                continue  # 组内已有相对信号，保持原奖励不动
+            n_groups_injected += 1
+            n_samples_injected += len(members)
+            for i in members:
+                noisy[i] = rewards[i] + self.rng.uniform(-self.delta, self.delta)
+        self.batches += 1
+        self.groups_total += len(groups)
+        self.groups_injected += n_groups_injected
+        self.samples_total += n
+        self.samples_injected += n_samples_injected
+        self.history.append({
+            "step": step,
+            "groups": len(groups),
+            "groups_injected": n_groups_injected,
+            "samples": n,
+            "samples_injected": n_samples_injected,
+        })
+        print(
+            f"🎲 [zero_variance_noise] step={step} "
+            f"注入组 {n_groups_injected}/{len(groups)}"
+            f"（{100.0 * n_groups_injected / max(len(groups), 1):.1f}%） "
+            f"注入样本 {n_samples_injected}/{n}"
+        )
+        return noisy
+
+    def summary(self) -> Dict[str, Any]:
+        return {
+            "delta": self.delta,
+            "batches": self.batches,
+            "groups_total": self.groups_total,
+            "groups_injected": self.groups_injected,
+            "group_injection_rate": (
+                self.groups_injected / self.groups_total if self.groups_total else 0.0
+            ),
+            "samples_total": self.samples_total,
+            "samples_injected": self.samples_injected,
+            "sample_injection_rate": (
+                self.samples_injected / self.samples_total if self.samples_total else 0.0
+            ),
+        }
+
+    def save_stats(self, path: Path) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {"summary": self.summary(), "history": self.history},
+                ensure_ascii=False, indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+
+def _wrap_reward_fn_with_zero_variance_noise(reward_fn, injector: ZeroVarianceNoiseInjector):
+    """把注入器接在 reward_fn 与 GRPOTrainer 之间（奖励语义不变，只加噪声）。"""
+
+    def noisy_reward_fn(*args, **kwargs):
+        rewards = reward_fn(*args, **kwargs)
+        task_ids = kwargs.get("task_id")
+        if isinstance(task_ids, str):
+            task_ids = [task_ids]
+        step = int(getattr(kwargs.get("trainer_state"), "global_step", 0) or 0)
+        return injector.inject(task_ids, list(rewards), step)
+
+    # TRL 用 __name__ 作为奖励分量指标前缀，必须保持不变
+    noisy_reward_fn.__name__ = getattr(reward_fn, "__name__", "grpo_reward_fn")
+    return noisy_reward_fn
+
+
 #: DAPO 论文的推荐取值（clip-higher 上界、overlong filtering 开关、KL 系数）。
 DAPO_PRESET = {
     "loss_type": "dapo",
@@ -451,6 +569,7 @@ def main(
     reward_curriculum_steps: int = 30,
     reward_weights: Optional[str] = None,
     disable_failure_caps: bool = False,
+    zero_variance_noise: float = 0.0,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -528,6 +647,8 @@ def main(
             raise SystemExit(f"❌ {exc}") from exc
     if rollout_trace_max_samples < 0:
         raise SystemExit("❌ rollout_trace_max_samples 不能为负数")
+    if not math.isfinite(zero_variance_noise) or zero_variance_noise < 0:
+        raise SystemExit("❌ zero_variance_noise 必须是有限的非负数（0 表示禁用）")
     if save_steps < 0:
         raise SystemExit("❌ save_steps 不能为负数")
     if save_steps > 0 and save_total_limit < 1:
@@ -679,6 +800,18 @@ def main(
         tracker=tracker,
         auditor=auditor,
     )
+    noise_injector = None
+    if zero_variance_noise > 0:
+        # 只包住正式训练奖励；dynamic sampling 的无副作用预打分保持干净，
+        # 噪声只应影响优势计算，不应决定哪些组被接受进 batch。
+        noise_injector = ZeroVarianceNoiseInjector(
+            zero_variance_noise, num_generations=num_generations, seed=seed
+        )
+        reward_fn = _wrap_reward_fn_with_zero_variance_noise(reward_fn, noise_injector)
+        print(
+            f"🎲 [zero_variance_noise] R1.6 方差直接操纵: delta={zero_variance_noise}, "
+            f"seed={seed} —— 组内奖励 std==0 的组注入 Uniform(-δ,+δ) 噪声"
+        )
     rollout_func = make_multiturn_rollout_func(
         environment_factory,
         max_turns=max_turns,
@@ -846,6 +979,21 @@ def main(
         REPO_ROOT / output_dir / "reward_probe_summary.json"
     )
     print(f"📊 逐任务奖励统计: {reward_summary_path}")
+    noise_summary = None
+    noise_stats_path = None
+    if noise_injector is not None:
+        noise_summary = noise_injector.summary()
+        noise_stats_path = noise_injector.save_stats(
+            REPO_ROOT / output_dir / "zero_variance_noise_stats.json"
+        )
+        print(
+            f"🎲 [zero_variance_noise] 注入统计: 组 "
+            f"{noise_summary['groups_injected']}/{noise_summary['groups_total']}"
+            f"（{100.0 * noise_summary['group_injection_rate']:.1f}%）、样本 "
+            f"{noise_summary['samples_injected']}/{noise_summary['samples_total']}"
+            f"（{100.0 * noise_summary['sample_injection_rate']:.1f}%）"
+            f" -> {noise_stats_path}"
+        )
     rollout_audit_summary_path = None
     rollout_audit_summary = None
     if auditor is not None:
@@ -930,6 +1078,15 @@ def main(
             else {"enabled": False}
         ),
         "reward_curriculum_steps": reward_curriculum_steps,
+        "zero_variance_noise": zero_variance_noise,
+        "zero_variance_noise_stats": (
+            {
+                "stats_path": str(noise_stats_path),
+                **noise_summary,
+            }
+            if (noise_injector is not None and noise_summary is not None)
+            else None
+        ),
         "initial_reward_weights": dataclasses.asdict(initial_weights),
         "rollout_audit": (
             {
@@ -1008,6 +1165,13 @@ if __name__ == "__main__":
              "显式传0，从第一步启用完整语义权重。该值会写入training_manifest.json",
     )
     p.add_argument("--num_generations", type=int, default=4)
+    p.add_argument(
+        "--zero_variance_noise", type=float, default=0.0,
+        help="R1.6 因果闭环实验：对组内奖励完全一致（std==0）的组，向每个成员"
+             "奖励叠加 eps~Uniform(-δ,+δ)（δ=本值，建议 0.05）。噪声期望为 0，"
+             "不改奖励语义，只恢复组内相对信号；0 表示禁用。注入统计写入 "
+             "output_dir/zero_variance_noise_stats.json",
+    )
     p.add_argument(
         "--allow_zero_variance", action="store_true",
         help="跳过「组内奖励方差为 0」检查。默认开启该检查：方差为 0 时"
