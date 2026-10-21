@@ -1165,8 +1165,6 @@ if __name__ == "__main__":
              "显式传0，从第一步启用完整语义权重。该值会写入training_manifest.json",
     )
     p.add_argument("--num_generations", type=int, default=4)
-    p.add_argument("--dynamic_sampling_max_resamples", type=int, default=32,
-        help="DAPO 动态采样重试预算（E5 调参对照用；默认 32 与原实现一致）")
     p.add_argument(
         "--zero_variance_noise", type=float, default=0.0,
         help="R1.6 因果闭环实验：对组内奖励完全一致（std==0）的组，向每个成员"
