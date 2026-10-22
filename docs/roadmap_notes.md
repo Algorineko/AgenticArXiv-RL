@@ -58,9 +58,11 @@
 | 3 select | 只在 **train 切分** 里挑弱族的父任务（最差族优先、族内按父任务自身 strict 率升序、确定性），且父任务必须已有参数化派生 | 参数化 seed manifest 的 `tasks` 血缘（derived → parent） |
 | 4 synthesize | 子进程调用 `scripts/generate_parametric_sft_data.py --only-parents id,id`（新增参数，未知 id 直接报错，manifest 记录 `only_parents`） | 既有派生 + 离线环境执行 + manifest |
 | 5 freeze | `artifacts/self_evolve/round_N/manifest.json`：每个输入/输出的 SHA256、git revision、选择结果；`lineage_sha256` 可审计 | 与 SFT manifest 同款哈希约定 |
-| 6 gate | 新旧四切分 strict pass³ 不回退：iid / ood 永远严格（容差 0），只有 dev（n=8，噪声大）可显式给 `--dev-tolerance`（如 0.125 = 一题）且记入 `gate_result.json`；坏例数只增不减；留出切分文件与冻结哈希逐字节一致。任一不满足则本轮拒绝、不晋升 | `report.py` 的 pass^k 定义（组合数口径，试验数 < k 的任务跳过） |
+| 6 gate | 新旧四切分 strict pass³ 不回退：iid / ood 永远严格（容差 0），只有 dev（n=8，噪声大）可显式给 `--dev-tolerance`（如 0.125 = 一题）且记入 `gate_result.json`；坏例数只增不减；带 `--round-dir` 时逐项核验冻结文件及留出切分。任一不满足则本轮拒绝、不晋升 | `report.py` 的 pass^k 定义（组合数口径，试验数 < k 的任务跳过） |
 
-round manifest 冻结的文件包括：评测 summary、split、snapshot、参数化 seed manifest、诊断报告和父任务选择结果；提供 traces 时还记录原始 traces 与本轮坏例文件，执行定向派生时记录生成数据及其 manifest。各文件均记录路径、字节数和 SHA256，并参与 `lineage_sha256`；未执行的可选步骤不加入对应文件。记录哈希不等于自动验证文件，后续 gate 仍只检查冻结的 split 哈希。
+round manifest 冻结的文件包括：评测 summary、split、snapshot、参数化 seed manifest、诊断报告和父任务选择结果；提供 traces 时还记录原始 traces 与本轮坏例文件，执行定向派生时记录生成数据及其 manifest。各文件均记录路径、字节数和 SHA256，并参与 `lineage_sha256`；未执行的可选步骤不加入对应文件。
+
+冻结后可用 `python -m AgenticArxiv.rl.self_evolve verify --round-dir artifacts/self_evolve/round_N` 核对 manifest 中**实际记录的所有文件**：路径、字节数、SHA256 和清单血缘哈希。结果写入 `verification_result.json`，失败时命令返回非零状态。带 `--round-dir` 的 `gate` 也执行同样的校验，并在 `gate_result.json` 中记录失败项；文件变化会拒绝该轮。清单中的相对路径默认相对于仓库根目录；旧实验若从其他目录生成，可为 `verify` 或 `gate` 指定 `--base-dir`。此校验不涵盖清单未记录的训练权重或后续生成的文件。
 
 ```bash
 # 诊断（可单独跑）

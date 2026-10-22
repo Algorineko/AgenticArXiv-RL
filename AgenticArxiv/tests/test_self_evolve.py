@@ -293,6 +293,86 @@ class FreezeAndGateTest(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 se.freeze_round(Path(tmp) / "r2", {"split": Path(tmp) / "missing"}, round_id=2)
 
+    def test_verify_round_detects_changed_and_missing_files_together(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            split, snapshot = root / "split.json", root / "snapshot.json"
+            split.write_bytes(b"{}")
+            snapshot.write_bytes(b"abcd")
+            round_dir = root / "round"
+            se.freeze_round(round_dir, {"split": split, "snapshot": snapshot}, round_id=1)
+            self.assertTrue(se.verify_round(round_dir).passed)
+            snapshot.write_bytes(b"wxyz")  # same length, different SHA256
+            split.unlink()
+            result = se.verify_round(round_dir)
+            self.assertFalse(result.passed)
+            self.assertEqual(result.files_checked, 2)
+            self.assertEqual({c.name for c in result.checks if not c.passed},
+                             {"file:split", "file:snapshot"})
+            self.assertEqual(snapshot.read_bytes(), b"wxyz")
+
+    def test_verify_round_rejects_manifest_edits_and_supports_relative_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            asset = root / "data" / "snapshot.json"
+            asset.write_bytes(b"{}")
+            round_dir = root / "round"
+            manifest = se.freeze_round(round_dir, {"snapshot": asset}, round_id=1)
+            manifest["files"]["snapshot"]["path"] = "data/snapshot.json"
+            manifest["lineage_sha256"] = se.canonical_hash({"round": 1, "files": manifest["files"]})
+            se.dump_json(round_dir / se.MANIFEST_FILE_NAME, manifest)
+            with patch.object(se, "PACKAGE_ROOT", str(root / "AgenticArxiv")):
+                self.assertTrue(se.verify_round(round_dir).passed)
+            self.assertTrue(se.verify_round(round_dir, base_dir=root).passed)
+            manifest["files"]["snapshot"]["bytes"] = 99
+            se.dump_json(round_dir / se.MANIFEST_FILE_NAME, manifest)
+            failed = se.verify_round(round_dir, base_dir=root)
+            self.assertEqual({c.name for c in failed.checks if not c.passed},
+                             {"manifest_lineage", "file:snapshot"})
+
+    def test_verify_round_rejects_directory_and_invalid_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asset = root / "asset.json"
+            asset.write_bytes(b"{}")
+            round_dir = root / "round"
+            se.freeze_round(round_dir, {"snapshot": asset}, round_id=1)
+            asset.unlink()
+            asset.mkdir()
+            self.assertEqual([c.name for c in se.verify_round(round_dir).checks if not c.passed],
+                             ["file:snapshot"])
+            (round_dir / se.MANIFEST_FILE_NAME).write_text("{bad json", encoding="utf-8")
+            self.assertEqual([c.name for c in se.verify_round(round_dir).checks if not c.passed],
+                             ["manifest"])
+
+    def test_verify_cli_writes_report_and_gate_rejects_changed_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            split, snapshot = root / "split.json", root / "snapshot.json"
+            split.write_bytes(b"{}")
+            snapshot.write_bytes(b"before")
+            round_dir = root / "round"
+            se.freeze_round(round_dir, {"split": split, "snapshot": snapshot}, round_id=1)
+            self.assertEqual(se.main(["verify", "--round-dir", str(round_dir)]), 0)
+            evaluation = self._eval(True, True, True)
+            summaries = root / "summary.json"
+            se.dump_json(summaries, evaluation["dev"])
+            args = ["gate", "--round-dir", str(round_dir), "--split", str(split),
+                    "--cases-before", "1", "--cases-after", "1"]
+            for name in se.GATE_SPLITS:
+                args.extend(["--prev", f"{name}={summaries}", "--new", f"{name}={summaries}"])
+            self.assertEqual(se.main(args), 0)
+            snapshot.write_bytes(b"after!")
+            self.assertEqual(se.main(["verify", "--round-dir", str(round_dir)]), 1)
+            report = se.load_json(round_dir / se.VERIFY_FILE_NAME)
+            self.assertEqual(report["kind"], "self_evolve_verification_result")
+            self.assertFalse(report["passed"])
+            self.assertEqual(se.main(args), 1)
+            result = se.load_json(round_dir / se.GATE_FILE_NAME)
+            self.assertIn("file:snapshot", [c["name"] for c in result["checks"] if not c["passed"]])
+            self.assertEqual(split.read_bytes(), b"{}")
+
     def _eval(self, dev_ok, iid_ok, ood_ok):
         def split(ok):
             return summary(*[trial("t1", ok=ok) for _ in range(3)], *[trial("t2") for _ in range(3)])
