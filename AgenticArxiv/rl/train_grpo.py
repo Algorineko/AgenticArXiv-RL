@@ -605,6 +605,7 @@ def main(
     max_turns: int = 4,
     temperature: float = 1.0,
     loss_type: str = None,
+    epsilon: float = None,
     epsilon_high: float = None,
     mask_truncated_completions: bool = None,
     importance_sampling_level: str = None,
@@ -923,6 +924,8 @@ def main(
         cfg_kwargs["loss_type"] = loss_type
     if epsilon_high is not None:
         cfg_kwargs["epsilon_high"] = epsilon_high
+    if epsilon is not None:
+        cfg_kwargs["epsilon"] = epsilon
     if mask_truncated_completions is not None:
         cfg_kwargs["mask_truncated_completions"] = mask_truncated_completions
     # ---- GSPO / Dr.GRPO（Roadmap P1） ----
@@ -1219,6 +1222,11 @@ if __name__ == "__main__":
         choices=["grpo", "dapo", "bnpo", "dr_grpo", "cispo", "sapo", "luspo"],
         help="token 级损失的归一化口径。'dapo' 按全局有效 token 数归一化，"
              "消除长度偏置（DAPO 论文）。默认不传，沿用当前 TRL 的默认值",
+    )
+    p.add_argument(
+        "--epsilon", type=float, default=None,
+        help="重要性比裁剪下界（PPO-clip）。TRL 默认 0.2；设大值（如 10）等价关闭裁剪，"
+             "用于无裁剪对照实验。默认不传，沿用 TRL 现值",
     )
     p.add_argument(
         "--epsilon_high", type=float, default=None,
