@@ -900,7 +900,8 @@ def main(
         "save_strategy": "steps" if save_steps > 0 else "no",
         "save_steps": save_steps if save_steps > 0 else 500,
         "save_total_limit": save_total_limit,
-        "optim": optim if qlora else "adamw_torch_fused",
+        "optim": ("adamw_torch_fused" if os.getenv("AA_LORA_BF16") == "1"
+                  else (optim if qlora else "adamw_torch_fused")),
         "gradient_checkpointing": gradient_checkpointing,
         "gradient_checkpointing_kwargs": (
             {"use_reentrant": False} if gradient_checkpointing else None
