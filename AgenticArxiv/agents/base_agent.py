@@ -1,6 +1,7 @@
 # AgenticArxiv/agents/base_agent.py
 import json
 import re
+import os
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -589,7 +590,8 @@ class BaseAgent(ABC):
         messages, extra = self.build_messages(task, tools_description, history_text)
         messages = self._inject_vision_parts(messages)
         extra = self._merge_llm_extra(extra)
-        eff_temperature = float(extra.pop("temperature", 0.1))
+        # AA_EVAL_TEMPERATURE: 轨迹库采样等非贪心用途的温度旋钮（默认 0.1 不变）
+        eff_temperature = float(extra.pop("temperature", os.getenv("AA_EVAL_TEMPERATURE", 0.1)))
         started = time.time()
         response = self.llm_client.chat_completions(
             model=agent_model,
