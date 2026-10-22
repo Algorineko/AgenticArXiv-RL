@@ -66,6 +66,7 @@ WEAKNESS_FILE_NAME = "weakness_report.json"
 SELECTION_FILE_NAME = "selection.json"
 MANIFEST_FILE_NAME = "manifest.json"
 GATE_FILE_NAME = "gate_result.json"
+VERIFY_FILE_NAME = "verification_result.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -621,7 +622,7 @@ def freeze_round(
 
 
 # --------------------------------------------------------------------------- #
-# gate
+# verify frozen inputs and outputs
 # --------------------------------------------------------------------------- #
 
 @dataclass
@@ -630,6 +631,91 @@ class GateCheck:
     passed: bool
     detail: Dict[str, Any] = field(default_factory=dict)
 
+
+@dataclass
+class VerificationResult:
+    passed: bool
+    checks: List[GateCheck]
+    files_checked: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"kind": "self_evolve_verification_result", "passed": self.passed,
+                "files_checked": self.files_checked, "checks": [asdict(c) for c in self.checks]}
+
+    def summary(self) -> str:
+        lines = [f"VERIFY {'PASSED' if self.passed else 'FAILED'} ({self.files_checked} files checked)"]
+        for check in self.checks:
+            if not check.passed:
+                lines.append(f"  {check.name}: {check.detail.get('error', check.detail)}")
+        return "\n".join(lines)
+
+
+def verify_round(round_dir: Path, *, base_dir: Optional[Path] = None) -> VerificationResult:
+    """Check a v1 round manifest and every recorded file against its frozen bytes.
+
+    Relative manifest paths were written from the repository root. ``base_dir``
+    overrides that root when verifying an older round from another checkout.
+    The result is read-only; callers decide whether to persist its report.
+    """
+    checks: List[GateCheck] = []
+    manifest_path = Path(round_dir) / MANIFEST_FILE_NAME
+    try:
+        manifest = load_json(manifest_path)
+    except (OSError, ValueError) as exc:
+        return VerificationResult(False, [GateCheck("manifest", False, {"error": str(exc)})], 0)
+    if (not isinstance(manifest, dict) or type(manifest.get("version")) is not int
+            or manifest["version"] != 1 or manifest.get("kind") != ROUND_MANIFEST_KIND):
+        return VerificationResult(False, [GateCheck("manifest", False, {"error": "unsupported manifest kind or version"})], 0)
+    files, round_id = manifest.get("files"), manifest.get("round")
+    if not isinstance(files, dict) or not files or isinstance(round_id, bool) or not isinstance(round_id, int):
+        return VerificationResult(False, [GateCheck("manifest", False, {"error": "invalid round or files mapping"})], 0)
+    for role, entry in files.items():
+        valid = (isinstance(role, str) and role and isinstance(entry, dict)
+                 and isinstance(entry.get("path"), str) and bool(entry["path"])
+                 and isinstance(entry.get("sha256"), str) and len(entry["sha256"]) == 64
+                 and all(c in "0123456789abcdef" for c in entry["sha256"])
+                 and isinstance(entry.get("bytes"), int) and not isinstance(entry["bytes"], bool)
+                 and entry["bytes"] >= 0)
+        if not valid:
+            checks.append(GateCheck(f"file:{role}", False, {"error": "invalid file record"}))
+    expected_lineage = canonical_hash({"round": round_id, "files": files})
+    lineage_matches = manifest.get("lineage_sha256") == expected_lineage
+    checks.append(GateCheck("manifest_lineage", lineage_matches,
+                            {"expected": expected_lineage, "recorded": manifest.get("lineage_sha256"),
+                             "error": None if lineage_matches else "lineage_sha256 mismatch"}))
+    if any(not c.passed and c.name.startswith("file:") for c in checks):
+        return VerificationResult(False, checks, 0)
+    root = Path(base_dir) if base_dir is not None else Path(PACKAGE_ROOT).parent
+    count = 0
+    for role, entry in sorted(files.items()):
+        if any(c.name == f"file:{role}" for c in checks):
+            continue
+        path = Path(entry["path"])
+        if not path.is_absolute():
+            path = root / path
+        path = path.resolve()
+        count += 1
+        if not path.is_file():
+            checks.append(GateCheck(f"file:{role}", False,
+                                    {"path": str(path), "error": "file missing or not a regular file"}))
+            continue
+        try:
+            actual_bytes = path.stat().st_size
+            actual_sha = sha256_file(path)
+        except OSError as exc:
+            checks.append(GateCheck(f"file:{role}", False, {"path": str(path), "error": str(exc)}))
+            continue
+        matched = actual_bytes == entry["bytes"] and actual_sha == entry["sha256"]
+        checks.append(GateCheck(f"file:{role}", matched,
+                                {"path": str(path), "error": "size or SHA256 mismatch" if not matched else None,
+                                 "expected_bytes": entry["bytes"], "actual_bytes": actual_bytes,
+                                 "expected_sha256": entry["sha256"], "actual_sha256": actual_sha}))
+    return VerificationResult(all(c.passed for c in checks), checks, count)
+
+
+# --------------------------------------------------------------------------- #
+# gate
+# --------------------------------------------------------------------------- #
 
 @dataclass
 class GateResult:
@@ -769,14 +855,35 @@ def cmd_gate(args: argparse.Namespace) -> int:
     prev, _ = _load_summaries(parse_split_assignments(args.prev))
     new, _ = _load_summaries(parse_split_assignments(args.new))
     frozen = None
+    verification = None
     if args.round_dir:
-        manifest = load_json(Path(args.round_dir) / MANIFEST_FILE_NAME)
-        frozen = (manifest.get("files") or {}).get("split", {}).get("sha256")
+        verification = verify_round(Path(args.round_dir), base_dir=args.base_dir)
+        try:
+            manifest = load_json(Path(args.round_dir) / MANIFEST_FILE_NAME)
+            if isinstance(manifest, dict) and isinstance(manifest.get("files"), dict):
+                split_record = manifest["files"].get("split")
+                if isinstance(split_record, dict):
+                    frozen = split_record.get("sha256")
+        except (OSError, ValueError):
+            pass
     result = gate(prev, new, cases_before=args.cases_before, cases_after=args.cases_after,
                   split_path=Path(args.split) if args.split else None,
                   frozen_split_sha256=frozen, dev_tolerance=args.dev_tolerance, k=args.k)
+    if verification is not None:
+        result.checks.extend(verification.checks)
+        if frozen is None:
+            result.checks.append(GateCheck("heldout_split_frozen", False,
+                                           {"error": "round manifest has no valid split record"}))
+        result.passed = all(check.passed for check in result.checks)
     if args.round_dir:
         dump_json(Path(args.round_dir) / GATE_FILE_NAME, result.to_dict())
+    print(result.summary())
+    return 0 if result.passed else 1
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    result = verify_round(Path(args.round_dir), base_dir=args.base_dir)
+    dump_json(Path(args.round_dir) / VERIFY_FILE_NAME, result.to_dict())
     print(result.summary())
     return 0 if result.passed else 1
 
@@ -862,7 +969,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="self_evolve",
-        description="Bounded self-evolution loop: diagnose -> mine -> select -> synthesize -> mix -> freeze -> gate",
+        description="Bounded self-evolution loop: diagnose -> mine -> select -> synthesize -> mix -> freeze -> verify -> gate",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -887,12 +994,18 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p)
     p.set_defaults(func=cmd_diagnose)
 
+    p = sub.add_parser("verify", help="check every file recorded in a frozen round manifest")
+    p.add_argument("--round-dir", required=True, help="round dir containing manifest.json")
+    p.add_argument("--base-dir", default=None, help="root for relative manifest paths (default: repository root)")
+    p.set_defaults(func=cmd_verify)
+
     p = sub.add_parser("gate", help="accept/reject a round against the previous one")
     p.add_argument("--prev", action="append", required=True, metavar="SPLIT=summary.json")
     p.add_argument("--new", action="append", required=True, metavar="SPLIT=summary.json")
     p.add_argument("--cases-before", type=int, required=True)
     p.add_argument("--cases-after", type=int, required=True)
-    p.add_argument("--round-dir", default=None, help="round dir with manifest.json (checks frozen split)")
+    p.add_argument("--round-dir", default=None, help="round dir with manifest.json (verifies all frozen files)")
+    p.add_argument("--base-dir", default=None, help="root for relative manifest paths (default: repository root)")
     p.add_argument("--split", default=None, help="current split file to compare with the frozen one")
     p.add_argument("--dev-tolerance", type=float, default=0.0,
                    help="opt-in pass^k slack for the noisy dev split only (e.g. 0.125 = one task); "
