@@ -429,6 +429,7 @@ def main(
     lr: float = 1e-5,
     beta: float = DEFAULT_BETA,
     reward_curriculum_steps: int = 30,
+    reward_config: str = None,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -619,7 +620,32 @@ def main(
     # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
     tracker = RewardComponentTracker()
     reward_calc = _build_reward_calculator(reward_curriculum_steps)
+    # Load custom reward weights configuration (if provided)
+    custom_reward_weights = None
+    if reward_config:
+        reward_config_path = Path(reward_config)
+        if not reward_config_path.is_absolute():
+            reward_config_path = REPO_ROOT / reward_config_path
+        if not reward_config_path.exists():
+            raise SystemExit(f"❌ reward_config file does not exist: {reward_config_path}")
+        
+        print(f"📋 Loading custom reward weights configuration: {reward_config_path}")
+        with open(reward_config_path, encoding="utf-8") as f:
+            config = json.load(f)
+            custom_reward_weights = config.get("weights")
+            if custom_reward_weights:
+                print(f"   format={custom_reward_weights.get('format', 1.0)}, "
+                      f"tool={custom_reward_weights.get('tool', 3.0)}, "
+                      f"argument={custom_reward_weights.get('argument', 2.0)}, "
+                      f"process={custom_reward_weights.get('process', 1.0)}, "
+                      f"outcome={custom_reward_weights.get('outcome', 3.0)}")
+
     initial_weights = reward_calc.schedule(training_step=0)
+    
+    # Apply custom weights (if provided)
+    if custom_reward_weights:
+        reward_calc.set_weights(custom_reward_weights)
+        print("✅ Applied custom reward weights")
     print(
         "⚖️  奖励课程: "
         f"curriculum_steps={reward_curriculum_steps}, initial_weights={initial_weights}"
