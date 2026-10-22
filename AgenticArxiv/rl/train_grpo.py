@@ -262,6 +262,36 @@ def _load_policy(
         policy.config.use_cache = False
         return policy
 
+    if os.getenv("AA_LORA_BF16") == "1":
+        # bf16-LoRA: 全精度冻结基座 + LoRA 适配器（无 bitsandbytes 依赖; 8B 级单卡可行）
+        from peft import LoraConfig, get_peft_model
+        source = _adapter_base_model(local, base_model) if is_adapter else (
+            str(Path(base_model).resolve()) if base_model and Path(base_model).exists()
+            else base_model or model_path
+        )
+        print(f"🧩 GRPO bf16-LoRA: bf16 冻结基座 + LoRA r={lora_r}\n   base={source}")
+        base = AutoModelForCausalLM.from_pretrained(
+            source, dtype=torch.bfloat16, device_map={"": 0},
+            low_cpu_mem_usage=True, local_files_only=Path(source).exists(),
+        )
+        base.config.use_cache = False
+        if hasattr(base, "gradient_checkpointing_enable"):
+            base.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        policy = (
+            PeftModel.from_pretrained(base, model_path, is_trainable=True)
+            if is_adapter
+            else get_peft_model(base, LoraConfig(
+                r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
+                task_type="CAUSAL_LM",
+            ))
+        )
+        policy.config.use_cache = False
+        trainable = sum(pp.numel() for pp in policy.parameters() if pp.requires_grad)
+        total = sum(pp.numel() for pp in policy.parameters())
+        print(f"🔧 参数统计: trainable={trainable:,}, model_parameters={total:,}, "
+              f"trainable_ratio={100.0 * trainable / max(total, 1):.4f}%")
+        return policy
+
     _qlora_runtime_guard()
     quantization, fresh_lora = _build_qlora_configs(
         lora_r, lora_alpha, lora_dropout
