@@ -261,6 +261,13 @@ class BenchmarkRunner:
         kwargs = {"side_effect_mgr": side_fx, "env": env, "llm_extra": self.llm_extra}
         if max_iterations is not None:
             kwargs["max_iterations"] = max_iterations
+        # AA_MAX_ITERATIONS_OVERRIDE: 只钳制(min(任务预算, cap)), 不抬高 ——
+        # pass@k 覆盖率评测的墙时控制; 与 greedy 基线同任务预算可比, 钳制须披露。
+        _mi_cap = os.getenv("AA_MAX_ITERATIONS_OVERRIDE")
+        if _mi_cap:
+            _cap = int(_mi_cap)
+            _cur = kwargs.get("max_iterations")
+            kwargs["max_iterations"] = _cap if _cur is None else min(_cur, _cap)
         if agent_type == "mcp":
             from mcp_protocol.mcp_agent import MCPAgent
             return MCPAgent(self.llm_client, **kwargs)
