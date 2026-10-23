@@ -326,6 +326,11 @@ class TransformersLLMClient:
         target = next(self.model.parameters()).device
         inputs = {key: value.to(target) if hasattr(value, "to") else value for key, value in inputs.items()}
         do_sample = temperature is not None and temperature > 0
+        # AA_EVAL_TEMPERATURE 覆盖调用方温度（pass@k 覆盖率评测用，V8）。
+        _env_t = os.getenv("AA_EVAL_TEMPERATURE")
+        if _env_t is not None:
+            temperature = float(_env_t)
+            do_sample = temperature > 0
         # 大 LoRA 适配（如 27B@0.58%）在 temp>0 采样下会回落 base 行为；
         # AA_EVAL_GREEDY=1 强制确定性解码，作为大模型本地评测的标准口径。
         if os.getenv("AA_EVAL_GREEDY") == "1":
