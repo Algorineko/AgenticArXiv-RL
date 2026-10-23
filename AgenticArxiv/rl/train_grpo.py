@@ -25,6 +25,8 @@ import math
 import os
 import random
 import sys
+
+import torch
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -540,6 +542,146 @@ def _wrap_reward_fn_with_zero_variance_noise(reward_fn, injector: ZeroVarianceNo
     return noisy_reward_fn
 
 
+# ---------------------------------------------------------------------------
+# V 系列优势干预（第四轮审稿裁决实验）
+#   permute: 非 tie 组内置换优势 —— 保幅度/频率、毁与轨迹的对应（gpt#2 对照表）
+#   avspo:   AVSPO 忠实移植 —— 虚拟样本只进归一化统计、无策略梯度项、
+#            坍塌组内真实样本保持相同优势（He et al., ICML 2026, arXiv:2605.21125；
+#            r_obs<0 的带符号推广为本仓披露的适配，原文只定义 r_obs>0 与 ==0）
+# 干预点：TRL 算完 advantages 之后、写进 loss 之前（_generate_and_score_completions
+# 的输出 dict）；mode=none 且未开插桩时与 GRPOTrainer 完全等价。
+# ---------------------------------------------------------------------------
+_REWARD_RECORDER: Dict[str, Any] = {"last": None}
+
+
+def _wrap_reward_fn_with_recorder(reward_fn):
+    """记录 reward_fn 最近一次的逐 completion 奖励（干预与插桩的组结构数据源）。
+    必须包在噪声注入之后，记录的才是 TRL 实际参与归一化的奖励。"""
+
+    def recorded_reward_fn(*args, **kwargs):
+        rewards = reward_fn(*args, **kwargs)
+        try:
+            _REWARD_RECORDER["last"] = [float(x) for x in rewards]
+        except (TypeError, ValueError):
+            _REWARD_RECORDER["last"] = None
+        return rewards
+
+    recorded_reward_fn.__name__ = getattr(reward_fn, "__name__", "grpo_reward_fn")
+    return recorded_reward_fn
+
+
+class InterventionGRPOTrainer(GRPOTrainer):
+    """GRPOTrainer + 优势级干预与逐组奖励插桩（类属性在 main() 实例化前配置）。"""
+
+    varm_mode = "none"        # none / permute / avspo
+    varm_seed = 42
+    varm_dump = False         # 逐组奖励向量插桩（group_rewards.jsonl）
+    avspo_alpha = 0.5         # K = max(1, min(G, ⌈G·ACR^α⌉))
+    avspo_anchor = 0.1        # r_obs == 0 时的虚拟锚点
+    avspo_eta = 0.01          # τ_adapt 自适应步长
+    avspo_tau0 = 0.5          # τ_adapt 初值，夹在 [0.1, 0.9]
+    avspo_tau_sigma = 1e-6    # 组坍塌判定阈值（AVSPO 的 τ）
+    avspo_eps = 1e-4          # 数值稳定项（与 TRL 归一化一致）
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._iv_rng = torch.Generator(device="cpu")
+        self._iv_rng.manual_seed(int(self.varm_seed))
+        self._tau_adapt = float(self.avspo_tau0)
+        self._prev_J = None
+        out_dir = Path(self.args.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        self._stats_fh = open(out_dir / "intervention_stats.jsonl", "a", encoding="utf-8")
+        self._dump_fh = (
+            open(out_dir / "group_rewards.jsonl", "a", encoding="utf-8")
+            if self.varm_dump else None
+        )
+        if self.varm_mode != "none" or self.varm_dump:
+            print(
+                f"🧪 [advantage_intervention] mode={self.varm_mode} seed={self.varm_seed}"
+                + (f" alpha={self.avspo_alpha} anchor={self.avspo_anchor} "
+                   f"eta={self.avspo_eta} tau0={self.avspo_tau0}"
+                   if self.varm_mode == "avspo" else "")
+                + (f" dump=group_rewards.jsonl" if self.varm_dump else "")
+            )
+
+    def _generate_and_score_completions(self, *args, **kwargs):
+        output = super()._generate_and_score_completions(*args, **kwargs)
+        if self.varm_mode != "none" or self._dump_fh is not None:
+            try:
+                self._intervene(output)
+            except Exception:  # 干预失败不允许拖垮训练，但必须可见可查
+                import traceback
+                traceback.print_exc()
+        return output
+
+    def _intervene(self, output):
+        if not getattr(self.model, "training", False):
+            return  # eval 批次（evaluate/canary 走独立评估器）不改写
+        adv = output.get("advantages")
+        rec = _REWARD_RECORDER.get("last")
+        if adv is None or not rec:
+            return
+        G = int(self.num_generations)
+        n = int(adv.shape[0])
+        if n == 0 or n % G or len(rec) != n:
+            print(f"⚠️ [intervention] 结构不齐 adv={n} rec={len(rec)} G={G}，跳过本步")
+            return
+        step = int(self.state.global_step)
+        adv_g = adv.view(-1, G)
+        rw = torch.tensor(rec, dtype=torch.float64).view(-1, G)
+        collapsed = rw.std(dim=1, unbiased=False) < self.avspo_tau_sigma  # AVSPO σ_ℛ 总体口径
+        acr = float(collapsed.float().mean())
+        J = float(rw.mean())
+        mode, gate, K, n_touched = self.varm_mode, False, 0, 0
+
+        if mode == "permute":
+            # 非 tie 组（有信号组）内置换：幅度分布不变，与轨迹的对应被打断。
+            # tie 组优势全零，置换为恒等，天然跳过。
+            for j in torch.nonzero(~collapsed).flatten().tolist():
+                perm = torch.randperm(G, generator=self._iv_rng)
+                adv_g[j] = adv_g[j][perm.to(adv_g.device)]
+                n_touched += 1
+        elif mode == "avspo":
+            gate = acr > self._tau_adapt
+            if gate and acr > 0:
+                K = max(1, min(G, math.ceil(G * (acr ** self.avspo_alpha))))
+                for j in torch.nonzero(collapsed).flatten().tolist():
+                    r_obs = float(rw[j].max())
+                    if r_obs == 0.0:
+                        v = [self.avspo_anchor * (K - k + 1) / K
+                             for k in range(1, K + 1)]
+                    else:
+                        # r_obs>0 原式 v_k=r_obs(1−k/(K+1))；r_obs<0 时同一式给出
+                        # (r_obs,0) 内的虚拟值 → 共同优势为负（整组压低），符号推广
+                        v = [r_obs * (1.0 - k / (K + 1)) for k in range(1, K + 1)]
+                    aug = torch.tensor([r_obs] * G + v, dtype=torch.float64)
+                    mu, sd = float(aug.mean()), float(aug.std(unbiased=False))
+                    adv_g[j].fill_((r_obs - mu) / (sd + self.avspo_eps))
+                    n_touched += 1
+            # Eq.10: τ_adapt ← τ_adapt + η·sign(ΔJ)·(ACR − τ_adapt)，夹 [0.1, 0.9]
+            if self._prev_J is not None:
+                dj = J - self._prev_J
+                s = 1.0 if dj > 0 else (-1.0 if dj < 0 else 0.0)
+                self._tau_adapt = min(
+                    0.9, max(0.1, self._tau_adapt + self.avspo_eta * s * (acr - self._tau_adapt))
+                )
+            self._prev_J = J
+
+        self._stats_fh.write(json.dumps({
+            "step": step, "mode": mode, "acr": round(acr, 4),
+            "tau_adapt": round(self._tau_adapt, 4), "gate": bool(gate), "K": K,
+            "n_touched": n_touched, "n_groups": int(rw.shape[0]), "J": round(J, 4),
+        }, ensure_ascii=False) + "\n")
+        self._stats_fh.flush()
+        if self._dump_fh is not None:
+            self._dump_fh.write(json.dumps({
+                "step": step, "mode": mode, "rewards": rw.tolist(),
+                "collapsed": collapsed.tolist(),
+            }, ensure_ascii=False) + "\n")
+            self._dump_fh.flush()
+
+
 #: DAPO 论文的推荐取值（clip-higher 上界、overlong filtering 开关、KL 系数）。
 DAPO_PRESET = {
     "loss_type": "dapo",
@@ -600,6 +742,12 @@ def main(
     reward_weights: Optional[str] = None,
     disable_failure_caps: bool = False,
     zero_variance_noise: float = 0.0,
+    advantage_intervention: str = "none",
+    avspo_alpha: float = 0.5,
+    avspo_anchor: float = 0.1,
+    avspo_eta: float = 0.01,
+    avspo_tau0: float = 0.5,
+    dump_group_rewards: bool = False,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -843,6 +991,16 @@ def main(
             f"🎲 [zero_variance_noise] R1.6 方差直接操纵: delta={zero_variance_noise}, "
             f"seed={seed} —— 组内奖励 std==0 的组注入 Uniform(-δ,+δ) 噪声"
         )
+    if advantage_intervention != "none" or dump_group_rewards:
+        # 记录器必须最后包（噪声之后），保证捕获的是 TRL 实际归一化的奖励
+        reward_fn = _wrap_reward_fn_with_recorder(reward_fn)
+        InterventionGRPOTrainer.varm_mode = advantage_intervention
+        InterventionGRPOTrainer.varm_seed = seed
+        InterventionGRPOTrainer.varm_dump = bool(dump_group_rewards)
+        InterventionGRPOTrainer.avspo_alpha = avspo_alpha
+        InterventionGRPOTrainer.avspo_anchor = avspo_anchor
+        InterventionGRPOTrainer.avspo_eta = avspo_eta
+        InterventionGRPOTrainer.avspo_tau0 = avspo_tau0
     rollout_func = make_multiturn_rollout_func(
         environment_factory,
         max_turns=max_turns,
@@ -954,7 +1112,7 @@ def main(
 
     print(describe_logging(backends, logging_dir if backends else None))
     print(f"🚀 开始 GRPO 训练（每个 prompt 采样 {num_generations} 条，规则奖励）")
-    trainer = GRPOTrainer(
+    trainer = InterventionGRPOTrainer(
         model=policy,
         reward_funcs=reward_fn,
         args=config,
@@ -1281,6 +1439,34 @@ if __name__ == "__main__":
     p.add_argument(
         "--seed", type=int, default=42,
         help="训练与 rollout 采样种子；对比两个策略的原始轨迹时必须保持一致",
+    )
+    p.add_argument(
+        "--advantage_intervention",
+        choices=["none", "permute", "avspo"], default="none",
+        help="V 系列优势干预（第四轮审稿裁决实验）: permute=非tie组内置换优势"
+             "（保幅度毁内容）; avspo=AVSPO 忠实移植（虚拟样本只进归一化统计，"
+             "He et al. ICML 2026, arXiv:2605.21125）",
+    )
+    p.add_argument(
+        "--avspo_alpha", type=float, default=0.5,
+        help="AVSPO K 自适应指数: K = max(1, min(G, ceil(G·ACR^α)))",
+    )
+    p.add_argument(
+        "--avspo_anchor", type=float, default=0.1,
+        help="AVSPO r_obs == 0 时的虚拟锚点奖励",
+    )
+    p.add_argument(
+        "--avspo_eta", type=float, default=0.01,
+        help="AVSPO τ_adapt 自适应步长（Eq.10）",
+    )
+    p.add_argument(
+        "--avspo_tau0", type=float, default=0.5,
+        help="AVSPO τ_adapt 初值（运行中夹在 [0.1, 0.9]）",
+    )
+    p.add_argument(
+        "--dump_group_rewards", action="store_true",
+        help="逐组逐步奖励向量写 output_dir/group_rewards.jsonl"
+             "（tie 组成分析插桩，可与干预正交使用）",
     )
     p.add_argument(
         "--qlora", action=argparse.BooleanOptionalAction, default=True,
