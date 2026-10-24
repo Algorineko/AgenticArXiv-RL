@@ -642,6 +642,18 @@ class InterventionGRPOTrainer(GRPOTrainer):
                 perm = torch.randperm(G, generator=self._iv_rng)
                 adv_g[j] = adv_g[j][perm.to(adv_g.device)]
                 n_touched += 1
+        elif mode == "zero":
+            # 非 tie 组优势置零：纯移除信号，不新增任何随机更新（GPT#3 四臂矩阵的归零对照）
+            for j in torch.nonzero(~collapsed).flatten().tolist():
+                adv_g[j] = 0.0
+                n_touched += 1
+        elif mode == "reverse":
+            # 非 tie 组优势按奖励秩反向分配：系统性反相关（最优轨迹拿最差优势）
+            for j in torch.nonzero(~collapsed).flatten().tolist():
+                order = torch.argsort(rw[j], descending=True)
+                vals = adv_g[j][order.to(adv_g.device)].clone()  # 按轨迹好坏排序的优势值
+                adv_g[j][order.to(adv_g.device)] = vals.flip(0).to(adv_g[j].dtype)
+                n_touched += 1
         elif mode == "avspo":
             gate = acr > self._tau_adapt
             if gate and acr > 0:
@@ -1442,7 +1454,7 @@ if __name__ == "__main__":
     )
     p.add_argument(
         "--advantage_intervention",
-        choices=["none", "permute", "avspo"], default="none",
+        choices=["none", "permute", "zero", "reverse", "avspo"], default="none",
         help="V 系列优势干预（第四轮审稿裁决实验）: permute=非tie组内置换优势"
              "（保幅度毁内容）; avspo=AVSPO 忠实移植（虚拟样本只进归一化统计，"
              "He et al. ICML 2026, arXiv:2605.21125）",
