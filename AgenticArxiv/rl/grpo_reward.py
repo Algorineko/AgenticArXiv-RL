@@ -58,6 +58,7 @@ SUPPORTED_TOOL_NAMES = {
     "extract_paper_figures",
     "analyze_figure",
     "get_translated_content",
+    "run_tests",
 }
 
 

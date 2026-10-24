@@ -880,12 +880,13 @@ def main(
     # 先验证任务与快照，再加载模型。语义标准答案损坏时应在占用显存前失败。
     tasks = _load_tasks(task_set, split)
     snapshot_path = Path(snapshot) if snapshot else DEFAULT_SNAPSHOT
-    if not snapshot_path.exists():
+    if task_set != "code" and not snapshot_path.exists():
         raise SystemExit(
             f"❌ 多轮 GRPO 需要离线快照 {snapshot_path}\n"
             "   请先运行: python -m AgenticArxiv.rl.build_snapshot"
         )
-    tasks = attach_expected_paper_ids(tasks, snapshot_path)
+    if task_set != "code":
+        tasks = attach_expected_paper_ids(tasks, snapshot_path)
     required_turns = max((len(t.get("expected_tools") or []) + 1 for t in tasks), default=1)
     if max_turns < required_turns:
         raise SystemExit(
@@ -959,8 +960,15 @@ def main(
             f"模型不可能生成完整动作，奖励会恒为下限、梯度为 0。\n"
             f"请改用 --max_completion_length {need + 64}"
         )
-    env = load_mock_env(snapshot_path)  # canary / verifier 使用
-    environment_factory = make_environment_factory(snapshot_path)
+    if task_set == "code":
+        env = None  # 代码域: canary/verifier 快照语义不适用, 旁路
+    else:
+        env = load_mock_env(snapshot_path)
+    if task_set == "code":
+        from AgenticArxiv.rl.code_env import make_code_environment_factory
+        environment_factory = make_code_environment_factory()
+    else:
+        environment_factory = make_environment_factory(snapshot_path)
     print(f"🗂  使用独立离线环境执行多轮工具调用: {snapshot_path}")
     # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
     tracker = RewardComponentTracker()
@@ -1521,7 +1529,7 @@ if __name__ == "__main__":
     )
     p.add_argument("--snapshot", default=None)
     p.add_argument(
-        "--task_set", choices=["default", "expanded"], default="default",
+        "--task_set", choices=["default", "expanded", "code"], default="default",
         help="default=benchmark/tasks.py 的 8 条冒烟任务（保持现状）；"
              "expanded=完整基准集。改默认值会让既有训练曲线不可比，故需显式指定",
     )
