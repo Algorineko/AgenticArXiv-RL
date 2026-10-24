@@ -133,7 +133,7 @@ def main():
         ),
     )
     parser.add_argument(
-        "--task-set", choices=["default", "expanded", "probe"], default="default",
+        "--task-set", choices=["default", "expanded", "probe", "code"], default="default",
         help=(
             f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
             f"expanded=扩充后的 {len(get_expanded_tasks())} 条"
@@ -156,7 +156,10 @@ def main():
         llm_extra["chat_template_kwargs"] = {"enable_thinking": False}
 
     # 任务池
-    if args.task_set == "expanded":
+    if args.task_set == "code":
+        from AgenticArxiv.benchmark.tasks_code import get_code_tasks
+        task_list = get_code_tasks()
+    elif args.task_set == "expanded":
         from benchmark.tasks_expanded import offline_only_ids
         pool = get_expanded_tasks()
         if not args.offline:
