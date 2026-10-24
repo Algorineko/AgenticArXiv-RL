@@ -29,7 +29,7 @@ def load_tasks(task_set: str, split: Optional[str] = None) -> List[Dict[str, Any
     # 延迟导入：badcase_replay 是轻量 CI 入口，import 时不必加载任务集。
     if task_set == "code":
         from AgenticArxiv.benchmark.tasks_code import get_code_tasks
-        task_defs = get_code_tasks()
+        pool = get_code_tasks()
     elif task_set == "expanded":
         from benchmark.tasks_expanded import get_expanded_tasks
         pool = get_expanded_tasks()
