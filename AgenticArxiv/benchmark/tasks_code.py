@@ -72,7 +72,10 @@ for _t in _TMPL:
             _checks = _re.sub(rf"\b{_re.escape(_k)}\b", repr(_v), _checks)
         _POOL[f"{_t['id']}_p{_pi}"] = dict(
             id=f"{_t['id']}_p{_pi}", sig=_t["sig"], desc=_t["desc"],
+            task=(f"实现函数 `{_t['sig']}`: {_t['desc']}。然后用 run_tests 提交代码并运行测试 "
+                  f"(task_id={_t['id']}_p{_pi})。代码须为完整可执行 Python。"),
             checks_src=_checks, category="code", max_iterations=4,
+            expected_tools=["run_tests"], difficulty="basic",
         )
 
 
