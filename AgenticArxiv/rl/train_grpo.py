@@ -647,6 +647,18 @@ class InterventionGRPOTrainer(GRPOTrainer):
             for j in torch.nonzero(~collapsed).flatten().tolist():
                 adv_g[j] = 0.0
                 n_touched += 1
+        elif mode == "swap":
+            # RSPO 式组内成对交换 (GLM C2): 保留幅度与排序结构, 仅交换两两配对的内容
+            # 检验 P2 预言: 结构化交换若无质量相关 -> 应无害或有害 (可证伪)
+            for j in torch.nonzero(~collapsed).flatten().tolist():
+                row = adv_g[j].clone()
+                order = torch.argsort(rw[j], descending=True)
+                idx = order.to(adv_g.device)
+                adv_g[j][idx[0]], adv_g[j][idx[-1]] = row[idx[-1]], row[idx[0]]  # 最优<->最差交换
+                if G > 2:
+                    mid = G // 2
+                    adv_g[j][idx[mid]], adv_g[j][idx[mid - 1]] = row[idx[mid - 1]], row[idx[mid]]
+                n_touched += 1
         elif mode == "reverse":
             # 非 tie 组优势按奖励秩反向分配：系统性反相关（最优轨迹拿最差优势）
             for j in torch.nonzero(~collapsed).flatten().tolist():
@@ -1454,7 +1466,7 @@ if __name__ == "__main__":
     )
     p.add_argument(
         "--advantage_intervention",
-        choices=["none", "permute", "zero", "reverse", "avspo"], default="none",
+        choices=["none", "permute", "zero", "reverse", "swap", "avspo"], default="none",
         help="V 系列优势干预（第四轮审稿裁决实验）: permute=非tie组内置换优势"
              "（保幅度毁内容）; avspo=AVSPO 忠实移植（虚拟样本只进归一化统计，"
              "He et al. ICML 2026, arXiv:2605.21125）",
