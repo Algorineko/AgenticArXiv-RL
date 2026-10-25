@@ -553,6 +553,41 @@ def _wrap_reward_fn_with_zero_variance_noise(reward_fn, injector: ZeroVarianceNo
 # ---------------------------------------------------------------------------
 _REWARD_RECORDER: Dict[str, Any] = {"last": None}
 
+def _wrap_reward_fn_with_folr(reward_fn, first_turn_credit: float = 0.25):
+    """FOLR 移植 (TSPO 忠实家族检验, GLM#4): 首个正确工具调用 turn 获部分奖励.
+
+    TSPO 的 FOLR 把部分奖励分配给目标首次正确出现的 turn (质量相关 by construction).
+    我们在标准奖励之上, 对每个 rollout 找到首个"期望工具+正确参数"的 turn, 给该 turn
+    的动作一个加性 credit —— 与期望 paper-id 的 gold chain replay 对齐.
+    实现层: 借用 reward_fn 的 history 通道 (auditor 已记录逐turn工具调用); 简化版:
+    对首个调用期望工具名的 turn 给 credit (参数精确性已由标准奖励的 argument 分量度量).
+    """
+    def folr_reward_fn(*args, **kwargs):
+        rewards = reward_fn(*args, **kwargs)
+        try:
+            task_ids = kwargs.get("task_id")
+            if isinstance(task_ids, str):
+                task_ids = [task_ids]
+            steps = kwargs.get("steps")  # gold 链: [(tool, args), ...]
+            histories = kwargs.get("histories")
+            if not steps or not histories:
+                return rewards
+            out = list(rewards)
+            for idx, (hist, gold) in enumerate(zip(histories, steps or [[]] * len(out))):
+                expected_first = gold[0][0] if gold else None
+                if not expected_first or not hist:
+                    continue
+                for turn in hist:
+                    act = turn.get("action") or ""
+                    if expected_first in act:
+                        out[idx] = out[idx] + first_turn_credit
+                        break
+            return out
+        except Exception:
+            return rewards
+    folr_reward_fn.__name__ = getattr(reward_fn, "__name__", "grpo_reward_fn")
+    return folr_reward_fn
+
 
 def _wrap_reward_fn_with_recorder(reward_fn):
     """记录 reward_fn 最近一次的逐 completion 奖励（干预与插桩的组结构数据源）。
@@ -772,6 +807,7 @@ def main(
     avspo_eta: float = 0.01,
     avspo_tau0: float = 0.5,
     dump_group_rewards: bool = False,
+    folr_first_turn_credit: float = 0.0,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -1023,6 +1059,9 @@ def main(
             f"🎲 [zero_variance_noise] R1.6 方差直接操纵: delta={zero_variance_noise}, "
             f"seed={seed} —— 组内奖励 std==0 的组注入 Uniform(-δ,+δ) 噪声"
         )
+    if folr_first_turn_credit > 0:
+        reward_fn = _wrap_reward_fn_with_folr(reward_fn, folr_first_turn_credit)
+        print(f"FOLR 移植: first-turn credit={folr_first_turn_credit} (TSPO 家族忠实检验)")
     if advantage_intervention != "none" or dump_group_rewards:
         # 记录器必须最后包（噪声之后），保证捕获的是 TRL 实际归一化的奖励
         reward_fn = _wrap_reward_fn_with_recorder(reward_fn)
@@ -1494,6 +1533,10 @@ if __name__ == "__main__":
     p.add_argument(
         "--avspo_tau0", type=float, default=0.5,
         help="AVSPO τ_adapt 初值（运行中夹在 [0.1, 0.9]）",
+    )
+    p.add_argument(
+        "--folr_first_turn_credit", type=float, default=0.0,
+        help="FOLR 移植: 首个正确工具调用 turn 的加性 credit (TSPO 家族忠实检验), 0=禁用",
     )
     p.add_argument(
         "--dump_group_rewards", action="store_true",
