@@ -617,6 +617,7 @@ class InterventionGRPOTrainer(GRPOTrainer):
     avspo_tau0 = 0.5          # τ_adapt 初值，夹在 [0.1, 0.9]
     avspo_tau_sigma = 1e-6    # 组坍塌判定阈值（AVSPO 的 τ）
     avspo_eps = 1e-4          # 数值稳定项（与 TRL 归一化一致）
+    avspo_clip_positive = False  # 扩展消融: 负 r_obs 按 0-anchor 处理 (GLM#7)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -707,6 +708,8 @@ class InterventionGRPOTrainer(GRPOTrainer):
                 K = max(1, min(G, math.ceil(G * (acr ** self.avspo_alpha))))
                 for j in torch.nonzero(collapsed).flatten().tolist():
                     r_obs = float(rw[j].max())
+                    if self.avspo_clip_positive and r_obs < 0:
+                        r_obs = 0.0  # 原文二元设定无负值; clip变体把负组按r=0 anchor处理
                     if r_obs == 0.0:
                         v = [self.avspo_anchor * (K - k + 1) / K
                              for k in range(1, K + 1)]
@@ -808,6 +811,7 @@ def main(
     avspo_tau0: float = 0.5,
     dump_group_rewards: bool = False,
     folr_first_turn_credit: float = 0.0,
+    avspo_clip_positive: bool = False,
     num_generations: int = 4,
     max_completion_length: int = 256,
     max_turns: int = 4,
@@ -1072,6 +1076,7 @@ def main(
         InterventionGRPOTrainer.avspo_anchor = avspo_anchor
         InterventionGRPOTrainer.avspo_eta = avspo_eta
         InterventionGRPOTrainer.avspo_tau0 = avspo_tau0
+        InterventionGRPOTrainer.avspo_clip_positive = avspo_clip_positive
     rollout_func = make_multiturn_rollout_func(
         environment_factory,
         max_turns=max_turns,
@@ -1537,6 +1542,10 @@ if __name__ == "__main__":
     p.add_argument(
         "--folr_first_turn_credit", type=float, default=0.0,
         help="FOLR 移植: 首个正确工具调用 turn 的加性 credit (TSPO 家族忠实检验), 0=禁用",
+    )
+    p.add_argument(
+        "--avspo_clip_positive", action="store_true",
+        help="AVSPO 扩展消融: 负 tie 组按原文 r=0 anchor 处理 (clip-to-positive)",
     )
     p.add_argument(
         "--dump_group_rewards", action="store_true",
