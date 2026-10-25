@@ -173,6 +173,7 @@ class TestTransformersClientResponse(unittest.TestCase):
                 return torch.tensor([[1, 2, 3, 4, 5]])
 
         client = TransformersLLMClient.__new__(TransformersLLMClient)
+        client.is_vlm = False
         client.tokenizer = Tokenizer()
         client.model = Model()
         client.seed = 7
