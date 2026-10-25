@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a>
+  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a> | <a href="README.ja.md">🇯🇵 日本語</a>
 </p>
 
 # AgenticArXiv-RL — Entorno de Entrenamiento para RL Agentic
@@ -24,6 +24,23 @@ Convertir las tareas de búsqueda/descarga/traducción/interpretación de papers
 
 **No es objetivo**: una aplicación de arXiv de nivel de producción, una UI web o un servicio de traducción en tiempo real (la app web original se retiró de este repositorio; véase el [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) original).
 
+### Experimento Opcional de Enrutamiento de Herramientas con Jev
+
+La inferencia ReAct estándar admite un enrutador Jev opcional que elige la siguiente herramienta.
+En modo guided, un analizador determinista procesa los argumentos explícitos, los ambiguos quedan
+a cargo del modelo de política y el entorno ejecuta las herramientas. `TOOL_ROUTER=policy` conserva
+el comportamiento por defecto; al seleccionar `jev`, una confianza baja, un fallo de API o un error
+de validación de argumentos hacen que se vuelva a la ruta original de la política. Esta función no
+se integra en el entrenamiento GRPO. La configuración, las referencias, el piloto de 81 tareas que
+solo evalúa el enrutamiento, las limitaciones y la reproducción están en [JEV_ROUTER.md](JEV_ROUTER.md);
+los ajustes de activación y de API listos para copiar están en [jev_config.example.env](jev_config.example.env).
+Una prueba de humo de las interfaces del proyecto, sin GPU ni red, comprueba que las rutas de la
+política y de Jev son intercambiables mediante las mismas interfaces de ReAct, entorno y benchmark.
+En una evaluación pequeña de 10 tareas mixtas con un Qwen entrenado con GRPO y 3 repeticiones,
+guided Jev elevó el éxito estricto del 40% al 60%, redujo los tokens locales de Qwen un 74.01% y
+aumentó la latencia total un 36.96%. Es una comprobación de integración con una muestra pequeña;
+no establece la tasa de éxito global en las 81 tareas.
+
 ---
 
 ## 🚀 Inicio Rápido
@@ -44,7 +61,7 @@ EOF
 
 # 3. Probar un rollout (recompensa en el rango [-1, 1], varía según la trayectoria)
 python -m AgenticArxiv.rl.rollout search_01 traces/train/
-# ✅ Task search_01 rollout 完成  Reward: 1.00
+# ✅ Rollout de search_01 completado  Recompensa: 1.00
 ```
 
 Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/train/`. Los comandos siguientes se ejecutan por defecto desde la raíz del repositorio.
@@ -71,11 +88,11 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 5. `get_paper_cache_status(ref, session_id)` — Consulta del estado de la caché
 6. `get_paper_content(ref, session_id, section=None)` — Lectura del abstract o de una sección concreta (extracción determinista)
 7. `summarize_paper(ref, style, max_words)` — Resumen del lado del entorno (tldr / structured / bullet)
-8. `extract_paper_figures(ref)` — Extracción de los archivos de figuras y sus captions
+8. `extract_paper_figures(ref)` — Extracción de los archivos de figuras y sus pies de figura
 9. `analyze_figure(ref, figure_no, question=None)` — Análisis de figuras: el entorno llama a un VLM local para leer la imagen (requiere el entorno multimodal)
 10. `get_translated_content(ref, session_id, page=1)` — Lectura de la traducción página a página (el PDF traducido al chino, extracción determinista; la página 1 suele contener el título y el abstract)
 
-> El bucle de interpretación «búsqueda → descarga → lectura → resumen → extracción de figuras → análisis de figuras» está completamente cerrado: el análisis de figuras lo realiza del lado del entorno el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto, que graba las respuestas en el snapshot, y del lado de la política existen los pesos [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5), que aprendieron esa cadena de cuatro pasos.
+> El bucle de interpretación «búsqueda → descarga → lectura → resumen → extracción de figuras → análisis de figuras» está completamente cerrado: el análisis de figuras lo realiza del lado del entorno el [VLM FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) post-entrenado en este proyecto, y los resultados se graban en snapshots. Del lado de la política, los pesos [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) han aprendido la cadena de cuatro pasos para el análisis de figuras.
 > **Criterio de admisión**: un espacio de acciones más grande no es automáticamente mejor — el estándar para añadir una herramienta es «habilita una nueva categoría de tareas», no «puede que sea útil». La cadena de decisiones de diseño está en [Diseño de Evolución del Conjunto de Herramientas](docs/toolset_evolution.md).
 
 ### Verifiable Reward (cinco componentes)
@@ -147,7 +164,7 @@ tensorboard --logdir outputs/grpo/logs
 
 **Rollout y puntuación multiturno** (`rl/grpo_reward.py`): en cada turno la política actual genera una acción ReAct y un `MockArxivEnv` independiente la ejecuta, reinsertando la observation en el contexto; los tokens del assistant entran en la loss y los del entorno actúan solo como contexto vía `env_mask=0`; la trayectoria completa la puntúa el `RewardCalculator` de cinco componentes, con el mismo estándar que usan el rollout y el benchmark.
 
-**Garantías de calidad del entrenamiento** (de fallos silenciosos a errores sonoros): chequeo de la longitud de generación, guarda de varianza cero (`RewardVarianceGuard`), evaluación canary intermedia con parada temprana, umbrales de verificación por fase (tasa de parseo SFT ≥ 0.3, reward DPO ≥ −0.3, reward GRPO ≥ −0.2), precisión mixta adaptativa y validación previa del backend de logging. Además de las métricas que trae TRL, las curvas registran `reward_components/*` (desglose por componente), `reward_weights/*` (pesos del currículo) y `rollout/*` (turns / finished / parse_error_rate).
+**Garantías de calidad del entrenamiento** (de fallos silenciosos a errores explícitos): comprobación de la longitud de generación, protección frente a varianza cero (`RewardVarianceGuard`), evaluación canary intermedia con parada temprana, umbrales de verificación por fase (tasa de parseo SFT ≥ 0.3, reward DPO ≥ −0.3, reward GRPO ≥ −0.2), precisión mixta adaptativa y validación previa del backend de logging. Además de las métricas que trae TRL, las curvas registran `reward_components/*` (desglose por componente), `reward_weights/*` (pesos del currículo) y `rollout/*` (turns / finished / parse_error_rate).
 
 ### Fase 3': OPD (destilación on-policy, opcional, intercambiable con GRPO)
 
@@ -174,7 +191,8 @@ TRL eliminó el PPOTrainer clásico (no existe en `trl>=0.28.0`); `train_ppo.py`
 ```bash
 python scripts/build_figure_qa_dataset.py                          # datos semilla de QA de figuras
 python -m AgenticArxiv.rl.train_vlm_figure_qa                      # post-entrenamiento LoRA de Qwen3-VL-4B
-FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<directorio de FigureQA> \
+# Sustituye /path/to/figureqa por el directorio local del modelo FigureQA
+FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH="/path/to/figureqa" \
   python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
 ```
 
@@ -193,16 +211,52 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<directorio de FigureQA> \
 | [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO) | Qwen2.5-1.5B | Objetivo DAPO sin muestreo dinámico (rl_train 0.667 / dev 0.500 / iid 0.481 / ood 0.500, pass³; la mejor de las tres variantes) |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) | Qwen2.5-1.5B | SFT + cadena de cuatro pasos con `analyze_figure` (rl_train 0.485 / dev 0.250 / iid 0.278 / ood 0.250, pass³) |
 | [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) | Qwen3-VL-4B | VLM de análisis de figuras del lado del entorno |
+| [AgenticArXiv-RL-Qwen3-VL-8B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-8B-GRPO) | Qwen3-VL-8B | **Modelo principal del asistente de artículos en el dispositivo**: política multimodal y cadena completa SFT→DPO→GRPO (éxito estricto del 72.8% en 81 tareas, 2.9× la base; ROUGE-1 de figuras +32%) |
+| [AgenticArXiv-RL-Qwen3.8-27B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3.8-27B-SFT) | Qwen3.8-27B | Edición de investigación especializada en comprensión de figuras (ROUGE en clean-val +60%/+87%; las decisiones de herramientas no alcanzaron los criterios de aceptación, véase el documento de experimentos) |
 
 Todos se alojan en ModelScope (`Algorineko/AgenticArXiv-RL-*`); las model cards incluyen la tabla de evaluación offline y una descripción honesta de sus limitaciones.
 
 ---
 
+## 🏆 Resultados del Post-entrenamiento de VLM para el Dispositivo (Qwen3-VL-8B · Qwen3.8-27B)
+
+En 4×64GB de DCU Hygon se completó la **cadena SFT → DPO → GRPO** de Qwen3-VL-8B y el SFT
+especializado en comprensión de figuras de Qwen3.8-27B, un modelo multimodal nativo. Los datos
+pasaron por dos rondas de depuración: filtrado de clipart y normalización del manual de herramientas.
+La evaluación comparte un **protocolo de decodificación greedy**, un benchmark offline de 81 tareas
+y ROUGE de figuras en clean-val.
+
+| Fase | Éxito estricto en 81 tareas | Tasa de finalización | Precisión de herramientas | Finalización falsa | ROUGE-1 limpio |
+|---|---|---|---|---|---|
+| 8B base | 24.7% | 80.2% | 32.1% | 22.2% | 0.1139 |
+| 8B SFT v3 | 66.7% | 95.1% | 72.8% | 8.6% | 0.1446 (+27%) |
+| 8B DPO v3 | 65.4% | 97.5% | 74.1% | 11.1% | 0.1435 |
+| **8B GRPO v3 (modelo principal)** | **72.8%** | **97.5%** | **82.7%** | **6.2%** | **0.1509 (+32%)** |
+| 27B base (control) | 24.7% | 80.2% | 32.1% | 22.2% | 0.1349 |
+| 27B cap SFT (edición de investigación) | 21.0% | 66.7% | 25.9% | **4.9%** | **0.2164 (+60%)** |
+
+**Modelo principal: 8B GRPO (éxito estricto del 72.8%) = 2.9× 27B base**, con el mayor éxito estricto
+y la mayor precisión de herramientas de la tabla. Dos ejecuciones independientes alcanzaron un
+71.6% y un 72.8% de éxito estricto (4.9% de tareas con cambio de resultado); el ROUGE-1 de figuras
+en clean-val mejoró un 32% respecto a 8B base. El adaptador 27B de mayor capacidad (r128) también
+se publica como edición de investigación, con mejoras de ROUGE de +60%/+87%, las mayores del
+proyecto. Los límites de la adaptación LoRA con pocos datos al fuerte conocimiento previo de 27B y
+las tres etapas de análisis de causas (contaminación por clipart / deriva del registro / protocolo
+de muestreo) se documentan en **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**.
+
+---
+
+El registro completo del post-entrenamiento de VLM para el dispositivo (selección del modelo /
+evolución de datos / cuatro rondas de experimentos / análisis de causas) está en
+[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md).
+
+---
+
 ## 🧪 Conjunto de Tareas y Evaluación
 
-- **Conjunto de humo** (`benchmark/tasks.py`): 8 tareas (search / download / translate / cache / composite)
+- **Conjunto de pruebas de humo** (`benchmark/tasks.py`): 8 tareas (search / download / translate / cache / composite)
 - **Conjunto ampliado** (`benchmark/tasks_expanded.py`): 86 tareas y catorce familias de plantillas (search / keyword_search / ref_form / composite / state / optional / constraint / long_chain / infeasible / paper_reading / paper_summary / figure_extraction / figure_analysis / **translation_reading**); se activa con `run_benchmark.py --task-set expanded`. Ambos conjuntos pasan por el mismo `TaskSpec`: `expected_tools` / `expected_tool_args` se derivan de una única fuente `steps`, de modo que nunca hay dos listas escritas a mano que diverjan.
-- **Particiones**: train / iid_test / ood_test por plantilla (`benchmark/splits.py`, fijadas en `data/splits/`); `rl_train` toma solo la banda intermedia de la tasa de éxito (en los extremos la varianza intragrupo es cero y no se produce gradiente). Tras cambiar de modelo hay que volver a medir las rates: los umbrales antiguos no se pueden reutilizar.
+- **Particiones**: train / iid_test / ood_test por plantilla (`benchmark/splits.py`, fijadas en `data/splits/`); `rl_train` toma solo la banda intermedia de la tasa de éxito (en los extremos la varianza intragrupo es cero y no se produce gradiente). Tras cambiar de modelo hay que volver a medir las tasas de éxito: los umbrales antiguos no se pueden reutilizar.
 - **Criterios de evaluación**: fiabilidad `pass^k` (convención tau-bench), `false_finish` (la política degradada `always_finish` alcanza un 91.5% frente al 0% de `reference`), `ref_score` (compara el `paper_id` y no la forma literal del `ref`), coste normalizado por número de aciertos.
 - **Puertas de discriminación** (`run_baselines.py`): políticas degradadas deterministas con umbral por categoría — «buscar siempre cs.AI» baja de 0.833 a 0.446 en la categoría de búsqueda, y «llamar a herramientas cuando no tocaba» pasa de +0.165 a −0.235.
 - **Replay de casos malos** (`eval/badcase_replay.py` + `eval/eval_cases.jsonl`, 17 casos): cada trayectoria fallida se congela como caso de regresión permanente; el replay ejecuta solo el evaluador y el propio `pytest` hace de puerta. `hack/*` documenta formas de engañar la puntuación con aserciones de umbral y sirve además de biblioteca de casos de reward hacking.
@@ -215,9 +269,9 @@ python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_t
 
 ## 🛡️ Notas sobre Dependencias
 
-**Dependencias principales** (`AgenticArxiv/requirements.txt`): `torch>=2.0`, `transformers>=4.45`, `trl>=0.28.0` (verificado en 0.29.1; el mínimo lo fija la ruta `rollout_func` del GRPO multiturno), `peft`, `bitsandbytes` (QLoRA), `datasets`, `accelerate`, `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic>=2`, `fire`.
+**Dependencias principales** (`AgenticArxiv/requirements.txt`): `torch>=2.0`, `transformers>=4.45`, `trl>=0.28.0` (verificado en 0.29.1; el mínimo lo fija la ruta `rollout_func` del GRPO multiturno), `peft`, `bitsandbytes` (QLoRA), `datasets`, `accelerate`, `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic>=2`, `fire`, `PyMuPDF>=1.24.0`, `Pillow`.
 
-**Dependencias opcionales** (`requirements-extra.txt`): `pdf2zh` (traducción real de PDF), `fastapi`/`uvicorn`/`sqlalchemy`/`pymysql` (capa de compatibilidad web archivada), `mcp` (capa de compatibilidad MCP archivada), `tensorboard`/`wandb` (backends de curvas de entrenamiento), `matplotlib`/`numpy`/`pandas` (scripts de gráficas).
+**Dependencias opcionales** (`AgenticArxiv/requirements-extra.txt`): `pdf2zh` (traducción real de PDF), `fastapi`/`uvicorn`/`sqlalchemy`/`pymysql` (capa de compatibilidad web archivada), `mcp` (capa de compatibilidad MCP archivada), `tensorboard`/`wandb` (backends de curvas de entrenamiento), `matplotlib`/`numpy`/`pandas` (scripts de gráficas).
 
 ---
 
@@ -255,7 +309,7 @@ Licencia MIT
 
 ### P0 — Asistente de Papers Multimodal en el Dispositivo (objetivo final)
 
-- [ ] **Multimodalidad del lado de la política**: pasar el VLM del entorno a la política (la observation transporta las figuras), reutilizando la ruta visual-lingüística de TRL ya validada en `train_vlm_figure_qa.py`; bases candidatas Qwen3-VL-4B / Qwen2.5-VL-2B (gama on-device)
+- [x] **Multimodalidad del lado de la política**: publicado un modelo de política multimodal Qwen3-VL-8B con la cadena completa SFT → DPO → GRPO; la adaptación a modelos de 2–4B para el dispositivo y la inferencia cuantizada siguen entre los objetivos de optimización siguientes (véase el [registro de post-entrenamiento de VLM](docs/edge-vlm-posttrain.md))
 - [ ] **Cadena de lectura de extremo a extremo**: búsqueda → descarga → traducción → resumen → análisis de figuras, cerrada dentro de un único modelo y optimizada para la inferencia en el dispositivo (cuantización + escala 2-4B)
 - [x] **El texto traducido, en el contexto**: nueva herramienta `get_translated_content`, que lee la traducción de pdf2zh página a página de forma determinista; se reproduce desde snapshots offline (grabados con `build_snapshot --translate-max-ref N`) y se evalúa con la regla de calidad de resultado de las herramientas de lectura
 

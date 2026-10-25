@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a>
+  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a> | <a href="README.ja.md">🇯🇵 日本語</a>
 </p>
 
 # AgenticArXiv-RL — Agentic RL 训练环境
@@ -188,7 +188,8 @@ TRL 已移除经典 PPOTrainer（`trl>=0.28.0` 上不存在），`train_ppo.py` 
 ```bash
 python scripts/build_figure_qa_dataset.py                          # 图表 QA 种子数据
 python -m AgenticArxiv.rl.train_vlm_figure_qa                      # Qwen3-VL-4B LoRA 后训练
-FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
+# 将 /path/to/figureqa 替换为本地 FigureQA 模型目录
+FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH="/path/to/figureqa" \
   python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
 ```
 
@@ -229,8 +230,8 @@ Qwen3.8-27B（原生多模态）的图表理解特化 SFT。数据经 clipart �
 | 27B base（对照） | 24.7% | 80.2% | 32.1% | 22.2% | 0.1349 |
 | 27B cap SFT（研究版） | 21.0% | 66.7% | 25.9% | **4.9%** | **0.2164（+60%）** |
 
-**主模型：8B GRPO（strict 72.8%）= 27B base 的 2.9 倍**，全指标（完成率/工具/参数/假结束/token）最优，
-两次独立运行可复现（任务翻转率 4.9%）；图表识别 clean-val ROUGE-1 +32%。
+**主模型：8B GRPO（strict 72.8%）= 27B base 的 2.9 倍**，strict 成功率和工具准确率在上表中最高，
+两次独立运行的 strict 分别为 71.6% 和 72.8%（任务翻转率 4.9%）；图表识别 clean-val ROUGE-1 相比 8B base 提升 32%。
 27B 容量升级版（r128）图表识别 +60%/+87%（全项目最优）作为研究版一并发布——
 小数据 LoRA 在 27B 强先验上的适配边界与三轮根因分析（clipart 污染 / 注册表漂移 / 采样协议）
 完整记录见 **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**。
@@ -257,9 +258,9 @@ python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_t
 
 ## 🛡️ 依赖说明
 
-**核心依赖**（`AgenticArxiv/requirements.txt`）：`torch>=2.0`、`transformers>=4.45`、`trl>=0.28.0`（已在 0.29.1 验证；下限由多轮 GRPO 的 rollout_func 路径决定）、`peft`、`bitsandbytes`（QLoRA）、`datasets`、`accelerate`、`arxiv`、`requests`、`python-dotenv`、`loguru`、`pydantic>=2`、`fire`。
+**核心依赖**（`AgenticArxiv/requirements.txt`）：`torch>=2.0`、`transformers>=4.45`、`trl>=0.28.0`（已在 0.29.1 验证；下限由多轮 GRPO 的 `rollout_func` 路径决定）、`peft`、`bitsandbytes`（QLoRA）、`datasets`、`accelerate`、`arxiv`、`requests`、`python-dotenv`、`loguru`、`pydantic>=2`、`fire`、`PyMuPDF>=1.24.0`、`Pillow`。
 
-**可选依赖**（`requirements-extra.txt`）：`pdf2zh`（真实 PDF 翻译）、`fastapi`/`uvicorn`/`sqlalchemy`/`pymysql`（归档的 Web 兼容层）、`mcp`（归档的 MCP 兼容层）、`tensorboard`/`wandb`（曲线后端）、`matplotlib`/`numpy`/`pandas`（绘图脚本）。
+**可选依赖**（`AgenticArxiv/requirements-extra.txt`）：`pdf2zh`（真实 PDF 翻译）、`fastapi`/`uvicorn`/`sqlalchemy`/`pymysql`（归档的 Web 兼容层）、`mcp`（归档的 MCP 兼容层）、`tensorboard`/`wandb`（曲线后端）、`matplotlib`/`numpy`/`pandas`（绘图脚本）。
 
 ---
 
@@ -297,7 +298,7 @@ MIT License
 
 ### P0 — 端侧多模态论文助手（终极目标）
 
-- [ ] **策略侧多模态化**：把 VLM 从 env 侧移进策略侧（observation 携带图表），复用 `train_vlm_figure_qa.py` 已验证的 TRL 视觉语言路径；候选基座 Qwen3-VL-4B / Qwen2.5-VL-2B（端侧档）
+- [x] **策略侧多模态化**：已发布 Qwen3-VL-8B 策略侧多模态模型，完成 SFT → DPO → GRPO 全链路；进一步适配 2–4B 端侧模型与量化推理仍属下述优化目标（见 [VLM 后训练记录](docs/edge-vlm-posttrain.md)）
 - [ ] **端到端阅读链**：检索 → 下载 → 翻译 → 总结 → 识图在单模型内闭环，面向端侧推理（量化 + 2-4B 量级）优化
 - [x] **翻译正文入上下文**：新增 `get_translated_content`，按页确定性读取 pdf2zh 译文；离线快照回放（`build_snapshot --translate-max-ref N` 录制），按读类规则判定结果质量
 
