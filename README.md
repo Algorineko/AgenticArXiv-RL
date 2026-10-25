@@ -22,9 +22,14 @@
 2. **渐进式训练**：SFT → DPO → GRPO（另提供 OPD on-policy 蒸馏路线；PPO 在当前依赖下不可用）
 3. **轻量级工程**：纯 Python + JSONL 存储，无数据库、无前端，专注离线训练
 
-**非目标**：生产级 arXiv 应用、Web UI、实时翻译服务（原 Web 应用已从本仓库移除，见原版 [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv)）。
+**非目标**：生产级 arXiv 应用与实时翻译服务。`AgenticArxivWeb/` 保留在本仓库，将改造为 RSI 环境协同进化的沙盒载体（见 Roadmap P3）；历史原版见 [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv)。环境改造的完整设计文档见 [docs/rl_building.md](docs/rl_building.md)。
 
 ### 可选 Jev 工具路由实验
+
+默认关闭的判别式 next-tool router（`TOOL_ROUTER=jev`）：在小样本结构验证中 strict success 40%→60%、本地 Qwen token −74%，不接入 GRPO 训练。
+
+<details>
+<summary>展开：Jev 路由机制、回退策略与实验详情</summary>
 
 普通 ReAct 推理支持默认关闭的 Jev next-tool router：Jev 选择下一步工具，guided 模式
 用确定性解析器处理显式参数，含糊参数仍交给策略模型，环境继续执行工具。默认
@@ -37,6 +42,8 @@ smoke，验证 policy/Jev 两条路径可经过同一 ReAct、环境和 benchmar
 GRPO Qwen 的 mixed 10-task、repeat=3 小样本中，guided Jev 将 strict success 从 40%
 提高到 60%，本地 Qwen token 减少 74.01%，总延迟增加 36.96%。该结果是小样本结构
 验证，不代表完整 81 题总体胜率。
+
+</details>
 
 ---
 
@@ -66,6 +73,11 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ---
 
 ## 📚 核心概念
+
+论文任务改造为 MDP：10 工具动作空间 + 五分量可验证奖励（RLVR）+ 轨迹间隔离，全部规则可判、离线可复现。
+
+<details>
+<summary>展开：MDP 设计 · 动作空间（10 工具）· 五分量可验证奖励 · Rollout 隔离</summary>
 
 ### MDP 设计
 
@@ -113,9 +125,16 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 `rl/sandbox.py` 的 `RolloutSandbox` 在每条轨迹前记录环境/Store/产物目录基线，轨迹后恢复并清理——多轮 GRPO、rollout 与 benchmark 共用该 reset 契约，杜绝轨迹间状态串联。
 
+</details>
+
 ---
 
 ## 🛠️ 训练路径（SFT → DPO → GRPO / OPD）
+
+SFT → DPO → GRPO 渐进式训练，OPD on-policy 蒸馏与 GRPO 互替，PPO 在当前依赖下不可用；GSPO / Dr.GRPO / DAPO 目标变体已接线并完成对照训练发布。
+
+<details>
+<summary>展开：各阶段训练命令与说明（SFT · DPO · GRPO 及变体 · OPD · 多模态 VLM）</summary>
 
 ### 阶段1：SFT
 
@@ -159,6 +178,8 @@ tensorboard --logdir outputs/grpo/logs
 
 > 已发布：[AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO)（33 条信号任务，全程离线快照回放）。离线评测（seed 45 / repeat 3，严格成功率 pass³）SFT → GRPO：**rl_train 0.081→0.636，dev 0.000→0.375，iid_test 0.056→0.444，ood_test 0.000→0.500**。
 
+> **目标变体对照**（seed 42 / 60 步，pass³，权重均已发布见下表）：GSPO 与基线逐位持平（轨迹分化、行为收敛一致）；Dr.GRPO rl_train 0.657 略优、ood 工具准确率最优；**DAPO 三切分最优（0.667 / 0.500 / 0.481 / 0.500）**。实现注记见 [docs/rl_paradigm_comparison.md](docs/rl_paradigm_comparison.md)。**奖励权重消融框架**：`--reward_config` 支持 9 组单变量权重设计（[docs/ablation_reward_weights.md](docs/ablation_reward_weights.md)，🟡 设计完成待执行）。
+
 **多轮 rollout 与打分**（`rl/grpo_reward.py`）：每轮由当前 policy 生成 ReAct 动作，独立 `MockArxivEnv` 执行并把 observation 插回上下文；assistant token 进 loss，环境 token 经 `env_mask=0` 只作上下文；完整轨迹交五分量 `RewardCalculator` 打分，与 rollout / benchmark 同一标准。
 
 **训练质量保障**（静默失败 → 响亮报错）：生成长度体检、零方差守护（`RewardVarianceGuard`）、Canary 中途评估早停、阶段验证阈值（SFT 可解析率 ≥ 0.3、DPO 奖励 ≥ −0.3、GRPO 奖励 ≥ −0.2）、混合精度自适应、日志后端预校验。曲线除 TRL 自带指标外记录 `reward_components/*`（分量明细）、`reward_weights/*`（课程权重）、`rollout/*`（turns / finished / parse_error_rate）。
@@ -193,7 +214,9 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH="/path/to/figureqa" \
   python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
 ```
 
-> 已发布：[AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA)（451 图 / 73 论文，按论文切分防泄漏；留出 94 图 ROUGE-1 0.105→0.126、ROUGE-L 0.081→0.102）。
+> 已发布：[AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA)（451 图 / 73 论文，按论文切分防泄漏；留出 94 图 ROUGE-1 0.105→0.126、ROUGE-L 0.081→0.102）。8B / 27B 策略侧 VLM 的全链路成果见下文「🏆 端侧 VLM 后训练成果」。
+
+</details>
 
 ---
 
@@ -234,10 +257,7 @@ Qwen3.8-27B（原生多模态）的图表理解特化 SFT。数据经 clipart �
 两次独立运行的 strict 分别为 71.6% 和 72.8%（任务翻转率 4.9%）；图表识别 clean-val ROUGE-1 相比 8B base 提升 32%。
 27B 容量升级版（r128）图表识别 +60%/+87%（全项目最优）作为研究版一并发布——
 小数据 LoRA 在 27B 强先验上的适配边界与三轮根因分析（clipart 污染 / 注册表漂移 / 采样协议）
-完整记录见 **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**。
-
----
-端侧 VLM 后训练全记录（选型/数据演进/四轮实验/根因分析）见 [docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)。
+完整记录（选型 / 数据演进 / 四轮实验 / 根因分析）见 **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**。
 
 ---
 
@@ -284,47 +304,62 @@ MIT License
 
 ## 🙋 FAQ
 
+<details>
+<summary>展开：常见问题（与原版区别 · 为何 GRPO · 质量为何不进奖励）</summary>
+
 **Q: 与原 AgenticArXiv 的区别？** 原版是生产级 Web 应用（FastAPI+Vue3+MySQL，三种 Agent 架构）；本项目是纯 Python + JSONL 的 RL 训练环境，只保留 ReAct 单策略，核心是 SFT/DPO/GRPO 训练与可验证奖励。
 
 **Q: 为什么选 GRPO 不用 PPO？** GRPO 无需 value model（显存开销小）、适合 1.5B 量级小模型、实现简单易调试；PPO 更适合生产级大模型训练。
 
 **Q: 摘要/识图的质量为什么不进奖励？** 质量打分需要 LLM-as-judge，引入非确定性与 hacking 面。设计上把解读收敛为**工具调用决策问题**（何时调、对谁调、参数对不对）——全部规则可判、可复现，这是 RLVR 的前提。
 
+</details>
+
 ---
 
 ## 📝 Roadmap（开发路线图）
 
-> 完整论据与引入路径见 [docs/roadmap_notes.md](docs/roadmap_notes.md)。欢迎认领（见 🤝 贡献）。
+> 完整论据与引入路径见 [docs/roadmap_notes.md](docs/roadmap_notes.md)。已完成项已融入正文各章节。欢迎认领（见 🤝 贡献）。
+
+<details>
+<summary>展开：开发路线图（P0 端侧闭环 · P1 新算法 · P2 Jev · P3 协同进化 · ⛔ 阻塞项）</summary>
 
 ### P0 — 端侧多模态论文助手（终极目标）
 
-- [x] **策略侧多模态化**：已发布 Qwen3-VL-8B 策略侧多模态模型，完成 SFT → DPO → GRPO 全链路；进一步适配 2–4B 端侧模型与量化推理仍属下述优化目标（见 [VLM 后训练记录](docs/edge-vlm-posttrain.md)）
-- [ ] **端到端阅读链**：检索 → 下载 → 翻译 → 总结 → 识图在单模型内闭环，面向端侧推理（量化 + 2-4B 量级）优化
-- [x] **翻译正文入上下文**：新增 `get_translated_content`，按页确定性读取 pdf2zh 译文；离线快照回放（`build_snapshot --translate-max-ref N` 录制），按读类规则判定结果质量
+- [ ] **端到端阅读链**：检索 → 下载 → 翻译 → 总结 → 识图在单模型内闭环，面向端侧推理（量化 + 2–4B 量级）优化。翻译环节已具备（`get_translated_content` 按页确定性读取 pdf2zh 译文 + `build_snapshot --translate-max-ref N` 快照回放）；策略侧多模态化已完成 8B 全链路（见「🏆 端侧 VLM 后训练成果」与 [VLM 后训练记录](docs/edge-vlm-posttrain.md)），剩余核心是把全链压进端侧预算
 
 ### P1 — 新一代 Agentic RL 算法
 
-- [x] **GSPO / Dr.GRPO 接线**：`--importance_sampling_level sequence`（序列级重要性采样，GSPO）与 `--loss_type dr_grpo`（无偏长度归一）已接入 `train_grpo.py`，与 `--dapo` 预设正交可组合
-- [x] **新方法训练与对比**：GSPO / Dr.GRPO / DAPO 三变体已在冻结切分上完成对照训练并发布权重（公共配方对齐基线，seed 42 / 60 步；离线评测 pass³，基线 GRPO：rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500）：
-  - **GSPO**（序列级 IS）：0.636 / 0.375 / 0.444 / 0.500——与基线逐位持平（权重哈希不同、轨迹分化，行为收敛一致）
-  - **Dr.GRPO**（无偏目标）：0.657 / 0.375 / 0.444 / 0.500——rl_train 略优，ood 工具准确率 0.67 / 虚假完成率 0.33 最优
-  - **DAPO**（clip-higher 0.28 + 截断掩码 + β=0，33 任务池上动态采样不可行故关闭）：**0.667 / 0.500 / 0.481 / 0.500**——rl_train / dev / iid 三切分最优
-  - 详情与实现注记见 `docs/rl_paradigm_comparison.md`
 - [ ] **SAO 式异步训练**：迁移 verl `fully_async_policy` / AReaL，先引入 skip-observation 掩码与 DIS 双边裁剪（[arXiv:2607.07508](https://arxiv.org/abs/2607.07508)，官方代码未开源）
 - [ ] **跨步信用分配**：GiGPO / ARPO 式组内跨步优势，缓解长程链的轨迹级稀疏信号（自研研究项）
+- [ ] **Agentic TTT（测试时训练/适应）**：TTT 在具身智能已广泛应用，LLM Agent 层面是否成立是开放问题。本仓库形态：单篇论文 episode 内自生成 QA/摘要尝试 → 多数票/验证器伪奖励（TTRL，[arXiv:2504.16084](https://arxiv.org/abs/2504.16084)）→ 少步 LoRA 更新 → 复答，与长上下文 ICL 基线对照验证「即时特化」是否划算。约束：端侧延迟预算、灾难性遗忘、TTT 非确定性与 RLVR 可复现评测的冲突、离线快照下「在测试分布上训练」的口径界定
 
 ### P2 — Jev 判别式决策组件
 
 - [ ] **Jev 式判别头**：非自回归结构化决策（choice/score，成本 ~LLM 的 1/400），候选落点：① `result_quality` 判别头替代规则 ② 奖励分量路由器（替代固定课程表）③ 工具选择的结构化解码（封闭枚举天然适合判别式）。约束：确定性推理或只作诊断信号，保持 RLVR 可复现
+- [ ] **RLCD 自训 Jev**：用 [RLCD（Reinforcement Learning from Contrastive Distillation，arXiv:2307.12950）](https://arxiv.org/abs/2307.12950)给判别头补训练路线：正/负原则提示 = 成功 vs 失败的工具决策轨迹（仓库 traces + 可验证奖励可直接构造偏好对），对比损失 + RL 损失联合训练，无需人工偏好标注。目标：仓内自训判别头替代外部 TypeSafe API 依赖，优先落地质量判别头落点
 
 ### P3 — RSI 受限自进化（bounded RSI）
 
 - [ ] **自进化数据闭环**：留出评测暴露弱点 → 坏例库自动扩容 → 参数化派生针对性数据 → 再训练 → 冻结新留出集（复用现有评测/数据/训练管线，前置件已齐）；验收：每轮四切分 pass³ 不回退、坏例库只增不减（[arXiv:2609.11873](https://arxiv.org/abs/2609.11873) 四步循环）。**编排器已落地**（`AgenticArxiv/rl/self_evolve.py`：diagnose → mine → select → synthesize → freeze → gate，纯 JSON、无需模型；`generate_parametric_sft_data.py --only-parents` 定向补数据），真实一轮训练与四切分对照待跑（见 [docs/roadmap_notes.md](docs/roadmap_notes.md)）
+- [ ] **Harness + environment 协同进化**：自进化不止于权重（数据闭环见上条）——Harness 侧：提示词 / 工具路由 / 工作流的 DGM 式自改与 archive（[Darwin Gödel Machine, arXiv:2505.22954](https://arxiv.org/abs/2505.22954)）；environment 侧：任务分布 / 奖励函数自生成（Absolute-Zero 式 self-play，[arXiv:2505.03335](https://arxiv.org/abs/2505.03335)），环境载体 = 改造 `AgenticArxivWeb/` 为可演化任务/奖励沙盒。bounded 纪律不变：manifest SHA256 审计、四切分留出闸门、人工晋升
 
 ### ⛔ 环境阻塞项
 
 - [ ] **vLLM 加速采样**：TRL 0.29 要求 vLLM 0.10.2–0.12.0，本机平台定制版 0.6.2 装在一起会让 GRPOTrainer import 失败。属环境依赖而非代码改动，待平台提供匹配构建。
 
+</details>
+
 ---
 
 **开始你的 Agentic RL 训练之旅！** 🚀
+
+---
+
+## 🌟 Contributors
+
+感谢每一位让本项目变得更好的贡献者：
+
+<a href="https://github.com/Algorineko/AgenticArXiv-RL/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Algorineko/AgenticArXiv-RL" alt="Contributors"/>
+</a>

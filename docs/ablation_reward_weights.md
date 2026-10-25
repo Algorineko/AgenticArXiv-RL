@@ -288,7 +288,7 @@ cd AgenticArXiv-RL/
 source .venv/bin/activate
 python scripts/ablation_reward_weights.py --base_model outputs/sft/final --num_steps 100
 
-# 结果分析
+# 结果分析（汇总脚本待实现；当前可直接读 artifacts/ablation_reward_weights/ 下的 JSONL 与 TensorBoard）
 python scripts/visualize_ablation_results.py artifacts/ablation_reward_weights/
 
 # TensorBoard 可视化
