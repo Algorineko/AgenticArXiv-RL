@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a>
+  <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇬🇧 English</a> | <a href="README.es-ES.md">🇪🇸 Español</a> | <a href="README.ja.md">🇯🇵 日本語</a>
 </p>
 
 # AgenticArXiv-RL — Agentic RL Training Environment
@@ -23,6 +23,22 @@ This project turns arXiv paper retrieval/download/translation/interpretation tas
 3. **Lightweight engineering**: pure Python + JSONL storage, no database, no frontend — focused on offline training
 
 **Non-goals**: a production-grade arXiv app, a Web UI, a real-time translation service (the original web app has been removed from this repo; see the original [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv)).
+
+### Optional Jev Tool-Routing Experiment
+
+Standard ReAct inference supports an optional Jev router that selects the next tool. In guided mode,
+a deterministic parser handles explicit arguments, ambiguous arguments are left to the policy model,
+and the environment executes the tools. `TOOL_ROUTER=policy` preserves the default behavior;
+setting it to `jev` enables routing, with fallback to the original policy path on low confidence,
+API failures, or argument-validation failures. This feature is not integrated into GRPO training.
+See [JEV_ROUTER.md](JEV_ROUTER.md) for configuration, baselines, the 81-task routing-only pilot,
+limitations, and reproduction instructions; copyable switch/API settings are in
+[jev_config.example.env](jev_config.example.env). A project-interface smoke check requires no GPU
+or network and verifies that the policy and Jev paths can be swapped through the same ReAct,
+environment, and benchmark interfaces. In a small mixed 10-task evaluation with a real GRPO Qwen
+model and 3 repeats, guided Jev increased strict success from 40% to 60%, reduced local Qwen token
+usage by 74.01%, and increased total latency by 36.96%. This is a small-sample integration check
+and does not establish the overall success rate on the full 81-task set.
 
 ---
 
@@ -75,7 +91,7 @@ Batch rollouts: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/tra
 9. `analyze_figure(ref, figure_no, question=None)` — figure analysis: the env calls a local VLM to read the figure (multimodal environment enabled)
 10. `get_translated_content(ref, session_id, page=1)` — read the translation one page at a time (the translated Chinese PDF, deterministic extraction; page 1 usually holds the title and abstract)
 
-> The full "search → download → read → summarize → extract figures → analyze figures" interpretation loop is now wired end to end: figure analysis is performed env-side by the project's post-trained [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA), which also records the snapshots, and on the policy side the [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) checkpoint has learned that four-step chain.
+> The full "search → download → read → summarize → extract figures → analyze figures" interpretation loop is now wired end to end: figure analysis is performed env-side by the project's post-trained [FigureQA VLM](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA), with results recorded in snapshots. On the policy side, the [SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) checkpoint has learned the four-step figure-analysis chain.
 > **Admission rule**: a bigger action space is not automatically a better one — a new tool is admitted only if it "unlocks a new class of tasks", not merely because it "might be useful". See [Toolset Evolution Design](docs/toolset_evolution.md) for the full design decision chain.
 
 ### Verifiable Reward (Five Components)
@@ -174,7 +190,8 @@ TRL has removed the classic PPOTrainer (it does not exist on `trl>=0.28.0`), and
 ```bash
 python scripts/build_figure_qa_dataset.py                          # figure QA seed data
 python -m AgenticArxiv.rl.train_vlm_figure_qa                      # Qwen3-VL-4B LoRA post-training
-FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
+# Replace /path/to/figureqa with the local FigureQA model directory
+FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH="/path/to/figureqa" \
   python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
 ```
 
@@ -193,8 +210,41 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH=<FigureQA 目录> \
 | [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO-DAPO) | Qwen2.5-1.5B | DAPO objective without dynamic sampling (rl_train 0.667 / dev 0.500 / iid 0.481 / ood 0.500, pass³; best of the three variants) |
 | [AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-SFT-T5) | Qwen2.5-1.5B | SFT + the `analyze_figure` four-step chain (rl_train 0.485 / dev 0.250 / iid 0.278 / ood 0.250, pass³) |
 | [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) | Qwen3-VL-4B | env-side figure-analysis VLM |
+| [AgenticArXiv-RL-Qwen3-VL-8B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-8B-GRPO) | Qwen3-VL-8B | **Main on-device paper assistant**: policy-side multimodality, full SFT→DPO→GRPO pipeline (72.8% strict success on 81 tasks, 2.9× base; figure ROUGE-1 +32%) |
+| [AgenticArXiv-RL-Qwen3.8-27B-SFT](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3.8-27B-SFT) | Qwen3.8-27B | Figure-understanding research edition (clean-val ROUGE +60%/+87%; tool decisions did not meet the acceptance criteria, see the experiment doc) |
 
 All models are hosted on ModelScope (`Algorineko/AgenticArXiv-RL-*`); each model card includes the offline evaluation table and an honest statement of limitations.
+
+---
+
+## 🏆 On-Device VLM Post-Training Results (Qwen3-VL-8B · Qwen3.8-27B)
+
+The full **SFT → DPO → GRPO pipeline** for Qwen3-VL-8B and figure-understanding SFT for the natively
+multimodal Qwen3.8-27B were completed on 4×64GB Hygon DCUs. Data underwent two rounds of cleanup:
+clipart filtering and tool-manual canonicalization. Evaluation uses a common **greedy decoding
+protocol**, an 81-task offline benchmark, and clean-val figure ROUGE.
+
+| Stage | 81-task strict success | Completion rate | Tool accuracy | False finish | Clean ROUGE-1 |
+|---|---|---|---|---|---|
+| 8B base | 24.7% | 80.2% | 32.1% | 22.2% | 0.1139 |
+| 8B SFT v3 | 66.7% | 95.1% | 72.8% | 8.6% | 0.1446 (+27%) |
+| 8B DPO v3 | 65.4% | 97.5% | 74.1% | 11.1% | 0.1435 |
+| **8B GRPO v3 (main model)** | **72.8%** | **97.5%** | **82.7%** | **6.2%** | **0.1509 (+32%)** |
+| 27B base (control) | 24.7% | 80.2% | 32.1% | 22.2% | 0.1349 |
+| 27B cap SFT (research edition) | 21.0% | 66.7% | 25.9% | **4.9%** | **0.2164 (+60%)** |
+
+**Main model: 8B GRPO (72.8% strict success) = 2.9× 27B base**, with the highest strict success
+and tool accuracy in the table. Two independent runs achieved 71.6% and 72.8% strict success
+(4.9% task outcome flip rate); clean-val figure ROUGE-1 improved by 32% over 8B base.
+The higher-capacity 27B adapter (r128) is also released as a research edition, with figure-understanding
+ROUGE gains of +60%/+87%, the highest in the project. The limits of small-data LoRA adaptation to
+27B's strong prior and the three stages of root-cause analysis (clipart contamination / registry
+drift / sampling protocol) are documented in **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**.
+
+---
+
+The full on-device VLM post-training record (model selection / data evolution / four experiment rounds /
+root-cause analysis) is in [docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md).
 
 ---
 
@@ -215,9 +265,9 @@ python -m AgenticArxiv.benchmark.run_benchmark --task-set expanded --split iid_t
 
 ## 🛡️ Dependencies
 
-**Core dependencies** (`AgenticArxiv/requirements.txt`): `torch>=2.0`, `transformers>=4.45`, `trl>=0.28.0` (verified on 0.29.1; the lower bound is set by the multi-turn GRPO rollout_func path), `peft`, `bitsandbytes` (QLoRA), `datasets`, `accelerate`, `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic>=2`, `fire`.
+**Core dependencies** (`AgenticArxiv/requirements.txt`): `torch>=2.0`, `transformers>=4.45`, `trl>=0.28.0` (verified on 0.29.1; the lower bound is set by the multi-turn GRPO `rollout_func` path), `peft`, `bitsandbytes` (QLoRA), `datasets`, `accelerate`, `arxiv`, `requests`, `python-dotenv`, `loguru`, `pydantic>=2`, `fire`, `PyMuPDF>=1.24.0`, `Pillow`.
 
-**Optional dependencies** (`requirements-extra.txt`): `pdf2zh` (real PDF translation), `fastapi`/`uvicorn`/`sqlalchemy`/`pymysql` (the archived web compatibility layer), `mcp` (the archived MCP compatibility layer), `tensorboard`/`wandb` (curve backends), `matplotlib`/`numpy`/`pandas` (plotting scripts).
+**Optional dependencies** (`AgenticArxiv/requirements-extra.txt`): `pdf2zh` (real PDF translation), `fastapi`/`uvicorn`/`sqlalchemy`/`pymysql` (the archived web compatibility layer), `mcp` (the archived MCP compatibility layer), `tensorboard`/`wandb` (curve backends), `matplotlib`/`numpy`/`pandas` (plotting scripts).
 
 ---
 
@@ -255,7 +305,7 @@ MIT License
 
 ### P0 — On-Device Multimodal Paper Assistant (ultimate goal)
 
-- [ ] **Multimodality on the policy side**: move the VLM from the env side into the policy (observations carry figures), reusing the TRL vision-language path already validated in `train_vlm_figure_qa.py`; candidate bases Qwen3-VL-4B / Qwen2.5-VL-2B (on-device tier)
+- [x] **Multimodality on the policy side**: released a Qwen3-VL-8B multimodal policy with the full SFT → DPO → GRPO pipeline; adaptation to 2–4B on-device models and quantized inference remain optimization goals below (see the [VLM post-training record](docs/edge-vlm-posttrain.md))
 - [ ] **End-to-end reading chain**: retrieval → download → translation → summarization → figure analysis closed-loop within a single model, optimized for on-device inference (quantization + 2-4B scale)
 - [x] **Translated text into the context**: added `get_translated_content`, which reads the pdf2zh translation page by page, deterministically; it replays from offline snapshots (recorded with `build_snapshot --translate-max-ref N`) and is graded by the reading-tool result-quality rule
 
