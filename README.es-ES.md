@@ -22,9 +22,14 @@ Convertir las tareas de búsqueda/descarga/traducción/interpretación de papers
 2. **Entrenamiento progresivo**: SFT → DPO → GRPO (se ofrece además una ruta de destilación on-policy con OPD; PPO no está disponible con las dependencias actuales)
 3. **Ingeniería ligera**: Python puro + almacenamiento en JSONL, sin base de datos ni frontend, enfocado en el entrenamiento offline
 
-**No es objetivo**: una aplicación de arXiv de nivel de producción, una UI web o un servicio de traducción en tiempo real (la app web original se retiró de este repositorio; véase el [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) original).
+**No es objetivo**: una aplicación de arXiv de nivel de producción o un servicio de traducción en tiempo real. `AgenticArxivWeb/` se conserva en este repositorio y se convertirá en el sandbox de la coevolución del entorno para RSI (véase el Roadmap P3); el original histórico está en [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv). El documento de diseño completo de la transformación del entorno está en [docs/rl_building.md](docs/rl_building.md).
 
 ### Experimento Opcional de Enrutamiento de Herramientas con Jev
+
+Un enrutador discriminativo de la siguiente herramienta, desactivado por defecto (`TOOL_ROUTER=jev`): en una comprobación estructural con muestra pequeña, el éxito estricto subió del 40% al 60% y los tokens locales de Qwen bajaron un 74%; no se integra en el entrenamiento GRPO.
+
+<details>
+<summary>Desplegar: mecanismo de enrutamiento de Jev, política de repliegue y detalles del experimento</summary>
 
 La inferencia ReAct estándar admite un enrutador Jev opcional que elige la siguiente herramienta.
 En modo guided, un analizador determinista procesa los argumentos explícitos, los ambiguos quedan
@@ -40,6 +45,8 @@ En una evaluación pequeña de 10 tareas mixtas con un Qwen entrenado con GRPO y
 guided Jev elevó el éxito estricto del 40% al 60%, redujo los tokens locales de Qwen un 74.01% y
 aumentó la latencia total un 36.96%. Es una comprobación de integración con una muestra pequeña;
 no establece la tasa de éxito global en las 81 tareas.
+
+</details>
 
 ---
 
@@ -69,6 +76,11 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 ---
 
 ## 📚 Conceptos Clave
+
+Las tareas sobre papers se convierten en un MDP: espacio de acciones con 10 herramientas + recompensa verificable de cinco componentes (RLVR) + aislamiento de rollouts — todo evaluable por reglas y reproducible offline.
+
+<details>
+<summary>Desplegar: diseño del MDP · espacio de acciones (10 herramientas) · recompensa verificable de cinco componentes · aislamiento de rollouts</summary>
 
 ### Diseño del MDP
 
@@ -116,9 +128,16 @@ Rollout por lotes: `python -m AgenticArxiv.rl.rollout --all --output_dir traces/
 
 El `RolloutSandbox` de `rl/sandbox.py` registra antes de cada trayectoria la línea base del entorno, del Store y de los directorios de artefactos, y la restaura y limpia al terminar — el GRPO multiturno, el rollout y el benchmark comparten este contrato de reset, eliminando cualquier encadenamiento de estado entre trayectorias.
 
+</details>
+
 ---
 
 ## 🛠️ Ruta de Entrenamiento (SFT → DPO → GRPO / OPD)
+
+Entrenamiento progresivo SFT → DPO → GRPO; la destilación on-policy con OPD es intercambiable con GRPO; PPO no está disponible con las dependencias actuales. Las variantes de objetivo GSPO / Dr.GRPO / DAPO ya están conectadas y completaron el entrenamiento comparativo con pesos publicados.
+
+<details>
+<summary>Desplegar: comandos y notas de cada fase (SFT · DPO · GRPO y variantes · OPD · VLM multimodal)</summary>
 
 ### Fase 1: SFT
 
@@ -162,6 +181,8 @@ tensorboard --logdir outputs/grpo/logs
 
 > Publicado: [AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO) (33 tareas con señal, replay offline de snapshots de principio a fin). Evaluación offline (seed 45 / repeat 3, tasa de éxito estricta pass³) SFT → GRPO: **rl_train 0.081→0.636, dev 0.000→0.375, iid_test 0.056→0.444, ood_test 0.000→0.500**.
 
+> **Comparación de variantes de objetivo** (seed 42 / 60 pasos, pass³, pesos publicados — véase la tabla de abajo): GSPO empató con la referencia en todas las particiones (trayectorias divergentes, mismo comportamiento convergido); Dr.GRPO quedó ligeramente por delante en rl_train (0.657) con la mejor precisión de herramientas en ood; **DAPO fue el mejor en tres particiones (0.667 / 0.500 / 0.481 / 0.500)**. Notas de implementación en [docs/rl_paradigm_comparison.md](docs/rl_paradigm_comparison.md). **Marco de ablación de pesos de recompensa**: `--reward_config` admite nueve diseños de pesos de una sola variable ([docs/ablation_reward_weights.md](docs/ablation_reward_weights.md), 🟡 diseñado, ejecución pendiente).
+
 **Rollout y puntuación multiturno** (`rl/grpo_reward.py`): en cada turno la política actual genera una acción ReAct y un `MockArxivEnv` independiente la ejecuta, reinsertando la observation en el contexto; los tokens del assistant entran en la loss y los del entorno actúan solo como contexto vía `env_mask=0`; la trayectoria completa la puntúa el `RewardCalculator` de cinco componentes, con el mismo estándar que usan el rollout y el benchmark.
 
 **Garantías de calidad del entrenamiento** (de fallos silenciosos a errores explícitos): comprobación de la longitud de generación, protección frente a varianza cero (`RewardVarianceGuard`), evaluación canary intermedia con parada temprana, umbrales de verificación por fase (tasa de parseo SFT ≥ 0.3, reward DPO ≥ −0.3, reward GRPO ≥ −0.2), precisión mixta adaptativa y validación previa del backend de logging. Además de las métricas que trae TRL, las curvas registran `reward_components/*` (desglose por componente), `reward_weights/*` (pesos del currículo) y `rollout/*` (turns / finished / parse_error_rate).
@@ -196,7 +217,9 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH="/path/to/figureqa" \
   python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
 ```
 
-> Publicado: [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) (451 figuras / 73 papers, partición por paper para evitar fugas; holdout de 94 figuras, ROUGE-1 0.105→0.126 y ROUGE-L 0.081→0.102).
+> Publicado: [AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA) (451 figuras / 73 papers, partición por paper para evitar fugas; holdout de 94 figuras, ROUGE-1 0.105→0.126 y ROUGE-L 0.081→0.102). Los resultados de la cadena completa de los VLM de política de 8B / 27B están en «🏆 Resultados del Post-entrenamiento de VLM para el Dispositivo», más abajo.
+
+</details>
 
 ---
 
@@ -242,13 +265,8 @@ en clean-val mejoró un 32% respecto a 8B base. El adaptador 27B de mayor capaci
 se publica como edición de investigación, con mejoras de ROUGE de +60%/+87%, las mayores del
 proyecto. Los límites de la adaptación LoRA con pocos datos al fuerte conocimiento previo de 27B y
 las tres etapas de análisis de causas (contaminación por clipart / deriva del registro / protocolo
-de muestreo) se documentan en **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**.
-
----
-
-El registro completo del post-entrenamiento de VLM para el dispositivo (selección del modelo /
-evolución de datos / cuatro rondas de experimentos / análisis de causas) está en
-[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md).
+de muestreo) se documentan en **[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)**
+(selección del modelo / evolución de datos / cuatro rondas de experimentos / análisis de causas).
 
 ---
 
@@ -295,47 +313,62 @@ Licencia MIT
 
 ## 🙋 FAQ
 
+<details>
+<summary>Desplegar: preguntas frecuentes (diferencias con el original · por qué GRPO · por qué la calidad no entra en la recompensa)</summary>
+
 **P: ¿En qué se diferencia del AgenticArXiv original?** El original es una aplicación web de nivel de producción (FastAPI+Vue3+MySQL, tres arquitecturas de agente); este proyecto es un entorno de entrenamiento RL en Python puro + JSONL que conserva únicamente la política única ReAct: su núcleo son el entrenamiento SFT/DPO/GRPO y la recompensa verificable.
 
 **P: ¿Por qué GRPO y no PPO?** GRPO no necesita value model (menor consumo de VRAM), encaja con modelos pequeños de la escala de 1.5B y su implementación es simple y fácil de depurar; PPO es más adecuado para entrenar modelos grandes de nivel de producción.
 
 **P: ¿Por qué la calidad del resumen/análisis de figuras no entra en la recompensa?** Puntuar la calidad exigiría LLM-as-judge, lo que introduce no determinismo y una superficie nueva de hacking. El diseño reduce la interpretación a un **problema de decisión de llamada a herramientas** (cuándo llamar, a quién, con qué argumentos) — todo evaluable por reglas y reproducible; es la premisa de RLVR.
 
+</details>
+
 ---
 
 ## 📝 Roadmap (Hoja de Ruta)
 
-> Los argumentos completos y la ruta de adopción están en [docs/roadmap_notes.md](docs/roadmap_notes.md). Anímate a reclamar una tarea (véase 🤝 Contribuir).
+> Los argumentos completos y la ruta de adopción están en [docs/roadmap_notes.md](docs/roadmap_notes.md). Las tareas completadas se han integrado en las secciones correspondientes del cuerpo del documento. Anímate a reclamar una tarea (véase 🤝 Contribuir).
+
+<details>
+<summary>Desplegar: hoja de ruta (P0 bucle en el dispositivo · P1 nuevos algoritmos · P2 Jev · P3 coevolución · ⛔ bloqueos)</summary>
 
 ### P0 — Asistente de Papers Multimodal en el Dispositivo (objetivo final)
 
-- [x] **Multimodalidad del lado de la política**: publicado un modelo de política multimodal Qwen3-VL-8B con la cadena completa SFT → DPO → GRPO; la adaptación a modelos de 2–4B para el dispositivo y la inferencia cuantizada siguen entre los objetivos de optimización siguientes (véase el [registro de post-entrenamiento de VLM](docs/edge-vlm-posttrain.md))
-- [ ] **Cadena de lectura de extremo a extremo**: búsqueda → descarga → traducción → resumen → análisis de figuras, cerrada dentro de un único modelo y optimizada para la inferencia en el dispositivo (cuantización + escala 2-4B)
-- [x] **El texto traducido, en el contexto**: nueva herramienta `get_translated_content`, que lee la traducción de pdf2zh página a página de forma determinista; se reproduce desde snapshots offline (grabados con `build_snapshot --translate-max-ref N`) y se evalúa con la regla de calidad de resultado de las herramientas de lectura
+- [ ] **Cadena de lectura de extremo a extremo**: búsqueda → descarga → traducción → resumen → análisis de figuras, cerrada dentro de un único modelo y optimizada para la inferencia en el dispositivo (cuantización + escala 2–4B). La traducción ya está lista (`get_translated_content` lee la traducción de pdf2zh página a página de forma determinista, con replay desde snapshots grabados con `build_snapshot --translate-max-ref N`); la multimodalidad del lado de la política completó la cadena de 8B (véase «🏆 Resultados del Post-entrenamiento de VLM para el Dispositivo» y el [registro de post-entrenamiento de VLM](docs/edge-vlm-posttrain.md)) — el núcleo pendiente es meter toda la cadena en el presupuesto del dispositivo
 
 ### P1 — Algoritmos de RL Agentic de Nueva Generación
 
-- [x] **Integración de GSPO / Dr.GRPO**: `--importance_sampling_level sequence` (muestreo de importancia a nivel de secuencia, GSPO) y `--loss_type dr_grpo` (normalización por longitud sin sesgo) ya están conectados en `train_grpo.py`, y son ortogonales y combinables con el preset `--dapo`
-- [x] **Entrenamiento y comparación con métodos nuevos**: las variantes GSPO / Dr.GRPO / DAPO fueron entrenadas sobre las particiones congeladas y publicadas (receta común alineada con la referencia, seed 42 / 60 pasos; pass³ fuera de línea, GRPO de referencia: rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500):
-  - **GSPO** (IS a nivel de secuencia): 0.636 / 0.375 / 0.444 / 0.500 — idéntico a la referencia en todas las particiones (pesos distintos, curvas de recompensa divergentes, mismo comportamiento convergido)
-  - **Dr.GRPO** (objetivo sin sesgo): 0.657 / 0.375 / 0.444 / 0.500 — ligeramente superior en rl_train; mejor precisión de herramientas en ood (0.67) y menor tasa de finalización falsa (0.33)
-  - **DAPO** (clip-higher 0.28 + máscara de truncamiento + β=0; el muestreo dinámico no es viable en el grupo de 33 tareas, por lo que se desactiva): **0.667 / 0.500 / 0.481 / 0.500** — el mejor en rl_train / dev / iid
-  - Detalles y notas de implementación en `docs/rl_paradigm_comparison.md`
 - [ ] **Entrenamiento asíncrono estilo SAO**: migrar a verl `fully_async_policy` / AReaL, introduciendo primero la máscara skip-observation y el recorte bilateral de DIS ([arXiv:2607.07508](https://arxiv.org/abs/2607.07508), código oficial sin publicar)
 - [ ] **Asignación de crédito entre pasos**: ventajas intragrupo que crucen pasos, al estilo GiGPO / ARPO, para aliviar la señal dispersa a nivel de trayectoria de las cadenas largas (línea de investigación propia)
+- [ ] **TTT agéntico (entrenamiento/adaptación en tiempo de prueba)**: el TTT está muy extendido en la IA encarnada; que funcione a nivel de agente LLM es una pregunta abierta. Forma en este repositorio: dentro del episodio de un solo paper, autogenerar intentos de QA/resumen → pseudorrecompensas por voto mayoritario/verificador (TTRL, [arXiv:2504.16084](https://arxiv.org/abs/2504.16084)) → unos pocos pasos de LoRA → responder de nuevo, comparado con una referencia de ICL de contexto largo para comprobar si la «especialización instantánea» compensa. Restricciones: presupuesto de latencia en el dispositivo, olvido catastrófico, el conflicto entre el no determinismo del TTT y la evaluación reproducible de RLVR, y el criterio de fuga de «entrenar sobre la distribución de prueba» con snapshots offline
 
 ### P2 — Componente de Decisión Discriminativo estilo Jev
 
 - [ ] **Cabeza discriminativa estilo Jev**: decisión estructurada no autorregresiva (choice/score, ~1/400 del coste de un LLM), posibles puntos de integración: ① una cabeza discriminativa para `result_quality` en lugar de reglas ② un enrutador de componentes de recompensa (en lugar del currículo fijo) ③ decodificación estructurada de la selección de herramientas (los enums cerrados encajan de forma natural en lo discriminativo). Restricción: inferencia determinista o uso solo como señal de diagnóstico, para mantener la reproducibilidad de RLVR
+- [ ] **Jev entrenado con RLCD**: entrenar la cabeza discriminativa con [RLCD (Reinforcement Learning from Contrastive Distillation, arXiv:2307.12950)](https://arxiv.org/abs/2307.12950): prompts de principio positivos/negativos = trayectorias de decisión de herramientas exitosas frente a fallidas (los traces del repositorio + la recompensa verificable permiten construir pares de preferencia directamente), entrenada con una pérdida contrastiva + pérdida de RL conjunta, sin etiquetas de preferencia humanas. Objetivo: una cabeza discriminativa entrenada internamente que sustituya a la dependencia de la API externa de TypeSafe, aterrizando primero la cabeza de calidad de resultado
 
 ### P3 — Autoevolución RSI Acotada (bounded RSI)
 
 - [ ] **Bucle de datos autoevolutivo**: la evaluación holdout expone debilidades → la biblioteca de casos malos se amplía automáticamente → derivación paramétrica de datos dirigidos → reentrenamiento → congelación de un nuevo holdout (reutiliza las líneas existentes de evaluación/datos/entrenamiento; los prerrequisitos ya están listos). Criterio de aceptación: el pass³ en las cuatro particiones no retrocede en ninguna ronda y la biblioteca de casos malos solo crece (ciclo de cuatro pasos de [arXiv:2609.11873](https://arxiv.org/abs/2609.11873)). **Orquestador implementado** (`AgenticArxiv/rl/self_evolve.py`: diagnose → mine → select → synthesize → freeze → gate, solo JSON, sin modelo; `generate_parametric_sft_data.py --only-parents` para datos dirigidos); queda pendiente una ronda real de entrenamiento con la comparación en cuatro particiones (ver [docs/roadmap_notes.md](docs/roadmap_notes.md))
+- [ ] **Coevolución de harness y entorno**: la autoevolución va más allá de los pesos (véase el bucle de datos anterior) — lado harness: automodificación y archivo al estilo DGM de prompts / enrutamiento de herramientas / flujos de trabajo ([Darwin Gödel Machine, arXiv:2505.22954](https://arxiv.org/abs/2505.22954)); lado entorno: distribuciones de tareas y funciones de recompensa autogeneradas (self-play al estilo Absolute-Zero, [arXiv:2505.03335](https://arxiv.org/abs/2505.03335)), con `AgenticArxivWeb/` como portador que se convertirá en un sandbox evolvable de tareas/recompensas. La disciplina acotada se mantiene: auditorías manifest SHA256, puertas holdout de cuatro particiones, promoción humana
 
 ### ⛔ Bloqueos del Entorno
 
 - [ ] **Muestreo acelerado con vLLM**: TRL 0.29 exige vLLM 0.10.2–0.12.0, y la compilación personalizada 0.6.2 de la plataforma local, instalada en conjunto, hace que la importación de GRPOTrainer falle. Es una dependencia del entorno, no un cambio de código: queda a la espera de que la plataforma ofrezca una compilación compatible.
 
+</details>
+
 ---
 
 **¡Comienza tu viaje de entrenamiento en RL Agentic!** 🚀
+
+---
+
+## 🌟 Colaboradores
+
+Gracias a todas las personas que han hecho mejor este proyecto:
+
+<a href="https://github.com/Algorineko/AgenticArXiv-RL/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Algorineko/AgenticArXiv-RL" alt="Colaboradores"/>
+</a>

@@ -22,9 +22,14 @@ arXiv 論文の検索・ダウンロード・翻訳・読解タスクを、**訓
 2. **段階的な訓練**：SFT → DPO → GRPO。OPD によるオンポリシー蒸留も利用できます。PPO は現在の依存関係では利用できません。
 3. **軽量な構成**：Python と JSONL ストレージのみを使い、データベースやフロントエンドを必要とせず、オフライン訓練に集中します。
 
-**対象外**：本番向け arXiv アプリ、Web UI、リアルタイム翻訳サービス。元の Web アプリはこのリポジトリから削除されています。元プロジェクトの [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) を参照してください。
+**対象外**：本番向け arXiv アプリ、リアルタイム翻訳サービス。`AgenticArxivWeb/` はこのリポジトリに残し、RSI における環境との共進化のためのサンドボックスとして改造していく予定です（ロードマップ P3 参照）。元プロジェクトの [AgenticArXiv](https://github.com/Algorineko/AgenticArXiv) を参照してください。環境を RL 訓練環境へ改造した設計の全体像は [docs/rl_building.md](docs/rl_building.md) にあります。
 
 ### 任意で利用できる Jev ツールルーティング実験
+
+既定で無効化されている識別型の次ツールルーター（`TOOL_ROUTER=jev`）：小規模な構造検証では、厳密成功率が 40% から 60% に上がり、ローカル Qwen のトークン使用量は 74% 減少しました。GRPO 訓練には組み込まれていません。
+
+<details>
+<summary>展開：Jev ルーティングの仕組み、フォールバック方針、実験の詳細</summary>
 
 通常の ReAct 推論では、次に使うツールを Jev が選ぶルーターを任意で有効にできます。
 guided モードでは、明示的な引数を決定論的なパーサーで処理し、曖昧な引数は方策モデルに任せ、
@@ -39,6 +44,8 @@ GRPO で訓練した Qwen を用いた混合 10 タスク・3 回反復の小規
 厳密成功率が 40% から 60% に上がり、ローカル Qwen のトークン使用量が 74.01% 減少した一方、
 総レイテンシは 36.96% 増加しました。これは少数サンプルによる統合の検証であり、
 全 81 タスクでの総合的な成功率を示すものではありません。
+
+</details>
 
 ---
 
@@ -68,6 +75,11 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 ---
 
 ## 📚 基本概念
+
+論文タスクを MDP として構成します。10 個のツールからなる行動空間 + 5 成分の検証可能報酬（RLVR）+ rollout の分離。すべてルールで判定でき、オフラインで再現可能です。
+
+<details>
+<summary>展開：MDP の設計 · 行動空間（10 個のツール）· 5 成分の検証可能報酬 · rollout の分離</summary>
 
 ### MDP の設計
 
@@ -115,9 +127,16 @@ python -m AgenticArxiv.rl.rollout search_01 traces/train/
 
 `rl/sandbox.py` の `RolloutSandbox` は、各軌跡の開始前に環境・Store・生成物ディレクトリの基準状態を記録し、終了後に復元と後片付けを行います。複数ターンの GRPO、rollout、ベンチマークが同じリセット規約を使い、軌跡間で状態が引き継がれることを防ぎます。
 
+</details>
+
 ---
 
 ## 🛠️ 訓練経路（SFT → DPO → GRPO / OPD）
+
+SFT → DPO → GRPO の段階的訓練。OPD によるオンポリシー蒸留は GRPO の代替となり、PPO は現在の依存関係では利用できません。GSPO / Dr.GRPO / DAPO の目的関数変種は実装済みで、対照訓練を完了し重みも公開しています。
+
+<details>
+<summary>展開：各ステージのコマンドと説明（SFT · DPO · GRPO と変種 · OPD · マルチモーダル VLM）</summary>
 
 ### ステージ 1：SFT
 
@@ -161,6 +180,8 @@ tensorboard --logdir outputs/grpo/logs
 
 > 公開済み：[AgenticArXiv-RL-Qwen2.5-1.5B-GRPO](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO)（学習信号のある 33 タスクを使用し、全工程でオフラインスナップショットを再生）。オフライン評価（seed 45 / 3 回反復、厳密成功率 pass³）での SFT → GRPO：**rl_train 0.081→0.636、dev 0.000→0.375、iid_test 0.056→0.444、ood_test 0.000→0.500**。
 
+> **目的関数変種の対照結果**（seed 42 / 60 ステップ、pass³、重みはいずれも公開済み — 下表参照）：GSPO はすべての分割でベースラインと同等（軌跡は分岐するが収束後の振る舞いは同じ）。Dr.GRPO は rl_train で 0.657 とわずかに改善し、ood のツール精度が最良。**DAPO は 3 分割で最良（0.667 / 0.500 / 0.481 / 0.500）**。実装の注記は [docs/rl_paradigm_comparison.md](docs/rl_paradigm_comparison.md)。**報酬重みのアブレーション框架**：`--reward_config` により 9 種類の単一変数の重み設計をサポート（[docs/ablation_reward_weights.md](docs/ablation_reward_weights.md)、🟡 設計完了・実行待ち）。
+
 **複数ターンの rollout と採点**（`rl/grpo_reward.py`）：各ターンで現在の方策が ReAct の行動を生成し、独立した `MockArxivEnv` が実行して観測結果をコンテキストに戻します。assistant のトークンは損失計算に含め、環境のトークンは `env_mask=0` によってコンテキストとしてのみ使います。軌跡全体は 5 成分の `RewardCalculator` で採点し、rollout・ベンチマークと同じ基準を適用します。
 
 **訓練品質の保護機構**：生成長の検査、ゼロ分散の監視（`RewardVarianceGuard`）、訓練途中の Canary 評価による早期停止、ステージごとの検証しきい値（SFT 解析可能率 ≥ 0.3、DPO 報酬 ≥ −0.3、GRPO 報酬 ≥ −0.2）、混合精度の自動調整、ログバックエンドの事前検証により、失敗を明示的なエラーとして検出します。TRL 標準の指標に加えて、`reward_components/*`（成分内訳）、`reward_weights/*`（カリキュラムの重み）、`rollout/*`（turns / finished / parse_error_rate）を記録します。
@@ -195,7 +216,9 @@ FIGURE_ANALYSIS_BACKEND=vlm VLM_MODEL_PATH="/path/to/figureqa" \
   python -m AgenticArxiv.rl.backfill_figure_analysis --snapshot data/mock_arxiv_snapshot.json
 ```
 
-> 公開済み：[AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA)（73 論文 / 451 図表。情報漏洩を防ぐため論文単位で分割。ホールドアウト 94 図表で ROUGE-1 は 0.105→0.126、ROUGE-L は 0.081→0.102）。
+> 公開済み：[AgenticArXiv-RL-Qwen3-VL-4B-FigureQA](https://www.modelscope.cn/models/Algorineko/AgenticArXiv-RL-Qwen3-VL-4B-FigureQA)（73 論文 / 451 図表。情報漏洩を防ぐため論文単位で分割。ホールドアウト 94 図表で ROUGE-1 は 0.105→0.126、ROUGE-L は 0.081→0.102）。8B / 27B の方策側 VLM の全経路の成果は、下記「🏆 端末向け VLM の事後訓練成果」を参照してください。
+
+</details>
 
 ---
 
@@ -241,12 +264,8 @@ clean-val の図表 ROUGE を測定しています。
 図表理解の ROUGE は +60%/+87% とプロジェクト内で最高の改善を示しました。
 強い事前知識を持つ 27B に少量データの LoRA を適用する際の限界と、3 段階の原因分析
 （clipart 汚染 / レジストリのずれ / サンプリングプロトコル）は、
-**[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)** に記録しています。
-
----
-
-端末向け VLM の事後訓練の全記録（モデル選定・データの変遷・4 ラウンドの実験・原因分析）は、
-[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md) を参照してください。
+**[docs/edge-vlm-posttrain.md](docs/edge-vlm-posttrain.md)** に記録しています
+（モデル選定・データの変遷・4 ラウンドの実験・原因分析）。
 
 ---
 
@@ -293,47 +312,62 @@ MIT License
 
 ## 🙋 よくある質問
 
+<details>
+<summary>展開：よくある質問（元プロジェクトとの違い · GRPO を選ぶ理由 · 品質を報酬に含めない理由）</summary>
+
 **Q：元の AgenticArXiv との違いは？** 元プロジェクトは本番向けの Web アプリ（FastAPI + Vue3 + MySQL、3 種類のエージェント構成）です。本プロジェクトは Python + JSONL の RL 訓練環境で、ReAct の単一方策だけを残し、SFT/DPO/GRPO 訓練と検証可能な報酬を中心にしています。
 
 **Q：PPO ではなく GRPO を選ぶ理由は？** GRPO は価値モデルが不要で GPU メモリの消費が少なく、1.5B 規模の小型モデルに適し、実装とデバッグも容易です。PPO は本番向けの大規模モデル訓練により適しています。
 
 **Q：要約や図表分析の品質を報酬に含めない理由は？** 品質の採点に LLM-as-judge を使うと、非決定性と報酬の抜け道が増えます。本設計では読解を**ツール呼び出しの意思決定問題**（いつ、どのツールを、どの引数で呼ぶか）として扱います。すべてをルールで判定でき、再現可能であることが RLVR の前提です。
 
+</details>
+
 ---
 
 ## 📝 ロードマップ
 
-> 詳細な根拠と導入経路は [docs/roadmap_notes.md](docs/roadmap_notes.md) を参照してください。各項目への参加を歓迎します（🤝 コントリビューション参照）。
+> 詳細な根拠と導入経路は [docs/roadmap_notes.md](docs/roadmap_notes.md) を参照してください。完了した項目は本文の該当セクションに統合済みです。各項目への参加を歓迎します（🤝 コントリビューション参照）。
+
+<details>
+<summary>展開：ロードマップ（P0 端末でのループ完結 · P1 新アルゴリズム · P2 Jev · P3 共進化 · ⛔ 阻害要因）</summary>
 
 ### P0 — 端末向けマルチモーダル論文アシスタント（最終目標）
 
-- [x] **方策側のマルチモーダル化**：Qwen3-VL-8B のマルチモーダル方策を公開し、SFT → DPO → GRPO の全経路を完了しました。2–4B の端末向けモデルへの適用と量子化推論は、引き続き以下の最適化目標に含まれます（[VLM 事後訓練の記録](docs/edge-vlm-posttrain.md) 参照）。
-- [ ] **エンドツーエンドの読解連鎖**：検索 → ダウンロード → 翻訳 → 要約 → 図表分析を単一モデルで完結させ、端末上の推論に向けて最適化します（量子化 + 2-4B 規模）。
-- [x] **訳文をコンテキストに取り込む**：`get_translated_content` を追加し、pdf2zh の訳文をページ単位で決定論的に読み取ります。オフラインスナップショットで再生し（`build_snapshot --translate-max-ref N` で記録）、読解ツールのルールで結果の品質を判定します。
+- [ ] **エンドツーエンドの読解連鎖**：検索 → ダウンロード → 翻訳 → 要約 → 図表分析を単一モデルで完結させ、端末上の推論に向けて最適化します（量子化 + 2–4B 規模）。翻訳はすでに利用可能（`get_translated_content` による pdf2zh 訳文のページ単位の決定論的読み取り + `build_snapshot --translate-max-ref N` で記録したスナップショットの再生）。方策側のマルチモーダル化は 8B で全経路を完了済み（「🏆 端末向け VLM の事後訓練成果」と [VLM 事後訓練の記録](docs/edge-vlm-posttrain.md) 参照）。残る核心は、チェーン全体を端末の予算に収めることです。
 
 ### P1 — 次世代の Agentic RL アルゴリズム
 
-- [x] **GSPO / Dr.GRPO の統合**：`--importance_sampling_level sequence`（系列単位の重要度サンプリング、GSPO）と `--loss_type dr_grpo`（バイアスのない長さ正規化）を `train_grpo.py` に実装済みです。`--dapo` プリセットとは独立して組み合わせられます。
-- [x] **新手法の訓練と比較**：GSPO / Dr.GRPO / DAPO の 3 変種を固定した分割で対照訓練し、重みを公開しました（ベースラインと共通の設定、seed 42 / 60 ステップ。オフライン pass³ の GRPO ベースライン：rl_train 0.636 / dev 0.375 / iid 0.444 / ood 0.500）。
-  - **GSPO**（系列単位の IS）：0.636 / 0.375 / 0.444 / 0.500。すべての分割でベースラインと同等です（重みのハッシュと報酬曲線は異なるものの、収束後の振る舞いは同じ）。
-  - **Dr.GRPO**（バイアスを補正した目的関数）：0.657 / 0.375 / 0.444 / 0.500。rl_train でわずかに改善し、ood のツール精度 0.67 / 虚偽完了率 0.33 が最良です。
-  - **DAPO**（clip-higher 0.28 + 打ち切りマスク + β=0。33 タスクのプールでは動的サンプリングが実用的でないため無効）：**0.667 / 0.500 / 0.481 / 0.500**。rl_train / dev / iid の 3 分割で最良です。
-  - 詳細と実装上の注記は `docs/rl_paradigm_comparison.md` を参照してください。
 - [ ] **SAO 型の非同期訓練**：verl の `fully_async_policy` / AReaL に移行し、まず skip-observation マスクと DIS の両側クリッピングを導入します（[arXiv:2607.07508](https://arxiv.org/abs/2607.07508)、公式コードは未公開）。
 - [ ] **ステップ間のクレジット割り当て**：GiGPO / ARPO 型のグループ内・ステップ間のアドバンテージを導入し、長い行動連鎖における軌跡単位の疎な学習信号を改善します（独自の研究課題）。
+- [ ] **Agentic TTT（テスト時訓練・適応）**：TTT は具身 AI で広く使われていますが、LLM エージェントのレイヤーで成立するかは開かれた問題です。本リポジトリでの形：単一論文のエピソード内で QA・要約の試行を自己生成 → 多数決/検証器による擬似報酬（TTRL、[arXiv:2504.16084](https://arxiv.org/abs/2504.16084)）→ 数ステップの LoRA 更新 → 再回答し、長コンテキスト ICL のベースラインと比較して「即時の特化」が割に合うかを検証します。制約：端末のレイテンシ予算、壊滅的な忘却、TTT の非決定性と RLVR の再現可能な評価との衝突、オフラインスナップショット下で「テスト分布で訓練する」ことの位置づけ。
 
 ### P2 — Jev 型の識別的意思決定コンポーネント
 
 - [ ] **Jev 型の識別ヘッド**：非自己回帰の構造化された意思決定（choice/score、コストは LLM の約 1/400）。候補は ① ルールを置き換える `result_quality` 識別ヘッド ② 固定カリキュラムを置き換える報酬成分ルーター ③ ツール選択の構造化デコードです。閉じた選択肢の集合は識別モデルに適しています。RLVR の再現性を保つため、推論を決定論的にするか、診断信号としてのみ使います。
+- [ ] **RLCD による Jev の自己訓練**：識別ヘッドの訓練経路として [RLCD（Reinforcement Learning from Contrastive Distillation、arXiv:2307.12950）](https://arxiv.org/abs/2307.12950)を導入します。正負の原則プロンプト = 成功したツール決定の軌跡と失敗した軌跡（リポジトリの traces + 検証可能な報酬から選好ペアを直接構築可能）を用い、対照損失 + RL 損失の joint で訓練します。人手の選好ラベルは不要。目標は、外部の TypeSafe API への依存を、リポジトリ内で訓練した識別ヘッドに置き換えることです。まず `result_quality` ヘッドの着地を優先します。
 
 ### P3 — 制約付き自己進化（bounded RSI）
 
 - [ ] **自己進化するデータループ**：ホールドアウト評価で弱点を特定 → 失敗例を自動追加 → 対象を絞ったデータをパラメトリックに生成 → 再訓練 → 新しいホールドアウトを固定します。既存の評価・データ・訓練パイプラインを再利用でき、前提機能は整っています。受け入れ基準は、各ラウンドで 4 分割の pass³ が低下せず、失敗例集が増え続けることです（[arXiv:2609.11873](https://arxiv.org/abs/2609.11873) の 4 ステップループ）。**オーケストレーターは実装済み**（`AgenticArxiv/rl/self_evolve.py`：diagnose → mine → select → synthesize → freeze → gate。JSON のみでモデル不要。`generate_parametric_sft_data.py --only-parents` で対象を絞ったデータを補充）。実際の訓練 1 ラウンドと 4 分割での比較は未実施です（[docs/roadmap_notes.md](docs/roadmap_notes.md) 参照）。
+- [ ] **ハーネスと環境の共進化**：自己進化は重みにとどまらず（データループは上記）— ハーネス側：プロンプト / ツールルーティング / ワークフローの DGM 式自己改造とアーカイブ（[Darwin Gödel Machine、arXiv:2505.22954](https://arxiv.org/abs/2505.22954)）。環境側：タスク分布 / 報酬関数の自己生成（Absolute-Zero 式 self-play、[arXiv:2505.03335](https://arxiv.org/abs/2505.03335)）。`AgenticArxivWeb/` を改造した進化可能なタスク・報酬サンドボックスを環境の担い手とします。制約付きの規律は変わりません：manifest の SHA256 監査、4 分割のホールドアウトゲート、人手による昇格。
 
 ### ⛔ 環境上の阻害要因
 
 - [ ] **vLLM によるサンプリング高速化**：TRL 0.29 は vLLM 0.10.2–0.12.0 を必要とします。実験環境にインストールされているプラットフォーム独自版 0.6.2 と併用すると、GRPOTrainer のインポートが失敗します。環境の依存関係による問題であり、対応するビルドの提供待ちです。
 
+</details>
+
 ---
 
 **Agentic RL の訓練を始めましょう！** 🚀
+
+---
+
+## 🌟 コントリビューター
+
+このプロジェクトをより良いものにしてくれたすべての貢献者に感謝します：
+
+<a href="https://github.com/Algorineko/AgenticArXiv-RL/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Algorineko/AgenticArXiv-RL" alt="コントリビューター"/>
+</a>
