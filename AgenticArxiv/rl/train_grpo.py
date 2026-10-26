@@ -678,6 +678,12 @@ class InterventionGRPOTrainer(GRPOTrainer):
                 perm = torch.randperm(G, generator=self._iv_rng)
                 adv_g[j] = adv_g[j][perm.to(adv_g.device)]
                 n_touched += 1
+        elif mode == "rloo":
+            # RLOO 估计器对照 (GLM III.1): A_i = r_i − mean(r_其他) = G/(G−1)·(r_i−r̄)
+            # 无 std 归一化。tie 组天然全零（与 GRPO 同为并列静默）；幅度口径为奖励原尺度
+            # （与 GRPO 的 O(1) 归一化优势不同，等效步长差异在论文中披露）。
+            adv_g[:] = ((rw - rw.mean(dim=1, keepdim=True)) * (G / (G - 1.0))).to(adv_g.dtype)
+            n_touched = int(rw.shape[0])
         elif mode == "zero":
             # 非 tie 组优势置零：纯移除信号，不新增任何随机更新（GPT#3 四臂矩阵的归零对照）
             for j in torch.nonzero(~collapsed).flatten().tolist():
@@ -1518,10 +1524,11 @@ if __name__ == "__main__":
     )
     p.add_argument(
         "--advantage_intervention",
-        choices=["none", "permute", "zero", "reverse", "swap", "avspo"], default="none",
+        choices=["none", "permute", "zero", "reverse", "swap", "avspo", "rloo"], default="none",
         help="V 系列优势干预（第四轮审稿裁决实验）: permute=非tie组内置换优势"
              "（保幅度毁内容）; avspo=AVSPO 忠实移植（虚拟样本只进归一化统计，"
-             "He et al. ICML 2026, arXiv:2605.21125）",
+             "He et al. ICML 2026, arXiv:2605.21125）; rloo=组相对估计器对照"
+             "（A_i=G/(G-1)·(r_i-r̄)，无 std 归一化，回答并列静默是 GRPO 家族还是组相对估计的病）",
     )
     p.add_argument(
         "--avspo_alpha", type=float, default=0.5,
