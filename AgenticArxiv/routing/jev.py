@@ -49,6 +49,11 @@ ROUTING_CRITERIA = {
     "summarize_paper": "Summarize a paper in the requested style and word budget.",
     "extract_paper_figures": "Extract figures from a downloaded paper.",
     "analyze_figure": "Describe or analyze a particular extracted paper figure.",
+    "get_translated_content": (
+        "Read the page-by-page translation of a paper that was already "
+        "translated. Use for reading translated text; start a new translation "
+        "with translate_arxiv_pdf instead."
+    ),
 }
 
 

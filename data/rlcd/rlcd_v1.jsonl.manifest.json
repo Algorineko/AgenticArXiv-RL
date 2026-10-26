@@ -1,0 +1,42 @@
+{
+  "kind": "jev_rlcd_decision_points",
+  "version": 1,
+  "output": "data/rlcd/rlcd_v1.jsonl",
+  "output_sha256": "5a1ed07dbcc4c49d5bb278e7b8c7eae8e33bc4151a71b02c397eae07b45e8970",
+  "output_rows": 2143,
+  "by_split": {
+    "dev": 230,
+    "iid_test": 353,
+    "ood_test": 179,
+    "train": 1381
+  },
+  "by_source": {
+    "gold_replay": 232,
+    "policy_failure_neg": 365,
+    "policy_success": 1546
+  },
+  "rows_with_negatives": 470,
+  "error_patterns": {
+    "other": 434,
+    "title_ref_wrong_search": 29,
+    "infeasible_called_tool": 5,
+    "recent_vs_keyword": 2
+  },
+  "prompt_version": "jev_router_prompt_v1",
+  "snapshot": "data/mock_arxiv_snapshot.json",
+  "snapshot_sha256_head": "f9dec79969c7c4e4c5913a5637a0651860413d5bb4cf01c65f8a105fbbb061f3",
+  "split_file": "data/splits/v3_81.json",
+  "stats": {
+    "rows": 5573,
+    "gold_rows": 232,
+    "traces_seen": 2408,
+    "traces_accepted": 2408,
+    "policy_positives": 4252,
+    "policy_negatives": 1089
+  },
+  "notes": [
+    "sft_pool 未在 v1 实现（SFT 行的 state 格式与 router prompt 不同构，重建有损）；正样本由 gold_replay + policy_success 提供",
+    "policy 轨迹标签由 expected_tools 确定性重算，未使用 raw_data.csv",
+    "回放校验口径 = setup+每工具步在冻结快照上无异常执行（不做 observation 字符串比对，渲染器与 base_agent 不同构）"
+  ]
+}
