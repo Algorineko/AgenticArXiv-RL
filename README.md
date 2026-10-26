@@ -337,7 +337,7 @@ MIT License
 ### P2 — Jev 判别式决策组件
 
 - [ ] **Jev 式判别头**：非自回归结构化决策（choice/score，成本 ~LLM 的 1/400），候选落点：① `result_quality` 判别头替代规则 ② 奖励分量路由器（替代固定课程表）③ 工具选择的结构化解码（封闭枚举天然适合判别式）。约束：确定性推理或只作诊断信号，保持 RLVR 可复现
-- [ ] **RLCD 自训 Jev**：用 [RLCD（Reinforcement Learning from Contrastive Distillation，arXiv:2307.12950）](https://arxiv.org/abs/2307.12950)给判别头补训练路线：正/负原则提示 = 成功 vs 失败的工具决策轨迹（仓库 traces + 可验证奖励可直接构造偏好对），对比损失 + RL 损失联合训练，无需人工偏好标注。目标：仓内自训判别头替代外部 TypeSafe API 依赖，优先落地质量判别头落点
+- [ ] **RLCD 自训 Jev**：正/负对比信号（成功 vs 失败的工具决策轨迹，可验证奖励免标注）+ 对比损失训练判别头，替代外部 TypeSafe API。**双臂对照已验证**（[docs/jev_rlcd.md](docs/jev_rlcd.md)）：对比项对纯 CE 基线四 suite 全胜（992 冻结点，McNemar p<0.0001，Δ +33.0pp）；链中步 91.0%、0.80 门控内高准确；首步复合链 53.1% 为已知短板（门控下安全回退）。待做：首步定向增强、`TOOL_ROUTER=local` 接线
 
 ### P3 — RSI 受限自进化（bounded RSI）
 

@@ -325,7 +325,11 @@ def main() -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     parser = argparse.ArgumentParser(description="本地 next-tool 判别头评测")
-    parser.add_argument("--router-model", required=True)
+    parser.add_argument(
+        "--router-model",
+        default="",
+        help="判别模型目录；--compare 模式下可省",
+    )
     parser.add_argument("--data", default="data/rlcd/rlcd_v1.jsonl")
     parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT)
     parser.add_argument("--split-file", default=DEFAULT_SPLIT_FILE)

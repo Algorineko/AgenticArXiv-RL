@@ -343,7 +343,7 @@ MIT License
 ### P2 — Jev-Style Discriminative Decision Component
 
 - [ ] **Jev-style discriminative head**: non-autoregressive structured decisions (choice/score, at ~1/400 the cost of an LLM); candidate landing spots: ① a `result_quality` discriminative head replacing the rules ② a reward-component router (replacing the fixed curriculum schedule) ③ structured decoding for tool selection (a closed enumeration is naturally suited to a discriminative model). Constraint: deterministic inference, or diagnostics-only, to keep RLVR reproducible
-- [ ] **RLCD-trained Jev**: train the discriminative head with [RLCD (Reinforcement Learning from Contrastive Distillation, arXiv:2307.12950)](https://arxiv.org/abs/2307.12950): positive/negative principle prompts = successful vs failed tool-decision trajectories (the repo's traces + verifiable rewards can build preference pairs directly), trained with a contrastive loss + RL loss joint objective, no human preference labels. Goal: an in-house trained discriminative head replacing the external TypeSafe API dependency, landing the result-quality head first
+- [ ] **RLCD-trained Jev**: contrastive signal from successful vs failed tool-decision trajectories (verifiable rewards, no human labels) trains the discriminative head, replacing the external TypeSafe API. **Two-arm comparison validated** ([docs/jev_rlcd.md](docs/jev_rlcd.md)): the contrastive term beats the CE-only baseline on all four suites (992 frozen points, McNemar p<0.0001, Δ +33.0pp); mid-chain steps 91.0% with high in-gate accuracy; composite-chain first steps 53.1% are a known weakness (safe fallback under the 0.80 gate). To do: targeted first-step augmentation, `TOOL_ROUTER=local` wiring
 
 ### P3 — Bounded RSI (restricted self-evolution)
 
