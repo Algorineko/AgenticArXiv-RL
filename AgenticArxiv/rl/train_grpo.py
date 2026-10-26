@@ -97,8 +97,9 @@ def _precision_flags():
 
 def _build_reward_calculator(
     curriculum_steps: int, weights_override: Optional[str] = None,
-    disable_failure_caps: bool = False
-) -> RewardCalculator:
+    disable_failure_caps: bool = False,
+    task_set: str = "default",
+) -> Any:
     """构造本次运行唯一的奖励配置，并拒绝含糊的负步数。
 
     weights_override: JSON 对象，逐分量覆盖权重（E4 奖励消融用），
@@ -106,7 +107,13 @@ def _build_reward_calculator(
     """
     if curriculum_steps < 0:
         raise SystemExit("❌ reward_curriculum_steps 不能为负数")
-    calc = RewardCalculator(curriculum_steps=curriculum_steps)
+    if task_set == "bfcl":
+        # BFCL 轨道: 标准答案是 gold 调用链, 五分量来自 score_chain 而非
+        # expected_tools 任务声明; 加权框架/课程与其它域同构 (rl/bfcl_env.py)。
+        from AgenticArxiv.rl.bfcl_env import BfclRewardCalculator
+        calc = BfclRewardCalculator(curriculum_steps=curriculum_steps)
+    else:
+        calc = RewardCalculator(curriculum_steps=curriculum_steps)
     if weights_override:
         try:
             parsed = json.loads(weights_override)
@@ -154,6 +161,22 @@ def _gold_completion_tokens(tokenizer, tasks) -> int:
     import json as _json
     lengths = [0]
     for task in tasks:
+        if task.get("gold_calls"):
+            # bfcl 任务没有 expected_tools: 标准动作是整条 gold 链的
+            # submit_calls 元提交, 长度按完整 JSON 数组字符串估, 否则守卫
+            # 对这一域形同虚设（截断的提交永远拿不到 outcome 分）。
+            action = _json.dumps(
+                {
+                    "name": "submit_calls",
+                    "args": {
+                        "calls": _json.dumps(task["gold_calls"], ensure_ascii=False)
+                    },
+                },
+                ensure_ascii=False,
+            )
+            text = f"Thought: xxx\nAction: {action}"
+            lengths.append(len(tokenizer(text)["input_ids"]))
+            continue
         for name in task.get("expected_tools", []) or []:
             text = f'Thought: xxx\nAction: {_json.dumps({"name": name, "args": {}}, ensure_ascii=False)}'
             lengths.append(len(tokenizer(text)["input_ids"]))
@@ -926,14 +949,22 @@ def main(
     # 先验证任务与快照，再加载模型。语义标准答案损坏时应在占用显存前失败。
     tasks = _load_tasks(task_set, split)
     snapshot_path = Path(snapshot) if snapshot else DEFAULT_SNAPSHOT
-    if task_set != "code" and not snapshot_path.exists():
+    if task_set not in ("code", "bfcl") and not snapshot_path.exists():
         raise SystemExit(
             f"❌ 多轮 GRPO 需要离线快照 {snapshot_path}\n"
             "   请先运行: python -m AgenticArxiv.rl.build_snapshot"
         )
-    if task_set != "code":
+    if task_set not in ("code", "bfcl"):
         tasks = attach_expected_paper_ids(tasks, snapshot_path)
-    required_turns = max((len(t.get("expected_tools") or []) + 1 for t in tasks), default=1)
+    # bfcl 任务没有 expected_tools 字段: 标准链是单次 submit_calls 元提交,
+    # 工具步数按 1 计（submit_calls + FINISH），与代码域 run_tests 同构。
+    required_turns = max(
+        (
+            (1 if task_set == "bfcl" else len(t.get("expected_tools") or [])) + 1
+            for t in tasks
+        ),
+        default=1,
+    )
     if max_turns < required_turns:
         raise SystemExit(
             f"❌ max_turns={max_turns} 小于当前任务标准链所需的 {required_turns} "
@@ -1006,19 +1037,24 @@ def main(
             f"模型不可能生成完整动作，奖励会恒为下限、梯度为 0。\n"
             f"请改用 --max_completion_length {need + 64}"
         )
-    if task_set == "code":
-        env = None  # 代码域: canary/verifier 快照语义不适用, 旁路
+    if task_set in ("code", "bfcl"):
+        env = None  # 代码/BFCL 域: canary/verifier 快照语义不适用, 旁路
     else:
         env = load_mock_env(snapshot_path)
     if task_set == "code":
         from AgenticArxiv.rl.code_env import make_code_environment_factory
         environment_factory = make_code_environment_factory()
+    elif task_set == "bfcl":
+        from AgenticArxiv.rl.bfcl_env import make_bfcl_environment_factory
+        environment_factory = make_bfcl_environment_factory()
     else:
         environment_factory = make_environment_factory(snapshot_path)
     print(f"🗂  使用独立离线环境执行多轮工具调用: {snapshot_path}")
     # structured completions 已携带真实 tool observations，不在 reward 端重复执行。
     tracker = RewardComponentTracker()
-    reward_calc = _build_reward_calculator(reward_curriculum_steps, reward_weights, disable_failure_caps)
+    reward_calc = _build_reward_calculator(
+        reward_curriculum_steps, reward_weights, disable_failure_caps, task_set
+    )
     initial_weights = reward_calc.schedule(training_step=0)
     print(
         "⚖️  奖励课程: "
@@ -1214,7 +1250,15 @@ def main(
             model=policy,
             tokenizer=tokenizer,
             # Canary 与训练必须使用同一奖励课程，否则监控值和训练目标不可比。
-            reward_calc=reward_calc,
+            # 例外: canary 任务集固定为 arXiv 冒烟任务，BFCL 臂的 score_chain
+            # 分量口径对这些任务恒为下限 —— 直接传入会把 canary 变成常量
+            # -1.0 的死监控并误触 min_reward 熔断。这里与代码域同口径，用
+            # 结构分监控策略是否退化。
+            reward_calc=(
+                RewardCalculator(curriculum_steps=reward_curriculum_steps)
+                if task_set == "bfcl"
+                else reward_calc
+            ),
             env=env,
             num_generations=num_generations,
             max_new_tokens=max_completion_length,
@@ -1588,9 +1632,11 @@ if __name__ == "__main__":
     )
     p.add_argument("--snapshot", default=None)
     p.add_argument(
-        "--task_set", choices=["default", "expanded", "code"], default="default",
+        "--task_set", choices=["default", "expanded", "code", "bfcl"], default="default",
         help="default=benchmark/tasks.py 的 8 条冒烟任务（保持现状）；"
-             "expanded=完整基准集。改默认值会让既有训练曲线不可比，故需显式指定",
+             "expanded=完整基准集；code=36 条参数化代码任务；"
+             "bfcl=BFCL-V3 multi_turn_base 200 任务（PREREG_BFCL 第二环境轨）。"
+             "改默认值会让既有训练曲线不可比，故需显式指定",
     )
     p.add_argument(
         "--split", default=None, metavar="[FILE:]NAME",
