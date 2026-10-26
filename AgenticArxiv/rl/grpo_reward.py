@@ -59,6 +59,8 @@ SUPPORTED_TOOL_NAMES = {
     "analyze_figure",
     "get_translated_content",
     "run_tests",
+    # BFCL 轨道 B (rl/bfcl_env.py): 唯一元工具, 整条调用链一次性提交
+    "submit_calls",
 }
 
 
