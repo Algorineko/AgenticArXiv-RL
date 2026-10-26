@@ -90,15 +90,15 @@ class BfclMultiTurnEnv:
                 "n_pred": 0,
                 "n_gold": len(gold),
             }
-        # expected 是标准答案回显, 供审计核对环境比对锚点; 它会随 observation
-        # 进入轨迹与日志 (PREREG_BFCL 发射前须评估 gold 泄漏风险)。
+        # 发射前决策(2026-10-27): expected(gold 回显)移出 observation —— 它会经
+        # rollout 的 Observation 回填进入策略上下文, 存在"看到 gold→重提交"泄漏
+        # 通道; 审计侧用 gold_calls 字段自 task 池核对即可, 不需要环境回显。
         return {
             "ok": True,
             "task_id": self._task["id"],
             **score_chain(pred, gold),
             "n_pred": len(pred),
             "n_gold": len(gold),
-            "expected": gold,
         }
 
     # ---- 环境契约 ----
