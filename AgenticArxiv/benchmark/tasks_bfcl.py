@@ -30,8 +30,10 @@ def _parse_call(text: str) -> Optional[Dict[str, Any]]:
     args: Dict[str, Any] = {}
     if argstr:
         try:
-            # BFCL gold 参数是合法 python 字面量键值对
-            args = eval(f"dict({argstr})", {"__builtins__": {}}, {})  # noqa: S307 — 只读数据文件
+            # BFCL gold 参数是合法 python 字面量键值对; 只放行 dict
+            ns: Dict[str, Any] = {}
+            exec(f"_r = dict({argstr})", {"__builtins__": {"dict": dict}}, ns)  # noqa: S102 — 只读数据文件
+            args = ns["_r"]
         except Exception:
             return None
     return {"name": name, "args": args}
