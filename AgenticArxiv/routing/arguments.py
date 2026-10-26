@@ -16,6 +16,12 @@ from typing import Any, Dict, List
 
 @dataclass(frozen=True)
 class RoutedArgumentResolution:
+    """Argument resolution for one tool, rather than overall task completion.
+
+    ``complete`` means its explicit references appear in earlier actions. Those
+    actions may have failed, and other requested tools may still be needed.
+    """
+
     status: str
     args: Dict[str, Any] = field(default_factory=dict)
     reason: str = ""
@@ -34,7 +40,11 @@ def resolve_routed_arguments(
     task: str,
     history: str,
 ) -> RoutedArgumentResolution:
-    """Resolve explicit arguments, report completion, or defer to Qwen."""
+    """Resolve explicit arguments or report that this tool's refs are exhausted.
+
+    A ``complete`` result cannot establish overall task success. The caller
+    should restore the full policy context to decide what remains to be done.
+    """
     clean_task = str(task or "")
     used_refs = _used_refs(history, tool_name)
 
