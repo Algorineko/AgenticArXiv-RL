@@ -133,7 +133,7 @@ def main():
         ),
     )
     parser.add_argument(
-        "--task-set", choices=["default", "expanded", "probe", "code"], default="default",
+        "--task-set", choices=["default", "expanded", "probe", "code", "bfcl"], default="default",
         help=(
             f"default=benchmark/tasks.py 的 {len(get_all_tasks())} 条；"
             f"expanded=扩充后的 {len(get_expanded_tasks())} 条"
