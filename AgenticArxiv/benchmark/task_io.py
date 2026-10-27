@@ -12,76 +12,13 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from benchmark.splits import load_split
+from AgenticArxiv.benchmark.tasks_bfcl import build_bfcl_task_text as _bfcl_task_text
 
 #: BFCL 任务的提交协议说明（拼进任务文本；submit_calls 契约见 rl/bfcl_env.py）。
 #: calls 是「JSON 数组字符串」，元素形如 'name(k=v, ...)' —— 元素内的调用
 #: 参数统一用单引号，避免与外层 JSON 双引号转义打架。
-_BFCL_PROTOCOL = (
-    "[提交协议] 本环境只有一个可调用工具 submit_calls：把你的完整函数调用链"
-    "一次性提交，不要逐个函数分多轮调用。每个调用写成文本形式 name(k=v, ...)，"
-    "参数用字面量（字符串参数用单引号），全部调用按顺序放进一个 JSON 数组，"
-    "再整体作为 calls 字符串参数提交：\n"
-    'Action: {"name": "submit_calls", "args": {"calls": '
-    '"[\\"cd(folder=\'docs\')\\", \\"send_mail(to=\'a@b.com\', subject=\'hi\')\\"]"}}\n'
-    "即 calls 的值是一个 JSON 数组字符串：数组元素用转义的双引号包住，调用内的"
-    "字符串参数用单引号。提交后用 Action: FINISH 结束。"
-)
 
 
-def _bfcl_signature(tool: Dict[str, Any]) -> str:
-    """一个 BFCL 函数 -> 'name(req[, opt: type])' 紧凑签名。
-
-    本域 parquet 的 schema 形状与全局注册表不同：properties 里大量键取值为
-    null（数据集级参数超集，与当前工具无关），format_tool_description 对
-    None spec 会直接 AttributeError。有意义的参数 = required 列表 +
-    properties 里带 dict spec 的可选键（gold 链会用到的可选参数，如
-    tail(lines=N)、ls(a=True)，都在这一档）。
-    """
-    params = tool.get("parameters")
-    params = params if isinstance(params, dict) else {}
-    props = params.get("properties")
-    props = props if isinstance(props, dict) else {}
-    required = params.get("required")
-    required = [str(name) for name in list(required)] if required is not None else []
-
-    def render(names: List[str]) -> str:
-        parts = []
-        for name in names:
-            spec = props.get(name)
-            spec = spec if isinstance(spec, dict) else {}
-            kind = spec.get("type")
-            parts.append(f"{name}: {kind}" if kind else name)
-        return ", ".join(parts)
-
-    signature = render(required)
-    optional = [
-        str(key) for key, spec in props.items()
-        if isinstance(spec, dict) and str(key) not in required
-    ]
-    optional_text = render(optional)
-    if optional_text:
-        signature = f"{signature}[, {optional_text}]" if signature else f"[{optional_text}]"
-    return signature
-
-
-def _bfcl_task_text(task: Dict[str, Any]) -> str:
-    """BFCL 任务 -> ReAct 任务文本: 用户问题 + 逐任务函数 schema + 提交协议。
-
-    BFCL 的可用函数逐任务不同（schema 由任务自带），全局注册表的 arXiv
-    工具对它没有意义。沿用代码域先例（域工具说明写进任务文本，prompt 模板
-    里的全局工具列表当作噪音），把 schema 与元工具 submit_calls 一起写进
-    任务文本，build_prompt_dataset 无需感知域差异。
-    """
-    functions = "\n".join(
-        f"- {tool.get('name', '')}({_bfcl_signature(tool)}): {tool.get('description', '')}"
-        for tool in task["tools"]
-    )
-    return (
-        f"{task['prompt']}\n\n"
-        "本任务可用的函数及其参数（必选参数在前，方括号内为可选参数）：\n"
-        f"{functions}\n\n"
-        f"{_BFCL_PROTOCOL}"
-    )
 
 
 def load_tasks(task_set: str, split: Optional[str] = None) -> List[Dict[str, Any]]:
