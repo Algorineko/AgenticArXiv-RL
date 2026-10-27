@@ -159,6 +159,9 @@ def main():
     if args.task_set == "code":
         from AgenticArxiv.benchmark.tasks_code import get_code_tasks
         pool = get_code_tasks()
+    elif args.task_set == "bfcl":
+        from AgenticArxiv.benchmark.tasks_bfcl import get_bfcl_tasks
+        pool = get_bfcl_tasks()
     elif args.task_set == "expanded":
         from benchmark.tasks_expanded import offline_only_ids
         pool = get_expanded_tasks()
