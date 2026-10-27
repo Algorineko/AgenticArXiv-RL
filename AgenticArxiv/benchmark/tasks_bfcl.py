@@ -84,6 +84,49 @@ def score_chain(pred_calls: List[str], gold_calls: List[str]) -> Dict[str, float
     }
 
 
+
+
+_EXAMPLE = json.dumps({
+    "name": "submit_calls",
+    "args": {"calls": json.dumps(["cd(folder='docs')", "send_mail(to='a@b.com', subject='hi')"])},
+})
+_BFCL_PROTOCOL = (
+    "[提交协议] 本环境只有一个可调用工具 submit_calls：把你的完整函数调用链"
+    "一次性提交，不要逐个函数分多轮调用。每个调用写成文本形式 name(k=v, ...)，"
+    "参数用字面量（字符串参数用单引号），全部调用按顺序放进一个 JSON 数组，"
+    "再整体作为 calls 字符串参数提交：\n"
+    "Action: " + _EXAMPLE + "\n"
+    "即 calls 的值是一个 JSON 数组字符串：数组元素用转义的双引号包住，调用内的"
+    "字符串参数用单引号。提交后用 Action: FINISH 结束。"
+)
+
+
+def _bfcl_signature(tool):
+    """一个 BFCL 函数 -> 'name(req[, opt: type])' 紧凑签名 (schema 超集防御)。"""
+    params = tool.get("parameters")
+    params = params if isinstance(params, dict) else {}
+    props = params.get("properties")
+    props = props if isinstance(props, dict) else {}
+    required = params.get("required")
+    required = [str(n) for n in list(required)] if required is not None else []
+    opt = []
+    for k, spec in props.items():
+        if isinstance(spec, dict) and k not in required:
+            t = spec.get("type", "?")
+            opt.append(f"{k}: {t}" if isinstance(t, str) else f"{k}")
+    sig = ", ".join(required + [f"[{o}]" for o in opt])
+    return sig
+
+
+def build_bfcl_task_text(task):
+    """BFCL 任务 -> ReAct 任务文本: 用户问题 + 逐任务函数 schema + 提交协议。"""
+    functions = "\n".join(
+        f"- {t.get('name', '')}({_bfcl_signature(t)}): {t.get('description', '')}"
+        for t in task["tools"]
+    )
+    return f"{task['prompt']}\n\n本任务可用的函数及其参数（必选参数在前，方括号内为可选参数）：\n{functions}\n\n{_BFCL_PROTOCOL}"
+
+
 def get_bfcl_tasks(limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """加载 parquet -> 任务池 (id/prompt/tools/gold_calls/gold_raw)。"""
     import pandas as pd  # 延迟导入: 仅 BFCL 轨需要
@@ -105,13 +148,15 @@ def get_bfcl_tasks(limit: Optional[int] = None) -> List[Dict[str, Any]]:
             for t in row["tools"]
         ]
         user_msgs = [m["content"] for m in row["messages"] if m.get("role") == "user"]
-        tasks.append(dict(
+        base = dict(
             id=f"bfcl_base_{i:03d}",
             prompt=user_msgs[0] if user_msgs else "",
             tools=tools,
             gold_calls=flat,
             gold_raw=gold_raw,
-        ))
+        )
+        base["task"] = build_bfcl_task_text(base)  # runner/agent 直接消费的统一字段
+        tasks.append(base)
         if limit and len(tasks) >= limit:
             break
     return tasks
