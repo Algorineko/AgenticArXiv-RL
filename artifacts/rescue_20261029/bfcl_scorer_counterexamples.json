@@ -1,0 +1,80 @@
+{
+  "source_commit": "f84bc56ec14ebbcdc0dd06b73bd738e3e3d30443",
+  "old_sha256": "e78bbb9524f4eb2abfa526eb0766af151efa6ae485af1db4435968399ad6175f",
+  "new_sha256": "82a1399d0f67b32d2baa4c8c85878d2ccd7a78a042bcc64283ee62cb54a3641f",
+  "scope": "Repository port full-chain outcome, not official BFCL evaluation or retrospective rescoring",
+  "cases": [
+    {
+      "case": "unparseable_extra_call",
+      "prediction": [
+        "foo(x=1)",
+        "not a call"
+      ],
+      "gold": [
+        "foo(x=1)"
+      ],
+      "old": {
+        "format": 0.5,
+        "call_name": 1.0,
+        "call_arg": 1.0,
+        "process": 1.0,
+        "outcome": 1.0
+      },
+      "fixed": {
+        "format": 0.5,
+        "call_name": 1.0,
+        "call_arg": 1.0,
+        "process": 1.0,
+        "outcome": 0.0
+      }
+    },
+    {
+      "case": "wrong_order",
+      "prediction": [
+        "b()",
+        "a()"
+      ],
+      "gold": [
+        "a()",
+        "b()"
+      ],
+      "old": {
+        "format": 1.0,
+        "call_name": 1.0,
+        "call_arg": 1.0,
+        "process": 0.0,
+        "outcome": 1.0
+      },
+      "fixed": {
+        "format": 1.0,
+        "call_name": 1.0,
+        "call_arg": 1.0,
+        "process": 0.0,
+        "outcome": 0.0
+      }
+    },
+    {
+      "case": "extra_argument",
+      "prediction": [
+        "foo(x=1,y=2)"
+      ],
+      "gold": [
+        "foo(x=1)"
+      ],
+      "old": {
+        "format": 1.0,
+        "call_name": 1.0,
+        "call_arg": 1.0,
+        "process": 1.0,
+        "outcome": 1.0
+      },
+      "fixed": {
+        "format": 1.0,
+        "call_name": 1.0,
+        "call_arg": 1.0,
+        "process": 1.0,
+        "outcome": 0.0
+      }
+    }
+  ]
+}

@@ -243,7 +243,9 @@ class TransformersLLMClient:
         }
         if dtype not in dtype_map:
             raise ValueError(f"Unsupported dtype {dtype!r}; choose from {sorted(dtype_map)}")
-        load_kwargs: Dict[str, Any] = {"dtype": dtype_map[dtype]}
+        # torch_dtype works with the declared transformers>=4.45 dependency;
+        # dtype is forwarded to the model constructor by older releases.
+        load_kwargs: Dict[str, Any] = {"torch_dtype": dtype_map[dtype]}
         self.device = device
         if device == "auto":
             load_kwargs["device_map"] = "auto"

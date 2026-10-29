@@ -73,8 +73,13 @@ def score_chain(pred_calls: List[str], gold_calls: List[str]) -> Dict[str, float
             prefix += 1
         else:
             break
-    exact = int(len(preds) == len(golds) and name_hits == len(golds)
-                and all(_arg_match(p, g) == 1.0 for p, g in zip(preds, golds)))
+    # Partial-credit matching may ignore syntax errors, order, or extra keys;
+    # full-chain exactness must not. Compare every parsed call in order and
+    # require that parsing did not silently drop any prediction or gold call.
+    exact = int(len(preds) == len(pred_calls)
+                and len(golds) == len(gold_calls)
+                and len(preds) == len(golds)
+                and all(p == g for p, g in zip(preds, golds)))
     return {
         "format": fmt,
         "call_name": name_hits / len(golds) if golds else 0.0,
