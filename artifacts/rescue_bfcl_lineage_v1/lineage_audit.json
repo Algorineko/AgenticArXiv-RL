@@ -1,0 +1,438 @@
+{
+  "kind": "posthoc_bfcl_v3_v4_task_lineage_audit_v1",
+  "protocol_sha256": "df802cad8928c86627c10ca6e05eeb354a1f845200710d597c07bc9a8d3a3b11",
+  "old_source": {
+    "sha256": "f64b84bedcd1a6d13bb5d185979428009cc18ebc66996d690eebcdd4b6946167",
+    "rows": 200,
+    "note": "Earlier BFCL v3 static-source snapshot; text overlap does not establish that a model was previously run on each matched row."
+  },
+  "normalization": "Unicode NFKC, lowercase, then retain word-character sequences joined by single spaces",
+  "counts": {
+    "cases": 44,
+    "cases_with_exact_first_question_match": 34,
+    "cases_with_exact_full_dialogue_match": 0
+  },
+  "cases": [
+    {
+      "case_id": "multi_turn_base_1",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        1
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 1,
+      "best_full_dialogue_similarity": 0.584746
+    },
+    {
+      "case_id": "multi_turn_base_3",
+      "turns": 2,
+      "exact_first_question_v3_rows": [
+        3
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 3,
+      "best_full_dialogue_similarity": 0.649402
+    },
+    {
+      "case_id": "multi_turn_base_6",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        6
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 6,
+      "best_full_dialogue_similarity": 0.444759
+    },
+    {
+      "case_id": "multi_turn_base_9",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        9
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 9,
+      "best_full_dialogue_similarity": 0.356846
+    },
+    {
+      "case_id": "multi_turn_base_10",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        10
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 55,
+      "best_full_dialogue_similarity": 0.29805
+    },
+    {
+      "case_id": "multi_turn_base_12",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        12
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 12,
+      "best_full_dialogue_similarity": 0.463822
+    },
+    {
+      "case_id": "multi_turn_base_16",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        16
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 16,
+      "best_full_dialogue_similarity": 0.680445
+    },
+    {
+      "case_id": "multi_turn_base_25",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        25
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 25,
+      "best_full_dialogue_similarity": 0.5
+    },
+    {
+      "case_id": "multi_turn_base_26",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        26
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 26,
+      "best_full_dialogue_similarity": 0.700375
+    },
+    {
+      "case_id": "multi_turn_base_29",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        29
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 29,
+      "best_full_dialogue_similarity": 0.521127
+    },
+    {
+      "case_id": "multi_turn_base_37",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        37
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 37,
+      "best_full_dialogue_similarity": 0.418136
+    },
+    {
+      "case_id": "multi_turn_base_38",
+      "turns": 2,
+      "exact_first_question_v3_rows": [
+        38
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 38,
+      "best_full_dialogue_similarity": 0.845411
+    },
+    {
+      "case_id": "multi_turn_base_0",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        0
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 0,
+      "best_full_dialogue_similarity": 0.351266
+    },
+    {
+      "case_id": "multi_turn_base_4",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        4
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 4,
+      "best_full_dialogue_similarity": 0.399217
+    },
+    {
+      "case_id": "multi_turn_base_2",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        2
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 2,
+      "best_full_dialogue_similarity": 0.251721
+    },
+    {
+      "case_id": "multi_turn_base_23",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        23
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 23,
+      "best_full_dialogue_similarity": 0.519393
+    },
+    {
+      "case_id": "multi_turn_base_14",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        14
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 13,
+      "best_full_dialogue_similarity": 0.305556
+    },
+    {
+      "case_id": "multi_turn_base_17",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        17
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 17,
+      "best_full_dialogue_similarity": 0.467023
+    },
+    {
+      "case_id": "multi_turn_base_15",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        15
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 15,
+      "best_full_dialogue_similarity": 0.375
+    },
+    {
+      "case_id": "multi_turn_base_28",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        28
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 3,
+      "best_full_dialogue_similarity": 0.321224
+    },
+    {
+      "case_id": "multi_turn_base_51",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        51
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 51,
+      "best_full_dialogue_similarity": 0.448622
+    },
+    {
+      "case_id": "multi_turn_base_61",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        61
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 61,
+      "best_full_dialogue_similarity": 0.419486
+    },
+    {
+      "case_id": "multi_turn_base_52",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        52
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 52,
+      "best_full_dialogue_similarity": 0.4406
+    },
+    {
+      "case_id": "multi_turn_base_53",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        53
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 53,
+      "best_full_dialogue_similarity": 0.436031
+    },
+    {
+      "case_id": "multi_turn_base_55",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        55
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 55,
+      "best_full_dialogue_similarity": 0.360161
+    },
+    {
+      "case_id": "multi_turn_base_60",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        60
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 60,
+      "best_full_dialogue_similarity": 0.43981
+    },
+    {
+      "case_id": "multi_turn_base_57",
+      "turns": 2,
+      "exact_first_question_v3_rows": [
+        57
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 57,
+      "best_full_dialogue_similarity": 0.615385
+    },
+    {
+      "case_id": "multi_turn_base_59",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        59
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 59,
+      "best_full_dialogue_similarity": 0.344898
+    },
+    {
+      "case_id": "multi_turn_base_101",
+      "turns": 3,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 145,
+      "best_full_dialogue_similarity": 0.328446
+    },
+    {
+      "case_id": "multi_turn_base_103",
+      "turns": 5,
+      "exact_first_question_v3_rows": [
+        103
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 32,
+      "best_full_dialogue_similarity": 0.22198
+    },
+    {
+      "case_id": "multi_turn_base_102",
+      "turns": 5,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 51,
+      "best_full_dialogue_similarity": 0.199488
+    },
+    {
+      "case_id": "multi_turn_base_106",
+      "turns": 4,
+      "exact_first_question_v3_rows": [
+        106
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 106,
+      "best_full_dialogue_similarity": 0.3978
+    },
+    {
+      "case_id": "multi_turn_base_109",
+      "turns": 7,
+      "exact_first_question_v3_rows": [
+        109
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 109,
+      "best_full_dialogue_similarity": 0.213611
+    },
+    {
+      "case_id": "multi_turn_base_139",
+      "turns": 2,
+      "exact_first_question_v3_rows": [
+        139
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 139,
+      "best_full_dialogue_similarity": 0.646707
+    },
+    {
+      "case_id": "multi_turn_base_112",
+      "turns": 4,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 121,
+      "best_full_dialogue_similarity": 0.246002
+    },
+    {
+      "case_id": "multi_turn_base_124",
+      "turns": 3,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 148,
+      "best_full_dialogue_similarity": 0.252119
+    },
+    {
+      "case_id": "multi_turn_base_151",
+      "turns": 3,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 151,
+      "best_full_dialogue_similarity": 0.390625
+    },
+    {
+      "case_id": "multi_turn_base_170",
+      "turns": 6,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 170,
+      "best_full_dialogue_similarity": 0.316245
+    },
+    {
+      "case_id": "multi_turn_base_152",
+      "turns": 3,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 152,
+      "best_full_dialogue_similarity": 0.435395
+    },
+    {
+      "case_id": "multi_turn_base_156",
+      "turns": 5,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 156,
+      "best_full_dialogue_similarity": 0.404605
+    },
+    {
+      "case_id": "multi_turn_base_154",
+      "turns": 5,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 154,
+      "best_full_dialogue_similarity": 0.483713
+    },
+    {
+      "case_id": "multi_turn_base_166",
+      "turns": 5,
+      "exact_first_question_v3_rows": [],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 166,
+      "best_full_dialogue_similarity": 0.366864
+    },
+    {
+      "case_id": "multi_turn_base_157",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        157
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 30,
+      "best_full_dialogue_similarity": 0.373225
+    },
+    {
+      "case_id": "multi_turn_base_161",
+      "turns": 3,
+      "exact_first_question_v3_rows": [
+        161
+      ],
+      "exact_full_dialogue_v3_rows": [],
+      "best_full_dialogue_v3_row": 161,
+      "best_full_dialogue_similarity": 0.58256
+    }
+  ],
+  "interpretation": "Roster overlaps the earlier BFCL source-task pool. Prior model-inference overlap cannot be determined from this source-text comparison; historical traces were unavailable for rescoring."
+}

@@ -1,6 +1,6 @@
-# Remaining BFCL filesystem native capacity diagnostic
+# BFCL filesystem native capacity diagnostic
 
-Frozen roster of eight unused pure-filesystem cases, 26 user turns. Official native tool interface and checker; reference policy passed 8/8 before model evaluation. This is a held-out-from-our-prior-inference diagnostic, not an uncontaminated benchmark or leaderboard score.
+Frozen roster of eight pure-filesystem cases, 26 user turns. Official native tool interface and checker; reference policy passed 8/8 before model evaluation. These IDs were not in earlier native model-inference rosters, but a post hoc lineage audit found that all 12 first-turn prompts across the prior calibration and this roster exactly match rows in the earlier BFCL v3 source snapshot. This is not an independent task-pool diagnostic or leaderboard score.
 
 | Model | Scenarios | User turns | Parse-error steps | Tool-error calls | Forced stops |
 |---|---:|---:|---:|---:|---:|
