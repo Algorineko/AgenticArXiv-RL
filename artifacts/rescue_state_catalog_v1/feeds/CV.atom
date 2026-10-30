@@ -1,0 +1,971 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/TjAogTQagoqQ89QWlxbJ223qFxI</id>
+  <title>arXiv Query: search_query=cat:cs.CV AND submittedDate:"202610220000 TO 202610292359"&amp;id_list=&amp;start=0&amp;max_results=24</title>
+  <updated>2026-10-29T14:28:56Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=cat:cs.CV+AND+submittedDate:%22202610220000+TO+202610292359%22&amp;start=0&amp;max_results=24&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>24</opensearch:itemsPerPage>
+  <opensearch:totalResults>649</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37668v1</id>
+    <title>Honeycomb-Surfels: Compact Hexagonal Primitives for Efficient Scene Rendering and Reconstruction</title>
+    <updated>2026-10-27T17:59:59Z</updated>
+    <link href="https://arxiv.org/abs/2610.37668v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37668v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Novel view synthesis and 3D reconstruction have advanced rapidly with radiance fields and splatting, yet their memory and computational demands limit their use in resource-constrained settings. We introduce Hexels: novel planar hexagonal surface elements with a first-order spatial color field for efficient 3D scene and 2D image representation. Hexels exploit locally planar regions with smoothly varying appearance using fewer, larger primitives. Their hexagonal support provides an area- and boundary-efficient domain, while the local color field captures appearance variation within each primitive. Across 34 scenes, Hexels improve PSNR over memory-matched 2DGS by 4.53-7.38 dB across datasets while requiring lower training VRAM. We further ablate Hexels by showing that per primitive, Hexels outperform 2DGS by upto 4.74 dB while using lower training VRAM and having 2.31 times faster FPS. Even in unconstrained settings, Hexels offers complementary quality-memory trade-offs. For efficient 3D surface reconstruction, Hexels reduce error by 28.9% compared with memory-matched 2DGS across 15 DTU scans. On 6 Tanks and Temples surface scenes, Hexels achieves the highest mean F1 among compared methods (34.38%, versus 31.72% for 2DGS). We further also show that Hexels, as a general primitive, improves 2D image representation over Image-GS. Hexels push the Pareto frontier on the quality-efficiency trade-off of surface-aligned primitives.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.GR" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:59:59Z</published>
+    <arxiv:comment>Project page at https://honeycomb-surfels.github.io/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Prakhar Kaushik</name>
+    </author>
+    <author>
+      <name>Soumava Paul</name>
+    </author>
+    <author>
+      <name>Alan Yuille</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37666v1</id>
+    <title>ThinkWorld: World Imagination Reinforces Chain-of-Dynamics Reasoning</title>
+    <updated>2026-10-27T17:59:52Z</updated>
+    <link href="https://arxiv.org/abs/2610.37666v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37666v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Vision-Language-Action (VLA) models have made substantial progress in robotic manipulation, but their generalization remains constrained by the diversity and coverage of action-labeled robot demonstrations. Human videos provide much broader behavioral and environmental experience, while learning from them faces a fundamental trade-off between scalable data and explicit action grounding. We introduce ThinkWorld, a VLA learning framework that grounds action reasoning in world dynamics and strengthens it through reinforcement learning with world imagination. ThinkWorld represents each action thought as a Chain-of-Dynamics (CoD), a sequence of discrete motion tokens that captures the intermediate dynamics connecting the current world to a future state and serves as a common action representation across embodiments. We first initialize CoD with action-labeled demonstrations, then predict the future induced by each CoD and reinforce those whose predictions better match the observed outcome. This enables videos without action annotations to provide direct supervision from observed state transitions, allowing human and robot experience to refine the same reasoning space. Experiments in simulation and on real robots demonstrate effective human-to-robot transfer and strong generalization to unseen tasks and environments.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:59:52Z</published>
+    <arxiv:comment>Project Page: https://thinkworld-project.github.io/</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Chaehyun Kim</name>
+    </author>
+    <author>
+      <name>Chi-Pin Huang</name>
+    </author>
+    <author>
+      <name>Jisoo Kim</name>
+    </author>
+    <author>
+      <name>Min-Hung Chen</name>
+    </author>
+    <author>
+      <name>Yu-Chiang Frank Wang</name>
+    </author>
+    <author>
+      <name>Seungryong Kim</name>
+    </author>
+    <author>
+      <name>Fu-En Yang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37662v1</id>
+    <title>Can Discrete Tokens Serve as Semantically Lossless Representations of Visual Signals?</title>
+    <updated>2026-10-27T17:59:22Z</updated>
+    <link href="https://arxiv.org/abs/2610.37662v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37662v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Discrete visual tokens represent vision in a discrete form analogous to language, offering a native interface for multimodal modeling under a shared next-token prediction objective. However, quantization error is widely assumed to cause unavoidable semantic loss, fundamentally limiting the semantic fidelity of discrete visual tokens and positioning continuous visual representations as an intrinsic upper bound. Using multimodal understanding as a proxy for semantic fidelity, we revisit this assumption and find quantization error unreliable, as discrete representations with substantially larger errors can achieve better understanding. Instead, the effective bit budget of discrete indices emerges as a key determinant of downstream performance. However, existing quantizers eventually saturate as additional codebooks contribute progressively less semantic information. As one approach to alleviating this saturation, we introduce Factorized Vector Quantization, which quantizes complementary, fixed-dimensional views of the visual feature with symmetric parallel codebooks. It continues to improve at larger bit budgets, ultimately matching continuous visual representations in multimodal understanding. Trained on industrial-scale multimodal data, our model achieves state-of-the-art performance among discrete-representation models, outperforming UniAR and Emu3-Chat by 22.8% and 59.2%, respectively, on a nine-metric average. To our knowledge, it is also the first discrete-representation model competitive with strong continuous-representation models such as Qwen3-VL, including on fine-grained OCR tasks. We further identify the key principles and a practical recipe enabling this competitiveness. These results and insights support the potential of discrete visual representations to underpin large-scale native multimodal foundation models. Code and models are available at https://github.com/hustvl/FVQ</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:59:22Z</published>
+    <arxiv:comment>Project page: https://doctor-james.github.io/FVQ-Page/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Jialv Zou</name>
+    </author>
+    <author>
+      <name>Xiaotong Li</name>
+    </author>
+    <author>
+      <name>Zhengrong Yue</name>
+    </author>
+    <author>
+      <name>Xu Huang</name>
+    </author>
+    <author>
+      <name>Yaxin Luo</name>
+    </author>
+    <author>
+      <name>Wenhao Yan</name>
+    </author>
+    <author>
+      <name>Haodong Li</name>
+    </author>
+    <author>
+      <name>Wenyu Liu</name>
+    </author>
+    <author>
+      <name>Xinggang Wang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37633v1</id>
+    <title>Repurposing Video Diffusion Transformers for Cross-View Temporal Object Correspondence</title>
+    <updated>2026-10-27T17:53:34Z</updated>
+    <link href="https://arxiv.org/abs/2610.37633v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37633v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Cross-view object correspondence identifies the same object across views. However, existing methods often rely on frame-wise matching or sequential tracking, which can propagate correspondence errors under appearance changes or occlusions. Therefore, we introduce cross-view temporal object correspondence, which requires preserving object identity across both views and time from a query mask. To address this, we propose XTrack, a unified framework which repurposes a pretrained video DiT with semantic and spatiotemporal priors for RGB-to-mask latent transport, jointly modeling cross-view matching and temporal tracking. However, naive video DiTs do not guarantee accurate cross-view grounding and often attend to semantically similar yet incorrect objects across views. Thus, we introduce focal cross-view attention alignment, hard negative conditioning, and local context crop strategies to ensure reliable grounding. Finally, beyond these architectural enhancements, we also tackle the lack of dense annotation by introducing a pseudo-label curation pipeline that converts sparse Ego-Exo4D annotations into dense supervision to enable effective video-level training. Our results demonstrate the effectiveness of XTrack as a unified framework, ensuring robust temporal consistency and identity preservation.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:53:34Z</published>
+    <arxiv:comment>Project Page : https://cvlab-kaist.github.io/XTrack/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Siyoon Jin</name>
+    </author>
+    <author>
+      <name>Dahyun Chung</name>
+    </author>
+    <author>
+      <name>Honggyu An</name>
+    </author>
+    <author>
+      <name>Sangbeom Lim</name>
+    </author>
+    <author>
+      <name>Wonjin Nam</name>
+    </author>
+    <author>
+      <name>Jaewoo Jung</name>
+    </author>
+    <author>
+      <name>WonJun Moon</name>
+    </author>
+    <author>
+      <name>Seungryong Kim</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37626v1</id>
+    <title>Know, then Draw: A New Learning Paradigm for Visual Generation</title>
+    <updated>2026-10-27T17:50:20Z</updated>
+    <link href="https://arxiv.org/abs/2610.37626v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37626v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Visual generation requires both high-level semantic knowledge and fine-grained pixel details. We propose a learning paradigm that assigns these roles to autoregressive pretraining for knowledge acquisition and diffusion post-training for high-fidelity rendering. Within this framework, we study the objective, representation, and scaling of knowledge acquisition and rendering. Controlled comparisons identify autoregression as the stronger pretraining objective for downstream rendering, improving both learning efficiency and final generation quality. We further find that AR-only generation quality does not necessarily correlate with final performance; semantic quality matters more. This motivates a purely semantic tokenizer trained with language supervision alone, without an image decoder or reconstruction loss. We establish compute-optimal scaling laws for knowledge acquisition and rendering, and find that autoregressive pretraining lowers the fitted asymptotic rendering loss compared with pixel diffusion models trained from scratch. Guided by the laws, we train a 3B-parameter text-to-image model with only 6,600 H100 GPU-hours, achieving 86 on GenEval and 87 on DPG-Bench and validating the proposed paradigm at scale.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:50:20Z</published>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Yucheng Mao</name>
+    </author>
+    <author>
+      <name>Chongjian Ge</name>
+    </author>
+    <author>
+      <name>Zhuowen Tu</name>
+    </author>
+    <author>
+      <name>Hao Tan</name>
+    </author>
+    <author>
+      <name>Hanwen Jiang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37619v1</id>
+    <title>Perceiving and Predicting Dynamic Sports: Spatiotemporal Intelligence in Vision Models for Egocentric Tennis Video</title>
+    <updated>2026-10-27T17:47:14Z</updated>
+    <link href="https://arxiv.org/abs/2610.37619v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37619v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Agile robots require spatiotemporal intelligence to interpret scenes, reason about interactions, and anticipate future events. Yet it remains unclear how well foundation vision models support these capabilities, particularly from a moving egocentric camera, which is a natural view for robots. To investigate this, we collect an annotated tennis dataset and train a suite of vision models on spatiotemporal tasks. Our dataset contains egocentric video synchronized with five allocentric videos, estimated global positions, labeled contact times, and annotated stroke types. We then evaluate seven prediction tasks from egocentric images: 2D ego player and 3D ball localization, future player and ball trajectories, forehand or backhand stroke anticipation, time to the next ego player ball contact, and 3D ball position at that contact. We compare image encoders, video encoders, and vision-language models with jointly trained prediction heads. The best performing models achieve mean current-frame localization errors of 0.14 m for the ego player and 0.54 m for the ball, future forecasting errors of 0.34 m for the ego player and 0.91 m for the ball over 1.1 s, and a mean contact-time prediction error of 0.14 s. Auxiliary depth information substantially improves 3D ball localization, suggesting that inferring metric depth remains a challenge. Longer image histories do not improve ball forecasting, indicating that representations exploit scene context rather than rely solely on inter-frame motion. Finally, we propose a conditional diffusion model to generate whole-body kinematic tennis motion from vision encoder predictions on egocentric video at real-time rates, adapting movements as predictions are refined. These results move towards a deeper understanding of how foundation vision models can support real-time dynamic robots using egocentric video.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:47:14Z</published>
+    <arxiv:comment>8 pages, 5 figures. Project page: https://tennis-vision.csail.mit.edu/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Tudor Braicu</name>
+    </author>
+    <author>
+      <name>Joseph DelPreto</name>
+    </author>
+    <author>
+      <name>Jared Boyer</name>
+    </author>
+    <author>
+      <name>Mónika Farsang</name>
+    </author>
+    <author>
+      <name>Maximilian Stölzle</name>
+    </author>
+    <author>
+      <name>Tim Niklas Seyde</name>
+    </author>
+    <author>
+      <name>Daniela Rus</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37613v1</id>
+    <title>VideoLVR: Latent Visual Reasoning over Grounded Video Evidence</title>
+    <updated>2026-10-27T17:41:56Z</updated>
+    <link href="https://arxiv.org/abs/2610.37613v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37613v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Chain-of-thought reasoning has substantially advanced video understanding in multimodal large language models (MLLMs). However, language-based reasoning traces do not provide a reliable mechanism for models to revisit relevant visual evidence, leading to visual forgetting and impairing their ability to reason over video content. Existing approaches maintain visual grounding during reasoning in two main ways: they either refer to evidence using textual coordinates, which specify symbolic locations rather than the visual content itself, or reinsert cropped regions or frames into the multimodal context, preserving visual details at the cost of substantial context expansion. To address these limitations, we introduce VideoLVR, which constructs latent visual evidence from local regions at relevant video moments, thereby providing visual support for intermediate reasoning steps. To supervise latent visual evidence generation, we introduce a visual token prediction objective that formulates visual token reconstruction as prediction over a vocabulary derived from the input video, thereby unifying visual evidence reconstruction and text generation within the same token prediction framework. This shared prediction framework enables MLLMs to reason over interleaved text tokens and latent visual states while integrating evidence from different moments. We further extend VideoLVR to reinforcement learning by treating sampled visual tokens as actions alongside text tokens and jointly optimizing the policy using final-answer rewards. By efficiently revisiting task-relevant visual information during reasoning, VideoLVR improves video understanding without substantially expanding the multimodal context. Experiments on multiple video benchmarks demonstrate its effectiveness, especially on tasks requiring fine-grained visual evidence.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:41:56Z</published>
+    <arxiv:comment>13 pages</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Shilong Li</name>
+    </author>
+    <author>
+      <name>Xingyuan Bu</name>
+    </author>
+    <author>
+      <name>Hao Shi</name>
+    </author>
+    <author>
+      <name>Yun Xing</name>
+    </author>
+    <author>
+      <name>Weixin Feng</name>
+    </author>
+    <author>
+      <name>Qiangpeng Yang</name>
+    </author>
+    <author>
+      <name>Shilei Wen</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37599v1</id>
+    <title>MoI-Bench: A Benchmark for Image Generation and Editing on Mobile Devices</title>
+    <updated>2026-10-27T17:31:40Z</updated>
+    <link href="https://arxiv.org/abs/2610.37599v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37599v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Developing on-device image models requires considering practical user needs, task types and device resource constraints. However, existing benchmarks provide limited guidance on identifying capability gaps between on-device models and server-side models. We introduce MoI-Bench, a benchmark grounded in mobile user needs, comprising 64 subtasks and 1150 samples. It defines 16 operations, such as removal and replacement, and eight visual target categories covering content such as portraits and text. These form two orthogonal axes whose applicable combinations define specific tasks, such as removing facial makeup. To better guide model improvement, we further propose MoI-Eval, which introduces task-specific criteria covering instruction following, visual quality and detail preservation. We further construct sample-level evaluation questions and aggregate their scores into overall quality and capability profiles along the operation, target and criteria axes. We evaluate representative on-device and server-side models and measure mobile deployment costs. Results show that this decoupled Operation x Target design provides finer-grained guidance for improving compact models. For example, it highlights the need to prioritize specific capability gaps (e.g., text-replacement) over broad application-level goals (e.g., improving text editing). Unlike conventional benchmarks that rank models using a single score, we introduce a two-dimensional Quality-Deployability capability map to assess models for practical mobile use. The map shows that current on-device models can achieve efficient generation or editing but expanding their task coverage deserves greater attention than further improving deployment efficiency. Further progress requires improving editing quality, particularly identity preservation and text rendering, while broadening task coverage.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:31:40Z</published>
+    <arxiv:comment>Project page: https://carlofkl.github.io/MoI-Bench-project/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Kailai Feng</name>
+    </author>
+    <author>
+      <name>Haoxiang Rao</name>
+    </author>
+    <author>
+      <name>Yuxiang Wei</name>
+    </author>
+    <author>
+      <name>Bo Chen</name>
+    </author>
+    <author>
+      <name>Junsong Li</name>
+    </author>
+    <author>
+      <name>Yang Pan</name>
+    </author>
+    <author>
+      <name>Chengkun Cai</name>
+    </author>
+    <author>
+      <name>Jagmohan Chauhan</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37583v1</id>
+    <title>Zero-Shot Multimodal Event Spotting in Soccer Broadcasts</title>
+    <updated>2026-10-27T17:24:35Z</updated>
+    <link href="https://arxiv.org/abs/2610.37583v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37583v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Automatic soccer event spotting supports highlight generation, video indexing, and sports analytics, but existing methods depend on large annotated datasets and soccer-specific training. We present a zero-shot framework that detects, classifies, and temporally localizes events in full-length soccer broadcasts without task-specific parameter training. Each match is segmented into overlapping clips represented by a compact visual storyboard and the aligned commentary transcript, which a general-purpose multimodal model processes jointly. On three manually annotated matches containing 130 events, the best configuration achieves 72.0% F1@5s and outperforms SoccerNet-trained CALF and NetVLAD++ in a cross-dataset setting, while the storyboard representation reduces inference cost by 72% compared with individual frames. We further analyze the effects of model family, input representation, and prompt optimization, and introduce an evidence-grounded excitement-scoring stage that ranks detected events with natural-language explanations for highlight selection.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.MM" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:24:35Z</published>
+    <arxiv:comment>Accepted to the Main Conference at the IEEE International Symposium on Multimedia: ISM 2026</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Sadia Kamal</name>
+    </author>
+    <author>
+      <name>Mahmudul Hasan</name>
+    </author>
+    <author>
+      <name>Tony Braskich</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37579v1</id>
+    <title>As the Story Unfolds: Watching a Film and Identifying Characters as a Human Does</title>
+    <updated>2026-10-27T17:20:44Z</updated>
+    <link href="https://arxiv.org/abs/2610.37579v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37579v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Films introduce characters incrementally as they progress. We study the problem of identifying principal characters and assigning their names directly from the movie itself, without using external cast lists, actor photographs, or pre-built character banks. We introduce the character naming task: given a name mentioned in dialogue and the associated video context, the model must determine which visible character bears that name. This task is challenging because name resolution often depends on cinematic cues such as shot-reverse-shot structure, self-introduction, direct address, third-party reference, gaze, and temporal continuity. We provide a dataset and annotations for evaluating character naming and first character appearances, develop a video-and-dialogue model for the task, and compare it with proprietary multimodal large language models. We further introduce a progressive framework for building a character bank as the film unfolds. Together, these contributions support online, human-like movie understanding in which character identities are inferred from the film itself.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:20:44Z</published>
+    <arxiv:comment>Project Page: https://www.robots.ox.ac.uk/~vgg/research/StreamCast/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Zhongrui Gui</name>
+    </author>
+    <author>
+      <name>Junyu Xie</name>
+    </author>
+    <author>
+      <name>Tengda Han</name>
+    </author>
+    <author>
+      <name>Weidi Xie</name>
+    </author>
+    <author>
+      <name>Andrew Zisserman</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37576v1</id>
+    <title>The Noise Plane: A Diffusion Bridge Across Exponent and Dispersion</title>
+    <updated>2026-10-27T17:19:45Z</updated>
+    <link href="https://arxiv.org/abs/2610.37576v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37576v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Diffusion-based denoising commonly uses Gaussian perturbations, whereas sensor noise follows diverse signal-dependent statistical laws. In this paper, we propose $p$-Bridge, a unified measurement-indexed diffusion framework for Tweedie noise. The noise exponent $p$ describes the variance--intensity relation, while accumulated measurement $ν$ controls the noise level. Together, they define a noise plane that includes Gaussian, Poisson, and Gamma models. The stochastic bridge connects measurement distributions through independent increments, giving denoising a physical interpretation as progressive measurement accumulation. Both the starting and stopping indices can be specified, allowing restoration from an observed measurement level to a prescribed higher level. Measurement superposition yields a shared reverse-mean update, paired with a deviance-based objective for learning the required conditional mean. A latent compound Poisson--Gamma construction enables sampling at intermediate exponents. A single exponent-conditioned network adapts to different Tweedie noise models without separate training for each exponent. Experiments show that exponent conditioning improves cross-exponent robustness over fixed-exponent models. Using estimated exponents, the shared network achieves robustness comparable to an oracle-selected set of five specialist models. Experiments on synthetic images, FMD fluorescence microscopy, and multi-sensor SAR images further demonstrate its effectiveness across different signal-dependent noise regimes.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:19:45Z</published>
+    <arxiv:comment>23 pages, 15 figures</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Xuran Hu</name>
+    </author>
+    <author>
+      <name>Yuru Jia</name>
+    </author>
+    <author>
+      <name>Tengxi Wang</name>
+    </author>
+    <author>
+      <name>Miloš Daković</name>
+    </author>
+    <author>
+      <name>Ljubiša Stanković</name>
+    </author>
+    <author>
+      <name>Wufan Zhao</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37566v1</id>
+    <title>ReferStream: Interactive Subject Injection for Streaming Video Generation</title>
+    <updated>2026-10-27T17:12:42Z</updated>
+    <link href="https://arxiv.org/abs/2610.37566v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37566v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Injecting new subjects naturally during streaming video generation requires integrating newly supplied visual references into the existing video while preserving established subjects and the scene. Encoding references independently of the current scene provides little guidance for this integration, while keeping their features in persistent memory can interfere with established context. We propose ReferStream, a framework that requires no additional training and combines reference construction using the current scene with transient cache injection. Joint Latent places reference latents in target regions of the latest scene latent, allowing reference features to be extracted in context. Cache Restoration uses these features to condition the injection chunk, then restores the overwritten global cache entries while retaining the newly generated history. This procedure incorporates new visual conditions without retraining the generator or revising emitted frames. We further introduce ReferStream Bench, a new benchmark with scheduled reference arrivals, evolving instructions, and explicit annotations of subject presence for InShot and MultiShot generation. Evaluation follows the event schedule and measures both the fidelity of new subjects and the preservation of established subjects, alongside video quality, text adherence, and count accuracy. Experiments on ReferStream Bench show higher scores for text adherence, subject similarity, and count accuracy than the compared baselines, including offline methods given all references in advance. Project page: https://xushuolin.github.io/ReferStream/.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T17:12:42Z</published>
+    <arxiv:comment>18 pages. Project page: https://xushuolin.github.io/ReferStream/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Shuolin Xu</name>
+    </author>
+    <author>
+      <name>Guanyuan Li</name>
+    </author>
+    <author>
+      <name>Boyu Li</name>
+    </author>
+    <author>
+      <name>Kelu Yao</name>
+    </author>
+    <author>
+      <name>Xiaogang Xu</name>
+    </author>
+    <author>
+      <name>Hongchuan Yu</name>
+    </author>
+    <author>
+      <name>Shuicheng Yan</name>
+    </author>
+    <author>
+      <name>Xiaobin Hu</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37545v1</id>
+    <title>GroundControl: Satellite-Conditioned Multi-View Diffusion for Reconstruction-Free Novel View Synthesis</title>
+    <updated>2026-10-27T16:56:45Z</updated>
+    <link href="https://arxiv.org/abs/2610.37545v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37545v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Multi-view or video diffusion models have recently emerged as state-of-the-art approaches for novel-view synthesis from sparse image collections. While they can produce high quality images, they tend to hallucinate unrealistic spatial layouts when synthesizing views outside the input views (scene extrapolation). We propose to address this challenge for outdoor scenes by using satellite images as an additional information source to condition the multi-view generative model. We introduce a new satellite-conditioned multi-view diffusion model that combines conditioning from a satellite image and street-level input images when generating novel-views. Our cross-attention based conditioning allows us to retain pretrained multi-view diffusion priors to generate seamless, realistic, novel views from a handful of source views, while also adhering to the scene layout as seen from satellite images. Our model does not use 3D scene reconstruction, and only relies on posed street and satellite views. Our experiments on outdoor datasets show that our model is better than both satellite-conditioned or street-view conditioned baselines on novel-view synthesis, especially on challenging cases where target views have very little overlap with source views. Project page: https://nianticspatial.github.io/groundcontrol</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T16:56:45Z</published>
+    <arxiv:comment>Accepted to WACV 2027. Project page: https://nianticspatial.github.io/groundcontrol</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Akshay Krishnan</name>
+    </author>
+    <author>
+      <name>Matias Turkulainen</name>
+    </author>
+    <author>
+      <name>Jamie Wynn</name>
+    </author>
+    <author>
+      <name>Zawar Qureshi</name>
+    </author>
+    <author>
+      <name>Mohamed Sayed</name>
+    </author>
+    <author>
+      <name>Guillermo Garcia-Hernando</name>
+    </author>
+    <author>
+      <name>Sara Vicente</name>
+    </author>
+    <author>
+      <name>James Hays</name>
+    </author>
+    <author>
+      <name>Michael Firman</name>
+    </author>
+    <author>
+      <name>Daniyar Turmukhambetov</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37510v1</id>
+    <title>A note on data-efficient finetuning of vision foundation models</title>
+    <updated>2026-10-27T16:30:45Z</updated>
+    <link href="https://arxiv.org/abs/2610.37510v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37510v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Adapting foundation models to a new task within or beyond the training domain is the de facto standard for building specialized machine learning models. Recently, Visual Prompting (VP) has emerged as a promising technique for efficient knowledge transfer. As new foundation model families~(like Mamba) get introduced and VP pipelines such as AutoVP reach greater maturity, we find a growing need for a systematic evaluation of current approaches. In this work, we assess the performance of the latest models, comparing them to earlier architectures and alternative fine-tuning methods, to better understand the progress, challenges and opportunities in the field of efficient fine-tuning under resource limitations. Towards this goal, this paper provides a concise empirical overview of the interactions among foundation model families (Attention-, Convolution-, and Mamba-based) and transfer paradigms: VP, Linear Probing (LP), Full Fine-tuning (FFT) and Low Rank Adaptation (LoRA). Our work builds up on previous findings by broadening the selection of evaluated models and techniques while tuning hyperparameters. In the interest of delivering practical guidelines for the user, we also explore application of prevalent regularization techniques to boost performance in the context of VP.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T16:30:45Z</published>
+    <arxiv:comment>8 pages, 3 figures, Accepted at ES-FoMo III: 3rd Workshop on Efficient Systems for Foundation Models at ICML 2025</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Niclas Hergenröther</name>
+    </author>
+    <author>
+      <name>Antonio Orvieto</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37503v1</id>
+    <title>ALADDIN: Adversarial Latent Diffusion Distillation for One-Step Identity Swapping</title>
+    <updated>2026-10-27T16:25:16Z</updated>
+    <link href="https://arxiv.org/abs/2610.37503v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37503v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Face swapping transfers a source identity onto a target image while preserving the target's pose, expression, hair, and lighting. The most realistic current methods are diffusion-based, but they need many network evaluations per image. GAN-based methods are fast, yet trained from scratch they must learn realism from the adversarial signal alone and produce visibly weaker results. We present ALADDIN (Adversarial Latent Diffusion Distillation for One-Step Identity Swapping), a one-step face swapper obtained by initialising the generator from a pre-trained multi-step flow-matching model and training it adversarially under identity and target-preservation constraints. We expose a controllable trade-off between identity transfer and target-attribute preservation by training a student model with triplet pseudo-label supervision. We additionally identify a bias in the standard evaluation protocol, which favours methods trained against the same identity encoder used to score them, and re-evaluate all baselines with an independent one. ALADDIN is state-of-the-art among one-step methods in realism and target preservation at comparable identity transfer, and matches the best multi-step model with 28 times fewer network evaluations and an order of magnitude fewer training pairs.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T16:25:16Z</published>
+    <arxiv:comment>Accepted to WACV 2027. 15 pages, 5 figures, 4 tables, including references and appendices</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Ivan Shchekotov</name>
+    </author>
+    <author>
+      <name>Timofei Gritsaev</name>
+    </author>
+    <author>
+      <name>Viacheslav Pirogov</name>
+    </author>
+    <author>
+      <name>Dmitry Vetrov</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37472v1</id>
+    <title>How Reliable Is Individualized Functional-Network Attribution in Resting-State fMRI Cognitive Prediction in ADNI?</title>
+    <updated>2026-10-27T16:04:54Z</updated>
+    <link href="https://arxiv.org/abs/2610.37472v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37472v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Individualized attribution estimates which functional networks drive a model prediction for a given subject and is often proposed as an interpretable resting-state fMRI (rs-fMRI) biomarker, but its test-retest reliability is rarely quantified. We evaluate per-subject network-ablation attribution for a frozen resting-state functional connectivity (FC) predictor (Schaefer-200 FC predicting MMSE/ADAS-Cog13) trained on N=875 subjects from the Alzheimer's Disease Neuroimaging Initiative (ADNI), using, and (iii) a subject-level permutation null. Split-half reliability is near-ceiling (Spearman p=0.948/0.950) but drops on scan-rescan (p=0.609/0.616). Under the mismatched-subject null, correlations remain substantial (p~0.46-0.47), indicating strong population-shared structure, yet matched pairs exceed this null (z~6.6-6.9, p&lt;=10-4). Thus, in ADNI, individualized network attribution contains a modest but non-zero person-specific component atop a strong population-shared pattern. We recommend reporting scan-rescan reliability together with a permutation-null control, rather than within-session proxies alone, to avoid overstating individual specificity.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T16:04:54Z</published>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Sheethal Bhat</name>
+    </author>
+    <author>
+      <name>Mahfuzur Rahman Chowdhury</name>
+    </author>
+    <author>
+      <name>Imam Ahmed Shaik</name>
+    </author>
+    <author>
+      <name>Rose Dawn Bharath</name>
+    </author>
+    <author>
+      <name>Siming Bayer</name>
+    </author>
+    <author>
+      <name>Andreas Maier</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37471v1</id>
+    <title>PerceptRL: Making Visual Perception Rewardable in MLLMs from Answers to Interactions</title>
+    <updated>2026-10-27T16:04:10Z</updated>
+    <link href="https://arxiv.org/abs/2610.37471v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37471v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Fine-grained visual perception remains a bottleneck during post-training of multimodal large language models (MLLMs), as perceptual errors can constrain gains from reasoning-focused optimization. Although image-caption pre-training improves perception, its influence can weaken as subsequent stages change data mixtures and objectives. Continuing caption supervision during post-training is challenging because subjective, information-dense descriptions complicate verifiable reward design. We present PerceptRL, which strengthens perception at two complementary levels. Perception RL uses a multi-agent pipeline to extract verified errors from dense image captions and convert the corresponding visual facts into QA pairs with fixed answer labels and rule-based rewards. Chain QA links correlated errors, while multiple-choice QA combines unrelated errors. A specialized route targets high-error domains with tailored verification, and a domain-agnostic general route covers errors beyond these domains. Perception Agentic RL addresses fine-grained and dense cases unresolved by single-turn Perception RL through multi-turn inspection with visual tools. We observe coordinate drift even in models trained to use tools, where incorrect crops or annotations distort evidence and propagate errors. Coordinate Injection corrects spatial operations in cold-start trajectories, while a grounding-aware process reward supervises intermediate spatial fidelity alongside final-answer correctness. Training proceeds through shared cold-start SFT, single-turn Perception RL, and multi-turn Perception Agentic RL. Across seven benchmarks under a shared tool-use protocol, PerceptRL achieves 71.6% average accuracy, surpassing the base model with the same tools and the strongest evaluated frontier VLM by 15.7 and 5.2 percentage points, respectively.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T16:04:10Z</published>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Tongkun Guan</name>
+    </author>
+    <author>
+      <name>Zhibo Yang</name>
+    </author>
+    <author>
+      <name>Mingkun Yang</name>
+    </author>
+    <author>
+      <name>Haocheng Wang</name>
+    </author>
+    <author>
+      <name>Wei Shen</name>
+    </author>
+    <author>
+      <name>Xiaokang Yang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37437v1</id>
+    <title>Representing the Unseen: Rethinking Visual Imagination for Spatial Reasoning</title>
+    <updated>2026-10-27T15:48:09Z</updated>
+    <link href="https://arxiv.org/abs/2610.37437v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37437v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Visual world models increasingly support spatial reasoning by generating RGB views of unobserved states. However, RGB has become the default interface largely because it is well suited for visual generation, rather than necessarily being the most effective representation for downstream reasoning. Different spatial questions may benefit from different representations of the same imagined state: top-down geometry can facilitate global distance comparisons, while panoramic views provide broader context for reasoning about open space. To isolate the role of representation in spatial imagination, we introduce ImagiRep, a simulator-grounded benchmark of 922 questions spanning seven question types across two settings, Viewpoint Imagination and Cross-view Integration, providing oracle RGB and six alternative representations (e.g., depth, panoramic views, and top-down geometry) of the same unobserved state. This controlled comparison reveals that even accurate imagined RGB does not guarantee accurate spatial reasoning, and different questions benefit from different representations. Similar trends hold for representations derived from world-model-estimated states. Notably, estimated RGB alone can mislead spatial reasoning, while alternative representations retain complementary benefits. Building on these findings, we introduce GEARS, a lightweight test-time strategy for adaptive representation selection, outperforming existing spatial imagination methods and showing that reasoning about unseen states requires more than generating RGB views.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T15:48:09Z</published>
+    <arxiv:comment>Webpage:https://imagirep.github.io/</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Zengqi Zhao</name>
+    </author>
+    <author>
+      <name>Zun Wang</name>
+    </author>
+    <author>
+      <name>Shoubin Yu</name>
+    </author>
+    <author>
+      <name>Mohit Bansal</name>
+    </author>
+    <author>
+      <name>Yue Zhang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37431v1</id>
+    <title>Segmentation Confidence for Arbitrary CNNs</title>
+    <updated>2026-10-27T15:42:29Z</updated>
+    <link href="https://arxiv.org/abs/2610.37431v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37431v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Convolutional neural networks (CNN) are widely used for medical image segmentation. However, they lack an inherent measure of confidence. Existing methods for estimating prediction uncertainty often require a custom network architecture and/or dedicated training setups and need to be trained from scratch. In addition, the deduction of a single confidence score per input from the uncertainty maps is not always straightforward. In this study, we explore voxel-based uncertainty estimation methods that can be added to existing segmentation pipelines without training from scratch. We also propose a novel method to estimate a single confidence score from the uncertainty maps. Our evaluations on different ROIs and modalities suggest that our confidence score can predict segmentation performance in unseen data.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T15:42:29Z</published>
+    <arxiv:comment>5 pages, 6 figures, published in ISBI 2026</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Baris Oguz</name>
+    </author>
+    <author>
+      <name>Xing Yao</name>
+    </author>
+    <author>
+      <name>Claudia Tawil</name>
+    </author>
+    <author>
+      <name>Alison Pouch</name>
+    </author>
+    <author>
+      <name>Brett Byram</name>
+    </author>
+    <author>
+      <name>Gabriel Arenas</name>
+    </author>
+    <author>
+      <name>Nadav Schwartz</name>
+    </author>
+    <author>
+      <name>Ipek Oguz</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37430v1</id>
+    <title>When Visual Evidence Is Insufficient: How Instructions, Post-Training, and Internal Activations Shape Refusal in Multimodal Language Models</title>
+    <updated>2026-10-27T15:42:20Z</updated>
+    <link href="https://arxiv.org/abs/2610.37430v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37430v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>For reliable deployment, multimodal large language models (MLLMs) should recognize when an image provides insufficient evidence to answer a question and withhold unsupported answers. Yet refusal alone is not necessarily evidence of such recognition: models may refuse because of unrelated safety constraints or without identifying the missing evidence. We study how refusal on visually unanswerable questions is shaped by three sources of control: inference-time instructions, post-training, and internal activation interventions. Across three MLLMs on the MoHoBench benchmark, we systematically manipulate the meaning and placement of refusal instructions, compare supervised and preference-based post-training, and intervene on a refusal-related activation direction derived from naturally answered and refused examples. We find that refusal is highly sensitive to both the meaning and placement of instructions, with model-specific changes at the sample level that are obscured by aggregate refusal rates. Evidence-aware and general refusal instructions have stronger effects than an intentionally mismatched safety instruction. Post-training produces larger increases in refusal, but can also induce responses that combine refusal language with attempted answers. In contrast, activation intervention produces smaller yet transferable changes across prompt conditions, without evidence of indiscriminate refusal on tested visually answerable samples. These findings show that refusal is jointly shaped by external instructions, post-training, and internal representations, highlighting the need to disentangle evidence recognition from a model's learned propensity to refuse.</summary>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T15:42:20Z</published>
+    <arxiv:comment>31 pages, 6 figures</arxiv:comment>
+    <arxiv:primary_category term="cs.LG"/>
+    <author>
+      <name>Ananth K Suresh</name>
+    </author>
+    <author>
+      <name>Aveen Dayal</name>
+    </author>
+    <author>
+      <name>Gouthaman KV</name>
+    </author>
+    <author>
+      <name>Aditya Pola</name>
+    </author>
+    <author>
+      <name>Vineeth N Balasubramanian</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37406v1</id>
+    <title>CTBakeGS: training-free baking of photorealistic CT volume renderings into 3D Gaussian splats</title>
+    <updated>2026-10-27T15:21:01Z</updated>
+    <link href="https://arxiv.org/abs/2610.37406v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37406v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Photorealistic volume rendering of computed tomography (CT) may convey anatomy intuitively, but it needs the CT data, dedicated software and a powerful graphics processor. Three-dimensional Gaussian splatting (3DGS) displays photorealistic scenes in real time on less powerful devices, but existing medical approaches train each scene for minutes to hours. We aimed to convert a CT volume rendering directly into a 3DGS model without training. Splats were placed on an adaptive octree of millimetre-sized cells. Their colour and opacity were computed on the graphics processor with the renderer's lighting, cell opacity was converted analytically into splat opacity, and faint splats were retained stochastically above the 1/255 opacity floor of standard 3DGS rasterisers. Six public CT scans (1.5-mm voxels) were converted with three transfer functions and compared with converged references by peak signal-to-noise ratio (PSNR), structural similarity and a learned perceptual metric. Two-million-splat models reached a PSNR of 32.6 +/- 0.9 dB for bone, 30.1 +/- 1.0 dB for contrast-enhanced vessels and 32.3 +/- 1.5 dB for skin and bone. A conversion pass (usually two or three per model) took 4-30 s on a current laptop and 9-60 s on a desktop with a 4-GB graphics card. On the laptop, the models rendered at 68 frames per second at 800 x 800 pixels. Training-free conversion produced real-time 3DGS models of photorealistic CT renderings in about a minute or less per conversion pass on ordinary computers, with fidelity that we consider sufficient for interactive viewing.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.GR" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T15:21:01Z</published>
+    <arxiv:comment>Code and project page: https://github.com/BocchiSlice/CTBakeGS</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Haruki Fukuda</name>
+    </author>
+    <author>
+      <name>Constantin Lux</name>
+    </author>
+    <author>
+      <name>Wolf Schweitzer</name>
+    </author>
+    <author>
+      <name>Tadashi Hosoya</name>
+    </author>
+    <author>
+      <name>Lars Ebert</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37381v1</id>
+    <title>PDRVLA: A Vision-Language-Action Model with Physical Dynamics Representations</title>
+    <updated>2026-10-27T15:09:10Z</updated>
+    <link href="https://arxiv.org/abs/2610.37381v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37381v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Vision--Language--Action (VLA) models generate robot actions from visual observations and language instructions, but their understanding of physical dynamics remains limited. Video world models can capture scene dynamics, yet generating future videos introduces high latency into the control loop. We introduce PDRVLA, whose lightweight Physical Dynamics Module extracts physical tokens from vision--language features to condition action generation without online video generation. The module learns through direct prediction of future RGB, depth, and optical-flow features, with auxiliary supervision through a frozen pretrained video world model. Training relies entirely on publicly available data, expanded through human-to-robot synthesis, subtask annotation, and embodied chain-of-thought (ECoT) annotation. Across four simulation benchmarks, PDRVLA achieves success rates of 99.3% on LIBERO, 89.9% on LIBERO-Plus, 93.6% on RoboTwin~2.0, and 81.5% on SimplerEnv. Ablations show improved future prediction with world-model supervision and evaluate how subtask conditioning, future object-pose supervision, and ECoT training affect action success.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T15:09:10Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Hanqing Wang</name>
+    </author>
+    <author>
+      <name>Zhaotian Cai</name>
+    </author>
+    <author>
+      <name>Ruichuan An</name>
+    </author>
+    <author>
+      <name>Bohan Zeng</name>
+    </author>
+    <author>
+      <name>Tao Zhang</name>
+    </author>
+    <author>
+      <name>Yilin Chen</name>
+    </author>
+    <author>
+      <name>Xu Jiang</name>
+    </author>
+    <author>
+      <name>Kaiquan Chen</name>
+    </author>
+    <author>
+      <name>Chongyang Wu</name>
+    </author>
+    <author>
+      <name>Haoran Li</name>
+    </author>
+    <author>
+      <name>Fan Yang</name>
+    </author>
+    <author>
+      <name>Mingan Lin</name>
+    </author>
+    <author>
+      <name>Wentao Zhang</name>
+    </author>
+    <author>
+      <name>Zenan Zhou</name>
+    </author>
+    <author>
+      <name>Youzheng Wu</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37364v1</id>
+    <title>EmbeddingGemma 2: Unified and Efficient Multimodal Representations</title>
+    <updated>2026-10-27T15:00:42Z</updated>
+    <link href="https://arxiv.org/abs/2610.37364v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37364v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present EmbeddingGemma 2, an open multimodal embedding model which natively represents text, images, audio, video, and combinations thereof in a unified space. Our approach introduces improvements such as simplified per-layer embeddings and a multi-stage curriculum with modality and objective progression which ensure strong quality across unimodal, cross-modal, and mixed-modal evaluations. Notably, in comprehensive embedding benchmarks across all modalities, EmbeddingGemma 2 establishes a new Pareto frontier, outperforming both specialist models and models two to twelve times larger. Furthermore, our design offers flexibility for resource-constrained environments, supporting selective modality encoder loading, adjustable vision token budgets, truncatable embedding dimensions, and quantized weights. We present ablations analyzing key decisions and release EmbeddingGemma 2 to promote further research.</summary>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.SD" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T15:00:42Z</published>
+    <arxiv:comment>28 pages. Models are available on HuggingFace (at https://huggingface.co/google/embeddinggemma-2) and LiteRT (at https://huggingface.co/litert-community/embeddinggemma-2-740m-litert-lm)</arxiv:comment>
+    <arxiv:primary_category term="cs.LG"/>
+    <author>
+      <name>Henrique Schechter Vera</name>
+    </author>
+    <author>
+      <name>Sahil Dua</name>
+    </author>
+    <author>
+      <name>Jovan Andonov</name>
+    </author>
+    <author>
+      <name>Sara Smoot</name>
+    </author>
+    <author>
+      <name>Sebastian Russo</name>
+    </author>
+    <author>
+      <name>Ivan Llanos</name>
+    </author>
+    <author>
+      <name>Max Matveev</name>
+    </author>
+    <author>
+      <name>Jae Hyeon Yoo</name>
+    </author>
+    <author>
+      <name>Kat Black</name>
+    </author>
+    <author>
+      <name>Shih-Cheng Huang</name>
+    </author>
+    <author>
+      <name>Josiah Aklilu</name>
+    </author>
+    <author>
+      <name>Maarten Grootendorst</name>
+    </author>
+    <author>
+      <name>Omar Sanseviero</name>
+    </author>
+    <author>
+      <name>Chandramouli Amarnath</name>
+    </author>
+    <author>
+      <name>Ian Ballantyne</name>
+    </author>
+    <author>
+      <name>Zhe Li</name>
+    </author>
+    <author>
+      <name>Daniel Salz</name>
+    </author>
+    <author>
+      <name>Ibrahim Alabdulmohsin</name>
+    </author>
+    <author>
+      <name>Ilya Philippov</name>
+    </author>
+    <author>
+      <name>Kristen Quan</name>
+    </author>
+    <author>
+      <name>Glenn Cameron</name>
+    </author>
+    <author>
+      <name>Edouard Yvinec</name>
+    </author>
+    <author>
+      <name>Luciano Martins</name>
+    </author>
+    <author>
+      <name>Doug Reid</name>
+    </author>
+    <author>
+      <name>Sindhu Raghuram Panyam</name>
+    </author>
+    <author>
+      <name>Weiyi Wang</name>
+    </author>
+    <author>
+      <name>Hengxuan Ying</name>
+    </author>
+    <author>
+      <name>Madhuri Shanbhogue</name>
+    </author>
+    <author>
+      <name>Tanmaya Dabral</name>
+    </author>
+    <author>
+      <name>Shanfeng Zhang</name>
+    </author>
+    <author>
+      <name>Juyeong Ji</name>
+    </author>
+    <author>
+      <name>Renjie Wu</name>
+    </author>
+    <author>
+      <name>Joe Zou</name>
+    </author>
+    <author>
+      <name>Xu Chen</name>
+    </author>
+    <author>
+      <name>Yunan Zhang</name>
+    </author>
+    <author>
+      <name>Yu-Hui Chen</name>
+    </author>
+    <author>
+      <name>Matthew Soulanille</name>
+    </author>
+    <author>
+      <name>Vinod Mamillapalli</name>
+    </author>
+    <author>
+      <name>Yi-Chun Kuo</name>
+    </author>
+    <author>
+      <name>Wai Hon Law</name>
+    </author>
+    <author>
+      <name>Matt Kreileder</name>
+    </author>
+    <author>
+      <name>Alice Zheng</name>
+    </author>
+    <author>
+      <name>Suril Shah</name>
+    </author>
+    <author>
+      <name>Mogan Shieh</name>
+    </author>
+    <author>
+      <name>Pooja Consul</name>
+    </author>
+    <author>
+      <name>Alberto Montes</name>
+    </author>
+    <author>
+      <name>Andreas Hess</name>
+    </author>
+    <author>
+      <name>Andres Sevilla</name>
+    </author>
+    <author>
+      <name>Babak Samari</name>
+    </author>
+    <author>
+      <name>Brendan McCloskey</name>
+    </author>
+    <author>
+      <name>Brian Potetz</name>
+    </author>
+    <author>
+      <name>Daniel Cer</name>
+    </author>
+    <author>
+      <name>Georgios Kathareios</name>
+    </author>
+    <author>
+      <name>Gustavo Hernández Ábrego</name>
+    </author>
+    <author>
+      <name>Hesen Zhang</name>
+    </author>
+    <author>
+      <name>Ji Ma</name>
+    </author>
+    <author>
+      <name>Jiaxing Wu</name>
+    </author>
+    <author>
+      <name>Keegan Mosley</name>
+    </author>
+    <author>
+      <name>Paul Suganthan</name>
+    </author>
+    <author>
+      <name>Rui Meng</name>
+    </author>
+    <author>
+      <name>Shen Gao</name>
+    </author>
+    <author>
+      <name>Shengcao Cao</name>
+    </author>
+    <author>
+      <name>Yi-Ting Chen</name>
+    </author>
+    <author>
+      <name>Yichang Chen</name>
+    </author>
+    <author>
+      <name>Zhongli Ding</name>
+    </author>
+    <author>
+      <name>Kendra Byrne</name>
+    </author>
+    <author>
+      <name>Cormac Brick</name>
+    </author>
+    <author>
+      <name>Olivier Lacombe</name>
+    </author>
+    <author>
+      <name>Qin Yin</name>
+    </author>
+    <author>
+      <name>Tris Warkentin</name>
+    </author>
+    <author>
+      <name>Armand Joulin</name>
+    </author>
+    <author>
+      <name>Tom Duerig</name>
+    </author>
+    <author>
+      <name>Mojtaba Seyedhosseini</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.37349v1</id>
+    <title>TimeLineXR: An Interactive Exploration of Time in Vision-Language Models</title>
+    <updated>2026-10-27T14:50:59Z</updated>
+    <link href="https://arxiv.org/abs/2610.37349v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2610.37349v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Recently, it has been shown that vision-language models (VLMs) have a certain intrinsic understanding of time. They can estimate the temporal origin of objects and encode time along a low-dimensional, non-linear manifold inside their embedding space~\cite{tekaya2025matter}. That result is quantitative and reproducible, but the structure itself stays out of reach for end users: they cannot see it, query it with their own images, or inspect where a query lands relative to other years on the time axis. We present TimeLineXR, an interactive demonstration that turns this time axis into an explorable 3D scene. A web demo lets users upload or select images and see each placed on a color-coded 3D time axis; a Three.js WebXR scene renders the same time axis as a room-scale representation that can be grabbed, scaled, inspected, and queried by throwing image cards into it. Both clients run the same prediction pipeline against the same cached temporal index: encode the query with CLIP, project it through cosine-kernel KPCA, and snap it to the Bézier time axis. The system turns each image into a point on the time axis, so users can compare where different objects land and read off their estimated first year of appearance.Code source and reproduction steps can be found in: https://github.com/sterngefeuert/timeline-xr.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-10-27T14:50:59Z</published>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Nidham Tekaya</name>
+    </author>
+    <author>
+      <name>Markus Passecker</name>
+    </author>
+    <author>
+      <name>Matthias Zeppelzauer</name>
+    </author>
+  </entry>
+</feed>

@@ -1,0 +1,60 @@
+{
+  "kind": "real_metadata_replay_screen_v1",
+  "recorded_at": "2026-10-29T14:28:43.784414+00:00",
+  "source": "arXiv Atom API",
+  "requests": [
+    {
+      "aspect": "AI",
+      "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.AI+AND+submittedDate%3A%5B202610220000+TO+202610292359%5D&start=0&max_results=24&sortBy=submittedDate&sortOrder=descending",
+      "records": 24,
+      "recorded_at": "2026-10-29T14:28:44.863645+00:00"
+    },
+    {
+      "aspect": "LG",
+      "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.LG+AND+submittedDate%3A%5B202610220000+TO+202610292359%5D&start=0&max_results=24&sortBy=submittedDate&sortOrder=descending",
+      "records": 24,
+      "recorded_at": "2026-10-29T14:28:48.861565+00:00"
+    },
+    {
+      "aspect": "CL",
+      "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL+AND+submittedDate%3A%5B202610220000+TO+202610292359%5D&start=0&max_results=24&sortBy=submittedDate&sortOrder=descending",
+      "records": 24,
+      "recorded_at": "2026-10-29T14:28:53.258980+00:00"
+    },
+    {
+      "aspect": "CV",
+      "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CV+AND+submittedDate%3A%5B202610220000+TO+202610292359%5D&start=0&max_results=24&sortBy=submittedDate&sortOrder=descending",
+      "records": 24,
+      "recorded_at": "2026-10-29T14:28:57.268942+00:00"
+    }
+  ],
+  "files": {
+    "feeds/AI.atom": "effb7fb27808263fab7fa05e1cef0cdf8d002a2e2124ba037008c7cf9bf8afa8",
+    "feeds/CL.atom": "02ae12254777f5d40bedcd3a39a32a8e1c24106eb680ee14bfb9ba7a742f3d84",
+    "feeds/CV.atom": "d84139b8a3208c6a2ab1662805f5caa7d36982a4c7a371371ed97d1d43004433",
+    "feeds/LG.atom": "60a8f97e4c34a97ed59e4cee5ec9d9b4ad9a5cde28aa2ae52f89f213074ff77e",
+    "snapshot.json": "0d864d6834a6c31f5b85eb82a3b335d7ddd77adb90eac4d69b9124429b9b04dd",
+    "splits.json": "fac3c2cf54479107c24ac28fd3f292438b3f4ce31070defc0dc4598796ac6967",
+    "tasks.json": "7c12383aa02f4e0447e430d37b8dc84e7ac3805db95e369d39cccc7eb98ed774"
+  },
+  "n_tasks": 60,
+  "counts": {
+    "train": 12,
+    "search_dev": 12,
+    "promotion_val": 12,
+    "final_test": 24
+  },
+  "limitations": [
+    "Small development screen, not a publication benchmark",
+    "Real metadata; PDF download and translation remain offline stubs",
+    "Replay days is an argument contract, not a new online temporal query",
+    "Train/dev/promotion share primitive families; only final holds new compositions",
+    "Paper-disjoint categories confound domain with split; no broad OOD claim",
+    "Force-download measures requested call arguments only: offline stub does not perform network refresh",
+    "Six request pairs are development probes, not independent benchmark samples; label variant is manually fixed, not RSI"
+  ],
+  "builder_sha256": "170b7d8f4f4d0d7aa846f79450a6622c716aa6ff6b370a5c954e5685eb6c920d",
+  "task_generator_sha256": "7ce41f7996b4cefc94833372fc508143cd287d751b49f965a7607ec7b7131e55",
+  "protocol": "state_counterfactual_v1",
+  "parent_manifest_sha256": "aeaf9f1aaf14262ea575a5ba043d50d9fad7ad8e19a8f8af48dfe9ec2735ea73"
+}

@@ -1,0 +1,2060 @@
+[
+  {
+    "id": "rescue_v1_train_search_0",
+    "task": "检索最近7天cs.AI的论文，最多3篇。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "AI",
+        "days": 7,
+        "max_results": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search",
+    "difficulty": "medium",
+    "template": "search",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "search",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_search_1",
+    "task": "检索最近7天cs.AI的论文，最多4篇。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "AI",
+        "days": 7,
+        "max_results": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search",
+    "difficulty": "medium",
+    "template": "search",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "search",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_download_0",
+    "task": "下载当前列表中第1篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 3
+        }
+      }
+    ],
+    "template": "download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "download",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_download_1",
+    "task": "下载当前列表中第2篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 4
+        }
+      }
+    ],
+    "template": "download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "download",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_translate_0",
+    "task": "翻译当前列表中第1篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 3
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "template": "translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "translate",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_translate_1",
+    "task": "翻译当前列表中第2篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 4
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "template": "translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "translate",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_cache_0",
+    "task": "查看当前列表中第1篇论文的缓存状态。",
+    "expected_tools": [
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 3
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "template": "cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "cache",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_cache_1",
+    "task": "查看当前列表中第2篇论文的缓存状态。",
+    "expected_tools": [
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 4
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "template": "cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "cache",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_search_download_0",
+    "task": "检索最近7天cs.AI的论文，最多3篇，然后下载第1篇的PDF。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "AI",
+        "days": 7,
+        "max_results": 3
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download",
+    "difficulty": "medium",
+    "template": "search_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "search_download",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_search_download_1",
+    "task": "检索最近7天cs.AI的论文，最多4篇，然后下载第2篇的PDF。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "AI",
+        "days": 7,
+        "max_results": 4
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download",
+    "difficulty": "medium",
+    "template": "search_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "search_download",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_download_translate_0",
+    "task": "先下载当前列表中第1篇论文的PDF，再翻译这篇论文。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 3
+        }
+      }
+    ],
+    "template": "download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "download_translate",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_train_download_translate_1",
+    "task": "先下载当前列表中第2篇论文的PDF，再翻译这篇论文。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "AI",
+          "days": 7,
+          "max_results": 4
+        }
+      }
+    ],
+    "template": "download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "train",
+    "rescue_family": "download_translate",
+    "catalog_aspect": "AI"
+  },
+  {
+    "id": "rescue_v1_promotion_val_search_0",
+    "task": "检索最近7天cs.CL的论文，最多3篇。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CL",
+        "days": 7,
+        "max_results": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search",
+    "difficulty": "medium",
+    "template": "search",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "search",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_search_1",
+    "task": "检索最近7天cs.CL的论文，最多4篇。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CL",
+        "days": 7,
+        "max_results": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search",
+    "difficulty": "medium",
+    "template": "search",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "search",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_download_0",
+    "task": "下载当前列表中第1篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 3
+        }
+      }
+    ],
+    "template": "download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "download",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_download_1",
+    "task": "下载当前列表中第2篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 4
+        }
+      }
+    ],
+    "template": "download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "download",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_translate_0",
+    "task": "翻译当前列表中第1篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 3
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "template": "translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "translate",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_translate_1",
+    "task": "翻译当前列表中第2篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 4
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "template": "translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "translate",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_cache_0",
+    "task": "查看当前列表中第1篇论文的缓存状态。",
+    "expected_tools": [
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 3
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "template": "cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "cache",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_cache_1",
+    "task": "查看当前列表中第2篇论文的缓存状态。",
+    "expected_tools": [
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 4
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "template": "cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "cache",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_search_download_0",
+    "task": "检索最近7天cs.CL的论文，最多3篇，然后下载第1篇的PDF。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CL",
+        "days": 7,
+        "max_results": 3
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download",
+    "difficulty": "medium",
+    "template": "search_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "search_download",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_search_download_1",
+    "task": "检索最近7天cs.CL的论文，最多4篇，然后下载第2篇的PDF。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CL",
+        "days": 7,
+        "max_results": 4
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download",
+    "difficulty": "medium",
+    "template": "search_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "search_download",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_download_translate_0",
+    "task": "先下载当前列表中第1篇论文的PDF，再翻译这篇论文。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 3
+        }
+      }
+    ],
+    "template": "download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "download_translate",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_promotion_val_download_translate_1",
+    "task": "先下载当前列表中第2篇论文的PDF，再翻译这篇论文。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CL",
+          "days": 7,
+          "max_results": 4
+        }
+      }
+    ],
+    "template": "download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "promotion_val",
+    "rescue_family": "download_translate",
+    "catalog_aspect": "CL"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_translate_0",
+    "task": "检索最近7天cs.CV的论文，最多3篇，下载第1篇的PDF，然后翻译它。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 3
+      },
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_translate",
+    "difficulty": "medium",
+    "template": "search_download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_translate_1",
+    "task": "检索最近7天cs.CV的论文，最多4篇，下载第2篇的PDF，然后翻译它。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 4
+      },
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_translate",
+    "difficulty": "medium",
+    "template": "search_download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_translate_2",
+    "task": "检索最近7天cs.CV的论文，最多5篇，下载第3篇的PDF，然后翻译它。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 5
+      },
+      {
+        "ref": 3
+      },
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_translate",
+    "difficulty": "medium",
+    "template": "search_download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_translate_3",
+    "task": "检索最近7天cs.CV的论文，最多6篇，下载第4篇的PDF，然后翻译它。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 6
+      },
+      {
+        "ref": 4
+      },
+      {
+        "ref": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_translate",
+    "difficulty": "medium",
+    "template": "search_download_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_cache_0",
+    "task": "检索最近7天cs.CV的论文，最多3篇，下载第1篇的PDF，再查看这篇的缓存状态。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 3
+      },
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_cache",
+    "difficulty": "medium",
+    "template": "search_download_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_cache_1",
+    "task": "检索最近7天cs.CV的论文，最多4篇，下载第2篇的PDF，再查看这篇的缓存状态。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 4
+      },
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_cache",
+    "difficulty": "medium",
+    "template": "search_download_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_cache_2",
+    "task": "检索最近7天cs.CV的论文，最多5篇，下载第3篇的PDF，再查看这篇的缓存状态。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 5
+      },
+      {
+        "ref": 3
+      },
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_cache",
+    "difficulty": "medium",
+    "template": "search_download_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_search_download_cache_3",
+    "task": "检索最近7天cs.CV的论文，最多6篇，下载第4篇的PDF，再查看这篇的缓存状态。",
+    "expected_tools": [
+      "get_recently_submitted_cs_papers",
+      "download_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "aspect": "CV",
+        "days": 7,
+        "max_results": 6
+      },
+      {
+        "ref": 4
+      },
+      {
+        "ref": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_search_download_cache",
+    "difficulty": "medium",
+    "template": "search_download_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "search_download_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_double_download_0",
+    "task": "按顺序下载当前列表中第1篇和第2篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_double_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 3
+        }
+      }
+    ],
+    "template": "double_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "double_download",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_double_download_1",
+    "task": "按顺序下载当前列表中第2篇和第3篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      },
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_double_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 4
+        }
+      }
+    ],
+    "template": "double_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "double_download",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_double_download_2",
+    "task": "按顺序下载当前列表中第3篇和第4篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3
+      },
+      {
+        "ref": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_double_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 5
+        }
+      }
+    ],
+    "template": "double_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "double_download",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_double_download_3",
+    "task": "按顺序下载当前列表中第4篇和第5篇论文的PDF。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 4
+      },
+      {
+        "ref": 5
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_double_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "template": "double_download",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "double_download",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_download_cache_translate_0",
+    "task": "下载当前列表中第1篇论文，查看其缓存状态，最后翻译它。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 3
+        }
+      }
+    ],
+    "template": "download_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "download_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_download_cache_translate_1",
+    "task": "下载当前列表中第2篇论文，查看其缓存状态，最后翻译它。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 4
+        }
+      }
+    ],
+    "template": "download_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "download_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_download_cache_translate_2",
+    "task": "下载当前列表中第3篇论文，查看其缓存状态，最后翻译它。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3
+      },
+      {
+        "ref": 3
+      },
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 5
+        }
+      }
+    ],
+    "template": "download_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "download_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_download_cache_translate_3",
+    "task": "下载当前列表中第4篇论文，查看其缓存状态，最后翻译它。",
+    "expected_tools": [
+      "download_arxiv_pdf",
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 4
+      },
+      {
+        "ref": 4
+      },
+      {
+        "ref": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_download_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "template": "download_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "download_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_active_cache_translate_0",
+    "task": "先查看最近操作的那篇论文的缓存状态，再翻译它；两次都使用ref=null。",
+    "expected_tools": [
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": null
+      },
+      {
+        "ref": null
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_active_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 3
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "template": "active_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "active_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_active_cache_translate_1",
+    "task": "先查看最近操作的那篇论文的缓存状态，再翻译它；两次都使用ref=null。",
+    "expected_tools": [
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": null
+      },
+      {
+        "ref": null
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_active_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 4
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "template": "active_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "active_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_active_cache_translate_2",
+    "task": "先查看最近操作的那篇论文的缓存状态，再翻译它；两次都使用ref=null。",
+    "expected_tools": [
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": null
+      },
+      {
+        "ref": null
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_active_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 5
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 3
+        }
+      }
+    ],
+    "template": "active_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "active_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_active_cache_translate_3",
+    "task": "先查看最近操作的那篇论文的缓存状态，再翻译它；两次都使用ref=null。",
+    "expected_tools": [
+      "get_paper_cache_status",
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": null
+      },
+      {
+        "ref": null
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_active_cache_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 4
+        }
+      }
+    ],
+    "template": "active_cache_translate",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "active_cache_translate",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_translate_cache_0",
+    "task": "翻译当前列表中第1篇论文，然后查看它的缓存状态。",
+    "expected_tools": [
+      "translate_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      },
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 3
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "template": "translate_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "translate_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_translate_cache_1",
+    "task": "翻译当前列表中第2篇论文，然后查看它的缓存状态。",
+    "expected_tools": [
+      "translate_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      },
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 4
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "template": "translate_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "translate_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_translate_cache_2",
+    "task": "翻译当前列表中第3篇论文，然后查看它的缓存状态。",
+    "expected_tools": [
+      "translate_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3
+      },
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 5
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 3
+        }
+      }
+    ],
+    "template": "translate_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "translate_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "rescue_v1_final_test_translate_cache_3",
+    "task": "翻译当前列表中第4篇论文，然后查看它的缓存状态。",
+    "expected_tools": [
+      "translate_arxiv_pdf",
+      "get_paper_cache_status"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 4
+      },
+      {
+        "ref": 4
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate_cache",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "CV",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 4
+        }
+      }
+    ],
+    "template": "translate_cache",
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "final_test",
+    "rescue_family": "translate_cache",
+    "catalog_aspect": "CV"
+  },
+  {
+    "id": "state_v1_translate_1_listed",
+    "task": "翻译当前列表中第1篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "translate",
+    "catalog_aspect": "LG",
+    "pair_id": "translate_1",
+    "initial_state": "listed"
+  },
+  {
+    "id": "state_v1_translate_1_downloaded",
+    "task": "翻译当前列表中第1篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "translate",
+    "catalog_aspect": "LG",
+    "pair_id": "translate_1",
+    "initial_state": "downloaded"
+  },
+  {
+    "id": "state_v1_translate_2_listed",
+    "task": "翻译当前列表中第2篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "translate",
+    "catalog_aspect": "LG",
+    "pair_id": "translate_2",
+    "initial_state": "listed"
+  },
+  {
+    "id": "state_v1_translate_2_downloaded",
+    "task": "翻译当前列表中第2篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "translate",
+    "catalog_aspect": "LG",
+    "pair_id": "translate_2",
+    "initial_state": "downloaded"
+  },
+  {
+    "id": "state_v1_translate_3_listed",
+    "task": "翻译当前列表中第3篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "translate",
+    "catalog_aspect": "LG",
+    "pair_id": "translate_3",
+    "initial_state": "listed"
+  },
+  {
+    "id": "state_v1_translate_3_downloaded",
+    "task": "翻译当前列表中第3篇论文。",
+    "expected_tools": [
+      "translate_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_translate",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 3
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "translate",
+    "catalog_aspect": "LG",
+    "pair_id": "translate_3",
+    "initial_state": "downloaded"
+  },
+  {
+    "id": "state_v1_force_download_1_listed",
+    "task": "请强制重新下载当前列表中第1篇论文的PDF（force=true）。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1,
+        "force": true
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_force_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "force_download",
+    "catalog_aspect": "LG",
+    "pair_id": "force_download_1",
+    "initial_state": "listed"
+  },
+  {
+    "id": "state_v1_force_download_1_downloaded",
+    "task": "请强制重新下载当前列表中第1篇论文的PDF（force=true）。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 1,
+        "force": true
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_force_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 1
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "force_download",
+    "catalog_aspect": "LG",
+    "pair_id": "force_download_1",
+    "initial_state": "downloaded"
+  },
+  {
+    "id": "state_v1_force_download_2_listed",
+    "task": "请强制重新下载当前列表中第2篇论文的PDF（force=true）。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2,
+        "force": true
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_force_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "force_download",
+    "catalog_aspect": "LG",
+    "pair_id": "force_download_2",
+    "initial_state": "listed"
+  },
+  {
+    "id": "state_v1_force_download_2_downloaded",
+    "task": "请强制重新下载当前列表中第2篇论文的PDF（force=true）。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 2,
+        "force": true
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_force_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 2
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "force_download",
+    "catalog_aspect": "LG",
+    "pair_id": "force_download_2",
+    "initial_state": "downloaded"
+  },
+  {
+    "id": "state_v1_force_download_3_listed",
+    "task": "请强制重新下载当前列表中第3篇论文的PDF（force=true）。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3,
+        "force": true
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_force_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "force_download",
+    "catalog_aspect": "LG",
+    "pair_id": "force_download_3",
+    "initial_state": "listed"
+  },
+  {
+    "id": "state_v1_force_download_3_downloaded",
+    "task": "请强制重新下载当前列表中第3篇论文的PDF（force=true）。",
+    "expected_tools": [
+      "download_arxiv_pdf"
+    ],
+    "expected_tool_args": [
+      {
+        "ref": 3,
+        "force": true
+      }
+    ],
+    "expected_termination": "FINISH",
+    "category": "rescue_force_download",
+    "difficulty": "medium",
+    "setup": [
+      {
+        "name": "get_recently_submitted_cs_papers",
+        "args": {
+          "aspect": "LG",
+          "days": 7,
+          "max_results": 6
+        }
+      },
+      {
+        "name": "download_arxiv_pdf",
+        "args": {
+          "ref": 3
+        }
+      }
+    ],
+    "requires_offline": true,
+    "max_iterations": 6,
+    "rescue_split": "search_dev",
+    "rescue_family": "force_download",
+    "catalog_aspect": "LG",
+    "pair_id": "force_download_3",
+    "initial_state": "downloaded"
+  }
+]

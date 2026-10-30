@@ -70,7 +70,7 @@ def main():
     p.add_argument("--policy", choices=("model", "reference", "finish_only"), default="model")
     p.add_argument("--model", type=Path)
     p.add_argument("--model-id", default="")
-    p.add_argument("--variant", choices=("baseline", "completion_check"), default="baseline")
+    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries"), default="baseline")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--gpu", type=int, default=1)
     p.add_argument("--timeout", type=int, default=900)
@@ -98,6 +98,7 @@ def main():
                 "prompt_addition": NOTE if args.variant == "completion_check" else "",
                 "source_sha256": {name: sha256(ROOT / name) for name in (
                     "scripts/rescue_replay_eval.py", "scripts/rescue_gpu_pilot.py",
+                    "scripts/rescue_state_boundary.py",
                     "AgenticArxiv/benchmark/rescue_catalog.py", "AgenticArxiv/benchmark/runner.py",
                     "AgenticArxiv/benchmark/metrics.py", "AgenticArxiv/utils/llm_client.py",
                     "AgenticArxiv/agents/agent_engine.py", "AgenticArxiv/agents/prompt_templates.py")},
@@ -148,6 +149,14 @@ def main():
                 import agents.agent_engine as ae
                 original = ae.get_react_prompt
                 ae.get_react_prompt = lambda *a, **k: original(*a, **k) + NOTE
+            elif args.variant == "state_boundaries":
+                import agents.agent_engine as ae
+                from rescue_state_boundary import boundary_history
+                original = ae.get_react_prompt
+                def bounded_prompt(*a, **k):
+                    k["history"] = boundary_history(k.get("history", ""))
+                    return original(*a, **k)
+                ae.get_react_prompt = bounded_prompt
         else:
             runner._llm_client = ReferenceClient(tasks, finish_only=args.policy == "finish_only")
         manifest["versions"] = {x: importlib.metadata.version(x) for x in ("torch", "transformers", "pydantic")}
