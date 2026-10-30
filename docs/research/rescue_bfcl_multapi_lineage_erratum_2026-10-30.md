@@ -1,9 +1,0 @@
-# Post hoc lineage erratum for the native multi-API diagnostic
-
-The frozen native multi-API protocol correctly records that these 32 task IDs had not appeared in the project's earlier native model-inference rosters. That statement was too narrow to justify describing the roster as independent or held out from the project's earlier BFCL work.
-
-After inference, we compared all 44 cases in the three native BFCL rosters with the pinned 200-row `fireworks-ai/bfcl_v3_multi_turn_base` Parquet snapshot used in the earlier static BFCL protocol audit. After Unicode NFKC normalization, lowercasing, and word-token normalization, 34/44 first-turn requests match a v3 row exactly. All 12 filesystem calibration cases match; 22/32 balanced multi-API cases match. The v4 tasks extend these initial requests into multi-turn dialogues; some are also edited. The full scope, case-level matches, and comparison procedure are in `artifacts/rescue_bfcl_lineage_v1/` and `scripts/audit_rescue_bfcl_lineage.py`; the 32-case subset is also archived beside its model runs.
-
-This establishes overlap with the earlier source-task pool. It does not establish that earlier model inference used those rows: historical static-evaluation traces are unavailable, and the prior audit explicitly could not rescore its reported 8/40 result. Accordingly, the native filesystem and multi-API results remain valid as execution and checker audits, but they are not independent or held-out replications of the earlier BFCL task pool. We retain the frozen rosters, model traces, and replay outputs unchanged. This correction must accompany any presentation of these results.
-
-The native outcome remains 2/32 versus 9/32 complete scenarios (37/129 versus 65/129 turns) for the 1.5B and 7B checkpoints. These observations describe two public checkpoints on a small, simulator-based, source-overlapping roster; they do not establish a causal size effect, a new method, RSI, or generalization to unseen tasks.

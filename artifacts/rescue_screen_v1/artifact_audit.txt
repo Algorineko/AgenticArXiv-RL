@@ -1,6 +1,0 @@
-PASS: analysis JSON and Markdown regenerate identically.
-PASS: all 96 model trajectories have full coverage and recorded hashes.
-PASS: all eight inference/scoring source hashes match the pre-run protocol commit 582cdff in every arm.
-PASS: checkpoint weights match across each paired prompt comparison.
-PASS: reference 72/72, always-FINISH 0/24; reference trace hashes verified.
-PASS: a deliberately incomplete arm is rejected before comparison.

@@ -1,4 +1,0 @@
-grpo_baseline: all evaluation source hashes match pre-inference commit 767e016
-base_receipt_contract: all evaluation source hashes match pre-inference commit 767e016
-base_baseline: all evaluation source hashes match pre-inference commit 767e016
-grpo_receipt_contract: all evaluation source hashes match pre-inference commit 767e016

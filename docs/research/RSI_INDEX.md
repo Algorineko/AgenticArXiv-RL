@@ -1,6 +1,6 @@
 # API-first RSI research
 
-Status: complete CPU/API baseline calibration, 16/16 on eight repeated development instances. The first task suite is saturated; no RSI effectiveness result yet.
+Status: CPU calibration saturated (16/16); two exposed AppWorld train scenarios remain 0/2 under both baseline and a static discovery control. Reference solutions pass 2/2. No RSI effectiveness result yet.
 
 - [Resource-grounded research proposal](rsi_api_research_proposal_20261030.md): experience-controlled recursive improvement, fixed-meta optimization controls, CPU tasks, budget and stopping rules.
 - [Sanitized API resource probe](../../artifacts/rsi_api_preflight_v1/resource_probe.json): five bounded chat requests; one successful native tool response and four unavailable-model errors. These are connectivity checks.
@@ -14,3 +14,6 @@ Pilot entry point: `python3 scripts/rsi_api_pilot.py --output <new-directory>` w
 
 Current worktree: `AgenticArXiv-RSI`; branch: `research/rsi-api-20261030`.
 Large ignored checkpoints and local credential files are outside the Git archive. The original rescue worktree remains intact.
+
+- [Framework reuse, actual progress and publication positioning](rsi_framework_reuse_and_status_20261030.md).
+- [Prior research archive and recovery](../archive/rescue_archive_20261030.md).

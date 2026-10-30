@@ -1,0 +1,15 @@
+{
+  "observations_replayed": 15,
+  "observation_mismatches": 0,
+  "goal_verdict_mismatches": 0,
+  "episodes": 2,
+  "all_observations_match": true,
+  "all_goal_verdicts_match": true,
+  "source_digests_match": {
+    "rsi_api_pilot.py": true,
+    "rsi_cpu_tasks.py": true,
+    "rsi_appworld_api_probe.py": true
+  },
+  "replay_proxy_source_sha256": "07ce5cdf6a762166dab4987eeabee48ae786bd12c321c09762d159dca145e746",
+  "note": "Only train scenarios replayed. Mismatches, if present, are reported without normalization."
+}
