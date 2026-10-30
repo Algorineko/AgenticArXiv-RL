@@ -1,11 +1,16 @@
 # API-first RSI research
 
-Status: proposal and resource preflight; no RSI effectiveness result yet.
+Status: complete CPU/API baseline calibration, 16/16 on eight repeated development instances. The first task suite is saturated; no RSI effectiveness result yet.
 
 - [Resource-grounded research proposal](rsi_api_research_proposal_20261030.md): experience-controlled recursive improvement, fixed-meta optimization controls, CPU tasks, budget and stopping rules.
 - [Sanitized API resource probe](../../artifacts/rsi_api_preflight_v1/resource_probe.json): five bounded chat requests; one successful native tool response and four unavailable-model errors. These are connectivity checks.
 - [Prior research archive manifest](../../artifacts/rsi_api_preflight_v1/prior_research_archive.json): 751 tracked artifacts, scripts and documents at `67ac4f5cecdbba708aa7b424ea00aef9e33904df`, tagged `archive/rescue-audit-20261030`.
 - [Historical rescue research index](INDEX.md): previous negative results and protocol audits. Its used task pools must not be presented as fresh RSI validation.
+- [P0 frozen calibration protocol](rsi_p0_protocol_20261030.md) and [transport-only v2 continuation](rsi_p0_v2_rate_limit_protocol_20261030.md): independent CPU goal checks, source snapshots, capped API usage and unchanged baseline repeats.
+- [Limited RL, environment curriculum and TTT extension](rsi_model_harness_environment_extension_20261030.md): separates controller learning, LLM parameter training and API-side adaptation, with component controls.
+- [P0 actual findings](rsi_p0_findings_20261030.md): complete baseline, 48 independently replayed observations, RPM limits, combined resource accounting, and the decision to seek a non-saturated task suite.
+
+Pilot entry point: `python3 scripts/rsi_api_pilot.py --output <new-directory>` with `RSI_API_KEY` in the environment. Offline preflight adds `--validate-only`; replay with `scripts/analyze_rsi_p0.py`. Runtime credentials never enter the artifacts.
 
 Current worktree: `AgenticArXiv-RSI`; branch: `research/rsi-api-20261030`.
 Large ignored checkpoints and local credential files are outside the Git archive. The original rescue worktree remains intact.

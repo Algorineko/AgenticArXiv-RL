@@ -1,0 +1,28 @@
+{
+  "stage": "P0 development calibration, not RSI effectiveness",
+  "episodes": 16,
+  "planned_episodes": 16,
+  "successes": 16,
+  "normal_completion_successes": 16,
+  "by_domain": {
+    "inventory": {
+      "episodes": 8,
+      "successes": 8
+    },
+    "table": {
+      "episodes": 8,
+      "successes": 8
+    }
+  },
+  "tool_errors": 0,
+  "stop_reasons": {
+    "assistant_final": 16
+  },
+  "usage": {
+    "calls": 65,
+    "accounted_input_tokens": 107810,
+    "accounted_output_tokens": 18793,
+    "calls_without_provider_usage": 9
+  },
+  "complete": true
+}

@@ -1,0 +1,46 @@
+{
+  "tasks": [
+    {
+      "task_id": "p0_inventory_0",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_inventory_1",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_inventory_2",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_inventory_3",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_table_0",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_table_1",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_table_2",
+      "reference": true,
+      "negative_controls": true
+    },
+    {
+      "task_id": "p0_table_3",
+      "reference": true,
+      "negative_controls": true
+    }
+  ],
+  "reference_passed": 8,
+  "no_op_passed": 0
+}

@@ -1,0 +1,370 @@
+[
+  {
+    "id": "p0_inventory_0",
+    "split": "development_only",
+    "domain": "inventory",
+    "family": "reserve_then_dispatch",
+    "stock": {
+      "item_A": 11,
+      "item_B": 6,
+      "untouched": 11
+    },
+    "lines": {
+      "item_A": 4,
+      "item_B": 1
+    },
+    "reserved": {},
+    "prompt": "Ship the pending order. Inspect its required items, current stock, and existing reservations; reserve only the missing quantities, then dispatch it. Keep unrelated inventory unchanged. Existing reservations have already been deducted from stock. Complete the actual tool operations."
+  },
+  {
+    "id": "p0_inventory_1",
+    "split": "development_only",
+    "domain": "inventory",
+    "family": "reserve_then_dispatch",
+    "stock": {
+      "item_A": 9,
+      "item_B": 7,
+      "untouched": 11
+    },
+    "lines": {
+      "item_A": 5,
+      "item_B": 2
+    },
+    "reserved": {
+      "item_A": 1
+    },
+    "prompt": "Ship the pending order. Inspect its required items, current stock, and existing reservations; reserve only the missing quantities, then dispatch it. Keep unrelated inventory unchanged. Existing reservations have already been deducted from stock. Complete the actual tool operations."
+  },
+  {
+    "id": "p0_inventory_2",
+    "split": "development_only",
+    "domain": "inventory",
+    "family": "reserve_then_dispatch",
+    "stock": {
+      "item_A": 12,
+      "item_B": 8,
+      "untouched": 11
+    },
+    "lines": {
+      "item_A": 4,
+      "item_B": 2
+    },
+    "reserved": {},
+    "prompt": "Ship the pending order. Inspect its required items, current stock, and existing reservations; reserve only the missing quantities, then dispatch it. Keep unrelated inventory unchanged. Existing reservations have already been deducted from stock. Complete the actual tool operations."
+  },
+  {
+    "id": "p0_inventory_3",
+    "split": "development_only",
+    "domain": "inventory",
+    "family": "reserve_then_dispatch",
+    "stock": {
+      "item_A": 10,
+      "item_B": 6,
+      "untouched": 11
+    },
+    "lines": {
+      "item_A": 2,
+      "item_B": 1
+    },
+    "reserved": {
+      "item_A": 1
+    },
+    "prompt": "Ship the pending order. Inspect its required items, current stock, and existing reservations; reserve only the missing quantities, then dispatch it. Keep unrelated inventory unchanged. Existing reservations have already been deducted from stock. Complete the actual tool operations."
+  },
+  {
+    "id": "p0_table_0",
+    "split": "development_only",
+    "domain": "table",
+    "family": "filter_group_sum",
+    "rows": [
+      {
+        "entity": "account_0",
+        "version": 0,
+        "region": "east",
+        "active": false,
+        "amount": 24
+      },
+      {
+        "entity": "account_1",
+        "version": 1,
+        "region": "west",
+        "active": true,
+        "amount": 57
+      },
+      {
+        "entity": "account_2",
+        "version": 2,
+        "region": "east",
+        "active": true,
+        "amount": 73
+      },
+      {
+        "entity": "account_0",
+        "version": 3,
+        "region": "west",
+        "active": false,
+        "amount": 36
+      },
+      {
+        "entity": "account_1",
+        "version": 4,
+        "region": "east",
+        "active": true,
+        "amount": 63
+      },
+      {
+        "entity": "account_2",
+        "version": 5,
+        "region": "west",
+        "active": true,
+        "amount": 68
+      },
+      {
+        "entity": "account_0",
+        "version": 6,
+        "region": "east",
+        "active": false,
+        "amount": 81
+      },
+      {
+        "entity": "account_1",
+        "version": 7,
+        "region": "west",
+        "active": true,
+        "amount": 44
+      },
+      {
+        "entity": "account_2",
+        "version": 8,
+        "region": "east",
+        "active": true,
+        "amount": 40
+      }
+    ],
+    "latest": false,
+    "minimum": 25,
+    "prompt": "Read the transactions table. Use every source row, including multiple rows per entity. Keep active rows with amount >= 25. Group by region and sum amount as an integer total. Write report.json as a list of objects containing exactly region and total; omit regions without qualifying rows. Preserve all input tables."
+  },
+  {
+    "id": "p0_table_1",
+    "split": "development_only",
+    "domain": "table",
+    "family": "latest_filter_sum",
+    "rows": [
+      {
+        "entity": "account_0",
+        "version": 0,
+        "region": "east",
+        "active": false,
+        "amount": 19
+      },
+      {
+        "entity": "account_1",
+        "version": 1,
+        "region": "west",
+        "active": true,
+        "amount": 70
+      },
+      {
+        "entity": "account_2",
+        "version": 2,
+        "region": "east",
+        "active": true,
+        "amount": 13
+      },
+      {
+        "entity": "account_0",
+        "version": 3,
+        "region": "west",
+        "active": false,
+        "amount": 60
+      },
+      {
+        "entity": "account_1",
+        "version": 4,
+        "region": "east",
+        "active": true,
+        "amount": 33
+      },
+      {
+        "entity": "account_2",
+        "version": 5,
+        "region": "west",
+        "active": true,
+        "amount": 80
+      },
+      {
+        "entity": "account_0",
+        "version": 6,
+        "region": "east",
+        "active": false,
+        "amount": 43
+      },
+      {
+        "entity": "account_1",
+        "version": 7,
+        "region": "west",
+        "active": true,
+        "amount": 72
+      },
+      {
+        "entity": "account_2",
+        "version": 8,
+        "region": "east",
+        "active": true,
+        "amount": 34
+      }
+    ],
+    "latest": true,
+    "minimum": 30,
+    "prompt": "Read the transactions table. First retain only the greatest-version row per entity; apply all later filters to those retained rows. Keep active rows with amount >= 30. Group by region and sum amount as an integer total. Write report.json as a list of objects containing exactly region and total; omit regions without qualifying rows. Preserve all input tables."
+  },
+  {
+    "id": "p0_table_2",
+    "split": "development_only",
+    "domain": "table",
+    "family": "filter_group_sum",
+    "rows": [
+      {
+        "entity": "account_0",
+        "version": 0,
+        "region": "east",
+        "active": false,
+        "amount": 48
+      },
+      {
+        "entity": "account_1",
+        "version": 1,
+        "region": "west",
+        "active": true,
+        "amount": 39
+      },
+      {
+        "entity": "account_2",
+        "version": 2,
+        "region": "east",
+        "active": true,
+        "amount": 84
+      },
+      {
+        "entity": "account_0",
+        "version": 3,
+        "region": "west",
+        "active": false,
+        "amount": 12
+      },
+      {
+        "entity": "account_1",
+        "version": 4,
+        "region": "east",
+        "active": true,
+        "amount": 79
+      },
+      {
+        "entity": "account_2",
+        "version": 5,
+        "region": "west",
+        "active": true,
+        "amount": 83
+      },
+      {
+        "entity": "account_0",
+        "version": 6,
+        "region": "east",
+        "active": false,
+        "amount": 66
+      },
+      {
+        "entity": "account_1",
+        "version": 7,
+        "region": "west",
+        "active": true,
+        "amount": 88
+      },
+      {
+        "entity": "account_2",
+        "version": 8,
+        "region": "east",
+        "active": true,
+        "amount": 22
+      }
+    ],
+    "latest": false,
+    "minimum": 35,
+    "prompt": "Read the transactions table. Use every source row, including multiple rows per entity. Keep active rows with amount >= 35. Group by region and sum amount as an integer total. Write report.json as a list of objects containing exactly region and total; omit regions without qualifying rows. Preserve all input tables."
+  },
+  {
+    "id": "p0_table_3",
+    "split": "development_only",
+    "domain": "table",
+    "family": "latest_filter_sum",
+    "rows": [
+      {
+        "entity": "account_0",
+        "version": 0,
+        "region": "east",
+        "active": false,
+        "amount": 48
+      },
+      {
+        "entity": "account_1",
+        "version": 1,
+        "region": "west",
+        "active": true,
+        "amount": 47
+      },
+      {
+        "entity": "account_2",
+        "version": 2,
+        "region": "east",
+        "active": true,
+        "amount": 41
+      },
+      {
+        "entity": "account_0",
+        "version": 3,
+        "region": "west",
+        "active": false,
+        "amount": 84
+      },
+      {
+        "entity": "account_1",
+        "version": 4,
+        "region": "east",
+        "active": true,
+        "amount": 35
+      },
+      {
+        "entity": "account_2",
+        "version": 5,
+        "region": "west",
+        "active": true,
+        "amount": 71
+      },
+      {
+        "entity": "account_0",
+        "version": 6,
+        "region": "east",
+        "active": false,
+        "amount": 85
+      },
+      {
+        "entity": "account_1",
+        "version": 7,
+        "region": "west",
+        "active": true,
+        "amount": 24
+      },
+      {
+        "entity": "account_2",
+        "version": 8,
+        "region": "east",
+        "active": true,
+        "amount": 33
+      }
+    ],
+    "latest": true,
+    "minimum": 40,
+    "prompt": "Read the transactions table. First retain only the greatest-version row per entity; apply all later filters to those retained rows. Keep active rows with amount >= 40. Group by region and sum amount as an integer total. Write report.json as a list of objects containing exactly region and total; omit regions without qualifying rows. Preserve all input tables."
+  }
+]

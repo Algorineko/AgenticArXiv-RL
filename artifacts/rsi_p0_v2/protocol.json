@@ -1,0 +1,22 @@
+{
+  "created_utc": "2026-10-30T07:04:29.164021+00:00",
+  "stage": "P0 development calibration, not RSI effectiveness",
+  "model": "doubao-seed-2.0-mini",
+  "endpoint": "https://api.qnaigc.com/v1",
+  "max_steps": 6,
+  "repeats": 2,
+  "max_parallel_tools": 4,
+  "catalog_sha256": "b58dab6257f6da524f9893a4a9fdfca5ee03e77484557c6a05f2435811b79e31",
+  "source_sha256": {
+    "rsi_api_pilot.py": "513dd744e9e1cb1b901ecc584ffc93630081d7490f59abd7491dacb3aac5824c",
+    "rsi_cpu_tasks.py": "1c7bdfea7d05d43555bd9c9fe24411d6a3358c5b2e12ddde1ca528d53c54586e"
+  },
+  "limits": {
+    "calls": 88,
+    "input_tokens": 277678,
+    "output_tokens": 47042
+  },
+  "min_request_interval_s": 7.0,
+  "scoring": "independent goal state; explicit final and truncation reported separately",
+  "api_seed_claim": "No reproducibility guarantee from temperature=0 or provider model aliases"
+}

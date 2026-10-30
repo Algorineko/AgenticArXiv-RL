@@ -1,0 +1,9 @@
+{
+  "attempts": 77,
+  "successful_requests": 66,
+  "unknown_usage_attempts": 11,
+  "accounted_input_tokens": 130132,
+  "accounted_output_tokens": 21751,
+  "provider_reported_input_tokens": 58476,
+  "provider_reported_output_tokens": 16119
+}
