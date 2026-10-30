@@ -1,0 +1,33 @@
+{
+  "kind": "posthoc_prompt_contract_audit",
+  "conflict": "Runtime prompt requires FINISH immediately after translate, some task plans request later operations",
+  "flagged_catalog_task_ids": [
+    "rescue_v1_final_test_translate_cache_0",
+    "rescue_v1_final_test_translate_cache_1",
+    "rescue_v1_final_test_translate_cache_2",
+    "rescue_v1_final_test_translate_cache_3"
+  ],
+  "frozen_primary_scores_unchanged": true,
+  "clean_final_sensitivity": {
+    "raw_baseline": {
+      "n": 20,
+      "operations_and_finish": 9
+    },
+    "hidden_baseline": {
+      "n": 20,
+      "operations_and_finish": 0
+    },
+    "visible_baseline": {
+      "n": 20,
+      "operations_and_finish": 0
+    }
+  },
+  "flagged_current_expanded_ids": [
+    "chain_cv5_cache_dl_tr_cache"
+  ],
+  "limitations": [
+    "Flags only a directly explicit translate-stop conflict, not a complete semantic task audit",
+    "Historical paper prompt versions are not reconstructed by this current-source check",
+    "Clean subset is a post-hoc sensitivity analysis, not a replacement preregistered score"
+  ]
+}
