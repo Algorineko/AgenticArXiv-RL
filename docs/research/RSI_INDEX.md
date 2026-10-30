@@ -17,3 +17,6 @@ Large ignored checkpoints and local credential files are outside the Git archive
 
 - [Framework reuse, actual progress and publication positioning](rsi_framework_reuse_and_status_20261030.md).
 - [Prior research archive and recovery](../archive/rescue_archive_20261030.md).
+
+- [Framework registry integration audit](../../artifacts/rsi_registry_integration_v1/audit.json): 39 exposed-train observations and four verdicts replayed through the original ToolRegistry, no differences.
+- [24-step development diagnostic protocol](rsi_appworld_horizon_protocol_20261030.md): separate larger-budget calibration, no RSI effect claim.

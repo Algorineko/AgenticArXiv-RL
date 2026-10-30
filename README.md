@@ -1,4 +1,4 @@
-> 当前研究分支：API-first RSI。原 `AgenticArxiv/` 工程框架保留，研究问题与评测协议重新确立；当前尚无 RSI 增益结果。新先导暂用独立运行器，框架集成尚未完成。
+> 当前研究分支：API-first RSI。原 `AgenticArxiv/` 工程框架保留，研究问题与评测协议重新确立；当前尚无 RSI 增益结果。新先导通过隔离适配层复用原工具注册表；完整 agent/模型/轨迹框架集成尚未完成。
 >
 > [研究入口](docs/research/RSI_INDEX.md) · [框架复用与实际进展](docs/research/rsi_framework_reuse_and_status_20261030.md) · [旧研究归档](docs/archive/rescue_archive_20261030.md)
 >

@@ -2,7 +2,7 @@
 
 ## 判断
 
-不是完全从零开发，而是重新确立研究问题和证据链，保留 AgenticArxiv 工程基础。当前 CPU/API 与 AppWorld 先导使用独立 scripts 运行器，尚未完成旧框架集成；不能把“模块可复用”写成“已经复用完成”。不建议为沿用工程而恢复旧任务奖励或旧文本解析约束。
+不是完全从零开发，而是重新确立研究问题和证据链，保留 AgenticArxiv 工程基础。先导仍使用 scripts 运行器；现已通过独立适配层实际复用原 ToolRegistry，模型客户端和完整 agent/轨迹框架尚未集成。不能把局部接入写成全面复用完成。不建议为沿用工程而恢复旧任务奖励或旧文本解析约束。
 
 ## 已核查的复用边界
 
@@ -37,3 +37,11 @@
 主目标暂定 ICML 2027，但目前只是基础设施与开发诊断，未达到主会方法论文证据要求。若机制和独立验证尚未成熟，顺延后续合适主会或先投 workshop/技术报告。ICML 2027 截止时间尚未核实，不能按预测日期承诺排期。ICLR 2027 官方投稿截止为 2026-09-25，已过；AAMAS 2027 官方为 2026-10-08，已过。
 
 官方来源：https://icml.cc/ ；https://iclr.cc/Conferences/2027/CallForPapers ；https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/call-for-main-track/
+
+## 本轮集成验证
+
+新增 `AgenticArxiv/rsi/tool_environment.py`：实例化原 ToolRegistry，不触发旧 ReAct/业务工具初始化；工具 schema、参数校验、世界执行和终局评测由原环境负责。不是另写一个替代注册表。
+
+`artifacts/rsi_registry_integration_v1/audit.json`：两个历史开发运行共四条轨迹、39 次观察、四次最终判定全部一致；schema 与非法调用返回一致；原全局注册表未改变；无 API 请求、无 GPU 使用。它证明注册表接入的行为兼容性，不证明 RSI 有效。
+
+24 步开发诊断已按单独协议启动，两个已暴露场景不进入最终验证；允许更大预算，不能与旧 12 步结果直接比较方法优劣。

@@ -77,7 +77,18 @@ def main():
     p.add_argument("--public-output", type=Path, required=True)
     p.add_argument("--harness-file", type=Path)
     p.add_argument("--experiment-prefix", default="rsi_external_api_probe_v1")
+    p.add_argument("--registry", action="store_true", help="Use the original framework's isolated ToolRegistry")
+    p.add_argument("--max-steps", type=int, default=12)
+    p.add_argument("--max-calls", type=int, default=30)
+    p.add_argument("--max-input-tokens", type=int, default=200000)
+    p.add_argument("--max-output-tokens", type=int, default=30000)
     args = p.parse_args()
+    if not (1 <= args.max_steps <= 24 and 1 <= args.max_calls <= 50
+            and 1 <= args.max_input_tokens <= 600000 and 1 <= args.max_output_tokens <= 50000):
+        p.error("Development caps: 24 steps, 50 API attempts, 600k input and 50k output tokens")
+    if args.registry:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from AgenticArxiv.rsi.tool_environment import RegisteredToolEnvironment
     from appworld import load_task_ids
     from appworld.common.path_store import path_store
     path_store.update_root(str(args.root))
@@ -86,13 +97,14 @@ def main():
     args.private_output.mkdir(parents=True, exist_ok=False)
     if args.public_output.exists():
         raise ValueError("public output already exists")
-    limits = {"calls": 30, "input_tokens": 200000, "output_tokens": 30000}
+    limits = {"calls": args.max_calls, "input_tokens": args.max_input_tokens, "output_tokens": args.max_output_tokens}
     api = API("https://api.qnaigc.com/v1", "doubao-seed-2.0-mini", args.private_output,
               limits, min_interval=15, max_completion_tokens=1024)
     harness = args.harness_file.read_text() if args.harness_file else ""
     protocol = {"stage": "external train-only diagnostic, no RSI effect", "created_utc": utc(),
                 "task_id_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in selected],
-                "max_steps": 12, "max_parallel_tools": 4, "limits": limits,
+                "max_steps": args.max_steps, "max_parallel_tools": 4, "limits": limits,
+                "isolated_framework_registry": args.registry,
                 "model": api.model, "min_request_interval_s": 15, "max_completion_tokens": 1024,
                 "harness_sha256": hashlib.sha256(harness.encode()).hexdigest(),
                 "experiment_prefix": args.experiment_prefix,
@@ -103,6 +115,16 @@ def main():
     frozen.mkdir()
     for name in protocol["sources"]:
         (frozen / name).write_bytes((Path(__file__).parent / name).read_bytes())
+    if args.registry:
+        repo = Path(__file__).resolve().parents[1]
+        protocol["framework_sources"] = {}
+        for name in ("AgenticArxiv/tools/tool_registry.py", "AgenticArxiv/rsi/tool_environment.py"):
+            content = (repo / name).read_bytes()
+            protocol["framework_sources"][name] = hashlib.sha256(content).hexdigest()
+            target = args.private_output / "frozen_framework_sources" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        (args.private_output / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
     records = []
     for i, task_id in enumerate(selected):
         env = AppWorldEnvironment(task_id, f"{args.experiment_prefix}_{i}")
@@ -110,7 +132,9 @@ def main():
                 "prompt": env.world.task.instruction + "\nSupervisor identity: " + str(env.world.task.supervisor) +
                 "\nUse discovery tools to find the APIs and their parameters. Perform the actual requested "
                 "operations, then call supervisor.complete_task with the appropriate answer if required."}
-        trace = episode(api, task, repeat=0, max_steps=12, environment=env, harness_instruction=harness)
+        if args.registry:
+            env = RegisteredToolEnvironment(env)
+        trace = episode(api, task, repeat=0, max_steps=args.max_steps, environment=env, harness_instruction=harness)
         records.append({"task_id_sha256": task["id"], "success": trace["verdict"]["success"],
                         "stop": trace["stop"], "model_steps": len(trace["steps"]),
                         "tool_calls": trace["tool_calls"], "tool_errors": trace["tool_errors"]})

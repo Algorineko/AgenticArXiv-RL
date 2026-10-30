@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 from rsi_appworld_api_probe import AppWorldEnvironment
 
@@ -25,12 +26,22 @@ def main():
         archived = args.private_run / "frozen_sources" / name
         src = archived if archived.exists() else Path(__file__).parent / name
         source_checks[name] = hashlib.sha256(src.read_bytes()).hexdigest() == expected
+    framework_checks = {}
+    for name, expected in protocol.get("framework_sources", {}).items():
+        archived = args.private_run / "frozen_framework_sources" / name
+        framework_checks[name] = hashlib.sha256(archived.read_bytes()).hexdigest() == expected
+        source_checks[name] = framework_checks[name]
     assert all(source_checks.values()), source_checks
+    if protocol.get("isolated_framework_registry"):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from AgenticArxiv.rsi.tool_environment import RegisteredToolEnvironment
     counts = {"observations_replayed": 0, "observation_mismatches": 0,
               "goal_verdict_mismatches": 0, "episodes": len(traces)}
     for index, trace in enumerate(traces):
         assert trace["task_id"] in protocol["task_id_sha256"]
         env = AppWorldEnvironment(ids[trace["task_id"]], f"rsi_external_api_replay_v1_{index}")
+        if protocol.get("isolated_framework_registry"):
+            env = RegisteredToolEnvironment(env)
         try:
             for step in trace["steps"]:
                 operations = step["assistant"].get("tool_calls", [])
@@ -54,11 +65,16 @@ def main():
     counts["all_goal_verdicts_match"] = counts["goal_verdict_mismatches"] == 0
     counts["source_digests_match"] = source_checks
     counts["replay_proxy_source_sha256"] = hashlib.sha256((Path(__file__).parent / "rsi_appworld_api_probe.py").read_bytes()).hexdigest()
+    counts["replay_framework_source_sha256"] = {
+        name: hashlib.sha256((Path(__file__).resolve().parents[1] / name).read_bytes()).hexdigest()
+        for name in framework_checks}
     counts["note"] = "Only train scenarios replayed. Mismatches, if present, are reported without normalization."
     with args.output.open("x") as f:
         json.dump(counts, f, indent=2)
         f.write("\n")
     print(json.dumps(counts))
+    if not counts["all_observations_match"] or not counts["all_goal_verdicts_match"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
