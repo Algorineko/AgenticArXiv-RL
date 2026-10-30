@@ -1,0 +1,47 @@
+{
+  "kind": "native_multi_api_backend_reexecution_audit",
+  "interface": "qwen_native",
+  "frozen_protocol_auditor_sha256": "4ada4484eb84faa36d12ee66590598729e15cc347bc8fe7cd1b8ff6da0eb0b49",
+  "posthoc_replay_auditor_sha256": "e2bfa6a8c9dacb4140f5e5c97cb4ff9bf6912f402dde3718ebe2d6362ed83ecd",
+  "arms": {
+    "base_1p5": {
+      "model_id": "Qwen2.5-1.5B-Instruct",
+      "scenario_successes": 2,
+      "n_scenarios": 32,
+      "turn_successes": 37,
+      "n_turns": 129,
+      "native_check_turns": 37,
+      "model_steps": 240,
+      "parse_error_steps": 2,
+      "function_attempts": 118,
+      "tool_error_attempts": 39,
+      "forced_turn_stops": 0,
+      "tokens": 1058965,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "c41c29055d05dfb8b4418be88218bc210b3b49283dfe32cd1902497d0f4c85ca"
+    },
+    "base_7b": {
+      "model_id": "Qwen2.5-7B-Instruct",
+      "scenario_successes": 9,
+      "n_scenarios": 32,
+      "turn_successes": 65,
+      "n_turns": 129,
+      "native_check_turns": 65,
+      "model_steps": 334,
+      "parse_error_steps": 1,
+      "function_attempts": 255,
+      "tool_error_attempts": 69,
+      "forced_turn_stops": 7,
+      "tokens": 1596164,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "82522613acada974a7626389702bddd7a936f8e2d6cc64d8079aee5410852fb2"
+    }
+  },
+  "official_leaderboard_score": false,
+  "limitations": [
+    "32 two-API scenarios selected from the public BFCL source; pretrained contamination cannot be ruled out",
+    "Two checkpoint sizes are not a controlled causal scale intervention",
+    "Only the eight pinned simulated API classes; no live service effects",
+    "Every recorded action observation and native state/response check independently replayed"
+  ]
+}
