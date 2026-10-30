@@ -67,10 +67,10 @@ def main():
     p.add_argument("--catalog", type=Path, required=True)
     p.add_argument("--catalog-sha256", required=True)
     p.add_argument("--split", choices=("all", "train", "search_dev", "promotion_val", "final_test"), default="search_dev")
-    p.add_argument("--policy", choices=("model", "reference", "finish_only"), default="model")
+    p.add_argument("--policy", choices=("model", "reference", "finish_only", "request_executor"), default="model")
     p.add_argument("--model", type=Path)
     p.add_argument("--model-id", default="")
-    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries"), default="baseline")
+    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries", "receipt_contract"), default="baseline")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--gpu", type=int, default=1)
     p.add_argument("--timeout", type=int, default=900)
@@ -98,7 +98,8 @@ def main():
                 "prompt_addition": NOTE if args.variant == "completion_check" else "",
                 "source_sha256": {name: sha256(ROOT / name) for name in (
                     "scripts/rescue_replay_eval.py", "scripts/rescue_gpu_pilot.py",
-                    "scripts/rescue_state_boundary.py",
+                    "scripts/rescue_state_boundary.py", "scripts/rescue_operation_receipts.py",
+                    "scripts/rescue_receipt_prompt.py",
                     "AgenticArxiv/benchmark/rescue_catalog.py", "AgenticArxiv/benchmark/runner.py",
                     "AgenticArxiv/benchmark/metrics.py", "AgenticArxiv/utils/llm_client.py",
                     "AgenticArxiv/agents/agent_engine.py", "AgenticArxiv/agents/prompt_templates.py")},
@@ -149,6 +150,9 @@ def main():
                 import agents.agent_engine as ae
                 original = ae.get_react_prompt
                 ae.get_react_prompt = lambda *a, **k: original(*a, **k) + NOTE
+            elif args.variant == "receipt_contract":
+                from rescue_receipt_prompt import install
+                install()
             elif args.variant == "state_boundaries":
                 import agents.agent_engine as ae
                 from rescue_state_boundary import boundary_history
@@ -157,6 +161,20 @@ def main():
                     k["history"] = boundary_history(k.get("history", ""))
                     return original(*a, **k)
                 ae.get_react_prompt = bounded_prompt
+        elif args.policy == "request_executor":
+            from rescue_operation_receipts import compile_request
+            class RequestExecutor(ReferenceClient):
+                def start_generation_stream(self, key):
+                    text = self.tasks[key.rsplit(":", 1)[0]]["task"]
+                    req = compile_request(text)
+                    if req is None:
+                        raise ValueError("Unsupported request for deterministic executor")
+                    req = dict(req)
+                    name = req.pop("name")
+                    self.actions = [json.dumps({"name":name,"args":req}), "FINISH"]
+                    self.position = 0
+            # Only user text is passed; no gold/setup/expected fields.
+            runner._llm_client = RequestExecutor([{"id":t["id"],"task":t["task"]} for t in tasks])
         else:
             runner._llm_client = ReferenceClient(tasks, finish_only=args.policy == "finish_only")
         manifest["versions"] = {x: importlib.metadata.version(x) for x in ("torch", "transformers", "pydantic")}
