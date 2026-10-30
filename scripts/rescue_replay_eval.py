@@ -74,8 +74,25 @@ def main():
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--gpu", type=int, default=1)
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument("--frozen-final-protocol", type=Path)
+    p.add_argument("--frozen-final-sha256")
     args = p.parse_args()
-    if args.policy != "reference" and args.split not in ("search_dev", "promotion_val"):
+    frozen_final = None
+    if args.policy == "model" and args.split == "final_test":
+        if not args.frozen_final_protocol or not args.frozen_final_sha256:
+            p.error("Final model evaluation requires a separately frozen one-shot protocol")
+        if sha256(args.frozen_final_protocol) != args.frozen_final_sha256:
+            p.error("Final protocol hash mismatch")
+        frozen_final = json.loads(args.frozen_final_protocol.read_text())
+        if (frozen_final.get("kind") != "rescue_frozen_final_once_v1" or args.variant != "baseline"
+                or frozen_final["catalog_manifest_sha256"] != args.catalog_sha256
+                or args.model_id not in frozen_final["models"]):
+            p.error("Final protocol model/catalog/variant mismatch")
+        declared = frozen_final["models"][args.model_id]
+        actual = {f.name: sha256(f) for f in sorted(args.model.glob("*.safetensors"))} if args.model else {}
+        if actual != declared["weights_sha256"] or sha256(args.model / "config.json") != declared["config_sha256"]:
+            p.error("Final checkpoint differs from frozen model")
+    if args.policy != "reference" and args.split not in ("search_dev", "promotion_val") and frozen_final is None:
         p.error("Train/final/all are reserved for scripted reference validation")
     if args.policy == "model" and (not args.model or not args.model_id):
         p.error("Model evaluation requires --model and --model-id")
@@ -85,6 +102,17 @@ def main():
     if args.split != "all":
         ids = set(splits["split"][args.split])
         tasks = [t for t in tasks if t["id"] in ids]
+    if frozen_final:
+        if [t["id"] for t in tasks] != frozen_final["final_task_ids"]:
+            p.error("Final task list differs from frozen protocol")
+        # Refuse silent repeat final evaluations under a different output name.
+        import hashlib
+        key = hashlib.sha256((args.frozen_final_sha256 + args.model_id).encode()).hexdigest()
+        ledger = Path.home() / ".cache/agenticarxiv-rescue/final_once" / (key + ".json")
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        with ledger.open("x") as record:
+            record.write(json.dumps({"model_id": args.model_id, "protocol_sha256": args.frozen_final_sha256,
+                                     "started_at": datetime.now(timezone.utc).isoformat()}) + "\n")
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     set_runtime(args.output, args.gpu)
@@ -99,12 +127,14 @@ def main():
                 "source_sha256": {name: sha256(ROOT / name) for name in (
                     "scripts/rescue_replay_eval.py", "scripts/rescue_gpu_pilot.py",
                     "scripts/rescue_state_boundary.py", "scripts/rescue_operation_receipts.py",
-                    "scripts/rescue_receipt_prompt.py",
+                    "scripts/rescue_receipt_prompt.py", "scripts/rescue_plan_receipts.py",
                     "AgenticArxiv/benchmark/rescue_catalog.py", "AgenticArxiv/benchmark/runner.py",
                     "AgenticArxiv/benchmark/metrics.py", "AgenticArxiv/utils/llm_client.py",
                     "AgenticArxiv/agents/agent_engine.py", "AgenticArxiv/agents/prompt_templates.py")},
                 "started_at": datetime.now(timezone.utc).isoformat(), "status": "running",
-                "final_test_model_evaluated": False, "completed_task_ids": []}
+                "final_test_model_evaluated": bool(frozen_final),
+                "frozen_final_protocol_sha256": args.frozen_final_sha256 if frozen_final else None,
+                "completed_task_ids": []}
     manifest_path = args.output / "run_manifest.json"
     def save():
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
