@@ -1,0 +1,61 @@
+{
+  "kind": "posthoc_known_family_diagnostic_after_final",
+  "arms": {
+    "hidden_baseline": {
+      "search": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "download": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "translate": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "cache": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "search_download": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "download_translate": {
+        "n": 4,
+        "operations_and_finish": 0
+      }
+    },
+    "visible_baseline": {
+      "search": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "download": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "translate": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "cache": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "search_download": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "download_translate": {
+        "n": 4,
+        "operations_and_finish": 0
+      }
+    }
+  },
+  "limits": [
+    "Existing v1 search_dev pool, not new held-out evidence",
+    "No new training or parameter tuning based on these scores"
+  ]
+}

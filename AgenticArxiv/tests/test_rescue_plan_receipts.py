@@ -24,3 +24,11 @@ def test_search_receipt_requires_request_arguments_and_count():
  step={'action':{'name':'get_recently_submitted_cs_papers','args':{'aspect':'CV','days':7,'max_results':3}},'observation':'成功获取 3 篇论文:\n - title'}
  assert step_receipt(step,'get_recently_submitted_cs_papers',{'aspect':'CV','days':7,'max_results':3},None)
  assert not step_receipt(step,'get_recently_submitted_cs_papers',{'aspect':'AI','days':7,'max_results':3},None)
+
+def test_posthoc_search_alias_correction_preserves_frozen_primary_checker():
+    from rescue_plan_receipts_v2 import step_receipt as corrected
+    step={'action':{'name':'get_recently_submitted_cs_papers','args':{'aspect':'cs.LG','days':7,'max_results':3}},'observation':'成功获取 3 篇论文:\n - title'}
+    args={'aspect':'LG','days':7,'max_results':3}
+    assert corrected(step,'get_recently_submitted_cs_papers',args,None)
+    assert not step_receipt(step,'get_recently_submitted_cs_papers',args,None)
+    assert not corrected(step,'get_recently_submitted_cs_papers',{**args,'aspect':'CV'},None)

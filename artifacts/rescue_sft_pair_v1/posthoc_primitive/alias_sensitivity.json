@@ -1,0 +1,64 @@
+{
+  "kind": "posthoc_alias_sensitivity",
+  "reason": "Existing tools/strict metrics accept cs.LG as LG; frozen receipt-v1 compared raw search aspect",
+  "frozen_primary_unchanged": true,
+  "families": {
+    "hidden_baseline": {
+      "search": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "download": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "translate": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "cache": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "search_download": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "download_translate": {
+        "n": 4,
+        "operations_and_finish": 0
+      }
+    },
+    "visible_baseline": {
+      "search": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "download": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "translate": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "cache": {
+        "n": 4,
+        "operations_and_finish": 4
+      },
+      "search_download": {
+        "n": 4,
+        "operations_and_finish": 0
+      },
+      "download_translate": {
+        "n": 4,
+        "operations_and_finish": 0
+      }
+    }
+  },
+  "final_alias_corrected": {
+    "raw_baseline": 10,
+    "hidden_baseline": 0,
+    "visible_baseline": 0
+  }
+}
