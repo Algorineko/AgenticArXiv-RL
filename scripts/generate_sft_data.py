@@ -40,7 +40,7 @@ from tools.bootstrap import register_all_tools
 register_all_tools()
 
 from agents.agent_engine import ReActAgent
-from agents.prompt_templates import format_tool_description, get_react_prompt
+from agents.prompt_templates import format_tool_description, get_react_prompt, build_visible_setup_context
 from agents.side_effects import LocalSideEffectManager
 from benchmark.metrics import extract_metrics, is_strict_success
 from benchmark.splits import load_split
@@ -71,6 +71,7 @@ def build_sft_samples_from_history(
     *,
     source_task_id: Optional[str] = None,
     source_split: Optional[str] = None,
+    initial_history: str = "",
 ) -> List[Dict[str, Any]]:
     """从完整的执行历史构造各轮次训练样本。
 
@@ -98,7 +99,10 @@ def build_sft_samples_from_history(
             history_parts.append(
                 f"Thought: {prev_thought}\nAction: {prev_action}\nObservation: {prev_obs}"
             )
-        history_text = "\n\n".join(history_parts)
+        generated_history = "\n\n".join(history_parts)
+        history_text = initial_history.strip()
+        if generated_history:
+            history_text = f"{history_text}\n\n{generated_history}" if history_text else generated_history
 
         # 构造与推理完全一致的 ReAct Prompt
         prompt = get_react_prompt(
@@ -242,6 +246,9 @@ def generate_deterministic_trajectories(
                 ) from exc
 
         task_def = spec.to_task()
+        if not task_def.get("setup") and getattr(spec, "depends_on", None):
+            # Match the actual fallback search executed immediately above.
+            task_def["setup"] = [{"name": "get_recently_submitted_cs_papers", "args": search_args}]
         if not spec.steps:
             # blocked 任务：不调工具，并说明任务声明的具体阻塞原因。
             history.append({
@@ -307,6 +314,7 @@ def generate_deterministic_trajectories(
             history,
             source_task_id=spec.id,
             source_split=source_split,
+            initial_history=build_visible_setup_context(task_def),
         )
         sft_data.extend(samples)
 

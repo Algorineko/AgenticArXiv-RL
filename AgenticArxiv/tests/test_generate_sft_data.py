@@ -147,3 +147,26 @@ class ExpertFailFastTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class VisibleSetupAlignmentTest(unittest.TestCase):
+    def test_first_decision_sees_only_prior_state_and_later_keeps_history(self):
+        from agents.prompt_templates import build_visible_setup_context, get_react_prompt
+        spec = TaskSpec(id='alignment', task='翻译当前列表第1篇',
+            steps=(Step('translate_arxiv_pdf', {'ref':1}),),
+            setup=(Step('get_recently_submitted_cs_papers', {'aspect':'AI','days':7,'max_results':5}),))
+        initial = build_visible_setup_context(spec.to_task())
+        action='{"name":"translate_arxiv_pdf","args":{"ref":1}}'
+        history=[{'thought':'翻译','action':action,'observation':'创建任务'},
+                 {'thought':'结束','action':'FINISH','observation':'任务完成'}]
+        rows=build_sft_samples_from_history(spec.task,'tools',history,initial_history=initial)
+        self.assertEqual(rows[0]['messages'][0]['content'],get_react_prompt(task=spec.task,tools_description='tools',history=initial))
+        self.assertNotIn('Action: '+action,rows[0]['messages'][0]['content'])
+        self.assertIn(initial,rows[1]['messages'][0]['content'])
+        self.assertIn('Observation: 创建任务',rows[1]['messages'][0]['content'])
+
+    def test_deterministic_generator_exposes_setup_in_first_prompt(self):
+        spec=TaskSpec(id='state_probe',task='下载第1篇',steps=(Step('download_arxiv_pdf',{'ref':1}),),
+                      setup=(Step('get_recently_submitted_cs_papers',{'aspect':'AI','days':7,'max_results':5}),))
+        rows=generate_deterministic_trajectories([spec],_StateProbeEnv(),'tools')
+        self.assertIn('此前已检索最近 7 天的 cs.AI',rows[0]['messages'][0]['content'])
+        self.assertIn('[任务开始前的会话状态]',rows[0]['messages'][0]['content'])
