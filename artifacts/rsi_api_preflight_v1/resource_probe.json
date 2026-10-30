@@ -1,0 +1,291 @@
+{
+  "checked_at_utc": "2026-10-30T05:59:26.653113+00:00",
+  "endpoint": "https://api.qnaigc.com/v1",
+  "catalog_models": [
+    "meituan/longcat-flash-lite",
+    "qwen3-vl-30b-a3b-thinking",
+    "doubao-1.5-pro-32k",
+    "doubao-1.5-thinking-pro",
+    "doubao-1.5-vision-pro",
+    "glm-4.5",
+    "kimi-k2",
+    "qwen-turbo",
+    "qwen-vl-max-2025-01-25",
+    "qwen2.5-vl-72b-instruct",
+    "qwen3-235b-a22b",
+    "qwen3-30b-a3b",
+    "qwen3-235b-a22b-instruct-2507",
+    "qwen3-235b-a22b-thinking-2507",
+    "qwen3-coder-480b-a35b-instruct",
+    "doubao-seed-1.6",
+    "doubao-seed-1.6-flash",
+    "doubao-seed-1.6-thinking",
+    "qwen3-next-80b-a3b-thinking",
+    "qwen3-next-80b-a3b-instruct",
+    "z-ai/glm-4.6",
+    "moonshotai/kimi-k2-thinking",
+    "z-ai/glm-4.7",
+    "qwen3-30b-a3b-thinking-2507",
+    "z-ai/glm-4.5-air-free",
+    "tencent/hy3-preview",
+    "qwen/qwen3.6-27b",
+    "nvidia/nemotron-3-ultra-550b-a55b0-free",
+    "moonshotai/kimi-k3-free",
+    "z-ai/glm-5.1",
+    "moonshotai/kimi-k2.6",
+    "qwen/qwen3.7-max",
+    "minimax/minimax-m3",
+    "moonshotai/kimi-k2.7-code",
+    "z-ai/glm-5.2",
+    "qwen/qwen3.7-plus",
+    "bytedance/doubao-seed-2-1-pro",
+    "bytedance/doubao-seed-2-1-turbo",
+    "stepfun/step-3.7-flash",
+    "moonshotai/kimi-k3",
+    "deepseek/deepseek-v4-flash-20260731",
+    "qwen/qwen3.8-max",
+    "deepseek/deepseek-v4-pro-0813",
+    "z-ai/glm-5.3",
+    "deepseek/deepseek-v4-flash-vision-exp",
+    "qwen/qwen3.8-flash-next",
+    "z-ai/glm-5.3-flash",
+    "tencent/hy4-preview",
+    "deepseek/deepseek-v4.1-flash",
+    "qwen/qwen3.7-flash",
+    "xiaomi/mimo-v2.6-pro",
+    "xiaomi/mimo-v2.6-flash",
+    "bytedance/doubao-seed-2-1-lite",
+    "deepseek/deepseek-v4.1-flash-1017",
+    "minimax/minimax-m3.1-flash",
+    "qiniu/conatus-free",
+    "moonshotai/kimi-k3.1-pro",
+    "moonshotai/kimi-k3.1-pro-highspeed",
+    "doubao-seed-2.0-code",
+    "doubao-seed-2.0-pro",
+    "minimax/minimax-m2.5-highspeed",
+    "MiniMax-M1",
+    "doubao-seed-2.0-mini",
+    "minimax/minimax-m2",
+    "moonshotai/kimi-k2.5",
+    "minimax/minimax-m2.5",
+    "minimax/minimax-m2.7",
+    "doubao-seed-2.0-lite",
+    "qwen3.5-397b-a17b",
+    "qwen-max-2025-01-25",
+    "qwen3-32b",
+    "qwen3-max-preview",
+    "qwen3-30b-a3b-instruct-2507",
+    "minimax/minimax-m2.1",
+    "z-ai/glm-5",
+    "qwen3-max",
+    "qwen/qwen3.6-plus",
+    "qwen/qwen3.5-plus"
+  ],
+  "note": "Catalog visibility is not proof of availability, parameter count, version pinning, or price. Probes are connectivity checks, not research evaluations.",
+  "probes": [
+    {
+      "requested_model": "qwen3-30b-a3b-instruct-2507",
+      "request": {
+        "model": "qwen3-30b-a3b-instruct-2507",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Call the echo tool once with text exactly probe_ok. Do not perform any other action."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "echo",
+              "description": "Echo supplied text.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "temperature": 0,
+        "max_tokens": 256,
+        "stream": false
+      },
+      "status": "http_error",
+      "http_status": 400,
+      "elapsed_s": 0.272
+    },
+    {
+      "requested_model": "doubao-seed-2.0-mini",
+      "request": {
+        "model": "doubao-seed-2.0-mini",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Call the echo tool once with text exactly probe_ok. Do not perform any other action."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "echo",
+              "description": "Echo supplied text.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "temperature": 0,
+        "max_tokens": 256,
+        "stream": false
+      },
+      "status": "ok",
+      "returned_model": "doubao-seed-2.0-mini",
+      "system_fingerprint": null,
+      "usage": {
+        "prompt_tokens": 485,
+        "completion_tokens": 87,
+        "total_tokens": 572,
+        "prompt_tokens_details": {},
+        "completion_tokens_details": {
+          "reasoning_tokens": 55
+        }
+      },
+      "finish_reason": "tool_calls",
+      "tool_calls": [
+        {
+          "index": 0,
+          "type": "function",
+          "id": "call_oyolkuv997g1ivfyre5bi6m9",
+          "function": {
+            "name": "echo",
+            "arguments": "{\"text\": \"probe_ok\"}"
+          }
+        }
+      ],
+      "content": "",
+      "elapsed_s": 1.46
+    },
+    {
+      "requested_model": "qwen3-30b-a3b-instruct-2507",
+      "mode": "native_tools",
+      "request": {
+        "model": "qwen3-30b-a3b-instruct-2507",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Call the echo tool once with text exactly probe_ok. Do not perform any other action."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "echo",
+              "description": "Echo supplied text.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "temperature": 0,
+        "max_tokens": 256,
+        "stream": false
+      },
+      "status": "http_error",
+      "http_status": 400,
+      "error_message": "{\"error\":{\"message\":\"Model not exist. (type: invalid_request_error) (request_id: chatcmpl-efff52b4d3324f248d1f27c7afb3b29e)\",\"type\":\"invalid_request_error\"}}",
+      "elapsed_s": 0.362
+    },
+    {
+      "requested_model": "qwen3-30b-a3b-instruct-2507",
+      "mode": "plain_text",
+      "request": {
+        "model": "qwen3-30b-a3b-instruct-2507",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return exactly: probe_ok"
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 256,
+        "stream": false
+      },
+      "status": "http_error",
+      "http_status": 400,
+      "error_message": "{\"error\":{\"message\":\"Model not exist. (type: invalid_request_error) (request_id: chatcmpl-da148f4ce1d24ceabda3f48c9b12853c)\",\"type\":\"invalid_request_error\"}}",
+      "elapsed_s": 0.298
+    },
+    {
+      "requested_model": "qwen3-30b-a3b",
+      "mode": "native_tools_no_thinking_requested",
+      "request": {
+        "model": "qwen3-30b-a3b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Call the echo tool once with text exactly probe_ok. Do not perform any other action."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "echo",
+              "description": "Echo supplied text.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "temperature": 0,
+        "max_tokens": 256,
+        "stream": false,
+        "enable_thinking": false
+      },
+      "status": "http_error",
+      "http_status": 502,
+      "error_message": "{\"error\":{\"message\":\"Model qwen3-30b-a3b has been retired on 2026-07-07 and is no longer available. Please use another model. For more information, please visit the Model Marketplace. (request_id: chatcmpl-31ce0795258c4ed4bb9057abd800d0c7)\",\"type\":\"upstream_error\"}}",
+      "elapsed_s": 0.212
+    }
+  ]
+}
