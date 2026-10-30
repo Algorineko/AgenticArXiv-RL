@@ -1,0 +1,33 @@
+{
+  "interface": "qwen_native",
+  "kind": "native_BFCL_filesystem_calibration",
+  "policy": "finish_only",
+  "model_id": "",
+  "status": "completed",
+  "protocol_sha256": "6c9c11effac4e5977b860b6a53abd1e893cf45279945f087b138dfc6789ea3c8",
+  "case_ids": [
+    "multi_turn_base_1",
+    "multi_turn_base_3",
+    "multi_turn_base_6",
+    "multi_turn_base_9"
+  ],
+  "completed_case_ids": [
+    "multi_turn_base_1",
+    "multi_turn_base_3",
+    "multi_turn_base_6",
+    "multi_turn_base_9"
+  ],
+  "source_sha256": "d6afe68d9a39995ffb885341bf40f35640e4a730aa26cec73ef32cd6c3e6fc76",
+  "started_at": "2026-10-30T01:52:45.361919+00:00",
+  "max_calls_per_turn": 6,
+  "max_new_tokens": 384,
+  "seed": 45,
+  "decode": "greedy",
+  "official_leaderboard_score": false,
+  "case_successes": 0,
+  "n_cases": 4,
+  "turn_successes": 0,
+  "n_turns": 14,
+  "traces_sha256": "7a47c9cd2435e9e77e469ee07c18b013d5043470f476abf849e953d9cfac601c",
+  "wall_seconds": 0.002
+}

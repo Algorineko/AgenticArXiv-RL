@@ -1,0 +1,9 @@
+# Qwen原生工具协议对照（模型推理前固定）
+
+两轮固定ReAct校准仍存在严重格式/参数地板，不继续提示搜索。直接检查本地三模型tokenizer，均自带tools分支和tool_call协议。因此补做模型原生接口兼容性控制：调用tokenizer.apply_chat_template(messages, tools=...)，使用默认简短system消息、原始用户多轮消息、标准tool结果消息和模型原生tool_call/name/arguments；不再注入自定义ReAct或arXiv提示。
+
+仍是同四原生文件系统场景、同initial_config/全部用户轮、原生状态与响应检查器、同三权重，greedy seed45、384新token、每用户轮最多6次模型调用。原生接口允许每次输出多个函数调用，额外记实际函数数，不能跨接口声称等函数调用预算/吞吐。每次最多8个函数，全部以字面量白名单分派，模型不见gold或评分反馈。
+
+函数参数schema仅将源dict类型转为标准JSON Schema object，保留参数说明/required。原生协议没有tool_call时视为该用户轮结束；若实际状态/观察没达标则失败。允许JSON编码的arguments字符串，不把ReAct的args或shell命令猜测成工具执行。不为新SFT模型自动补标签或参数。检查器只读真实后端观察。
+
+这些四题已是使用过的开发校准材料，不作为新独立测试，也不根据结果训练或筛选权重。ArXiv SFT模型的原生协议遗忘与推理能力不能混为一谈；这一对照旨在校准健康raw起点并区分接口适配。不是RSI或新算法。

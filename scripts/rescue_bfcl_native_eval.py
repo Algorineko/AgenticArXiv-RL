@@ -133,17 +133,18 @@ def run_case(question,answer,schemas,backend,checkers,policy,client,model_id):
     return {'case_id':question['id'],'success':all(t['success'] for t in turns),'turns':turns}
 
 
-def main():
+def main(case_runner=run_case, client_factory=None, interface="react"):
     p=argparse.ArgumentParser();p.add_argument('--source-root',type=Path,required=True);p.add_argument('--protocol',type=Path,required=True);p.add_argument('--protocol-sha256',required=True);p.add_argument('--policy',choices=['model','reference','finish_only'],required=True);p.add_argument('--model',type=Path);p.add_argument('--model-id',default='');p.add_argument('--output',type=Path,required=True);a=p.parse_args()
     if sha256(a.protocol)!=a.protocol_sha256:p.error('Changed calibration protocol')
     protocol=json.loads(a.protocol.read_text())
+    if protocol.get('interface','react')!=interface:p.error('Protocol/driver interface mismatch')
     if a.policy=='model' and (not a.model or a.model_id not in protocol['models']):p.error('Undeclared model')
     if sha256(Path(__file__))!=protocol['evaluator_sha256']:p.error('Changed calibration evaluator')
     for name,h in protocol['support_source_sha256'].items():
         if sha256(ROOT/name)!=h:p.error('Changed support source '+name)
     backend,checkers,cases,answers,schemas=load(a.source_root,protocol)
     a.output.mkdir(parents=True,exist_ok=False)
-    m={'kind':'native_BFCL_filesystem_ReAct_calibration','policy':a.policy,'model_id':a.model_id,'status':'running','protocol_sha256':a.protocol_sha256,'case_ids':[q['id'] for q in cases],'completed_case_ids':[],'source_sha256':sha256(Path(__file__)),'started_at':datetime.now(timezone.utc).isoformat(),'max_calls_per_turn':6,'max_new_tokens':384,'seed':45,'decode':'greedy','official_leaderboard_score':False}
+    m={'interface':interface,'kind':'native_BFCL_filesystem_calibration','policy':a.policy,'model_id':a.model_id,'status':'running','protocol_sha256':a.protocol_sha256,'case_ids':[q['id'] for q in cases],'completed_case_ids':[],'source_sha256':sha256(Path(__file__)),'started_at':datetime.now(timezone.utc).isoformat(),'max_calls_per_turn':6,'max_new_tokens':384,'seed':45,'decode':'greedy','official_leaderboard_score':False}
     def save():(a.output/'run_manifest.json').write_text(json.dumps(m,ensure_ascii=False,indent=2)+'\n')
     save();started=time.monotonic();lock=None;client=None
     def timeout(*_):raise TimeoutError('1800 second calibration arm limit')
@@ -160,13 +161,14 @@ def main():
             import torch
             from utils.llm_client import TransformersLLMClient
             torch.set_num_threads(4);torch.cuda.set_per_process_memory_fraction(.35,0)
-            client=TransformersLLMClient(str(a.model),device='cuda',dtype='bfloat16',seed=45)
+            factory=client_factory or TransformersLLMClient
+            client=factory(str(a.model),device='cuda',dtype='bfloat16',seed=45)
             import importlib.metadata
             m['versions']={v:importlib.metadata.version(v) for v in ('torch','transformers')};save()
         results=[]
         with (a.output/'traces.jsonl').open('x') as log:
             for q in cases:
-                result=run_case(q,answers[q['id']],schemas,backend,checkers,a.policy,client,a.model_id)
+                result=case_runner(q,answers[q['id']],schemas,backend,checkers,a.policy,client,a.model_id)
                 results.append(result);log.write(json.dumps(result,ensure_ascii=False)+'\n');log.flush();m['completed_case_ids'].append(q['id']);save();print(q['id'],result['success'],flush=True)
         passed=sum(r['success'] for r in results)
         if a.policy=='reference' and passed!=len(cases):raise RuntimeError('Native reference did not pass all cases')
