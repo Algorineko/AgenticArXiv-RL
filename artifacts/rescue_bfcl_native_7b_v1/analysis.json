@@ -1,0 +1,29 @@
+{
+  "kind": "native_backend_reexecution_audit",
+  "interface": "qwen_native",
+  "arms": {
+    "raw_7b": {
+      "model_id": "Qwen2.5-7B-Instruct",
+      "scenario_successes": 1,
+      "n_scenarios": 4,
+      "turn_successes": 6,
+      "n_turns": 14,
+      "native_check_turns": 6,
+      "native_check_scenarios": 1,
+      "model_steps": 57,
+      "parse_error_steps": 0,
+      "function_attempts": 65,
+      "tool_error_attempts": 32,
+      "forced_turn_stops": 4,
+      "tokens": 209128,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "605669c8a60f661a7c4096a39994ccb43dabcbe638a5c19a517006a8cad9187b"
+    }
+  },
+  "official_leaderboard_score": false,
+  "limitations": [
+    "Four previously used filesystem calibration scenarios; no broad benchmark claim",
+    "Native and ReAct interfaces have different formatting and parallel call affordances",
+    "Checks/observations independently replayed; no additional model inference used"
+  ]
+}
