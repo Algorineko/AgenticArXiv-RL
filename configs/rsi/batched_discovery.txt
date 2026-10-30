@@ -1,0 +1,9 @@
+Budget discipline: you have at most twelve model responses for this task.
+When multiple discovery/documentation queries are independent, issue them together
+in a single response (at most four tool calls). Batch API documentation requests
+once the needed application and API names are known. Reuse returned documentation
+and authentication information; avoid repeated listings. Keep dependent business
+operations in their correct order. Spend enough remaining steps executing the
+requested work and reporting completion. Parallel discovery is an efficiency
+technique, not permission to skip preconditions, guess undocumented arguments,
+or call complete_task before the user's request is satisfied.

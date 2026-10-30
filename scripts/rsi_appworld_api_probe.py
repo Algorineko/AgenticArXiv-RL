@@ -75,6 +75,8 @@ def main():
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--private-output", type=Path, required=True)
     p.add_argument("--public-output", type=Path, required=True)
+    p.add_argument("--harness-file", type=Path)
+    p.add_argument("--experiment-prefix", default="rsi_external_api_probe_v1")
     args = p.parse_args()
     from appworld import load_task_ids
     from appworld.common.path_store import path_store
@@ -87,21 +89,28 @@ def main():
     limits = {"calls": 30, "input_tokens": 200000, "output_tokens": 30000}
     api = API("https://api.qnaigc.com/v1", "doubao-seed-2.0-mini", args.private_output,
               limits, min_interval=15, max_completion_tokens=1024)
+    harness = args.harness_file.read_text() if args.harness_file else ""
     protocol = {"stage": "external train-only diagnostic, no RSI effect", "created_utc": utc(),
                 "task_id_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in selected],
                 "max_steps": 12, "max_parallel_tools": 4, "limits": limits,
                 "model": api.model, "min_request_interval_s": 15, "max_completion_tokens": 1024,
+                "harness_sha256": hashlib.sha256(harness.encode()).hexdigest(),
+                "experiment_prefix": args.experiment_prefix,
                 "sources": {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
                             for name in ("rsi_api_pilot.py", "rsi_cpu_tasks.py", "rsi_appworld_api_probe.py")}}
     (args.private_output / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
+    frozen = args.private_output / "frozen_sources"
+    frozen.mkdir()
+    for name in protocol["sources"]:
+        (frozen / name).write_bytes((Path(__file__).parent / name).read_bytes())
     records = []
     for i, task_id in enumerate(selected):
-        env = AppWorldEnvironment(task_id, f"rsi_external_api_probe_v1_{i}")
+        env = AppWorldEnvironment(task_id, f"{args.experiment_prefix}_{i}")
         task = {"id": hashlib.sha256(task_id.encode()).hexdigest(), "domain": "appworld",
                 "prompt": env.world.task.instruction + "\nSupervisor identity: " + str(env.world.task.supervisor) +
                 "\nUse discovery tools to find the APIs and their parameters. Perform the actual requested "
                 "operations, then call supervisor.complete_task with the appropriate answer if required."}
-        trace = episode(api, task, repeat=0, max_steps=12, environment=env)
+        trace = episode(api, task, repeat=0, max_steps=12, environment=env, harness_instruction=harness)
         records.append({"task_id_sha256": task["id"], "success": trace["verdict"]["success"],
                         "stop": trace["stop"], "model_steps": len(trace["steps"]),
                         "tool_calls": trace["tool_calls"], "tool_errors": trace["tool_errors"]})

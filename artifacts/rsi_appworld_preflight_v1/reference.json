@@ -1,0 +1,16 @@
+{
+  "dataset": "train only",
+  "model_calls": 0,
+  "results": [
+    {
+      "task_id_sha256": "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+      "reference_success": true,
+      "official_check_count": 2
+    },
+    {
+      "task_id_sha256": "f6698e50c86429c99bbed9b9f65ff69a565ea2e7584095f7bbc89890342e4616",
+      "reference_success": true,
+      "official_check_count": 7
+    }
+  ]
+}

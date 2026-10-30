@@ -110,13 +110,15 @@ class API:
                 "calls_without_provider_usage": self.unknown_usage}
 
 
-def episode(api, task, repeat, max_steps, environment=None):
+def episode(api, task, repeat, max_steps, environment=None, harness_instruction=""):
     env = environment if environment is not None else Environment(task)
     identifier = f"{task['id']}:repeat{repeat}"
     messages = [{"role": "system", "content": "You operate a local tool environment. Complete the user request "
                  "through the available tools. Tool observations describe real state. Do not assert completion "
                  "without performing the requested operations. When finished, give a short final answer."},
                 {"role": "user", "content": task["prompt"]}]
+    if harness_instruction:
+        messages[0]["content"] += "\n" + harness_instruction
     trace = {"episode_id": identifier, "task_id": task["id"], "domain": task["domain"],
              "repeat": repeat, "started_utc": utc(), "steps": [], "stop": "step_budget",
              "tool_errors": 0, "tool_calls": 0}

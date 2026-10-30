@@ -1,0 +1,52 @@
+{
+  "protocol": {
+    "stage": "external train-only diagnostic, no RSI effect",
+    "created_utc": "2026-10-30T07:31:31.703463+00:00",
+    "task_id_sha256": [
+      "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+      "f6698e50c86429c99bbed9b9f65ff69a565ea2e7584095f7bbc89890342e4616"
+    ],
+    "max_steps": 12,
+    "max_parallel_tools": 4,
+    "limits": {
+      "calls": 30,
+      "input_tokens": 200000,
+      "output_tokens": 30000
+    },
+    "model": "doubao-seed-2.0-mini",
+    "min_request_interval_s": 15,
+    "max_completion_tokens": 1024,
+    "sources": {
+      "rsi_api_pilot.py": "8264a3b11d47b772a41fba4d14606888e9973fd1b37d8f2c19e1e8abd33dff5a",
+      "rsi_cpu_tasks.py": "1c7bdfea7d05d43555bd9c9fe24411d6a3358c5b2e12ddde1ca528d53c54586e",
+      "rsi_appworld_api_probe.py": "6faf7d5a2aec2f9c0cfc73d66f411d5f618c278635e462ab0cdd82799e976db7"
+    }
+  },
+  "episodes": [
+    {
+      "task_id_sha256": "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+      "success": false,
+      "stop": "step_budget",
+      "model_steps": 12,
+      "tool_calls": 12,
+      "tool_errors": 0
+    },
+    {
+      "task_id_sha256": "f6698e50c86429c99bbed9b9f65ff69a565ea2e7584095f7bbc89890342e4616",
+      "success": false,
+      "stop": "step_budget",
+      "model_steps": 12,
+      "tool_calls": 12,
+      "tool_errors": 0
+    }
+  ],
+  "usage": {
+    "calls": 24,
+    "accounted_input_tokens": 128258,
+    "accounted_output_tokens": 8139,
+    "calls_without_provider_usage": 0
+  },
+  "complete": true,
+  "protected_trace_location": "/home/zhangjialiang/.cache/agentic-rsi/appworld-api-probe-v1",
+  "limitation": "Two deterministic train scenarios; not a benchmark score or method comparison."
+}
