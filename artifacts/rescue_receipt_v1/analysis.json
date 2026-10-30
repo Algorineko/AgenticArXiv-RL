@@ -1,0 +1,413 @@
+{
+  "kind": "static_request_contract_development_screen",
+  "catalog_manifest_sha256": "be0c82c502b8502f1d2790de33d7f9098f8fbb756588d30aaca9edd212bf9752",
+  "arms": {
+    "base_baseline": {
+      "model_id": "Qwen2.5-1.5B-Instruct",
+      "strict_successes": 4,
+      "n": 12,
+      "false_finishes": 0,
+      "force_stops": 3,
+      "single_action_finishes": 0,
+      "parse_failures": 0,
+      "tool_failures": 2,
+      "by_family": {
+        "translate": {
+          "successes": 1,
+          "n": 6
+        },
+        "force_download": {
+          "successes": 3,
+          "n": 6
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 100741,
+        "completion_tokens": 2936,
+        "total_tokens": 103677
+      },
+      "rollout_seconds": 41.081,
+      "wall_seconds_including_setup": 47.509,
+      "manifest_sha256": "c7b37ec86c02fc0bf0c73c7ff03d13a999b9052f640599d5a9f5e5bc62b5d5ad",
+      "summary_sha256": "2237e2dd9ca4691796faf6fd37cd85fc4bb9b229973cb4ec609c834fde22cde7",
+      "traces_sha256": "4c44fb1658612d4ac6702d0ff0b0d2dad4b848eec0166679dcf3e13f1510c08a"
+    },
+    "grpo_baseline": {
+      "model_id": "published-SFT-GRPO-1.5B",
+      "strict_successes": 3,
+      "n": 12,
+      "false_finishes": 5,
+      "force_stops": 0,
+      "single_action_finishes": 5,
+      "parse_failures": 0,
+      "tool_failures": 0,
+      "by_family": {
+        "translate": {
+          "successes": 3,
+          "n": 6
+        },
+        "force_download": {
+          "successes": 0,
+          "n": 6
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 39898,
+        "completion_tokens": 510,
+        "total_tokens": 40408
+      },
+      "rollout_seconds": 45.607,
+      "wall_seconds_including_setup": 82.41,
+      "manifest_sha256": "b16182f11fe2bab36fdedf4f3313ffe43f1b1b3059c894d409e420df8668eb44",
+      "summary_sha256": "7b334d642f3f25b7e07cd42e53f7840d6efaf14028d366b7fc5dfcbad889d3ac",
+      "traces_sha256": "cf39c3da3767dde385e1648072df19f0887efedb487b9f6cd7c367f4962d7e39"
+    },
+    "base_receipt_contract": {
+      "model_id": "Qwen2.5-1.5B-Instruct",
+      "strict_successes": 5,
+      "n": 12,
+      "false_finishes": 0,
+      "force_stops": 5,
+      "single_action_finishes": 0,
+      "parse_failures": 0,
+      "tool_failures": 6,
+      "by_family": {
+        "translate": {
+          "successes": 1,
+          "n": 6
+        },
+        "force_download": {
+          "successes": 4,
+          "n": 6
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 109857,
+        "completion_tokens": 2639,
+        "total_tokens": 112496
+      },
+      "rollout_seconds": 39.294,
+      "wall_seconds_including_setup": 45.74,
+      "manifest_sha256": "eb2effafb67afb9a25f6f401e7f956e1b9a1d2289280b6ba920857f72d7fabe2",
+      "summary_sha256": "f5685caa60d5e916a963017cf8e9f70f4a793d3f22375544797da1cbcee3d7dc",
+      "traces_sha256": "8d35ee8eda64eb9578d40799df3e713540dabdb362c2bee7f65d8b80d04dcd46"
+    },
+    "grpo_receipt_contract": {
+      "model_id": "published-SFT-GRPO-1.5B",
+      "strict_successes": 0,
+      "n": 12,
+      "false_finishes": 12,
+      "force_stops": 0,
+      "single_action_finishes": 12,
+      "parse_failures": 0,
+      "tool_failures": 0,
+      "by_family": {
+        "translate": {
+          "successes": 0,
+          "n": 6
+        },
+        "force_download": {
+          "successes": 0,
+          "n": 6
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 25302,
+        "completion_tokens": 216,
+        "total_tokens": 25518
+      },
+      "rollout_seconds": 25.545,
+      "wall_seconds_including_setup": 63.139,
+      "manifest_sha256": "be8f1b99aabaa0410975ebeee595e2b7f064b3141940a5ead3d446c5763c35c1",
+      "summary_sha256": "6f809c41d8795966e2989f0423d14041be7c3b88ffe78fc4634a2adfa67f940a",
+      "traces_sha256": "3bc5641bd0b2c45477038cf9ea2876276d560c3379855c35e642745e09f6b430"
+    }
+  },
+  "paired_prompt_changes": {
+    "base_prompt_change": {
+      "fixed": [
+        "state_v1_force_download_1_listed",
+        "state_v1_force_download_2_listed",
+        "state_v1_force_download_3_listed",
+        "state_v1_translate_1_listed"
+      ],
+      "regressed": [
+        "state_v1_force_download_1_downloaded",
+        "state_v1_force_download_2_downloaded",
+        "state_v1_translate_1_downloaded"
+      ],
+      "both_correct": 1,
+      "both_wrong": 4
+    },
+    "grpo_prompt_change": {
+      "fixed": [],
+      "regressed": [
+        "state_v1_translate_1_listed",
+        "state_v1_translate_2_listed",
+        "state_v1_translate_3_listed"
+      ],
+      "both_correct": 0,
+      "both_wrong": 9
+    }
+  },
+  "independent_task_families": 2,
+  "parameter_instances_per_family": 3,
+  "final_test_model_evaluated": false,
+  "promotion_val_model_evaluated": false,
+  "limitations": [
+    "No confidence/significance claim from correlated parameter variants",
+    "Base versus SFT+GRPO pipeline does not isolate an RL effect",
+    "Strict scoring requires the prescribed action chain, not an independent goal-state verifier",
+    "Paper-disjoint task targets do not restrict tool access to the other catalog categories",
+    "No autonomous evolution, reasoning, PDF-quality, or online-service claim",
+    "Operation receipts were declared before this screen; earlier state-screen receipt rescoring was post-hoc",
+    "Static handwritten compiler and receipt prompt, not autonomous improvement",
+    "Rule-only executor baseline must be reported; narrow grammar does not establish broad language understanding"
+  ],
+  "request_pairs": 6,
+  "operation_receipts": {
+    "base_baseline": {
+      "n": 12,
+      "operation_seen": 8,
+      "operation_and_finish": 8,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        }
+      }
+    },
+    "base_receipt_contract": {
+      "n": 12,
+      "operation_seen": 8,
+      "operation_and_finish": 7,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        }
+      }
+    },
+    "grpo_baseline": {
+      "n": 12,
+      "operation_seen": 3,
+      "operation_and_finish": 3,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    },
+    "grpo_receipt_contract": {
+      "n": 12,
+      "operation_seen": 0,
+      "operation_and_finish": 0,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    }
+  },
+  "promotion_decision": {
+    "base": {
+      "fixed": [
+        "state_v1_translate_1_listed",
+        "state_v1_force_download_1_listed"
+      ],
+      "regressed": [
+        "state_v1_translate_1_downloaded",
+        "state_v1_translate_2_downloaded",
+        "state_v1_translate_3_listed"
+      ],
+      "evaluate_promotion_once": false
+    },
+    "grpo": {
+      "fixed": [],
+      "regressed": [
+        "state_v1_translate_1_listed",
+        "state_v1_translate_2_listed",
+        "state_v1_translate_3_listed"
+      ],
+      "evaluate_promotion_once": false
+    }
+  }
+}

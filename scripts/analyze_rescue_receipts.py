@@ -7,11 +7,11 @@ sys.path.insert(0,str(ROOT/'AgenticArxiv'))
 from benchmark.semantic_oracle import attach_expected_paper_ids
 from rescue_operation_receipts import compile_request,assess
 
-def analyze(catalog,runs):
+def analyze(catalog,runs,split="search_dev"):
     from tools.bootstrap import require_all_tools
     require_all_tools("operation receipt audit")
     tasks=json.loads((catalog/'tasks.json').read_text())
-    tasks={t['id']:t for t in attach_expected_paper_ids(tasks,catalog/'snapshot.json') if t['rescue_split']=='search_dev'}
+    tasks={t['id']:t for t in attach_expected_paper_ids(tasks,catalog/'snapshot.json') if t['rescue_split']==split}
     result={'kind':'posthoc_offline_operation_receipts','limitations':['Post-hoc diagnostic, not predeclared primary outcome','Target identity uses frozen semantic oracle; receipt parsing is separate from strict chain scoring','Offline receipts do not prove actual PDF download/translation quality'],'arms':{}}
     for directory in sorted(runs.iterdir()):
         if not directory.is_dir():continue
