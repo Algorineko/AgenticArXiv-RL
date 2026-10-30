@@ -1,0 +1,25 @@
+{
+  "dataset": "train only",
+  "model_calls": 0,
+  "max_native_calls_in_single_reference_execution": 48,
+  "source_sha256": "c3a9a53c39687b6bf3c2f033df8f3a722e3c650bba1eca817986180fa9e0488d",
+  "limitation": "Trusted Python reference, not a model or proxy-policy capability bound. Failure does not prove no shorter policy exists.",
+  "results": [
+    {
+      "task_id_sha256": "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+      "reference_success": false,
+      "official_check_count": 2,
+      "native_api_calls": 48,
+      "execution_traceback": true,
+      "reference_code_sha256": "b8f54ca60d1157ff9692de70dfecbab01ea50974b82dacf944104b061898a11d"
+    },
+    {
+      "task_id_sha256": "f6698e50c86429c99bbed9b9f65ff69a565ea2e7584095f7bbc89890342e4616",
+      "reference_success": false,
+      "official_check_count": 7,
+      "native_api_calls": 48,
+      "execution_traceback": true,
+      "reference_code_sha256": "7884f99dffe34c1bcbe6af0bacad93fe2f7c2457b4341e2e19dab341d5568344"
+    }
+  ]
+}

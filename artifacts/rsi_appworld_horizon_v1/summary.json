@@ -1,0 +1,59 @@
+{
+  "protocol": {
+    "stage": "external train-only diagnostic, no RSI effect",
+    "created_utc": "2026-10-30T08:02:10.748814+00:00",
+    "task_id_sha256": [
+      "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+      "f6698e50c86429c99bbed9b9f65ff69a565ea2e7584095f7bbc89890342e4616"
+    ],
+    "max_steps": 24,
+    "max_parallel_tools": 4,
+    "limits": {
+      "calls": 50,
+      "input_tokens": 600000,
+      "output_tokens": 50000
+    },
+    "isolated_framework_registry": true,
+    "model": "doubao-seed-2.0-mini",
+    "min_request_interval_s": 15,
+    "max_completion_tokens": 1024,
+    "harness_sha256": "bbd75b07785ccad49a32825ffef4e75e002d58de6a564e6b3078b34895f9340d",
+    "experiment_prefix": "rsi_horizon_v1",
+    "sources": {
+      "rsi_api_pilot.py": "b75ff758eb3d20d2637bb6188af2cbce1693bb4f7db7a952982aaedd47436a01",
+      "rsi_cpu_tasks.py": "1c7bdfea7d05d43555bd9c9fe24411d6a3358c5b2e12ddde1ca528d53c54586e",
+      "rsi_appworld_api_probe.py": "bb1a56a8ce927dbc14daea734a137beeb627361591e26501ad1eff3dba93b243"
+    },
+    "framework_sources": {
+      "AgenticArxiv/tools/tool_registry.py": "d0c8a7d7e83cd582e1da506f941ebf71e7b851dbd9ec3b8815f949b09a09b2e5",
+      "AgenticArxiv/rsi/tool_environment.py": "fa52a842e3af6e75963d034bd069bc02df554e4e363d0f3c1177f5348e42d254"
+    }
+  },
+  "episodes": [
+    {
+      "task_id_sha256": "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+      "success": false,
+      "stop": "step_budget",
+      "model_steps": 24,
+      "tool_calls": 27,
+      "tool_errors": 0
+    },
+    {
+      "task_id_sha256": "f6698e50c86429c99bbed9b9f65ff69a565ea2e7584095f7bbc89890342e4616",
+      "success": false,
+      "stop": "step_budget",
+      "model_steps": 24,
+      "tool_calls": 25,
+      "tool_errors": 0
+    }
+  ],
+  "usage": {
+    "calls": 48,
+    "accounted_input_tokens": 420829,
+    "accounted_output_tokens": 12729,
+    "calls_without_provider_usage": 0
+  },
+  "complete": true,
+  "protected_trace_location": "/home/zhangjialiang/.cache/agentic-rsi/appworld-horizon-v1",
+  "limitation": "Two deterministic train scenarios; not a benchmark score or method comparison."
+}

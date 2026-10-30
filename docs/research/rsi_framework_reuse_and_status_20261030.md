@@ -49,3 +49,5 @@
 后续接入：`AgenticArxiv/rsi/trajectory_adapter.py` 直接使用原 `Trajectory`、`save_trajectory`、`load_trajectories`；保留完整 native trace，不推测 thought。v2 集成审计四条轨迹往返无差异、39 次观察无差异。旧容器中的 final_reward 仅为独立终局布尔指标，不引入旧 shaped reward，也不表示已接入训练。
 
 同时查明并修复 AppWorld 冻结宿主时钟导致的 API 时间记录错误，详见 `rsi_host_clock_erratum_20261030.md`。当前已启动的 horizon-v1 使用旧冻结代码，其真实耗时与逐请求 UTC 不作证据。
+
+本轮已完成：24 步仍 0/2，52 次观察回放一致；宽预算参考解在 48 原生请求限制下均失败。既有 2/2 参考通过不能证明紧预算代理可行。详见 `rsi_progress_20261030.md` 与可行性更正。

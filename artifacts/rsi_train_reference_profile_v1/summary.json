@@ -1,0 +1,53 @@
+{
+  "selection": "First four (or shorter prefix) frozen meta_train groups; inner_train only, no score-based selection",
+  "model_calls": 0,
+  "max_native_calls": 256,
+  "meta_dev_tasks_read": 0,
+  "locked_final_tasks_read": 0,
+  "public_pool_sha256": "6ab43b2075a798797227189c0fff60f47e1cfcec8c1d45a18957197b0cda1007",
+  "profiler_source_sha256": "afb2bf20f755f666c6a9b2798c1e201b16ae5121ecd46e71fb8afebe551624ee",
+  "reference_experience_policy": "Source/observations stay private and are never passed to improvers or solvers",
+  "limitation": "Trusted program counts, not an agent score or policy-length lower bound",
+  "results": [
+    {
+      "task_id_sha256": "3193bf4191ecae04241a774152778aa7078cfb6d11b5872da22756f4564267a0",
+      "generator_sha256": "4bc74fa1f1b08c6df61f308afd543a436713cc71d79e076de2dec7d03b1d1515",
+      "no_op_success": false,
+      "reference_success": true,
+      "native_api_calls": 31,
+      "execution_traceback": false,
+      "reference_code_sha256": "6939f8a46544256ea7d4ae0820eed70425ef6c0361b0e00d8b07d9adbaf2a322",
+      "official_check_count": 4
+    },
+    {
+      "task_id_sha256": "1fed9164bbc8cc76ce95257c456da993fc69773134ccf81733d3818af0fb8cfa",
+      "generator_sha256": "416d8c581a81e5cf453ecf37e3618515d48a12ffc2b7483572b2cbac17465ef3",
+      "no_op_success": false,
+      "reference_success": true,
+      "native_api_calls": 29,
+      "execution_traceback": false,
+      "reference_code_sha256": "e31c6095738003ff67059a3e89e0998978325bfb095801d03d82cfdd0a3added",
+      "official_check_count": 6
+    },
+    {
+      "task_id_sha256": "09652b8caabc0ed837194c0e2c0ba50388ee8d92cea78e20d5b001e959982851",
+      "generator_sha256": "8f3d33053ab464c1ddee9f41d2c5a459aeda3b8ba266daf6f67e652b7e7a4cb2",
+      "no_op_success": false,
+      "reference_success": true,
+      "native_api_calls": 40,
+      "execution_traceback": false,
+      "reference_code_sha256": "174e553843e9d5bd68aab258bad09d64d8a70fbd09d7b8c5d18f93e95535956b",
+      "official_check_count": 9
+    },
+    {
+      "task_id_sha256": "1d6db95bcc627dbb4db52e64126e9c6a8ada0bf1a84c29f7de3783b9a5b35b6d",
+      "generator_sha256": "caabbd13e83fa134e68aa5022d0d5b0b89dd41e7b85430f64f3b58ff52de08dc",
+      "no_op_success": false,
+      "reference_success": true,
+      "native_api_calls": 70,
+      "execution_traceback": false,
+      "reference_code_sha256": "c67195d3caba01068bde1c4957b55625211a84f5a195629fe22a8837889682c3",
+      "official_check_count": 6
+    }
+  ]
+}

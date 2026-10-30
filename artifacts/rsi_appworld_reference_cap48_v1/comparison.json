@@ -1,0 +1,27 @@
+{
+  "unconstrained_reference_summary_sha256": "c4ffd42d9a6fd3790f02ae73d257d9acea64f84b37127bb01a47c77c0abbdace",
+  "counts": [
+    {
+      "scenario_index": 0,
+      "unconstrained_reference_native_requests": 71,
+      "private_native_log_sha256": "a3250a4a757f74b03ead3a48077e297d9a1a6c5ec7b8973b0f8e962854282314"
+    },
+    {
+      "scenario_index": 1,
+      "unconstrained_reference_native_requests": 145,
+      "private_native_log_sha256": "18ed5071684a30880873a961937417e811cdbe19bb1e3a72b177e7098c4df98d"
+    }
+  ],
+  "cap48_results": "summary.json",
+  "conclusion": "Official references do not establish solvability within proxy/model budgets. Their cap48 failures are not a lower bound on optimal policy length.",
+  "private_execution_log_checks": [
+    {
+      "scenario_index": 0,
+      "native_request_limit_error_confirmed": true
+    },
+    {
+      "scenario_index": 1,
+      "native_request_limit_error_confirmed": true
+    }
+  ]
+}

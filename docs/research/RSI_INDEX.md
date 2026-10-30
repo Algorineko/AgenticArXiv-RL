@@ -1,6 +1,6 @@
 # API-first RSI research
 
-Status: CPU calibration saturated (16/16); two exposed AppWorld train scenarios remain 0/2 under both baseline and a static discovery control. Reference solutions pass 2/2. No RSI effectiveness result yet.
+Status: CPU calibration saturated (16/16); two exposed AppWorld train scenarios remain 0/2 under both baseline and a static discovery control. Wide-budget references pass 2/2 but fail 0/2 under a 48-call cap; the 24-step proxy diagnostic remains 0/2. No RSI effectiveness result yet.
 
 - [Resource-grounded research proposal](rsi_api_research_proposal_20261030.md): experience-controlled recursive improvement, fixed-meta optimization controls, CPU tasks, budget and stopping rules.
 - [Sanitized API resource probe](../../artifacts/rsi_api_preflight_v1/resource_probe.json): five bounded chat requests; one successful native tool response and four unavailable-model errors. These are connectivity checks.
@@ -24,3 +24,8 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [Host clock correction](rsi_host_clock_erratum_20261030.md): historical AppWorld request timestamps and durations use simulated time; counts, token accounting and replayed goal verdicts remain usable.
 - [Strong fixed improver audit](rsi_strong_baseline_audit_20261030.md): GEPA and existing meta-optimization support constrain novelty claims.
 - [ID-only pool provenance audit](../../artifacts/rsi_appworld_pool_v2/audit.json): unchanged membership, builder and registry digests, no task content accessed.
+
+- [AppWorld feasibility correction](rsi_appworld_feasibility_erratum_20261030.md): official references fail under 48 native calls; the earlier wide-budget reference pass does not establish tight-proxy feasibility.
+- [Preselected meta-train reference profiling](rsi_train_reference_profile_20261030.md): 4/4 trusted references, 0/4 no-op, native request counts 31/29/40/70; not model scores.
+
+- [Completed integration and diagnostic findings](rsi_progress_20261030.md): actual costs, 52-observation horizon replay, clock and feasibility corrections.

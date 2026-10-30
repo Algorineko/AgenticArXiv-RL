@@ -1,0 +1,21 @@
+{
+  "observations_replayed": 52,
+  "observation_mismatches": 0,
+  "goal_verdict_mismatches": 0,
+  "episodes": 2,
+  "all_observations_match": true,
+  "all_goal_verdicts_match": true,
+  "source_digests_match": {
+    "rsi_api_pilot.py": true,
+    "rsi_cpu_tasks.py": true,
+    "rsi_appworld_api_probe.py": true,
+    "AgenticArxiv/tools/tool_registry.py": true,
+    "AgenticArxiv/rsi/tool_environment.py": true
+  },
+  "replay_proxy_source_sha256": "bb1a56a8ce927dbc14daea734a137beeb627361591e26501ad1eff3dba93b243",
+  "replay_framework_source_sha256": {
+    "AgenticArxiv/tools/tool_registry.py": "d0c8a7d7e83cd582e1da506f941ebf71e7b851dbd9ec3b8815f949b09a09b2e5",
+    "AgenticArxiv/rsi/tool_environment.py": "fa52a842e3af6e75963d034bd069bc02df554e4e363d0f3c1177f5348e42d254"
+  },
+  "note": "Only train scenarios replayed. Mismatches, if present, are reported without normalization."
+}
