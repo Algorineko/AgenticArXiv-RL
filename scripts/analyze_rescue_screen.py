@@ -15,13 +15,14 @@ from rl.self_evolve import strict_success
 ARMS = ("base_baseline", "grpo_baseline", "base_completion_check", "grpo_completion_check")
 
 
-def analyze(catalog, runs):
+def analyze(catalog, runs, variant="completion_check"):
+    arms = ("base_baseline", "grpo_baseline", "base_" + variant, "grpo_" + variant)
     _, tasks, splits = verify_catalog(catalog)
     families = {t["id"]: t["rescue_family"] for t in tasks}
     expected = set(splits["split"]["search_dev"])
     catalog_hash = sha256(catalog / "manifest.json")
     manifests, scores, output = {}, {}, {}
-    for arm in ARMS:
+    for arm in arms:
         directory = runs / arm
         manifest = json.loads((directory / "run_manifest.json").read_text())
         summary = json.loads((directory / "benchmark/summary.json").read_text())
@@ -73,16 +74,16 @@ def analyze(catalog, runs):
             "summary_sha256": sha256(directory / "benchmark/summary.json"),
             "traces_sha256": manifest["traces_sha256"]}
         manifests[arm], scores[arm] = manifest, values
-    for arm in ARMS[1:]:
-        if manifests[arm]["source_sha256"] != manifests[ARMS[0]]["source_sha256"]:
+    for arm in arms[1:]:
+        if manifests[arm]["source_sha256"] != manifests[arms[0]]["source_sha256"]:
             raise ValueError("Model arms ran different evaluation/scoring code")
     for model in ("base", "grpo"):
-        a, b = manifests[model + "_baseline"], manifests[model + "_completion_check"]
+        a, b = manifests[model + "_baseline"], manifests[model + "_" + variant]
         if a["weights_sha256"] != b["weights_sha256"] or a["model_id"] != b["model_id"]:
             raise ValueError("Prompt comparison uses different checkpoint weights")
     comparisons = {}
     for model in ("base", "grpo"):
-        a, b = scores[model + "_baseline"], scores[model + "_completion_check"]
+        a, b = scores[model + "_baseline"], scores[model + "_" + variant]
         comparisons[model + "_prompt_change"] = {
             "fixed": sorted(t for t in expected if not a[t] and b[t]),
             "regressed": sorted(t for t in expected if a[t] and not b[t]),

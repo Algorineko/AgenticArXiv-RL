@@ -1,0 +1,5 @@
+grpo_state_boundaries: all evaluation source hashes match pre-inference commit 7c60503
+grpo_baseline: all evaluation source hashes match pre-inference commit 7c60503
+base_state_boundaries: all evaluation source hashes match pre-inference commit 7c60503
+base_baseline: all evaluation source hashes match pre-inference commit 7c60503
+No model final_test or promotion_val evaluation in these arms
