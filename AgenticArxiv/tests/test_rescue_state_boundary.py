@@ -25,3 +25,17 @@ def test_pair_invariance():
             assert left[key]==right[key]
         assert right['setup'][:-1]==left['setup']
         assert right['setup'][-1]['name']=='download_arxiv_pdf'
+
+def test_current_actions_only_preserves_actions_not_setup():
+    from rescue_state_boundary import current_actions_only
+    actual='Thought: x\nAction: FINISH\nObservation: 任务完成'
+    assert current_actions_only('先前已下载')==''
+    assert current_actions_only('先前已下载\n\n'+actual)==actual
+    assert current_actions_only(actual)==actual
+
+def test_facts_only_removes_just_legacy_imperative():
+    from rescue_state_boundary import state_facts_only
+    facts='先前已下载ref=1。\n'
+    directive='以上是已存在的会话状态，不属于当前任务动作，请勿重复执行。'
+    actions='\n\nThought: x\nAction: FINISH\nObservation: 任务完成'
+    assert state_facts_only(facts+directive+actions)==facts+actions

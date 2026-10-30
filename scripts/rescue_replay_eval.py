@@ -70,7 +70,7 @@ def main():
     p.add_argument("--policy", choices=("model", "reference", "finish_only", "request_executor"), default="model")
     p.add_argument("--model", type=Path)
     p.add_argument("--model-id", default="")
-    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries", "receipt_contract"), default="baseline")
+    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries", "receipt_contract", "current_actions_only", "state_facts_only"), default="baseline")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--gpu", type=int, default=1)
     p.add_argument("--timeout", type=int, default=900)
@@ -153,6 +153,15 @@ def main():
             elif args.variant == "receipt_contract":
                 from rescue_receipt_prompt import install
                 install()
+            elif args.variant in ("current_actions_only", "state_facts_only"):
+                import agents.agent_engine as ae
+                import rescue_state_boundary as sb
+                original = ae.get_react_prompt
+                transform = getattr(sb, args.variant)
+                def diagnostic_prompt(*a, **k):
+                    k["history"] = transform(k.get("history", ""))
+                    return original(*a, **k)
+                ae.get_react_prompt = diagnostic_prompt
             elif args.variant == "state_boundaries":
                 import agents.agent_engine as ae
                 from rescue_state_boundary import boundary_history
