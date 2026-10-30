@@ -23,7 +23,13 @@ def digest(value):
 
 
 def utc():
-    return dt.datetime.now(dt.timezone.utc).isoformat()
+    # AppWorld/freezegun freezes datetime.now and time.monotonic in the host.
+    # Explicit native clocks keep API accounting independent of simulated time.
+    return dt.datetime.fromtimestamp(time.clock_gettime(time.CLOCK_REALTIME), dt.timezone.utc).isoformat()
+
+
+def monotonic():
+    return time.clock_gettime(time.CLOCK_MONOTONIC)
 
 
 class BudgetExceeded(RuntimeError):
@@ -56,17 +62,17 @@ class API:
         # UTF-8 byte count plus overhead is a conservative reservation, not a tokenizer claim.
         reservation = len(canonical(payload).encode()) + 4096
         for retry in range(2):
-            time.sleep(max(0, self.last_start + self.min_interval - time.monotonic()))
+            time.sleep(max(0, self.last_start + self.min_interval - monotonic()))
             if (self.calls >= self.limits["calls"] or
                 self.input_tokens + reservation > self.limits["input_tokens"] or
                 self.output_tokens + payload["max_tokens"] > self.limits["output_tokens"]):
                 raise BudgetExceeded("pre-request budget reservation rejected")
             self.calls += 1
-            self.last_start = time.monotonic()
+            self.last_start = monotonic()
             record = {"call": self.calls, "episode_id": episode_id, "started_utc": utc(),
                       "request_sha256": digest(payload), "request": payload, "retry": retry,
                       "reserved_input_upper_estimate": reservation}
-            started = time.monotonic()
+            started = monotonic()
             response, status = None, None
             try:
                 req = urllib.request.Request(self.endpoint + "/chat/completions",
@@ -81,7 +87,7 @@ class API:
                               message=exc.read(2000).decode(errors="replace"))
             except (TimeoutError, OSError, ValueError) as exc:
                 record.update(status="transport_or_response_error", error_type=type(exc).__name__)
-            record["elapsed_s"] = round(time.monotonic() - started, 4)
+            record["elapsed_s"] = round(monotonic() - started, 4)
             usage = (response or {}).get("usage") or {}
             prompt, completion = usage.get("prompt_tokens"), usage.get("completion_tokens")
             if type(prompt) is int and prompt >= 0 and type(completion) is int and completion >= 0:

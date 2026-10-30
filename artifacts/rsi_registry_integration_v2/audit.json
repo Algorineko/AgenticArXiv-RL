@@ -1,0 +1,22 @@
+{
+  "episodes": 4,
+  "observations": 39,
+  "observation_mismatches": 0,
+  "verdict_mismatches": 0,
+  "schema_mismatches": 0,
+  "invalid_call_mismatches": 0,
+  "trajectory_roundtrip_mismatches": 0,
+  "trajectory_roundtrips": 4,
+  "api_calls": 0,
+  "legacy_global_registry_unchanged": true,
+  "sources": {
+    "AgenticArxiv/tools/tool_registry.py": "d0c8a7d7e83cd582e1da506f941ebf71e7b851dbd9ec3b8815f949b09a09b2e5",
+    "AgenticArxiv/rsi/tool_environment.py": "fa52a842e3af6e75963d034bd069bc02df554e4e363d0f3c1177f5348e42d254",
+    "AgenticArxiv/rl/trajectory.py": "3aa85ecfcf681cece2cf4d949e7918d283f40db357e35eedf42d8990009a3246",
+    "AgenticArxiv/rsi/trajectory_adapter.py": "8bb641a684751e2eb972c579f6ed9edceb560fbe9ca7d81f07edd66a15d00f1b",
+    "scripts/rsi_appworld_api_probe.py": "bb1a56a8ce927dbc14daea734a137beeb627361591e26501ad1eff3dba93b243",
+    "scripts/verify_rsi_registry_integration.py": "da49ff3dcb63d1d8f861bc694a0abe67d08b32fa59bd081635f8ee1c16bf959b"
+  },
+  "passed": true,
+  "scope": "Exposed train traces only; registry integration audit, no RSI effectiveness claim."
+}

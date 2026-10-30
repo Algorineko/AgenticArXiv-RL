@@ -7,10 +7,13 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from AgenticArxiv.rsi.tool_environment import RegisteredToolEnvironment
 from AgenticArxiv.tools.tool_registry import registry as legacy_registry
+from AgenticArxiv.rsi.trajectory_adapter import to_trajectory, from_trajectory
+from AgenticArxiv.rl.trajectory import save_trajectory, load_trajectories
 from rsi_appworld_api_probe import AppWorldEnvironment
 
 
@@ -31,7 +34,8 @@ def main():
     initial_registry = legacy_registry.list_tools()
     counts = {"episodes": 0, "observations": 0, "observation_mismatches": 0,
               "verdict_mismatches": 0, "schema_mismatches": 0,
-              "invalid_call_mismatches": 0, "api_calls": 0}
+              "invalid_call_mismatches": 0, "trajectory_roundtrip_mismatches": 0,
+              "trajectory_roundtrips": 0, "api_calls": 0}
     for run_index, run in enumerate(args.private_run):
         protocol = json.loads((run / "protocol.json").read_text())
         for name, expected in protocol["sources"].items():
@@ -39,6 +43,14 @@ def main():
         for index, line in enumerate((run / "traces.jsonl").read_text().splitlines()):
             trace = json.loads(line)
             assert trace["task_id"] in allowed
+            # Protected content never enters the public report or repository.
+            with tempfile.TemporaryDirectory(prefix="rsi_trajectory_", dir=run.parent) as tmp:
+                target = Path(tmp) / "roundtrip.jsonl"
+                save_trajectory(to_trajectory(trace, model=protocol["model"]), target)
+                restored = load_trajectories(target)
+                counts["trajectory_roundtrip_mismatches"] += int(
+                    len(restored) != 1 or from_trajectory(restored[0]) != trace)
+                counts["trajectory_roundtrips"] += 1
             raw = AppWorldEnvironment(allowed[trace["task_id"]], f"rsi_registry_replay_{run_index}_{index}")
             env = RegisteredToolEnvironment(raw)
             try:
@@ -70,6 +82,7 @@ def main():
     counts["legacy_global_registry_unchanged"] = legacy_registry.list_tools() == initial_registry
     counts["sources"] = {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in (
         "AgenticArxiv/tools/tool_registry.py", "AgenticArxiv/rsi/tool_environment.py",
+        "AgenticArxiv/rl/trajectory.py", "AgenticArxiv/rsi/trajectory_adapter.py",
         "scripts/rsi_appworld_api_probe.py", "scripts/verify_rsi_registry_integration.py")}
     counts["passed"] = counts["legacy_global_registry_unchanged"] and all(
         counts[k] == 0 for k in counts if k.endswith("mismatches"))

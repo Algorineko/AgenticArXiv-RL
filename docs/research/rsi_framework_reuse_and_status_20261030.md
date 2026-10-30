@@ -45,3 +45,7 @@
 `artifacts/rsi_registry_integration_v1/audit.json`：两个历史开发运行共四条轨迹、39 次观察、四次最终判定全部一致；schema 与非法调用返回一致；原全局注册表未改变；无 API 请求、无 GPU 使用。它证明注册表接入的行为兼容性，不证明 RSI 有效。
 
 24 步开发诊断已按单独协议启动，两个已暴露场景不进入最终验证；允许更大预算，不能与旧 12 步结果直接比较方法优劣。
+
+后续接入：`AgenticArxiv/rsi/trajectory_adapter.py` 直接使用原 `Trajectory`、`save_trajectory`、`load_trajectories`；保留完整 native trace，不推测 thought。v2 集成审计四条轨迹往返无差异、39 次观察无差异。旧容器中的 final_reward 仅为独立终局布尔指标，不引入旧 shaped reward，也不表示已接入训练。
+
+同时查明并修复 AppWorld 冻结宿主时钟导致的 API 时间记录错误，详见 `rsi_host_clock_erratum_20261030.md`。当前已启动的 horizon-v1 使用旧冻结代码，其真实耗时与逐请求 UTC 不作证据。

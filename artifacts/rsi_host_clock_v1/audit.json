@@ -1,0 +1,19 @@
+{
+  "outside": {
+    "accounting_elapsed_s": 0.08098171697929502,
+    "environment_monotonic_elapsed_s": 0.08098412305116653,
+    "accounting_matches_system_utc": true,
+    "environment_utc_matches_system": true
+  },
+  "inside": {
+    "accounting_elapsed_s": 0.08080784231424332,
+    "environment_monotonic_elapsed_s": 0.0,
+    "accounting_matches_system_utc": true,
+    "environment_utc_matches_system": false
+  },
+  "api_calls": 0,
+  "read_locked_final_tasks": 0,
+  "api_source_sha256": "eada8b35e0d2b2713b66e61115097d788d01f1d7467fa815e3dd46969976e4c0",
+  "verifier_source_sha256": "5e857c8474e0e24459b67bd6f7b5e20fb6f8076e387bd673a29dc879806a6788",
+  "passed": true
+}

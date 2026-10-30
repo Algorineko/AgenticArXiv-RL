@@ -20,3 +20,7 @@ Large ignored checkpoints and local credential files are outside the Git archive
 
 - [Framework registry integration audit](../../artifacts/rsi_registry_integration_v1/audit.json): 39 exposed-train observations and four verdicts replayed through the original ToolRegistry, no differences.
 - [24-step development diagnostic protocol](rsi_appworld_horizon_protocol_20261030.md): separate larger-budget calibration, no RSI effect claim.
+
+- [Host clock correction](rsi_host_clock_erratum_20261030.md): historical AppWorld request timestamps and durations use simulated time; counts, token accounting and replayed goal verdicts remain usable.
+- [Strong fixed improver audit](rsi_strong_baseline_audit_20261030.md): GEPA and existing meta-optimization support constrain novelty claims.
+- [ID-only pool provenance audit](../../artifacts/rsi_appworld_pool_v2/audit.json): unchanged membership, builder and registry digests, no task content accessed.

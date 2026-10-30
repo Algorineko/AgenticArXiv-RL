@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "generators": 28,
+  "instances": 84,
+  "excluded_exposed_generators": 2,
+  "same_membership_as_previous": true,
+  "public_manifest_sha256": "6ab43b2075a798797227189c0fff60f47e1cfcec8c1d45a18957197b0cda1007",
+  "verifier_source_sha256": "c6b5b003d766378d3dc22fb53df24cfe0ea31c16202620ecc6309671454e67e2",
+  "task_instructions_loaded": 0,
+  "solutions_loaded": 0,
+  "checker_labels_loaded": 0,
+  "scope": "ID and provenance checks only; semantic independence, difficulty and contamination not established."
+}
