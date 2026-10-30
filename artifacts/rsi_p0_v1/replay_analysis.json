@@ -1,0 +1,22 @@
+{
+  "tool_observations_replayed": 11,
+  "all_observations_match": true,
+  "all_goal_checks_match": true,
+  "accounting_matches": true,
+  "source_digests_match": {
+    "rsi_api_pilot.py": true,
+    "rsi_cpu_tasks.py": true
+  },
+  "complete": false,
+  "episodes": 3,
+  "successes": 2,
+  "by_domain": {
+    "inventory": {
+      "episodes": 3,
+      "successes": 2
+    }
+  },
+  "repeat_pairs": 0,
+  "success_disagreements_between_repeats": 0,
+  "limitation": "Eight development instances with related templates; no independence or RSI effect claim."
+}

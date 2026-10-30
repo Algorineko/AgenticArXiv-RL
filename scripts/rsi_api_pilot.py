@@ -31,7 +31,7 @@ class BudgetExceeded(RuntimeError):
 
 
 class API:
-    def __init__(self, endpoint, model, output, limits):
+    def __init__(self, endpoint, model, output, limits, min_interval):
         self.key = os.environ.get("RSI_API_KEY", "")
         if not self.key:
             raise ValueError("RSI_API_KEY is required; credentials are never written to artifacts")
@@ -40,6 +40,7 @@ class API:
             raise ValueError("HTTPS endpoint required")
         self.limits = limits
         self.calls = self.input_tokens = self.output_tokens = self.unknown_usage = 0
+        self.min_interval, self.last_start = min_interval, 0.0
 
     def clean(self, value):
         return json.loads(json.dumps(value, ensure_ascii=False).replace(self.key, "[REDACTED]"))
@@ -54,11 +55,13 @@ class API:
         # UTF-8 byte count plus overhead is a conservative reservation, not a tokenizer claim.
         reservation = len(canonical(payload).encode()) + 4096
         for retry in range(2):
+            time.sleep(max(0, self.last_start + self.min_interval - time.monotonic()))
             if (self.calls >= self.limits["calls"] or
                 self.input_tokens + reservation > self.limits["input_tokens"] or
                 self.output_tokens + payload["max_tokens"] > self.limits["output_tokens"]):
                 raise BudgetExceeded("pre-request budget reservation rejected")
             self.calls += 1
+            self.last_start = time.monotonic()
             record = {"call": self.calls, "episode_id": episode_id, "started_utc": utc(),
                       "request_sha256": digest(payload), "request": payload, "retry": retry,
                       "reserved_input_upper_estimate": reservation}
@@ -96,7 +99,7 @@ class API:
                     raise BudgetExceeded("provider-reported usage exceeded conservative estimate")
                 return response
             if retry == 0 and (status in (429, 500, 502, 503, 504) or status is None):
-                time.sleep(1)
+                time.sleep(30 if status == 429 else 1)
                 continue
             raise RuntimeError("API request failed; sanitized details recorded in api_calls.jsonl")
 
@@ -174,10 +177,15 @@ def main():
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--steps", type=int, default=6)
     parser.add_argument("--max-calls", type=int, default=100)
+    parser.add_argument("--max-input-tokens", type=int, default=300000)
+    parser.add_argument("--max-output-tokens", type=int, default=50000)
+    parser.add_argument("--min-interval", type=float, default=7.0)
     parser.add_argument("--validate-only", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.repeats <= 2 or not 1 <= args.steps <= 6 or not 1 <= args.max_calls <= 100:
         parser.error("P0 limits: repeats<=2, steps<=6, calls<=100")
+    if not 0 < args.max_input_tokens <= 300000 or not 0 < args.max_output_tokens <= 50000 or args.min_interval < 7:
+        parser.error("P0 caps: input<=300000, output<=50000, min interval>=7 seconds")
     args.output.mkdir(parents=True, exist_ok=False)
     controls = validate()
     (args.output / "preflight.json").write_text(json.dumps(controls, indent=2) + "\n")
@@ -185,18 +193,23 @@ def main():
     (args.output / "catalog.json").write_text(json.dumps(tasks, ensure_ascii=False, indent=2) + "\n")
     sources = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
                for name in ("rsi_api_pilot.py", "rsi_cpu_tasks.py")}
+    frozen = args.output / "frozen_sources"
+    frozen.mkdir()
+    for name in sources:
+        (frozen / name).write_bytes((Path(__file__).parent / name).read_bytes())
     protocol = {"created_utc": utc(), "stage": "P0 development calibration, not RSI effectiveness",
                 "model": args.model, "endpoint": args.endpoint, "max_steps": args.steps,
                 "repeats": args.repeats, "max_parallel_tools": 4, "catalog_sha256": digest(tasks),
                 "source_sha256": sources, "limits": {"calls": args.max_calls,
-                "input_tokens": 300000, "output_tokens": 50000},
+                "input_tokens": args.max_input_tokens, "output_tokens": args.max_output_tokens},
+                "min_request_interval_s": args.min_interval,
                 "scoring": "independent goal state; explicit final and truncation reported separately",
                 "api_seed_claim": "No reproducibility guarantee from temperature=0 or provider model aliases"}
     (args.output / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
     if args.validate_only:
         print(canonical(controls))
         return
-    api = API(args.endpoint, args.model, args.output, protocol["limits"])
+    api = API(args.endpoint, args.model, args.output, protocol["limits"], args.min_interval)
     results = []
     # Round-major order makes both passes observe all families; no selection from these repeats.
     for repeat in range(args.repeats):
