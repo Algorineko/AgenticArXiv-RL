@@ -13,3 +13,5 @@ Raw artifacts are under `artifacts/rescue_20261029/`, `artifacts/rescue_catalog_
 - [Setup alignment protocol](rescue_prompt_alignment_protocol.md) and [findings](rescue_prompt_alignment_findings.md): static presentation changes, one-shot promotion, and published SFT control.
 - [BFCL protocol audit](rescue_bfcl_protocol_audit.md): derivative static chain prediction versus official executable multi-step evaluation.
 - [New paired SFT feasibility protocol](rescue_sft_pair_protocol.md): train-only data, fixed 16 optimizer steps, and planned cross-deployment.
+- [New SFT development and final findings](rescue_sft_pair_findings.md): primitive success and 0/24 final composition regressions; the original final split is now used.
+- [Updated nearby work and claim boundaries](rescue_related_work_update_20261030.md): SEAL, Trajectory2Gym, OpenAgent, and Environment Tuning.
