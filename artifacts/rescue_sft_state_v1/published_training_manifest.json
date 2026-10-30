@@ -1,0 +1,38 @@
+{
+  "stage": "sft_full",
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "data": "data/sft/sft_v5_parametric_linguistic.jsonl",
+  "data_sha256": "66079e9015780f8e1a76837999df8f9a37b77d5a284e587affb22d84d0dfc793",
+  "data_manifest_kind": null,
+  "output": "outputs/sft/final",
+  "max_steps": -1,
+  "epochs": 2,
+  "batch_size": 4,
+  "gradient_accumulation_steps": 2,
+  "effective_batch_size": 8,
+  "learning_rate": 0.0001,
+  "max_length": 2560,
+  "optimizer": "adamw_torch_fused",
+  "seed": 42,
+  "train_loss": 0.07871687987424207,
+  "trainable_parameters": 1543714304,
+  "model_parameters_seen_by_trainer": 1543714304,
+  "trainable_ratio_percent": 100.0,
+  "peak_vram_gib": 47.240328311920166,
+  "qlora": {
+    "load_in_4bit": false,
+    "quant_type": null,
+    "double_quant": false,
+    "compute_dtype": null,
+    "r": null,
+    "alpha": null,
+    "dropout": null,
+    "target_modules": []
+  },
+  "versions": {
+    "torch": "2.4.1+das.opt2.dtk2504",
+    "transformers": "4.57.3",
+    "trl": "0.29.1"
+  },
+  "_paths_note": "base_model / output 已由训练机的绝对路径改写为可移植写法；在本仓库内复现时，--model 指向你本地的 Qwen2.5-1.5B-Instruct，输出目录用 --output_dir 指定。"
+}

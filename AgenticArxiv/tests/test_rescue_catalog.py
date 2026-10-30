@@ -75,11 +75,21 @@ def test_atom_error_cannot_become_a_paper():
         parse_atom('<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>error</id></entry></feed>')
 
 
-def test_model_entry_point_cannot_score_final_test(tmp_path):
+def test_model_entry_point_requires_frozen_protocol_for_final_test(tmp_path):
     script = Path(__file__).resolve().parents[2] / "scripts/rescue_replay_eval.py"
     r = subprocess.run([sys.executable, str(script), "--catalog", str(tmp_path),
         "--catalog-sha256", "unused", "--split", "final_test", "--policy", "model",
         "--output", str(tmp_path / "output")], text=True, capture_output=True)
     assert r.returncode == 2
-    assert "reserved for scripted reference" in r.stderr
+    assert "separately frozen one-shot protocol" in r.stderr
     assert not (tmp_path / "output").exists()
+
+def test_final_entry_rejects_changed_protocol_before_creating_output(tmp_path):
+    protocol=tmp_path/'protocol.json';protocol.write_text('{}')
+    script=Path(__file__).resolve().parents[2]/'scripts/rescue_replay_eval.py'
+    r=subprocess.run([sys.executable,str(script),'--catalog',str(tmp_path),'--catalog-sha256','unused',
+        '--split','final_test','--policy','model','--output',str(tmp_path/'output'),
+        '--frozen-final-protocol',str(protocol),'--frozen-final-sha256','invalid'],text=True,capture_output=True)
+    assert r.returncode==2
+    assert 'Final protocol hash mismatch' in r.stderr
+    assert not (tmp_path/'output').exists()

@@ -1,0 +1,12 @@
+artifacts/rescue_prompt_alignment_v1/model_runs/base_baseline: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/model_runs/base_current_actions_only: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/model_runs/base_state_facts_only: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/model_runs/grpo_baseline: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/model_runs/grpo_current_actions_only: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/model_runs/grpo_state_facts_only: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/promotion/model_runs/base_baseline: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/promotion/model_runs/base_state_facts_only: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/promotion/model_runs/grpo_baseline: source hashes match pre-ablation f8ebf37
+artifacts/rescue_prompt_alignment_v1/promotion/model_runs/grpo_current_actions_only: source hashes match pre-ablation f8ebf37
+artifacts/rescue_sft_state_v1/model_runs/sft_baseline: source hashes match pre-ablation f8ebf37
+artifacts/rescue_sft_state_v1/model_runs/sft_current_actions_only: source hashes match pre-ablation f8ebf37

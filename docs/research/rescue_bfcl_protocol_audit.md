@@ -1,0 +1,13 @@
+# BFCL 端口协议审计：静态链预测不能冒充原多步执行
+
+本次重新下载并固定了fireworks-ai/bfcl_v3_multi_turn_base的公开Parquet版本（200行，source_manifest记录版本与SHA256），没有沿用缺失历史快照。源数据只有messages、ground_truth、tools三列，没有后端initial_config。
+
+官方BFCL V3以实际函数执行、探索性工具观察与API最终状态检查来评估多步任务。初始配置装入后端，模型通过工具探索状态，而非必须直接看到它。参见[官方协议](https://gorilla.cs.berkeley.edu/blogs/13_bfcl_v3_multi_turn.html)。因此“模型看不到initial_config”本身不是缺陷；关键是它必须有可探索的真实后端。
+
+当前端口BfclMultiTurnEnv只提供submit_calls，将整个文本调用链一次提交，再返回score_chain的匹配分与n_gold/n_pred；它不执行原BFCL函数、不装入原状态、不产生原API观察。get_bfcl_tasks把源数据转为任务，build_bfcl_task_text又把完整参数schema压缩为函数描述和签名。200行展开共5600个工具实例、8280个已定义参数实例（含重复工具），所有8280个参数原有描述在紧凑呈现中均未保留；其中7244个必需参数只列名字，5600个响应schema未呈现。Arrow联合schema中的null占位已排除，不把655200个字段槽误当真实参数。
+
+数据来源：[Fireworks公开数据集](https://huggingface.co/datasets/fireworks-ai/bfcl_v3_multi_turn_base)。计数可用scripts/audit_rescue_bfcl_protocol.py重算；原始Parquet保存在本地cache，不复制到研究结果仓。该统计不说明每道题都不可解，也不证明任何历史训练作弊。
+
+研究结论应改称“BFCL来源的静态调用链预测任务”，精确区分其规则与官方多步执行评测。八臂同分或tie结构可以描述这个派生任务，却不能借原BFCL名称暗示已经验证官方交互能力或原后端状态迁移。新的严格评分修复不弥补这些协议差异；历史8/40仍不能在缺少原轨迹时重算。
+
+建议保留静态派生任务作受限评分几何实验，但如果需要第二环境的真实工具控制外部验证，应另建使用官方后端与检查器的固定版本评测，并保留完整schema、全部实际观察、探索成本和最终状态。无需在当前有协议缺口的端口上再加训练臂或补种子。

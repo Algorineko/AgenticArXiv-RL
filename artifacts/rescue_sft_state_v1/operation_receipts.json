@@ -1,0 +1,65 @@
+{
+  "kind": "posthoc_offline_operation_receipts",
+  "limitations": [
+    "Post-hoc diagnostic, not predeclared primary outcome",
+    "Target identity uses frozen semantic oracle; receipt parsing is separate from strict chain scoring",
+    "Offline receipts do not prove actual PDF download/translation quality"
+  ],
+  "arms": {
+    "sft_baseline": {
+      "n": 12,
+      "operation_seen": 0,
+      "operation_and_finish": 0,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    }
+  }
+}

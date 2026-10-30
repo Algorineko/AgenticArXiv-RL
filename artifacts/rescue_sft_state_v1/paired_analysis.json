@@ -1,0 +1,146 @@
+{
+  "model": "sft",
+  "variant": "current_actions_only",
+  "split": "search_dev",
+  "strict_metrics": {
+    "sft_baseline": {
+      "strict": 0,
+      "n": 12,
+      "first_finish": 10,
+      "tool_failures": 0,
+      "force_stop": 0,
+      "tokens": 29306
+    },
+    "sft_current_actions_only": {
+      "strict": 6,
+      "n": 12,
+      "first_finish": 0,
+      "tool_failures": 0,
+      "force_stop": 0,
+      "tokens": 49758
+    }
+  },
+  "receipts": {
+    "sft_baseline": {
+      "n": 12,
+      "operation_seen": 0,
+      "operation_and_finish": 0,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    },
+    "sft_current_actions_only": {
+      "n": 12,
+      "operation_seen": 6,
+      "operation_and_finish": 6,
+      "details": {
+        "state_v1_translate_1_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_1_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_2_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_2_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_3_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_translate_3_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "state_v1_force_download_1_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_1_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_2_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "state_v1_force_download_3_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    }
+  },
+  "fixed": [
+    "state_v1_translate_1_listed",
+    "state_v1_translate_1_downloaded",
+    "state_v1_translate_2_listed",
+    "state_v1_translate_2_downloaded",
+    "state_v1_translate_3_listed",
+    "state_v1_translate_3_downloaded"
+  ],
+  "regressed": [],
+  "passes_positive_gain_no_regression": true,
+  "final_test_model_evaluated": false
+}

@@ -1,0 +1,251 @@
+{
+  "model": "grpo",
+  "variant": "current_actions_only",
+  "split": "promotion_val",
+  "strict_metrics": {
+    "grpo_baseline": {
+      "strict": 5,
+      "n": 12,
+      "first_finish": 3,
+      "tool_failures": 0,
+      "force_stop": 0,
+      "tokens": 44831
+    },
+    "grpo_current_actions_only": {
+      "strict": 6,
+      "n": 12,
+      "first_finish": 0,
+      "tool_failures": 0,
+      "force_stop": 0,
+      "tokens": 49766
+    }
+  },
+  "receipts": {
+    "base_baseline": {
+      "n": 12,
+      "operation_seen": 6,
+      "operation_and_finish": 6,
+      "details": {
+        "receipt_v1_promotion_translate_4_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_4_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_5_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_5_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_6_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_6_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_4_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_4_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_5_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_5_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_6_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_6_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        }
+      }
+    },
+    "base_state_facts_only": {
+      "n": 12,
+      "operation_seen": 5,
+      "operation_and_finish": 5,
+      "details": {
+        "receipt_v1_promotion_translate_4_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_4_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_5_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_5_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_6_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_translate_6_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_4_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_4_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_5_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_5_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_6_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_6_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    },
+    "grpo_baseline": {
+      "n": 12,
+      "operation_seen": 5,
+      "operation_and_finish": 5,
+      "details": {
+        "receipt_v1_promotion_translate_4_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_4_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_5_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_5_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_6_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_6_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_4_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_4_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_5_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_5_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_6_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_6_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    },
+    "grpo_current_actions_only": {
+      "n": 12,
+      "operation_seen": 6,
+      "operation_and_finish": 6,
+      "details": {
+        "receipt_v1_promotion_translate_4_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_4_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_5_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_5_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_6_listed": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_translate_6_downloaded": {
+          "operation_seen": true,
+          "operation_and_finish": true
+        },
+        "receipt_v1_promotion_force_download_4_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_4_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_5_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_5_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_6_listed": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        },
+        "receipt_v1_promotion_force_download_6_downloaded": {
+          "operation_seen": false,
+          "operation_and_finish": false
+        }
+      }
+    }
+  },
+  "fixed": [
+    "receipt_v1_promotion_translate_6_downloaded"
+  ],
+  "regressed": [],
+  "passes_positive_gain_no_regression": true,
+  "final_test_model_evaluated": false
+}

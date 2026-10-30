@@ -1,0 +1,27 @@
+{
+  "model": "grpo",
+  "candidate": "current_actions_only",
+  "decision": {
+    "candidates": {
+      "current_actions_only": {
+        "fixed": [
+          "state_v1_translate_1_downloaded",
+          "state_v1_translate_2_downloaded",
+          "state_v1_translate_3_downloaded"
+        ],
+        "regressed": [],
+        "eligible": true,
+        "net_gain": 3
+      },
+      "state_facts_only": {
+        "fixed": [],
+        "regressed": [],
+        "eligible": false,
+        "net_gain": 0
+      }
+    },
+    "promotion_candidate": "current_actions_only"
+  },
+  "protocol_commit": "f8ebf37",
+  "selection_basis": "development-only rule; promotion model scores not yet available"
+}

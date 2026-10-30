@@ -144,10 +144,6 @@ class ExpertFailFastTest(unittest.TestCase):
         self.assertIn("无法解析", answer)
         self.assertIn("Action: FINISH", answer)
 
-
-if __name__ == "__main__":
-    unittest.main()
-
 class VisibleSetupAlignmentTest(unittest.TestCase):
     def test_first_decision_sees_only_prior_state_and_later_keeps_history(self):
         from agents.prompt_templates import build_visible_setup_context, get_react_prompt
@@ -170,3 +166,7 @@ class VisibleSetupAlignmentTest(unittest.TestCase):
         rows=generate_deterministic_trajectories([spec],_StateProbeEnv(),'tools')
         self.assertIn('此前已检索最近 7 天的 cs.AI',rows[0]['messages'][0]['content'])
         self.assertIn('[任务开始前的会话状态]',rows[0]['messages'][0]['content'])
+
+
+if __name__ == "__main__":
+    unittest.main()
