@@ -70,7 +70,7 @@ def main():
     p.add_argument("--policy", choices=("model", "reference", "finish_only", "request_executor"), default="model")
     p.add_argument("--model", type=Path)
     p.add_argument("--model-id", default="")
-    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries", "receipt_contract", "current_actions_only", "state_facts_only"), default="baseline")
+    p.add_argument("--variant", choices=("baseline", "completion_check", "state_boundaries", "receipt_contract", "current_actions_only", "state_facts_only", "task_contract_consistent"), default="baseline")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--gpu", type=int, default=1)
     p.add_argument("--timeout", type=int, default=900)
@@ -88,6 +88,11 @@ def main():
                 or frozen_final["catalog_manifest_sha256"] != args.catalog_sha256
                 or args.model_id not in frozen_final["models"]):
             p.error("Final protocol model/catalog/variant mismatch")
+        if args.timeout != 900:
+            p.error("Final protocol requires the frozen 900 second budget")
+        for name, expected_hash in frozen_final["source_sha256"].items():
+            if sha256(ROOT / name) != expected_hash:
+                p.error("Final protocol source differs: " + name)
         declared = frozen_final["models"][args.model_id]
         actual = {f.name: sha256(f) for f in sorted(args.model.glob("*.safetensors"))} if args.model else {}
         if actual != declared["weights_sha256"] or sha256(args.model / "config.json") != declared["config_sha256"]:
@@ -180,10 +185,14 @@ def main():
                 import agents.agent_engine as ae
                 original = ae.get_react_prompt
                 ae.get_react_prompt = lambda *a, **k: original(*a, **k) + NOTE
+            elif args.variant == "task_contract_consistent":
+                import agents.agent_engine as ae
+                from agents.prompt_templates import get_task_contract_react_prompt
+                ae.get_react_prompt = get_task_contract_react_prompt
             elif args.variant == "receipt_contract":
                 from rescue_receipt_prompt import install
                 install()
-            elif args.variant in ("current_actions_only", "state_facts_only"):
+            elif args.variant in ("current_actions_only", "state_facts_only", "task_contract_consistent"):
                 import agents.agent_engine as ae
                 import rescue_state_boundary as sb
                 original = ae.get_react_prompt

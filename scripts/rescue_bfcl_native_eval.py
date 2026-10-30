@@ -24,7 +24,12 @@ PROMPT='''You are an assistant operating a virtual filesystem through the tools 
 Use only the listed tools and their documented arguments. Discover hidden backend state by calling tools when needed. Follow the current user request using the previous dialogue and actual observations. A request may require multiple tool calls.
 Return exactly:
 Thought: brief reasoning
-Action: {"name":"tool_name","args":{...}}
+Action: {"name":"tool_name","args":{}}
+Action must be one strict JSON object with double quotes and JSON true/false/null, or the single word FINISH. Never emit shell commands, Python calls, multiple Action lines or trailing explanations.
+Valid function-call format examples:
+Action: {"name":"pwd","args":{}}
+Action: {"name":"ls","args":{"a":true}}
+The shell command ls -la is invalid; use the documented JSON ls arguments instead.
 Use Action: FINISH only when this user turn is complete, or explain why it cannot be completed. Do not fabricate observations. Execute one action at a time.
 Available tools (complete schemas):
 {schemas}

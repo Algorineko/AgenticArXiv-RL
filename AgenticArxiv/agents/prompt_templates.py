@@ -202,3 +202,14 @@ def format_tool_description(tools) -> str:
         descriptions.append(tool_desc)
     
     return "\n\n".join(descriptions)
+
+
+def get_task_contract_react_prompt(task: str, tools_description: str, history: str = "") -> str:
+    """Opt-in consistent stop rule; legacy prompt stays available for replay."""
+    prompt = get_react_prompt(task, tools_description, history)
+    return prompt.replace(
+        "- 调用 translate_arxiv_pdf 之后，直接 FINISH 即可，不要再调用 get_paper_cache_status 去查看翻译是否完成。",
+        "- translate_arxiv_pdf 调用成功表示本轮翻译提交步骤已完成，无需等待翻译结束。\n"
+        "- 如果用户还明确要求查询缓存或执行其他操作，应继续完成这些请求；全部请求步骤完成后再 FINISH。\n"
+        "- 不要为了等待异步翻译完成而自行轮询；用户明确要求的状态查询不属于自行轮询。",
+    )
