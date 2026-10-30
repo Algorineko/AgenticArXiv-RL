@@ -17,3 +17,4 @@ Raw artifacts are under `artifacts/rescue_20261029/`, `artifacts/rescue_catalog_
 - [Updated nearby work and claim boundaries](rescue_related_work_update_20261030.md): SEAL, Trajectory2Gym, OpenAgent, and Environment Tuning.
 - [Native backend calibration findings](rescue_bfcl_native_calibration_findings.md): all nine 1.5B interface/model arms, independent observation replay, and full 200-scenario gold backend preflight. These are development checks, not official leaderboard scores.
 - [7B 原生接口容量校准](rescue_bfcl_native_7b_findings.md): 同四个已用开发场景中 1/4 完整场景、6/14 用户轮；容量提供有限改善但不足以支撑 RSI 或方法效果结论。
+- [Remaining native filesystem capacity diagnostic](rescue_bfcl_native_remaining_findings.md): eight unused scenarios, 26 turns, two public base checkpoints; findings are diagnostic only.

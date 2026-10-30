@@ -1,0 +1,46 @@
+{
+  "kind": "native_backend_reexecution_audit",
+  "interface": "qwen_native",
+  "arms": {
+    "base_1p5": {
+      "model_id": "Qwen2.5-1.5B-Instruct",
+      "scenario_successes": 0,
+      "n_scenarios": 8,
+      "turn_successes": 2,
+      "n_turns": 26,
+      "native_check_turns": 2,
+      "native_check_scenarios": 0,
+      "model_steps": 46,
+      "parse_error_steps": 0,
+      "function_attempts": 27,
+      "tool_error_attempts": 12,
+      "forced_turn_stops": 0,
+      "tokens": 139069,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "9fa9b03c74e682dc18fe9170558d7a9c7fbb085250940f006eac7a5fdd540e70"
+    },
+    "base_7b": {
+      "model_id": "Qwen2.5-7B-Instruct",
+      "scenario_successes": 3,
+      "n_scenarios": 8,
+      "turn_successes": 14,
+      "n_turns": 26,
+      "native_check_turns": 14,
+      "native_check_scenarios": 3,
+      "model_steps": 86,
+      "parse_error_steps": 1,
+      "function_attempts": 74,
+      "tool_error_attempts": 25,
+      "forced_turn_stops": 4,
+      "tokens": 297113,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "829eab3b76e91d76bd6b3e061e274df1c4d988a9b91542441efa20277658847b"
+    }
+  },
+  "official_leaderboard_score": false,
+  "limitations": [
+    "Four previously used filesystem calibration scenarios; no broad benchmark claim",
+    "Native and ReAct interfaces have different formatting and parallel call affordances",
+    "Checks/observations independently replayed; no additional model inference used"
+  ]
+}
