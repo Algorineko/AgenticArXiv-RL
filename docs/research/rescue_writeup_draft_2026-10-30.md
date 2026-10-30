@@ -83,6 +83,8 @@ The native BFCL results add a cross-protocol execution observation. On a 32-scen
 
 We find no evidence that RSI is necessary. No model in this audit autonomously changed its environment, selected a useful modification, or demonstrated sustained self-improvement. The failed SFT results also do not motivate adding more recursive layers: a simpler workflow-regression baseline has not yet been ruled out. The defensible next question is narrower: can a predeclared diagnostic predict workflow regressions and select an intervention that beats ordinary multi-step regression training on genuinely new tasks?
 
+The trace audit sharpens one candidate question without answering it: when a tool returns a state or input error, can an agent identify the violated constraint, update its execution plan, and complete the request? Here the 7B trace more often contains later gold-aligned calls after an error than the 1.5B trace, but full-turn recovery remains uncommon. A follow-up should freeze a new task lineage and compare the unchanged policy with a simple error-to-constraint ledger and a standard multi-step regression baseline. The current results do not justify training this intervention, and they do not require an RSI loop.
+
 ## 6. Limitations and claim boundaries
 
 The original historical data snapshot and training JSONL were not available, so the new experiments do not reproduce the original training run. The short SFT comparison uses one seed, 16 optimizer steps, and overlapping task-family templates between training and development; it is a feasibility result. The one-shot workflow final set has been used and includes a known prompt conflict, though the conflict-exclusion sensitivity retains the main negative result.
