@@ -154,13 +154,16 @@ def main(case_runner=run_case, client_factory=None, interface="react"):
             os.environ.update(CUDA_VISIBLE_DEVICES='1',AA_EVAL_GREEDY='1',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',TOKENIZERS_PARALLELISM='false',OMP_NUM_THREADS='4',MKL_NUM_THREADS='4')
             lock=open(f'/tmp/agenticarxiv-rescue-{os.getuid()}-gpu1.lock','w');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             import subprocess
-            if int(subprocess.check_output(['nvidia-smi','--id=1','--query-gpu=memory.free','--format=csv,noheader,nounits'],text=True).strip())<16000:raise RuntimeError('Insufficient GPU1 memory')
+            if int(subprocess.check_output(['nvidia-smi','--id=1','--query-gpu=memory.free','--format=csv,noheader,nounits'],text=True).strip())<protocol.get('min_free_mib',16000):raise RuntimeError('Insufficient GPU1 memory')
             m['weights_sha256']={x.name:sha256(x) for x in sorted(a.model.glob('*.safetensors'))};m['config_sha256']=sha256(a.model/'config.json')
             declared=protocol['models'][a.model_id]
             if m['weights_sha256']!=declared['weights_sha256'] or m['config_sha256']!=declared['config_sha256']:raise ValueError('Undeclared checkpoint bytes')
             import torch
             from utils.llm_client import TransformersLLMClient
-            torch.set_num_threads(4);torch.cuda.set_per_process_memory_fraction(.35,0)
+            memory_fraction=protocol.get('cuda_memory_fraction',.35)
+            if not 0 < memory_fraction <= .7:raise ValueError('Invalid declared memory fraction')
+            torch.set_num_threads(4);torch.cuda.set_per_process_memory_fraction(memory_fraction,0)
+            m.update(physical_gpu=1,cuda_memory_fraction=memory_fraction)
             factory=client_factory or TransformersLLMClient
             client=factory(str(a.model),device='cuda',dtype='bfloat16',seed=45)
             import importlib.metadata
