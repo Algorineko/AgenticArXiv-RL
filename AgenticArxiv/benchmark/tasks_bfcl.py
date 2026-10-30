@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -30,10 +31,15 @@ def _parse_call(text: str) -> Optional[Dict[str, Any]]:
     args: Dict[str, Any] = {}
     if argstr:
         try:
-            # BFCL gold 参数是合法 python 字面量键值对; 只放行 dict
-            ns: Dict[str, Any] = {}
-            exec(f"_r = dict({argstr})", {"__builtins__": {"dict": dict}}, ns)  # noqa: S102 — 只读数据文件
-            args = ns["_r"]
+            # Predictions are model text, not executable Python. Accept literal
+            # keyword values only; never execute expressions to obtain them.
+            call = ast.parse(f"_call({argstr})", mode="eval").body
+            if not isinstance(call, ast.Call) or call.args:
+                return None
+            for keyword in call.keywords:
+                if keyword.arg is None or keyword.arg in args:
+                    return None
+                args[keyword.arg] = ast.literal_eval(keyword.value)
         except Exception:
             return None
     return {"name": name, "args": args}

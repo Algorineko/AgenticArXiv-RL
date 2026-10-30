@@ -1,0 +1,227 @@
+{
+  "kind": "descriptive_development_screen_only",
+  "catalog_manifest_sha256": "aeaf9f1aaf14262ea575a5ba043d50d9fad7ad8e19a8f8af48dfe9ec2735ea73",
+  "arms": {
+    "base_baseline": {
+      "model_id": "Qwen/Qwen2.5-1.5B-Instruct",
+      "strict_successes": 9,
+      "n": 24,
+      "false_finishes": 2,
+      "force_stops": 10,
+      "single_action_finishes": 0,
+      "parse_failures": 0,
+      "tool_failures": 2,
+      "by_family": {
+        "search": {
+          "successes": 4,
+          "n": 4
+        },
+        "download": {
+          "successes": 0,
+          "n": 4
+        },
+        "translate": {
+          "successes": 0,
+          "n": 4
+        },
+        "cache": {
+          "successes": 4,
+          "n": 4
+        },
+        "search_download": {
+          "successes": 1,
+          "n": 4
+        },
+        "download_translate": {
+          "successes": 0,
+          "n": 4
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 213877,
+        "completion_tokens": 6849,
+        "total_tokens": 220726
+      },
+      "rollout_seconds": 377.398,
+      "wall_seconds_including_setup": 399.599,
+      "manifest_sha256": "0525660fbda8b2f85cff9ddbb91d7eed6883860b796beb8f5c7a6b8086b571c3",
+      "summary_sha256": "25f4f9f2a4831033b4701c00363fa2b5e3aed111b44eb412e341f86253da59a1",
+      "traces_sha256": "3575f62994cc65c275d73a08f5ef0a6f868392fbbffb923a0affff5debe7e185"
+    },
+    "grpo_baseline": {
+      "model_id": "Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO",
+      "strict_successes": 12,
+      "n": 24,
+      "false_finishes": 12,
+      "force_stops": 0,
+      "single_action_finishes": 12,
+      "parse_failures": 0,
+      "tool_failures": 0,
+      "by_family": {
+        "search": {
+          "successes": 4,
+          "n": 4
+        },
+        "download": {
+          "successes": 0,
+          "n": 4
+        },
+        "translate": {
+          "successes": 0,
+          "n": 4
+        },
+        "cache": {
+          "successes": 0,
+          "n": 4
+        },
+        "search_download": {
+          "successes": 4,
+          "n": 4
+        },
+        "download_translate": {
+          "successes": 4,
+          "n": 4
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 93450,
+        "completion_tokens": 1478,
+        "total_tokens": 94928
+      },
+      "rollout_seconds": 120.802,
+      "wall_seconds_including_setup": 154.512,
+      "manifest_sha256": "b17139b526aefc24bef4214c8d93a4e4b71dcfe80436e5fd1ae4441f5b30deec",
+      "summary_sha256": "beda9a9f31e585e455306417c7ac325de988d9bbad60e641b7d9d996e94a98a2",
+      "traces_sha256": "2a3b522e89b0b30c683c0facc2ecacdac51c31b1d11f0de35d82348e1f3d7ca3"
+    },
+    "base_completion_check": {
+      "model_id": "Qwen/Qwen2.5-1.5B-Instruct",
+      "strict_successes": 0,
+      "n": 24,
+      "false_finishes": 1,
+      "force_stops": 22,
+      "single_action_finishes": 0,
+      "parse_failures": 0,
+      "tool_failures": 0,
+      "by_family": {
+        "search": {
+          "successes": 0,
+          "n": 4
+        },
+        "download": {
+          "successes": 0,
+          "n": 4
+        },
+        "translate": {
+          "successes": 0,
+          "n": 4
+        },
+        "cache": {
+          "successes": 0,
+          "n": 4
+        },
+        "search_download": {
+          "successes": 0,
+          "n": 4
+        },
+        "download_translate": {
+          "successes": 0,
+          "n": 4
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 351403,
+        "completion_tokens": 12191,
+        "total_tokens": 363594
+      },
+      "rollout_seconds": 635.7,
+      "wall_seconds_including_setup": 656.421,
+      "manifest_sha256": "7e0e92c60d07dbd72b03077f960145068ea851762d1bf171829b173e245b1143",
+      "summary_sha256": "1dc617c471486da88e2dc1335a950ed6a4028b6628d74fb95a8a5ba4105b3946",
+      "traces_sha256": "9724b66c04950b9c57ef1dab25e504ff610cfca9ddc782a3fb55358fcd2cc649"
+    },
+    "grpo_completion_check": {
+      "model_id": "Algorineko/AgenticArXiv-RL-Qwen2.5-1.5B-GRPO",
+      "strict_successes": 11,
+      "n": 24,
+      "false_finishes": 13,
+      "force_stops": 0,
+      "single_action_finishes": 12,
+      "parse_failures": 0,
+      "tool_failures": 0,
+      "by_family": {
+        "search": {
+          "successes": 4,
+          "n": 4
+        },
+        "download": {
+          "successes": 0,
+          "n": 4
+        },
+        "translate": {
+          "successes": 0,
+          "n": 4
+        },
+        "cache": {
+          "successes": 0,
+          "n": 4
+        },
+        "search_download": {
+          "successes": 4,
+          "n": 4
+        },
+        "download_translate": {
+          "successes": 3,
+          "n": 4
+        }
+      },
+      "token_usage": {
+        "prompt_tokens": 93749,
+        "completion_tokens": 1435,
+        "total_tokens": 95184
+      },
+      "rollout_seconds": 119.228,
+      "wall_seconds_including_setup": 152.327,
+      "manifest_sha256": "2213135175592417e3289545f76d9131d6e9e7252c89964b2b3a3b9197d59a94",
+      "summary_sha256": "d06af7abe35265e432af0cebf9f28b15b9e342a48d92f06c861ba3b68d7db673",
+      "traces_sha256": "2833091c96915749b39962a72be0a5a6c06c0f16c50961504a3556397bbf659b"
+    }
+  },
+  "paired_prompt_changes": {
+    "base_prompt_change": {
+      "fixed": [],
+      "regressed": [
+        "rescue_v1_search_dev_cache_0",
+        "rescue_v1_search_dev_cache_1",
+        "rescue_v1_search_dev_cache_2",
+        "rescue_v1_search_dev_cache_3",
+        "rescue_v1_search_dev_search_0",
+        "rescue_v1_search_dev_search_1",
+        "rescue_v1_search_dev_search_2",
+        "rescue_v1_search_dev_search_3",
+        "rescue_v1_search_dev_search_download_0"
+      ],
+      "both_correct": 0,
+      "both_wrong": 15
+    },
+    "grpo_prompt_change": {
+      "fixed": [],
+      "regressed": [
+        "rescue_v1_search_dev_download_translate_3"
+      ],
+      "both_correct": 11,
+      "both_wrong": 12
+    }
+  },
+  "independent_task_families": 6,
+  "parameter_instances_per_family": 4,
+  "final_test_model_evaluated": false,
+  "promotion_val_model_evaluated": false,
+  "limitations": [
+    "No confidence/significance claim from correlated parameter variants",
+    "Base versus SFT+GRPO pipeline does not isolate an RL effect",
+    "Strict scoring requires the prescribed action chain, not an independent goal-state verifier",
+    "Paper-disjoint task targets do not restrict tool access to the other catalog categories",
+    "No autonomous evolution, reasoning, PDF-quality, or online-service claim"
+  ]
+}
