@@ -31,7 +31,7 @@ class BudgetExceeded(RuntimeError):
 
 
 class API:
-    def __init__(self, endpoint, model, output, limits, min_interval):
+    def __init__(self, endpoint, model, output, limits, min_interval, max_completion_tokens=512):
         self.key = os.environ.get("RSI_API_KEY", "")
         if not self.key:
             raise ValueError("RSI_API_KEY is required; credentials are never written to artifacts")
@@ -41,6 +41,7 @@ class API:
         self.limits = limits
         self.calls = self.input_tokens = self.output_tokens = self.unknown_usage = 0
         self.min_interval, self.last_start = min_interval, 0.0
+        self.max_completion_tokens = max_completion_tokens
 
     def clean(self, value):
         return json.loads(json.dumps(value, ensure_ascii=False).replace(self.key, "[REDACTED]"))
@@ -51,7 +52,7 @@ class API:
 
     def chat(self, messages, tools, episode_id):
         payload = {"model": self.model, "messages": messages, "tools": tools,
-                   "tool_choice": "auto", "temperature": 0, "max_tokens": 512, "stream": False}
+                   "tool_choice": "auto", "temperature": 0, "max_tokens": self.max_completion_tokens, "stream": False}
         # UTF-8 byte count plus overhead is a conservative reservation, not a tokenizer claim.
         reservation = len(canonical(payload).encode()) + 4096
         for retry in range(2):
@@ -109,8 +110,8 @@ class API:
                 "calls_without_provider_usage": self.unknown_usage}
 
 
-def episode(api, task, repeat, max_steps):
-    env = Environment(task)
+def episode(api, task, repeat, max_steps, environment=None):
+    env = environment if environment is not None else Environment(task)
     identifier = f"{task['id']}:repeat{repeat}"
     messages = [{"role": "system", "content": "You operate a local tool environment. Complete the user request "
                  "through the available tools. Tool observations describe real state. Do not assert completion "

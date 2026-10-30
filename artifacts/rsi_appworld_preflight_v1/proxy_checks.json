@@ -1,0 +1,8 @@
+{
+  "list_apps": true,
+  "list_apis": true,
+  "api_doc": true,
+  "invalid_identifier_rejected": true,
+  "unknown_tool_rejected": true,
+  "no_op_rejected": true
+}
