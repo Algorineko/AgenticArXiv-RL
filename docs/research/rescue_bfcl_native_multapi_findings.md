@@ -32,6 +32,12 @@ The paired scenario outcomes were 7 completed only by the 7B model, 0 only by th
 | MessageAPI + TravelAPI | 0/2 | 1/2 |
 | MathAPI + TravelAPI | 1/2 | 1/2 |
 
+## Post hoc error and recovery audit
+
+Across both runs, 94 of 108 tool-error calls (87.0%) were error responses returned by simulator methods; 14 were caught executor/dispatch exceptions. The explicit response-pattern taxonomy assigns 43 calls to filesystem path/object errors, 25 to vehicle state-precondition or capacity errors, 15 to missing entities/domain data, and 11 to other simulator responses. This indicates that syntax/dispatch failures are not the main source of tool errors in this diagnostic; many actions reach the simulator but fail its state or input checks.
+
+The 7B checkpoint also continued successfully after an error more often: a later successful tool call occurred in 24/35 error-containing turns, versus 3/34 for 1.5B. A stricter ordered match against gold function names and arguments found at least one later gold-aligned action in 14/35 7B turns and 2/34 1.5B turns. Yet only four 7B turns and no 1.5B turns completed successfully after an earlier tool error. These are descriptive counts from one greedy run per checkpoint on a source-overlapping task pool. They suggest a possible distinction between local recovery and full task completion, but do not establish a general recovery advantage or causal model-size effect. The rule-based taxonomy and recovery counts are reproducible with `scripts/analyze_rescue_bfcl_multapi_error_taxonomy.py`; inputs and counts are archived in `artifacts/rescue_bfcl_native_multapi_v1/error_taxonomy.json`.
+
 ## Interpretation
 
 The direction seen on the earlier filesystem-only subset recurs across this balanced sample of two-API tasks: the 7B checkpoint completed more scenarios and turns than the 1.5B checkpoint. The lineage audit below limits the independence of this evidence: 22/32 first-turn prompts exactly match rows in the earlier v3 BFCL source snapshot. This result is a cross-version, cross-backend audit on an overlapping task pool, not a held-out replication. It does not identify a causal parameter-count effect: model size, checkpoint identity and training history change together. The 7B model also used more generation steps (334 vs. 240), made more tool attempts (255 vs. 118), and had more tool errors (69 vs. 39); the protocol fixes per-call token and per-turn step ceilings, not total realized compute.
@@ -49,5 +55,6 @@ A post hoc comparison against the pinned 200-row BFCL v3 static-source snapshot 
 - Frozen protocol and source manifests: `artifacts/rescue_bfcl_native_multapi_v1/`.
 - Model traces and manifests: `artifacts/rescue_bfcl_native_multapi_v1/model_runs/{base_1p5,base_7b}/`.
 - Independent results: `artifacts/rescue_bfcl_native_multapi_v1/analysis.json`.
+- Post hoc error/recovery taxonomy: `artifacts/rescue_bfcl_native_multapi_v1/error_taxonomy.json`.
 - Runner and post hoc replay auditor: `scripts/rescue_bfcl_native_multapi.py` and `scripts/analyze_rescue_bfcl_native_multapi_v2.py`.
 - The post hoc analyzer independently re-executes each recorded function action, compares saved observations, and recomputes the official native state and response checks. No additional model inference is used.

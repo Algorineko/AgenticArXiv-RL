@@ -1,0 +1,99 @@
+{
+  "kind": "posthoc_native_multapi_error_taxonomy_v1",
+  "protocol_sha256": "838513935457856604c51da26911ca1abf02159c567afc3562a43ff3e2787913",
+  "arms": {
+    "base_1p5": {
+      "function_attempts": 118,
+      "parse_error_steps": 2,
+      "tool_error_calls": 39,
+      "simulator_returned_error_calls": 35,
+      "executor_or_dispatch_exceptions": 4,
+      "turns_with_tool_error": 34,
+      "error_turns_with_later_successful_call": 3,
+      "later_successful_calls_after_error": 3,
+      "error_turns_with_later_gold_aligned_action": 2,
+      "later_gold_aligned_calls_after_error": 2,
+      "turns_successful_despite_prior_tool_error": 0,
+      "categories": {
+        "executor_or_dispatch_exception": 4,
+        "filesystem_path_or_object_rejection": 19,
+        "missing_entity_or_domain_data": 7,
+        "other_simulator_returned_error": 4,
+        "state_precondition_or_capacity_rejection": 5
+      },
+      "examples": {
+        "filesystem_path_or_object_rejection": {
+          "tool": "mv",
+          "observation": "{\"error\": \"mv: cannot move 'document/final_report.pdf': No such file or directory\"}"
+        },
+        "other_simulator_returned_error": {
+          "tool": "send_message",
+          "observation": "{\"error\": \"No user is currently logged in.\"}"
+        },
+        "state_precondition_or_capacity_rejection": {
+          "tool": "fillFuelTank",
+          "observation": "{\"error\": \"Cannot fill gas above the tank capacity.\"}"
+        },
+        "executor_or_dispatch_exception": {
+          "tool": "get_last_service_ticket",
+          "observation": "Error during execution: Unavailable function/argument"
+        },
+        "missing_entity_or_domain_data": {
+          "tool": "estimate_distance",
+          "observation": "{\"error\": \"distance not found in database.\"}"
+        }
+      },
+      "trace_sha256": "f2115f3d3c0f6635ba7667e6f9d722f3d5a704878cc9194037f007b16018b933"
+    },
+    "base_7b": {
+      "function_attempts": 255,
+      "parse_error_steps": 1,
+      "tool_error_calls": 69,
+      "simulator_returned_error_calls": 59,
+      "executor_or_dispatch_exceptions": 10,
+      "turns_with_tool_error": 35,
+      "error_turns_with_later_successful_call": 24,
+      "later_successful_calls_after_error": 56,
+      "error_turns_with_later_gold_aligned_action": 14,
+      "later_gold_aligned_calls_after_error": 24,
+      "turns_successful_despite_prior_tool_error": 4,
+      "categories": {
+        "executor_or_dispatch_exception": 10,
+        "filesystem_path_or_object_rejection": 24,
+        "missing_entity_or_domain_data": 8,
+        "other_simulator_returned_error": 7,
+        "state_precondition_or_capacity_rejection": 20
+      },
+      "examples": {
+        "filesystem_path_or_object_rejection": {
+          "tool": "mv",
+          "observation": "{\"error\": \"mv: cannot move 'final_report.pdf': No such file or directory\"}"
+        },
+        "executor_or_dispatch_exception": {
+          "tool": "ls",
+          "observation": "Error during execution: got an unexpected keyword argument 'path'"
+        },
+        "missing_entity_or_domain_data": {
+          "tool": "get_user_id",
+          "observation": "{\"error\": \"User 'John Levy' not found in the workspace.\"}"
+        },
+        "state_precondition_or_capacity_rejection": {
+          "tool": "startEngine",
+          "observation": "{\"error\": \"Brake pedal needs to be pressed when starting the engine.\"}"
+        },
+        "other_simulator_returned_error": {
+          "tool": "send_message",
+          "observation": "{\"error\": \"No user is currently logged in.\"}"
+        }
+      },
+      "trace_sha256": "3c3a2e83eb3de8136b8ab1ff8756d60c52fd6f743c4683fdcae4c57d4d508fc3"
+    }
+  },
+  "combined": {
+    "tool_error_calls": 108,
+    "simulator_returned_error_calls": 94,
+    "simulator_return_share": 0.87037
+  },
+  "reference_trace_sha256": "6d5adbbd3a4272736274f84ed00624aa9fd71a87b059e709590280228cd6ec31",
+  "method": "Classify each runtime-marked tool_error from its recorded observation. Exceptions caught by the dispatcher are separated from simulator method responses. Simulator response families use explicit, inspectable keyword rules. Recovery counts record any later successful call and, separately, calls matching a subsequent exact gold name/argument pair in order. This is descriptive and post hoc, not a validated latent-error model."
+}
