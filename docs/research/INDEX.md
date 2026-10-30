@@ -15,3 +15,4 @@ Raw artifacts are under `artifacts/rescue_20261029/`, `artifacts/rescue_catalog_
 - [New paired SFT feasibility protocol](rescue_sft_pair_protocol.md): train-only data, fixed 16 optimizer steps, and planned cross-deployment.
 - [New SFT development and final findings](rescue_sft_pair_findings.md): primitive success and 0/24 final composition regressions; the original final split is now used.
 - [Updated nearby work and claim boundaries](rescue_related_work_update_20261030.md): SEAL, Trajectory2Gym, OpenAgent, and Environment Tuning.
+- [Native backend calibration findings](rescue_bfcl_native_calibration_findings.md): all nine 1.5B interface/model arms, independent observation replay, and full 200-scenario gold backend preflight. These are development checks, not official leaderboard scores.

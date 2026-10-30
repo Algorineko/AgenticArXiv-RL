@@ -1,0 +1,42 @@
+{
+  "interface": "qwen_native",
+  "kind": "native_BFCL_filesystem_calibration",
+  "policy": "model",
+  "model_id": "new-SFT-hidden-16steps",
+  "status": "completed",
+  "protocol_sha256": "6c9c11effac4e5977b860b6a53abd1e893cf45279945f087b138dfc6789ea3c8",
+  "case_ids": [
+    "multi_turn_base_1",
+    "multi_turn_base_3",
+    "multi_turn_base_6",
+    "multi_turn_base_9"
+  ],
+  "completed_case_ids": [
+    "multi_turn_base_1",
+    "multi_turn_base_3",
+    "multi_turn_base_6",
+    "multi_turn_base_9"
+  ],
+  "source_sha256": "d6afe68d9a39995ffb885341bf40f35640e4a730aa26cec73ef32cd6c3e6fc76",
+  "started_at": "2026-10-30T01:53:12.935900+00:00",
+  "max_calls_per_turn": 6,
+  "max_new_tokens": 384,
+  "seed": 45,
+  "decode": "greedy",
+  "official_leaderboard_score": false,
+  "weights_sha256": {
+    "model-00001-of-00002.safetensors": "0e50eec620703bf86546849856ce836ad4ab0705d916c65670d66817fb8fa132",
+    "model-00002-of-00002.safetensors": "d5fd408f1017d7c4246702e25267bf4019fe7c5c3c34e17740542e1954fdc40e"
+  },
+  "config_sha256": "b5259a8aff1c8ad0f5ed658634681e9b3e4fa2811fb9085ab31e777bab684a1a",
+  "versions": {
+    "torch": "2.8.0",
+    "transformers": "4.51.3"
+  },
+  "case_successes": 0,
+  "n_cases": 4,
+  "turn_successes": 0,
+  "n_turns": 14,
+  "traces_sha256": "d80dd222f08daf9e90ce049790666a44b5903f656059c94e5f1b6942a4e3afd6",
+  "wall_seconds": 12.149
+}

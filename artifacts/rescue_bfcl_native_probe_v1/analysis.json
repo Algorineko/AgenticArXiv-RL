@@ -1,0 +1,63 @@
+{
+  "kind": "native_backend_reexecution_audit",
+  "interface": "react",
+  "arms": {
+    "raw": {
+      "model_id": "Qwen2.5-1.5B-Instruct",
+      "scenario_successes": 0,
+      "n_scenarios": 4,
+      "turn_successes": 0,
+      "n_turns": 14,
+      "native_check_turns": 0,
+      "native_check_scenarios": 0,
+      "model_steps": 81,
+      "parse_error_steps": 52,
+      "function_attempts": 27,
+      "tool_error_attempts": 27,
+      "forced_turn_stops": 12,
+      "tokens": 495267,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "f8fd83b31d8c79acc1d5f5e3cbde412a78b07a7b9d521551986b78083c22ba2b"
+    },
+    "hidden": {
+      "model_id": "new-SFT-hidden-16steps",
+      "scenario_successes": 0,
+      "n_scenarios": 4,
+      "turn_successes": 0,
+      "n_turns": 14,
+      "native_check_turns": 0,
+      "native_check_scenarios": 0,
+      "model_steps": 29,
+      "parse_error_steps": 5,
+      "function_attempts": 10,
+      "tool_error_attempts": 10,
+      "forced_turn_stops": 0,
+      "tokens": 100884,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "ad5feb12d0c028a8bcb9364c6f3206314db3840a3e21593cd6925b15a2bd4522"
+    },
+    "visible": {
+      "model_id": "new-SFT-visible-16steps",
+      "scenario_successes": 0,
+      "n_scenarios": 4,
+      "turn_successes": 0,
+      "n_turns": 14,
+      "native_check_turns": 1,
+      "native_check_scenarios": 0,
+      "model_steps": 84,
+      "parse_error_steps": 73,
+      "function_attempts": 11,
+      "tool_error_attempts": 6,
+      "forced_turn_stops": 14,
+      "tokens": 314447,
+      "all_observations_and_native_checks_replayed": true,
+      "run_manifest_sha256": "4f5079af4317a3252cac9bfc36dbe940443d649f559927fa0d6593bfc729e4df"
+    }
+  },
+  "official_leaderboard_score": false,
+  "limitations": [
+    "Four previously used filesystem calibration scenarios; no broad benchmark claim",
+    "Native and ReAct interfaces have different formatting and parallel call affordances",
+    "Checks/observations independently replayed; no additional model inference used"
+  ]
+}
