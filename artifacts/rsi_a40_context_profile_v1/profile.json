@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "model_manifest_sha256": "d521d33f5d9dcc6a99f3db27f3ba5cfaa2a1ee85c820087e33cc7b00b47a7c1a",
+  "source_sha256": "774e728b7794e821d437d836e35c6141726979342c1f15a13fd28c8d474bbd2a",
+  "physical_gpu": 0,
+  "memory_fraction": 0.6,
+  "steps": [
+    {
+      "input_tokens": 4096,
+      "peak_reserved_mib": 16802.0,
+      "peak_allocated_mib": 16626.9,
+      "seconds": 1.15
+    },
+    {
+      "input_tokens": 8192,
+      "peak_reserved_mib": 17972.0,
+      "peak_allocated_mib": 17621.0,
+      "seconds": 1.52
+    },
+    {
+      "input_tokens": 12288,
+      "peak_reserved_mib": 19124.0,
+      "peak_allocated_mib": 18615.2,
+      "seconds": 2.39
+    }
+  ],
+  "max_verified_context_tokens": 12288,
+  "gpu_name": "NVIDIA A40",
+  "total_mib": 45488.1,
+  "base_reserved_mib": 15626.0,
+  "initial_free_mib": 45489,
+  "predicted_12288_mib": 22952.5
+}

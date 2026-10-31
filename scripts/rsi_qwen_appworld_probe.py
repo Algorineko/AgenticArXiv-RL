@@ -47,6 +47,7 @@ def main():
     p.add_argument("--remote-root", required=True)
     p.add_argument("--private-output", type=Path, required=True)
     p.add_argument("--public-output", type=Path, required=True)
+    p.add_argument("--context-profile", type=Path)
     args = p.parse_args()
     if (not re.fullmatch(r"[A-Za-z0-9_-]+@[A-Za-z0-9.:-]+", args.remote)
             or not re.fullmatch(r"/tmp/agentic-rsi-[A-Za-z0-9_-]+", args.remote_root)
@@ -60,6 +61,15 @@ def main():
     manifest = json.loads(manifest_file.read_text())
     if not neutral_ready(neutral_status, probe, manifest):
         raise SystemExit("Verified successful neutral tool probe is required")
+    context_limit = 8192
+    if args.context_profile:
+        profile = json.loads(args.context_profile.read_text())
+        if (profile.get("status") != "passed" or profile.get("max_verified_context_tokens") != 12288
+                or profile.get("source_sha256") != sha("scripts/rsi_qwen_context_profile.py")
+                or profile.get("model_manifest_sha256") != sha(manifest_file)
+                or profile.get("memory_fraction") != 0.60 or "a40" not in profile.get("gpu_name", "").lower()):
+            raise SystemExit("Context profile provenance or resource checks failed")
+        context_limit = 12288
     gpu = select_gpu(args.remote, args.port)
     if gpu is None:
         raise SystemExit("No eligible single GPU currently has enough free memory")
@@ -92,11 +102,18 @@ def main():
     subprocess.run(["scp", "-q", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                     "-o", "ConnectTimeout=8", "-P", str(args.port), str(server_file),
                     f"{args.remote}:{remote_server}"], check=True, timeout=30)
-    remote_command = shlex.join(["timeout", "3600", "env", f"CUDA_VISIBLE_DEVICES={gpu}",
+    if args.context_profile:
+        remote_profile = f"{args.remote_root}/context_profile_{sha(args.context_profile)[:12]}.json"
+        subprocess.run(["scp", "-q", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+                        "-P", str(args.port), str(args.context_profile), f"{args.remote}:{remote_profile}"], check=True, timeout=30)
+    remote_args = ["timeout", "3600", "env", f"CUDA_VISIBLE_DEVICES={gpu}",
                                 f"{args.remote_root}/venv/bin/python", "-u", remote_server,
                                 "--model-dir", f"{args.remote_root}/model", "--physical-gpu", str(gpu),
                                 "--manifest", f"{args.remote_root}/model_manifest.json",
-                                "--max-context-tokens", "8192", "--max-new-tokens", "1024"])
+                                "--max-context-tokens", str(context_limit), "--max-new-tokens", "1024"]
+    if args.context_profile:
+        remote_args += ["--context-profile", remote_profile]
+    remote_command = shlex.join(remote_args)
     command = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
                "-p", str(args.port), args.remote, remote_command]
@@ -114,7 +131,7 @@ def main():
                 "max_steps": 24, "max_parallel_tools": 4, "limits": limits,
                 "isolated_framework_registry": True, "bounded_batch_interface": True,
                 "same_api_batch_interface": True, "primitive_budget": 128, "max_environment_interactions": 128,
-                "max_completion_tokens": 1024, "max_prompt_tokens": 8192, "physical_gpu": gpu,
+                "max_completion_tokens": 1024, "max_prompt_tokens": context_limit, "context_profile_sha256": sha(args.context_profile) if args.context_profile else None, "physical_gpu": gpu,
                 "harness_sha256": sha("configs/rsi/same_api_batch_development.txt"),
                 "sources": {name: sha(Path("scripts") / name) for name in sources},
                 "framework_sources": {name: sha(name) for name in framework},
@@ -131,7 +148,7 @@ def main():
             destination.write_bytes(Path(name).read_bytes())
     expected = {"model_id": "Qwen/Qwen3-8B", "physical_gpu": gpu, "server_source_sha256": server_hash,
                 "model_manifest_sha256": sha(manifest_file), "config_sha256": probe["config_sha256"],
-                "max_memory_fraction": 0.60, "max_context_tokens": 8192, "max_new_tokens": 1024}
+                "max_memory_fraction": 0.60, "max_context_tokens": context_limit, "max_new_tokens": 1024}
     api = LocalQwenClient(command, args.private_output, limits, expected, max_completion_tokens=1024)
     if "a40" not in api.ready.get("gpu_name", "").lower() or api.ready.get("memory_before_mib", 0) < 40000:
         api.close()

@@ -58,9 +58,18 @@ def main():
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--max-context-tokens", type=int, default=8192)
     p.add_argument("--max-new-tokens", type=int, default=1024)
+    p.add_argument("--context-profile", type=Path)
     args = p.parse_args()
-    if not (1 <= args.max_context_tokens <= 8192 and 1 <= args.max_new_tokens <= 1024):
-        p.error("Maximum context is 8192 and maximum generation is 1024 tokens")
+    if not (1 <= args.max_context_tokens <= 12288 and 1 <= args.max_new_tokens <= 1024):
+        p.error("Maximum context is 12288 and maximum generation is 1024 tokens")
+    if args.max_context_tokens > 8192:
+        if not args.context_profile:
+            p.error("A verified synthetic context profile is required")
+        profile = json.loads(args.context_profile.read_text())
+        if (profile.get("status") != "passed" or profile.get("max_verified_context_tokens", 0) < args.max_context_tokens
+                or profile.get("model_manifest_sha256") != hashlib.sha256(args.manifest.read_bytes()).hexdigest()
+                or profile.get("memory_fraction") != 0.60 or "a40" not in profile.get("gpu_name", "").lower()):
+            raise SystemExit("Synthetic context profile does not authorize this run")
     if os.environ.get("CUDA_VISIBLE_DEVICES") != str(args.physical_gpu):
         raise SystemExit("Exactly the selected physical GPU must be visible")
     manifest = json.loads(args.manifest.read_text())
@@ -91,7 +100,8 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True, trust_remote_code=False)
         model = AutoModelForCausalLM.from_pretrained(args.model_dir, torch_dtype=torch.bfloat16,
                                                      device_map={"": 0}, low_cpu_mem_usage=True,
-                                                     local_files_only=True, trust_remote_code=False)
+                                                     local_files_only=True, trust_remote_code=False,
+                                                     attn_implementation="sdpa")
     send({"status": "ready", "model_id": "Qwen/Qwen3-8B", "physical_gpu": args.physical_gpu,
           "gpu_name": torch.cuda.get_device_name(0), "memory_before_mib": free,
           "gpu_total_memory_mib": round(torch.cuda.get_device_properties(0).total_memory / 1024**2, 1),
@@ -127,7 +137,8 @@ def main():
                 send({"status": "resource_unavailable", "usage": {"prompt_tokens": input_tokens, "completion_tokens": 0}})
                 break
             encoded = encoded.to("cuda:0")
-            with contextlib.redirect_stdout(sys.stderr), torch.inference_mode():
+            from torch.nn.attention import sdpa_kernel, SDPBackend
+            with contextlib.redirect_stdout(sys.stderr), torch.inference_mode(), sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
                 generated = model.generate(**encoded, max_new_tokens=request["max_tokens"], do_sample=False, use_cache=True)
             suffix = generated[0, input_tokens:]
             raw = tokenizer.decode(suffix, skip_special_tokens=False)
