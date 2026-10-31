@@ -32,3 +32,5 @@ Large ignored checkpoints and local credential files are outside the Git archive
 
 - [Fixed batch train calibration protocol](rsi_batch_train_calibration_protocol_20261031.md): four preselected meta-train instances, bounded shared primitive budget, no RSI candidates.
 - [Improver controls and GEPA adapter](rsi_improver_controls_20261031.md): instruction-level proposer distinction, official upstream offline plumbing smoke, no effectiveness claim.
+
+- [2026-10-31 progress checkpoint](rsi_progress_20261031.md): obsolete branch removed, shared batching/control adapters tested, live four-task calibration and automatic replay/reporting configured.

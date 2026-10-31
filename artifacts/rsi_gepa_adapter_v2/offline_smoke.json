@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "checks": {
+    "allowlist_rejected_before_execution": true,
+    "official_engine_proposed_and_evaluated": true,
+    "independent_sqlite_fixture_passed": true,
+    "metric_count_matches_adapter": true
+  },
+  "upstream_url": "https://github.com/gepa-ai/gepa",
+  "upstream_commit": "80a62c879ecdeb8741faac72a844dceb1c18691f",
+  "upstream_core_unchanged": true,
+  "llm_api_calls": 0,
+  "scripted_reflection_calls": 1,
+  "fixture_episodes": 6,
+  "sources": {
+    "AgenticArxiv/rsi/gepa_adapter.py": "90cd66d7efe9216f21d54b48895f6812d715565db7d5feddb785dfab1bcc81b8",
+    "scripts/verify_rsi_gepa_adapter.py": "d09efc47afe67ecca61b201125a3722604ea49976b610474e855a5f60b79aed5",
+    "scripts/rsi_cpu_tasks.py": "1c7bdfea7d05d43555bd9c9fe24411d6a3358c5b2e12ddde1ca528d53c54586e"
+  },
+  "scope": "Synthetic plumbing fixture only; scripted policies, same toy train/val. No GEPA or RSI effectiveness result."
+}

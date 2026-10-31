@@ -31,3 +31,5 @@
 `python3 -m unittest discover -s AgenticArxiv/tests -p 'test_rsi_*.py'`：12 项通过，覆盖 batch 的状态/预算边界、三组 proposer 区别、同起点请求一致性、无效/no-op 候选，以及无工具请求格式与未知用量重试计量。无 GPU，无真实 API 请求。
 
 官方来源：https://github.com/gepa-ai/gepa/tree/80a62c879ecdeb8741faac72a844dceb1c18691f ；https://gepa-ai.github.io/gepa/guides/adapters/
+
+后续小修：GEPA candidate 与自建 proposer 统一12000字符文本上限；v2 offline smoke通过，见 `artifacts/rsi_gepa_adapter_v2/offline_smoke.json`。无真实模型效果评测。

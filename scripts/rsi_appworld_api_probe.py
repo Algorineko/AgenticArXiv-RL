@@ -88,6 +88,7 @@ def main():
     p.add_argument("--train-pool-file", type=Path)
     p.add_argument("--train-pool-manifest", type=Path)
     p.add_argument("--train-count", type=int, default=4)
+    p.add_argument("--model", default="doubao-seed-2.0-mini")
     args = p.parse_args()
     if not (1 <= args.max_steps <= 24 and 1 <= args.max_calls <= 100
             and 1 <= args.max_input_tokens <= 1500000 and 1 <= args.max_output_tokens <= 100000
@@ -128,7 +129,7 @@ def main():
     if args.public_output.exists():
         raise ValueError("public output already exists")
     limits = {"calls": args.max_calls, "input_tokens": args.max_input_tokens, "output_tokens": args.max_output_tokens}
-    api = API("https://api.qnaigc.com/v1", "doubao-seed-2.0-mini", args.private_output,
+    api = API("https://api.qnaigc.com/v1", args.model, args.private_output,
               limits, min_interval=15, max_completion_tokens=args.completion_tokens)
     harness = args.harness_file.read_text() if args.harness_file else ""
     protocol = {"stage": "external train-only diagnostic, no RSI effect", "created_utc": utc(),

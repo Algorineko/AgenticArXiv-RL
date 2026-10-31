@@ -4,6 +4,7 @@ This module does not implement or replace GEPA's optimizer or reflection prompt.
 All live solver and reflection calls must share one accounting API instance.
 """
 from copy import deepcopy
+from .improver import MAX_TEXT_CHARS
 
 
 class NativeTraceGEPAAdapter:
@@ -19,7 +20,7 @@ class NativeTraceGEPAAdapter:
     def evaluate(self, batch, candidate, capture_traces=False):
         from gepa.core.adapter import EvaluationBatch
         if (set(candidate) != {"solver_harness"} or not isinstance(candidate["solver_harness"], str)
-                or not candidate["solver_harness"].strip()):
+                or not candidate["solver_harness"].strip() or len(candidate["solver_harness"]) > MAX_TEXT_CHARS):
             raise ValueError("Only solver_harness text is mutable")
         # Validate the entire requested batch before executing anything.
         for task in batch:
