@@ -42,3 +42,5 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [Counterfactual comparison draft](rsi_counterfactual_design_20261031.md): separates fixed-state proposer effects from end-to-end lineages, with cost and data boundaries.
 
 - [Completed 4-task calibration findings](rsi_batch_train_calibration_findings_20261031.md): 0/4 with 76 exact replayed observations; 3/4 tasks used unregistered child names in batch calls.
+
+- [Conditional real-model lineage connectivity protocol](rsi_lineage_connectivity_protocol_20261031.md): smoke only after a complete, replayed 1/2 development pair; no task-performance claim.
