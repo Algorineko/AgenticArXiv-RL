@@ -1,0 +1,19 @@
+{
+  "status": "api_failure",
+  "requested_model": "qwen/qwen3.6-27b",
+  "returned_model": null,
+  "native_tool_call_valid": false,
+  "finish_reason": null,
+  "usage": {
+    "calls": 2,
+    "accounted_input_tokens": 9008,
+    "accounted_output_tokens": 2048,
+    "calls_without_provider_usage": 2
+  },
+  "limitation": "Catalog and response aliases do not attest actual backend weights; no task capability claim.",
+  "http_status_counts": {
+    "502": 2
+  },
+  "private_trace_sha256": "377ee1f7d54ddefd6dad969736d3ffa19e1670ef696b8ae3baac7c5f51bc2495",
+  "private_trace_location": "/home/zhangjialiang/.cache/agentic-rsi/qwen36-neutral-probe-v1/api_calls.jsonl"
+}

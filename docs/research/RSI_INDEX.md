@@ -36,3 +36,9 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [2026-10-31 progress checkpoint](rsi_progress_20261031.md): obsolete branch removed, shared batching/control adapters tested, live four-task calibration and automatic replay/reporting configured.
 
 - [Conditional same-API batching development protocol](rsi_same_api_development_protocol_20261031.md): preregistered fallback after a complete replayed 0/4; attribution remains limited.
+
+- [Closest-work and viability reassessment](rsi_related_work_reassessment_20261031.md): Skill∞, HSI and HarnessEvolve narrow novelty; no RSI effect established.
+
+- [Counterfactual comparison draft](rsi_counterfactual_design_20261031.md): separates fixed-state proposer effects from end-to-end lineages, with cost and data boundaries.
+
+- [Completed 4-task calibration findings](rsi_batch_train_calibration_findings_20261031.md): 0/4 with 76 exact replayed observations; 3/4 tasks showed batch proxy-name confusion.

@@ -1,0 +1,16 @@
+{
+  "requested_model": "qwen/qwen3.6-27b",
+  "limits": {
+    "calls": 2,
+    "input_tokens": 30000,
+    "output_tokens": 2048
+  },
+  "created_utc": "2026-10-31T03:55:38.399267+00:00",
+  "max_completion_tokens": 1024,
+  "purpose": "Neutral connectivity only, not capability or weight identity",
+  "sources": {
+    "rsi_model_probe.py": "f3f349ce9626bfd51401ad3128d35378f22e6cdede047425f163028ecb308eb7",
+    "rsi_api_pilot.py": "ed2f33cf825aee931ca936fe3212fdf5cb3f124c1a4c92b955dfa84de89247a0",
+    "rsi_cpu_tasks.py": "1c7bdfea7d05d43555bd9c9fe24411d6a3358c5b2e12ddde1ca528d53c54586e"
+  }
+}

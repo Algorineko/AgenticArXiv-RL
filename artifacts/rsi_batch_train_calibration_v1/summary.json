@@ -1,0 +1,90 @@
+{
+  "protocol": {
+    "stage": "external train-only diagnostic, no RSI effect",
+    "created_utc": "2026-10-31T03:35:28.943865+00:00",
+    "task_id_sha256": [
+      "3193bf4191ecae04241a774152778aa7078cfb6d11b5872da22756f4564267a0",
+      "1fed9164bbc8cc76ce95257c456da993fc69773134ccf81733d3818af0fb8cfa",
+      "09652b8caabc0ed837194c0e2c0ba50388ee8d92cea78e20d5b001e959982851",
+      "1d6db95bcc627dbb4db52e64126e9c6a8ada0bf1a84c29f7de3783b9a5b35b6d"
+    ],
+    "max_steps": 24,
+    "max_parallel_tools": 4,
+    "limits": {
+      "calls": 100,
+      "input_tokens": 1500000,
+      "output_tokens": 100000
+    },
+    "isolated_framework_registry": true,
+    "bounded_batch_interface": true,
+    "primitive_budget": 128,
+    "max_environment_interactions": 128,
+    "training_pool": {
+      "public_manifest_sha256": "6ab43b2075a798797227189c0fff60f47e1cfcec8c1d45a18957197b0cda1007",
+      "selection": "Frozen meta_train prefix, inner_train only",
+      "count": 4
+    },
+    "model": "doubao-seed-2.0-mini",
+    "min_request_interval_s": 15,
+    "max_completion_tokens": 2048,
+    "harness_sha256": "4fad332da6b08da60a6ad4309523be71d29e5d1559f13ffb82cb179f376f0f25",
+    "experiment_prefix": "rsi_batch_train_v1",
+    "sources": {
+      "rsi_api_pilot.py": "eada8b35e0d2b2713b66e61115097d788d01f1d7467fa815e3dd46969976e4c0",
+      "rsi_cpu_tasks.py": "1c7bdfea7d05d43555bd9c9fe24411d6a3358c5b2e12ddde1ca528d53c54586e",
+      "rsi_appworld_api_probe.py": "14f78e468d21e7adf3dd8bfe670e946774e21c5998429f48863fcbfc9574e56e"
+    },
+    "framework_sources": {
+      "AgenticArxiv/tools/tool_registry.py": "d0c8a7d7e83cd582e1da506f941ebf71e7b851dbd9ec3b8815f949b09a09b2e5",
+      "AgenticArxiv/rsi/tool_environment.py": "fa52a842e3af6e75963d034bd069bc02df554e4e363d0f3c1177f5348e42d254",
+      "AgenticArxiv/rsi/batch_environment.py": "b323a0cc64180e5eaeb2f3752c5942bf4ab7611b988abd521970cfcf4c6b8cec"
+    }
+  },
+  "episodes": [
+    {
+      "task_id_sha256": "3193bf4191ecae04241a774152778aa7078cfb6d11b5872da22756f4564267a0",
+      "success": false,
+      "stop": "step_budget",
+      "model_steps": 24,
+      "tool_calls": 24,
+      "tool_errors": 0,
+      "primitive_attempts": 24
+    },
+    {
+      "task_id_sha256": "1fed9164bbc8cc76ce95257c456da993fc69773134ccf81733d3818af0fb8cfa",
+      "success": false,
+      "stop": "assistant_final",
+      "model_steps": 17,
+      "tool_calls": 16,
+      "tool_errors": 1,
+      "primitive_attempts": 15
+    },
+    {
+      "task_id_sha256": "09652b8caabc0ed837194c0e2c0ba50388ee8d92cea78e20d5b001e959982851",
+      "success": false,
+      "stop": "step_budget",
+      "model_steps": 24,
+      "tool_calls": 24,
+      "tool_errors": 3,
+      "primitive_attempts": 46
+    },
+    {
+      "task_id_sha256": "1d6db95bcc627dbb4db52e64126e9c6a8ada0bf1a84c29f7de3783b9a5b35b6d",
+      "success": false,
+      "stop": "generation_truncated",
+      "model_steps": 13,
+      "tool_calls": 12,
+      "tool_errors": 2,
+      "primitive_attempts": 19
+    }
+  ],
+  "usage": {
+    "calls": 78,
+    "accounted_input_tokens": 662831,
+    "accounted_output_tokens": 31898,
+    "calls_without_provider_usage": 0
+  },
+  "complete": true,
+  "protected_trace_location": "/home/zhangjialiang/.cache/agentic-rsi/appworld-batch-train-v1",
+  "limitation": "Preselected train-only diagnostic; not a benchmark score or RSI method comparison."
+}
