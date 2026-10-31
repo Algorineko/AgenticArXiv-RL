@@ -33,6 +33,9 @@ def main():
         archived = args.private_run / "frozen_framework_sources" / name
         framework_checks[name] = hashlib.sha256(archived.read_bytes()).hexdigest() == expected
         source_checks[name] = framework_checks[name]
+    for name, expected in protocol.get("backend_sources", {}).items():
+        archived = args.private_run / "frozen_backend_sources" / name
+        source_checks[name] = hashlib.sha256(archived.read_bytes()).hexdigest() == expected
     assert all(source_checks.values()), source_checks
     # Load the actual archived implementation, not a later worktree version.
     frozen = args.private_run / "frozen_sources"

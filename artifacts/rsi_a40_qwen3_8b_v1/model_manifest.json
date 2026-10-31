@@ -1,0 +1,49 @@
+{
+  "model_id": "Qwen/Qwen3-8B",
+  "source": "https://modelscope.cn/models/Qwen/Qwen3-8B",
+  "requested_revision": "master",
+  "resolved_revision": "not provided; file hashes pin downloaded content",
+  "model_type": "qwen3",
+  "modelscope_version": "1.40.2",
+  "files": {
+    "config.json": {
+      "bytes": 728,
+      "sha256": "f7c4eadfbbf522470667b797a3c89be2524832d2d599797248dc304fff447c30"
+    },
+    "model-00001-of-00005.safetensors": {
+      "bytes": 3996250744,
+      "sha256": "31d6a825ae35f11fb85b195b4c42c146c051e446433125a215336abdf95cbf5f"
+    },
+    "model-00002-of-00005.safetensors": {
+      "bytes": 3993160032,
+      "sha256": "5991236cea6fe21f3d43cab0f0e84448734fbbe0789816202989f2ddc9d18282"
+    },
+    "model-00003-of-00005.safetensors": {
+      "bytes": 3959604768,
+      "sha256": "c5185c4794be2d8a9784d5753c9922db38df478ce11f9ed0b415b7304d896836"
+    },
+    "model-00004-of-00005.safetensors": {
+      "bytes": 3187841392,
+      "sha256": "b5ee7de71fbf17db3d5704e0c8f2bc7d005ca9e1d7ca2aeb19827b0cfcaa917a"
+    },
+    "model-00005-of-00005.safetensors": {
+      "bytes": 1244659840,
+      "sha256": "20c2d6366ab85c90786ccdd829cd2b9e7d30ef3b2ebbb998280e7e4014b542ff"
+    },
+    "model.safetensors.index.json": {
+      "bytes": 32878,
+      "sha256": "f9fdbcb91c23971c13ec5d5f2573d2349e8f61f2f049371ec699281748fdb1bc"
+    },
+    "tokenizer.json": {
+      "bytes": 11422654,
+      "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+    },
+    "tokenizer_config.json": {
+      "bytes": 9732,
+      "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101"
+    }
+  },
+  "source_sha256": "e32c37370c7dfb4bb88b0aace726bf762c2736ff61ab5921007793deba0a3ff7",
+  "storage": "temporary server filesystem; not a durable backup",
+  "gpu_used_for_download": false
+}

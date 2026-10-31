@@ -48,3 +48,5 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [A40 open-model preparation protocol](rsi_a40_open_model_protocol_20261031.md): temporary storage, single-GPU memory gates, neutral tool probe, no task-performance claim.
 
 - [Same-API development findings](rsi_same_api_development_findings_20261031.md): mini model used both batches without proxy errors but remained 0/2; 37 observations replayed.
+
+- [Conditional A40 local-model task protocol](rsi_a40_local_calibration_protocol_20261031.md): only after neutral tool success and manifest verification; two exposed training instances, no RSI effect claim.

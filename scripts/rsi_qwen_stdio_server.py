@@ -97,6 +97,8 @@ def main():
           "gpu_total_memory_mib": round(torch.cuda.get_device_properties(0).total_memory / 1024**2, 1),
           "max_memory_fraction": 0.60, "max_context_tokens": args.max_context_tokens,
           "max_new_tokens": args.max_new_tokens,
+          "peak_allocated_mib": round(torch.cuda.max_memory_allocated(0) / 1024**2, 1),
+          "peak_reserved_mib": round(torch.cuda.max_memory_reserved(0) / 1024**2, 1),
           "model_manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
           "config_sha256": hashlib.sha256((args.model_dir / "config.json").read_bytes()).hexdigest(),
           "server_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()})

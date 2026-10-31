@@ -1,0 +1,21 @@
+{
+  "stage": "single neutral tool-call connectivity, not task performance",
+  "native_tool_call_valid": true,
+  "model_id": "Qwen/Qwen3-8B",
+  "gpu_name": "NVIDIA A40",
+  "physical_gpu": 1,
+  "memory_before_mib": 45486,
+  "max_memory_fraction": 0.6,
+  "gpu_total_memory_mib": 45488.1,
+  "peak_allocated_mib": 15672.7,
+  "peak_reserved_mib": 15698.0,
+  "prompt_tokens": 163,
+  "generated_tokens": 20,
+  "tool_call_blocks": 1,
+  "do_sample": false,
+  "thinking_enabled": false,
+  "torch_version": "2.7.1+cu128",
+  "probe_source_sha256": "7f2c318f36d3ccd0476d0ae3cd2960ccb802dd3431a939f055cb61436d8f812f",
+  "config_sha256": "f7c4eadfbbf522470667b797a3c89be2524832d2d599797248dc304fff447c30",
+  "limitation": "One neutral tool probe only, no RSI or task effectiveness."
+}

@@ -1,0 +1,12 @@
+{
+  "state": "complete",
+  "checks": {
+    "expected_model_and_type": true,
+    "expected_weight_size_and_hashes": true,
+    "download_script_matches": true,
+    "probe_script_matches": true,
+    "model_config_matches": true,
+    "single_a40_with_headroom": true,
+    "bounded_peak_memory": true
+  }
+}

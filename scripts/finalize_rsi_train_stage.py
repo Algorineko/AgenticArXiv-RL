@@ -34,7 +34,7 @@ def main():
             except json.JSONDecodeError:
                 candidate = None  # Writer may be replacing a checkpoint.
             if candidate and candidate.get("episodes"):
-                fatal = candidate["episodes"][-1]["stop"] in ("api_error", "global_budget")
+                fatal = candidate["episodes"][-1]["stop"] in ("api_error", "global_budget", "model_resource_unavailable")
                 if candidate.get("complete") or fatal:
                     summary = candidate
                     break
@@ -79,10 +79,14 @@ def main():
              "| --- | --- | --- | --- | --- | --- |"]
     for row in episodes:
         lines.append(f"| {row['task_id_sha256'][:12]} | {row['success']} | {row['stop']} | {row['model_steps']} | {row['tool_calls']} | {row['primitive_attempts']} |")
-    lines += ["", f"API 请求：{usage['calls']}；计量 input：{usage['accounted_input_tokens']}，output：{usage['accounted_output_tokens']}；缺失提供方用量：{usage['calls_without_provider_usage']} 次。缺失时采用预算预留估计，不能冒称实际账单。",
+    usage_label = ("本地模型请求/分词器计数" if usage.get("source") == "local tokenizer; not provider billing"
+                   else "API 请求/提供方用量")
+    lines += ["", f"{usage_label}：{usage['calls']}；计量 input：{usage['accounted_input_tokens']}，output：{usage['accounted_output_tokens']}；缺失用量：{usage['calls_without_provider_usage']} 次。缺失时采用预算预留估计，不能冒称实际账单。",
               f"停止原因：{dict(counts)}。实际分发批量调用 {batch_calls} 次，其已执行子调用 {batch_children} 次；基础操作单独计数。",
               f"独立回放 {replay['observations_replayed']} 条顶层观察，观察与最终判定均一致。源码摘要核验通过。", "",
-              "未读取 meta_dev/锁定最终任务内容，未给模型参考源码或解答，没有使用 GPU。"]
+              ("未读取 meta_dev/锁定最终任务内容，未给模型参考源码或解答；本次使用单张 A40。"
+               if summary.get("local_backend") else
+               "未读取 meta_dev/锁定最终任务内容，未给模型参考源码或解答，没有使用 GPU。")]
     if not summary["complete"]:
         decision = "全套未完成，先处理预算/网络中断；不计算完整总分或开始递归效果对照。"
     elif successes == 0:

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 import time
@@ -93,8 +94,8 @@ def main():
         if not all(checks.values()):
             write_json(status_path, {"state": "verification_failed", "checks": checks})
             raise SystemExit("Remote aggregate failed provenance or resource verification")
-        write_json(args.output / "model_manifest.json", manifest)
-        write_json(args.output / "probe.json", probe)
+        shutil.copyfile(dest / "model_manifest.json", args.output / "model_manifest.json")
+        shutil.copyfile(dest / "probe.json", args.output / "probe.json")
         write_json(status_path, {"state": "complete", "checks": checks})
     args.local_findings.parent.mkdir(parents=True, exist_ok=True)
     args.local_findings.write_text(
