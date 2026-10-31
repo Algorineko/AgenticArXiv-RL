@@ -87,7 +87,7 @@ def main():
         selected.append(task_id)
     if len(selected) != 2 or len(set(selected)) != 2:
         raise ValueError("Expected the fixed two-task training prefix")
-    args.private_output.mkdir(parents=True)
+    args.private_output.mkdir(parents=True, mode=0o700)
     args.public_output.parent.mkdir(parents=True, exist_ok=True)
     remote_manifest = shlex.quote(f"{args.remote_root}/model_manifest.json")
     remote_digest_output = subprocess.check_output(

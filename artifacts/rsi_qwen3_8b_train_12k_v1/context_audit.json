@@ -1,0 +1,31 @@
+{
+  "episodes": [
+    {
+      "episode_sha256_prefix": "1fed9164bbc8",
+      "last_prompt_tokens": 13206,
+      "tool_messages": 13,
+      "tool_content_characters": 38233,
+      "unique_exact_tool_contents": 5,
+      "duplicate_group_sizes": [
+        5,
+        3,
+        3
+      ],
+      "duplicate_tool_content_characters": 23328,
+      "system_content_characters": 1045,
+      "user_content_characters": 421
+    },
+    {
+      "episode_sha256_prefix": "3193bf4191ec",
+      "last_prompt_tokens": 12380,
+      "tool_messages": 14,
+      "tool_content_characters": 39370,
+      "unique_exact_tool_contents": 14,
+      "duplicate_group_sizes": [],
+      "duplicate_tool_content_characters": 0,
+      "system_content_characters": 1045,
+      "user_content_characters": 603
+    }
+  ],
+  "note": "Characters are not model tokens. Exact duplicate content is not evidence that removing messages preserves tool-call semantics."
+}
