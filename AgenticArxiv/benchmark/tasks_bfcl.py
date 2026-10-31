@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-_PARQUET = Path("[LOCAL_PATH_WITHHELD]")
+_PARQUET = Path(__file__).resolve().parents[2] / "data" / "bfcl" / "v3_multi_turn_base.parquet"
 
 
 def _parse_call(text: str) -> Optional[Dict[str, Any]]:

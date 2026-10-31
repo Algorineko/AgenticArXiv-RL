@@ -7,7 +7,7 @@ backward → greedy 生成」的最小闭环，产出峰值显存 / 吞吐 / los
 运行环境（覆盖层方案，见 local_docs/plan.md）::
 
     export HCU_ROOT=$HOME/env/hcu_root
-    source $HCU_ROOT[LOCAL_PATH_WITHHELD]   # set +u 先行
+    source "$HCU_ROOT/${HCU_ENV_SCRIPT:?set HCU_ENV_SCRIPT relative to HCU_ROOT}"   # set +u 先行
     export PYTHONHOME=$HCU_ROOT/usr
     export PYTHONPATH=$HOME/env/pip_overlay_tf514:$HCU_ROOT/usr/local/lib/python3.10/dist-packages
     export HIP_VISIBLE_DEVICES=2            # 选卡用 HIP，不用 CUDA
