@@ -3,6 +3,16 @@
     {
       "episode_sha256_prefix": "1fed9164bbc8",
       "last_prompt_tokens": 13206,
+      "invocations_by_tool": {
+        "list_apps": 1,
+        "list_apis": 1,
+        "api_doc": 11
+      },
+      "identical_invocation_group_sizes": [
+        5,
+        3,
+        3
+      ],
       "tool_messages": 13,
       "tool_content_characters": 38233,
       "unique_exact_tool_contents": 5,
@@ -18,6 +28,13 @@
     {
       "episode_sha256_prefix": "3193bf4191ec",
       "last_prompt_tokens": 12380,
+      "invocations_by_tool": {
+        "list_apps": 1,
+        "list_apis": 7,
+        "api_doc": 4,
+        "call_api": 2
+      },
+      "identical_invocation_group_sizes": [],
       "tool_messages": 14,
       "tool_content_characters": 39370,
       "unique_exact_tool_contents": 14,
