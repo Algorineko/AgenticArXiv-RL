@@ -34,3 +34,5 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [Improver controls and GEPA adapter](rsi_improver_controls_20261031.md): instruction-level proposer distinction, official upstream offline plumbing smoke, no effectiveness claim.
 
 - [2026-10-31 progress checkpoint](rsi_progress_20261031.md): obsolete branch removed, shared batching/control adapters tested, live four-task calibration and automatic replay/reporting configured.
+
+- [Conditional same-API batching development protocol](rsi_same_api_development_protocol_20261031.md): preregistered fallback after a complete replayed 0/4; attribution remains limited.

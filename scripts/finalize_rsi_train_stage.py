@@ -49,6 +49,9 @@ def main():
     replay = json.loads(args.replay_output.read_text())
     assert replay["all_observations_match"] and replay["all_goal_verdicts_match"]
     episodes = summary["episodes"]
+    planned = len(summary["protocol"]["task_id_sha256"])
+    if not planned:
+        raise ValueError("No planned task identifiers")
     counts = collections.Counter(row["stop"] for row in episodes)
     successes = sum(row["success"] for row in episodes)
     normal_successes = sum(row["success"] and row["stop"] == "assistant_final" for row in episodes)
@@ -66,28 +69,28 @@ def main():
         for step in trace["steps"]:
             for operation, observed in zip(step["assistant"].get("tool_calls", []), step["observations"]):
                 function = operation.get("function") or {}
-                if function.get("name") == "batch_tools":
+                if function.get("name") in ("batch_tools", "batch_api_calls"):
                     batch_calls += 1
                     batch_children += len(observed["result"].get("results", []))
     lines = ["# 固定批量接口训练校准：实际结果（2026-10-31）", "",
-             f"完成状态：{summary['complete']}；已结束 {len(episodes)}/4 题，独立终局成功 {successes}/{len(episodes)}，正常 final 且成功 {normal_successes}。",
-             "这是四个预定 meta_train/inner_train 的开发校准，不是最终测试或 RSI 方法实验。", "",
+             f"完成状态：{summary['complete']}；已结束 {len(episodes)}/{planned} 题，独立终局成功 {successes}/{len(episodes)}，正常 final 且成功 {normal_successes}。",
+             f"这是预定的 {planned} 个 meta_train/inner_train 开发实例，不是最终测试或 RSI 方法实验。", "",
              "| 训练实例摘要前缀 | 成功 | 停止原因 | 模型响应 | 顶层工具调用 | 基础调用尝试 |",
              "| --- | --- | --- | --- | --- | --- |"]
     for row in episodes:
         lines.append(f"| {row['task_id_sha256'][:12]} | {row['success']} | {row['stop']} | {row['model_steps']} | {row['tool_calls']} | {row['primitive_attempts']} |")
     lines += ["", f"API 请求：{usage['calls']}；计量 input：{usage['accounted_input_tokens']}，output：{usage['accounted_output_tokens']}；缺失提供方用量：{usage['calls_without_provider_usage']} 次。缺失时采用预算预留估计，不能冒称实际账单。",
-              f"停止原因：{dict(counts)}。实际分发 batch_tools {batch_calls} 次，其已执行子调用 {batch_children} 次；不是把批量免费计作一次基础操作。",
+              f"停止原因：{dict(counts)}。实际分发批量调用 {batch_calls} 次，其已执行子调用 {batch_children} 次；基础操作单独计数。",
               f"独立回放 {replay['observations_replayed']} 条顶层观察，观察与最终判定均一致。源码摘要核验通过。", "",
               "未读取 meta_dev/锁定最终任务内容，未给模型参考源码或解答，没有使用 GPU。"]
     if not summary["complete"]:
-        decision = "全套未完成，先处理预算/网络中断；不计算四题总分或开始递归效果对照。"
+        decision = "全套未完成，先处理预算/网络中断；不计算完整总分或开始递归效果对照。"
     elif successes == 0:
-        decision = "0/4，未通过健康基线门槛；不启动三组效果对照，继续诊断模型/工具使用与响应预算。不能据此否定 RSI。"
-    elif successes == 4:
-        decision = "4/4，本前缀已饱和；需在训练范围扩展标定，不在这四题上宣称改进。"
+        decision = f"0/{planned}，未通过健康基线门槛；继续诊断模型/工具使用与响应预算。不能据此否定 RSI。"
+    elif successes == planned:
+        decision = f"{planned}/{planned}，本前缀已饱和；需在训练范围扩展标定，不能据此宣称改进。"
     else:
-        decision = "本前缀有初步非饱和空间，但四题不足以证明稳定性；下一步冻结更完整开发/选择协议与重复基线，再进入等经验/等预算三组对照。"
+        decision = f"本前缀有初步非饱和空间，但{planned}题不足以证明稳定性；下一步冻结更完整开发/选择协议与重复基线，再进入等经验/等预算三组对照。"
     lines += ["", "推进决策：" + decision]
     if probe:
         lines += ["", f"独立中性 Qwen 连通性检查：status={probe['status']}，native_tool_call_valid={probe['native_tool_call_valid']}，usage={probe['usage']}。此费用独立于上述四题校准，未运行 Qwen 任务评测；模型别名不证明实际后端权重身份。"]

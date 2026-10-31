@@ -84,6 +84,7 @@ def main():
     p.add_argument("--max-output-tokens", type=int, default=30000)
     p.add_argument("--completion-tokens", type=int, default=1024)
     p.add_argument("--batch", action="store_true")
+    p.add_argument("--same-api-batch", action="store_true")
     p.add_argument("--primitive-budget", type=int, default=128)
     p.add_argument("--train-pool-file", type=Path)
     p.add_argument("--train-pool-manifest", type=Path)
@@ -97,6 +98,8 @@ def main():
         p.error("Development caps: 24 steps, 100 attempts, 1.5M input, 100k output, 2048 output/response, 128 primitive calls")
     if args.batch and not args.registry:
         p.error("Batching requires --registry for tracked framework integration")
+    if args.same_api_batch and not args.batch:
+        p.error("Same-API batching requires --batch")
     if bool(args.train_pool_file) != bool(args.train_pool_manifest):
         p.error("Both training pool file and public manifest are required")
     if args.registry:
@@ -104,6 +107,8 @@ def main():
         from AgenticArxiv.rsi.tool_environment import RegisteredToolEnvironment
     if args.batch:
         from AgenticArxiv.rsi.batch_environment import BoundedBatchEnvironment
+    if args.same_api_batch:
+        from AgenticArxiv.rsi.api_batch_environment import SameAPIBatchEnvironment
     from appworld import load_task_ids
     from appworld.common.path_store import path_store
     path_store.update_root(str(args.root))
@@ -136,7 +141,8 @@ def main():
                 "task_id_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in selected],
                 "max_steps": args.max_steps, "max_parallel_tools": 4, "limits": limits,
                 "isolated_framework_registry": args.registry,
-                "bounded_batch_interface": args.batch, "primitive_budget": args.primitive_budget if args.batch else None,
+                "bounded_batch_interface": args.batch, "same_api_batch_interface": args.same_api_batch,
+                "primitive_budget": args.primitive_budget if args.batch else None,
                 "max_environment_interactions": args.primitive_budget if args.batch else 48,
                 "training_pool": pool_metadata,
                 "model": api.model, "min_request_interval_s": 15, "max_completion_tokens": args.completion_tokens,
@@ -155,6 +161,8 @@ def main():
         framework_paths = ["AgenticArxiv/tools/tool_registry.py", "AgenticArxiv/rsi/tool_environment.py"]
         if args.batch:
             framework_paths.append("AgenticArxiv/rsi/batch_environment.py")
+        if args.same_api_batch:
+            framework_paths.append("AgenticArxiv/rsi/api_batch_environment.py")
         for name in framework_paths:
             content = (repo / name).read_bytes()
             protocol["framework_sources"][name] = hashlib.sha256(content).hexdigest()
@@ -172,7 +180,8 @@ def main():
                 "operations, then call supervisor.complete_task with the appropriate answer if required."}
         primitive_env = None
         if args.batch:
-            primitive_env = BoundedBatchEnvironment(env, primitive_budget=args.primitive_budget)
+            wrapper = SameAPIBatchEnvironment if args.same_api_batch else BoundedBatchEnvironment
+            primitive_env = wrapper(env, primitive_budget=args.primitive_budget)
             env = primitive_env
         if args.registry:
             env = RegisteredToolEnvironment(env)

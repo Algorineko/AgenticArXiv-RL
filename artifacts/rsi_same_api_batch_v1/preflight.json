@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "checks": {
+    "observations_match": true,
+    "verdict_matches": true,
+    "no_op_rejected": true,
+    "primitive_budget_exact": true,
+    "exhaustion_rejected": true,
+    "world_interactions_exact": true
+  },
+  "llm_api_calls": 0,
+  "task_id_sha256": "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+  "sources": {
+    "AgenticArxiv/rsi/api_batch_environment.py": "a79ae046823428c5ff928c5a86f7548978e49201cd7a5ba12e78f3d300189fad",
+    "AgenticArxiv/rsi/batch_environment.py": "b323a0cc64180e5eaeb2f3752c5942bf4ab7611b988abd521970cfcf4c6b8cec",
+    "AgenticArxiv/rsi/tool_environment.py": "fa52a842e3af6e75963d034bd069bc02df554e4e363d0f3c1177f5348e42d254",
+    "scripts/verify_rsi_same_api_batch.py": "76913ece6d1f0e4288a77a53f2ca6010671e9737f521e80c33197499b54b93de"
+  },
+  "scope": "Exposed train documentation only; no method effectiveness claim."
+}
