@@ -44,3 +44,7 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [Completed 4-task calibration findings](rsi_batch_train_calibration_findings_20261031.md): 0/4 with 76 exact replayed observations; 3/4 tasks used unregistered child names in batch calls.
 
 - [Conditional real-model lineage connectivity protocol](rsi_lineage_connectivity_protocol_20261031.md): smoke only after a complete, replayed 1/2 development pair; no task-performance claim.
+
+- [A40 open-model preparation protocol](rsi_a40_open_model_protocol_20261031.md): temporary storage, single-GPU memory gates, neutral tool probe, no task-performance claim.
+
+- [Same-API development findings](rsi_same_api_development_findings_20261031.md): mini model used both batches without proxy errors but remained 0/2; 37 observations replayed.

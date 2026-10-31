@@ -148,6 +148,10 @@ def episode(api, task, repeat, max_steps, environment=None, harness_instruction=
             if choice.get("finish_reason") == "length":
                 trace["stop"] = "generation_truncated"
                 break
+            if choice.get("finish_reason") in {"model_parse_error", "model_context_limit",
+                                                "model_resource_unavailable", "model_protocol_error"}:
+                trace["stop"] = choice["finish_reason"]
+                break
             if not calls:
                 trace["stop"] = "assistant_final"
                 break

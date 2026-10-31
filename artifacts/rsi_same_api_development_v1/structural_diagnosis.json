@@ -1,0 +1,41 @@
+{
+  "dataset": "preselected train/inner_train only",
+  "episodes": [
+    {
+      "task_id_sha256": "3193bf4191ecae04241a774152778aa7078cfb6d11b5872da22756f4564267a0",
+      "goal_success": false,
+      "stop": "step_budget",
+      "model_steps": 24,
+      "proxy_tool_counts": {
+        "list_apps": 1,
+        "list_apis": 3,
+        "api_doc": 5,
+        "call_api": 14,
+        "batch_api_calls": 1
+      },
+      "proxy_errors": {},
+      "batch_structural_findings": {},
+      "batch_children_executed": 7
+    },
+    {
+      "task_id_sha256": "1fed9164bbc8cc76ce95257c456da993fc69773134ccf81733d3818af0fb8cfa",
+      "goal_success": false,
+      "stop": "assistant_final",
+      "model_steps": 14,
+      "proxy_tool_counts": {
+        "list_apps": 1,
+        "list_apis": 2,
+        "api_doc": 4,
+        "call_api": 5,
+        "batch_api_calls": 1
+      },
+      "proxy_errors": {},
+      "batch_structural_findings": {},
+      "batch_children_executed": 4
+    }
+  ],
+  "source_sha256": "968d2262503f8613dd861770708970d77de1e572bf2400ea304c42243c93012f",
+  "model_calls": 0,
+  "locked_final_tasks_read": 0,
+  "limitation": "Proxy errors and output structure only; domain-level API failures are not fully classified."
+}

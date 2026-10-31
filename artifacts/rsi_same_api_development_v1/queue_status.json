@@ -1,0 +1,13 @@
+{
+  "state": "complete",
+  "protocol": "docs/research/rsi_same_api_development_protocol_20261031.md",
+  "selection": "First two frozen meta_train groups, inner_train only",
+  "previous_complete": true,
+  "previous_successes": 0,
+  "requested_model": "doubao-seed-2.0-mini",
+  "model_selection": "Qwen if neutral tool probe passed, otherwise the original mini model",
+  "previous_probe_passed": false,
+  "complete": true,
+  "episodes": 2,
+  "successes": 0
+}
