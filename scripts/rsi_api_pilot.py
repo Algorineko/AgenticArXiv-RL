@@ -57,8 +57,10 @@ class API:
             stream.write(canonical(self.clean(value)) + "\n")
 
     def chat(self, messages, tools, episode_id):
-        payload = {"model": self.model, "messages": messages, "tools": tools,
-                   "tool_choice": "auto", "temperature": 0, "max_tokens": self.max_completion_tokens, "stream": False}
+        payload = {"model": self.model, "messages": messages,
+                   "temperature": 0, "max_tokens": self.max_completion_tokens, "stream": False}
+        if tools:
+            payload.update(tools=tools, tool_choice="auto")
         # UTF-8 byte count plus overhead is a conservative reservation, not a tokenizer claim.
         reservation = len(canonical(payload).encode()) + 4096
         for retry in range(2):

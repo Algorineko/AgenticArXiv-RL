@@ -29,3 +29,6 @@ Large ignored checkpoints and local credential files are outside the Git archive
 - [Preselected meta-train reference profiling](rsi_train_reference_profile_20261030.md): 4/4 trusted references, 0/4 no-op, native request counts 31/29/40/70; not model scores.
 
 - [Completed integration and diagnostic findings](rsi_progress_20261030.md): actual costs, 52-observation horizon replay, clock and feasibility corrections.
+
+- [Fixed batch train calibration protocol](rsi_batch_train_calibration_protocol_20261031.md): four preselected meta-train instances, bounded shared primitive budget, no RSI candidates.
+- [Improver controls and GEPA adapter](rsi_improver_controls_20261031.md): instruction-level proposer distinction, official upstream offline plumbing smoke, no effectiveness claim.

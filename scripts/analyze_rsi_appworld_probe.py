@@ -18,7 +18,7 @@ def main():
     from appworld.common.path_store import path_store
     path_store.update_root(str(args.root))
     ids = {hashlib.sha256(t.encode()).hexdigest(): t
-           for t in load_task_ids("train", num_tasks_per_scenario=1)}
+           for t in load_task_ids("train")}
     traces = [json.loads(x) for x in (args.private_run / "traces.jsonl").read_text().splitlines()]
     protocol = json.loads((args.private_run / "protocol.json").read_text())
     source_checks = {}
@@ -35,11 +35,19 @@ def main():
     if protocol.get("isolated_framework_registry"):
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from AgenticArxiv.rsi.tool_environment import RegisteredToolEnvironment
+    if protocol.get("bounded_batch_interface"):
+        from AgenticArxiv.rsi.batch_environment import BoundedBatchEnvironment
     counts = {"observations_replayed": 0, "observation_mismatches": 0,
-              "goal_verdict_mismatches": 0, "episodes": len(traces)}
+              "goal_verdict_mismatches": 0, "episodes": len(traces),
+              "primitive_attempts_by_episode": []}
     for index, trace in enumerate(traces):
         assert trace["task_id"] in protocol["task_id_sha256"]
-        env = AppWorldEnvironment(ids[trace["task_id"]], f"rsi_external_api_replay_v1_{index}")
+        env = AppWorldEnvironment(ids[trace["task_id"]], f"rsi_external_api_replay_v1_{index}",
+                                  max_interactions=protocol.get("max_environment_interactions", 48))
+        primitive_env = None
+        if protocol.get("bounded_batch_interface"):
+            primitive_env = BoundedBatchEnvironment(env, primitive_budget=protocol["primitive_budget"])
+            env = primitive_env
         if protocol.get("isolated_framework_registry"):
             env = RegisteredToolEnvironment(env)
         try:
@@ -59,6 +67,10 @@ def main():
                     counts["observations_replayed"] += 1
                     counts["observation_mismatches"] += int(actual != observed["result"])
             counts["goal_verdict_mismatches"] += int(env.check() != trace["verdict"])
+            if primitive_env:
+                assert primitive_env.primitive_attempts <= protocol["primitive_budget"]
+                counts["primitive_attempts_by_episode"].append({"task_id_sha256": trace["task_id"],
+                                                               "attempts": primitive_env.primitive_attempts})
         finally:
             env.close()
     counts["all_observations_match"] = counts["observation_mismatches"] == 0

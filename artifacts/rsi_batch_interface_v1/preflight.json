@@ -1,0 +1,22 @@
+{
+  "checks": {
+    "observations_identical": true,
+    "verdict_identical": true,
+    "no_op_rejected": true,
+    "exact_primitive_accounting": true,
+    "budget_exhaustion_rejected": true,
+    "no_extra_world_interactions": true
+  },
+  "passed": true,
+  "llm_api_calls": 0,
+  "primitive_calls_per_world": 3,
+  "task_id_sha256": "d292d4cd969e36ece621f6f161d3c4d1d462aac73489eda06bff617a51a50049",
+  "sources": {
+    "AgenticArxiv/rsi/batch_environment.py": "b323a0cc64180e5eaeb2f3752c5942bf4ab7611b988abd521970cfcf4c6b8cec",
+    "AgenticArxiv/rsi/tool_environment.py": "fa52a842e3af6e75963d034bd069bc02df554e4e363d0f3c1177f5348e42d254",
+    "AgenticArxiv/tools/tool_registry.py": "d0c8a7d7e83cd582e1da506f941ebf71e7b851dbd9ec3b8815f949b09a09b2e5",
+    "scripts/rsi_appworld_api_probe.py": "14f78e468d21e7adf3dd8bfe670e946774e21c5998429f48863fcbfc9574e56e",
+    "scripts/verify_rsi_batch_interface.py": "b9760120476fee817f15a750b66e16a84c2983a1427087db7bcd5331defce9b3"
+  },
+  "scope": "Exposed train documentation parity only; state-changing batch invariants tested separately on SQLite."
+}
