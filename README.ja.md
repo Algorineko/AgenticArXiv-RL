@@ -9,8 +9,10 @@
 > 最終目標は、**端末上で動作する軽量マルチモーダル論文アシスタント**。検索・ダウンロード・翻訳から要約・図表理解までを担う、エンドツーエンドの論文読解モデルです。
 
 <p align="center">
-  <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL プロジェクトの概要" width="800"/>
+  <img src="imgs/AgenticArXiv-RL-hero.png" alt="AgenticArXiv-RL プロジェクトの概要" width="800"/>
 </p>
+
+[レーダー図のデータと評価基準](docs/edge-vlm-posttrain.md)：Qwen3-VL-8B の SFT / DPO / GRPO、81 タスク。全軸は高いほど良く、誤終了率は `1 − rate` で表示。
 
 ---
 
@@ -344,8 +346,10 @@ MIT License
 
 ### P2 — Jev 型の識別的意思決定コンポーネント
 
-- [ ] **Jev 型の識別ヘッド**：非自己回帰の構造化された意思決定（choice/score、コストは LLM の約 1/400）。候補は ① ルールを置き換える `result_quality` 識別ヘッド ② 固定カリキュラムを置き換える報酬成分ルーター ③ ツール選択の構造化デコードです。閉じた選択肢の集合は識別モデルに適しています。RLVR の再現性を保つため、推論を決定論的にするか、診断信号としてのみ使います。
-- [ ] **RLCD による Jev の自己訓練**：成功/失敗のツール決定軌跡からの対照信号（検証可能な報酬で人手ラベル不要）で識別ヘッドを訓練し、外部 TypeSafe API を置き換えます。**2 アーム比較で検証済み**（[docs/jev_rlcd.md](docs/jev_rlcd.md)）：対照項は CE 単独のベースラインに 4 スイートすべてで勝利（992 凍結ポイント、McNemar p<0.0001、Δ +33.0pp）。チェーン中間ステップ 91.0%、0.80 ゲート内で高精度。複合チェーンの最初のステップ 53.1% が既知の弱点（ゲート下で安全にフォールバック）。残タスク：最初のステップの targeted 強化、`TOOL_ROUTER=local` の配線
+- [x] **Jev ツールルーティング**：外部 TypeSafe の next-tool ルーター（`TOOL_ROUTER=jev`）を接続済み。guided 引数解析、信頼度ゲート、フォールバックに対応。既定は無効、推論専用で GRPO には未統合。[JEV_ROUTER.md](JEV_ROUTER.md) を参照。
+- [x] **RLCD ローカル識別ヘッドの訓練・比較**：データ構築、対照学習、凍結評価は完了（992 評価点で CE 比 +33.0pp、チェーン中間ステップ精度 91.0%）。外部 API の置き換えは未完了。[docs/jev_rlcd.md](docs/jev_rlcd.md) を参照。
+- [ ] **ローカル接続と改善**：`TOOL_ROUTER=local` の実装、複合チェーンの最初のステップの強化（現状の初手精度 53.1%）、信頼度ゲートと policy フォールバック付きの end-to-end 評価。
+- [ ] **その他の識別的用途**：`result_quality` ヘッドと報酬成分ルーターを探索。決定論的推論または診断専用とし、RLVR の再現性を維持。
 
 ### P3 — 制約付き自己進化（bounded RSI）
 

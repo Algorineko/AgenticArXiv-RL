@@ -9,8 +9,10 @@
 > The ultimate goal: **a lightweight multimodal paper assistant for on-device deployment** — an end-to-end paper-reading model spanning retrieval, download, translation, summarization, and figure understanding.
 
 <p align="center">
-  <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL project overview" width="800"/>
+  <img src="imgs/AgenticArXiv-RL-hero.png" alt="AgenticArXiv-RL project overview" width="800"/>
 </p>
+
+[Radar data and methodology](docs/edge-vlm-posttrain.md): Qwen3-VL-8B SFT / DPO / GRPO on 81 tasks; all axes higher is better; false-finish rate is shown as `1 − rate`.
 
 ---
 
@@ -342,8 +344,10 @@ MIT License
 
 ### P2 — Jev-Style Discriminative Decision Component
 
-- [ ] **Jev-style discriminative head**: non-autoregressive structured decisions (choice/score, at ~1/400 the cost of an LLM); candidate landing spots: ① a `result_quality` discriminative head replacing the rules ② a reward-component router (replacing the fixed curriculum schedule) ③ structured decoding for tool selection (a closed enumeration is naturally suited to a discriminative model). Constraint: deterministic inference, or diagnostics-only, to keep RLVR reproducible
-- [ ] **RLCD-trained Jev**: contrastive signal from successful vs failed tool-decision trajectories (verifiable rewards, no human labels) trains the discriminative head, replacing the external TypeSafe API. **Two-arm comparison validated** ([docs/jev_rlcd.md](docs/jev_rlcd.md)): the contrastive term beats the CE-only baseline on all four suites (992 frozen points, McNemar p<0.0001, Δ +33.0pp); mid-chain steps 91.0% with high in-gate accuracy; composite-chain first steps 53.1% are a known weakness (safe fallback under the 0.80 gate). To do: targeted first-step augmentation, `TOOL_ROUTER=local` wiring
+- [x] **Jev tool routing**: external TypeSafe next-tool routing is integrated (`TOOL_ROUTER=jev`), with guided argument parsing, confidence gating and fallback. Off by default, inference only; not integrated into GRPO. See [JEV_ROUTER.md](JEV_ROUTER.md).
+- [x] **RLCD local head training and comparison**: dataset construction, contrastive training and frozen evaluation are complete (+33.0pp over CE on 992 evaluation points; 91.0% mid-chain accuracy). This does not yet replace the external API; see [docs/jev_rlcd.md](docs/jev_rlcd.md).
+- [ ] **Local routing integration and improvement**: implement `TOOL_ROUTER=local`, augment composite-chain first steps (currently 53.1% first-step accuracy), and run end-to-end benchmarks with confidence gating and policy fallback.
+- [ ] **Other discriminative components**: explore a `result_quality` head and reward-component routing, with deterministic inference or diagnostics-only use to preserve RLVR reproducibility.
 
 ### P3 — Bounded RSI (restricted self-evolution)
 

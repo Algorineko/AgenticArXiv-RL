@@ -9,8 +9,10 @@
 > Objetivo final: **un asistente de papers multimodal y ligero, desplegado en el dispositivo** — un modelo de lectura de papers de extremo a extremo, desde la búsqueda, la descarga y la traducción hasta el resumen y el análisis de figuras.
 
 <p align="center">
-  <img src="imgs/AgenticArXiv-RL.jpg" alt="Introducción al proyecto AgenticArXiv-RL" width="800"/>
+  <img src="imgs/AgenticArXiv-RL-hero.png" alt="Introducción al proyecto AgenticArXiv-RL" width="800"/>
 </p>
+
+[Datos y metodología del radar](docs/edge-vlm-posttrain.md): Qwen3-VL-8B SFT / DPO / GRPO en 81 tareas; todos los ejes, mayor es mejor; tasa de falso cierre como `1 − rate`.
 
 ---
 
@@ -345,8 +347,10 @@ Licencia MIT
 
 ### P2 — Componente de Decisión Discriminativo estilo Jev
 
-- [ ] **Cabeza discriminativa estilo Jev**: decisión estructurada no autorregresiva (choice/score, ~1/400 del coste de un LLM), posibles puntos de integración: ① una cabeza discriminativa para `result_quality` en lugar de reglas ② un enrutador de componentes de recompensa (en lugar del currículo fijo) ③ decodificación estructurada de la selección de herramientas (los enums cerrados encajan de forma natural en lo discriminativo). Restricción: inferencia determinista o uso solo como señal de diagnóstico, para mantener la reproducibilidad de RLVR
-- [ ] **Jev entrenado con RLCD**: señal contrastiva de trayectorias de decisión exitosas vs fallidas (recompensa verificable, sin etiquetas humanas) entrena la cabeza discriminativa, sustituyendo la API externa de TypeSafe. **Comparación de dos brazos validada** ([docs/jev_rlcd.md](docs/jev_rlcd.md)): el término contrastivo supera a la base de solo CE en las cuatro suites (992 puntos congelados, McNemar p<0.0001, Δ +33.0pp); pasos intermedios de cadena 91.0% con alta precisión dentro de la puerta; primeros pasos de cadenas compuestas 53.1% como debilidad conocida (repliegue seguro bajo la puerta de 0.80). Pendiente: aumento dirigido de primeros pasos, conexión de `TOOL_ROUTER=local`
+- [x] **Enrutamiento Jev**: integrado el router externo de TypeSafe (`TOOL_ROUTER=jev`), con argumentos guided, umbral de confianza y repliegue. Desactivado por defecto, solo para inferencia; sin integración en GRPO. Véase [JEV_ROUTER.md](JEV_ROUTER.md).
+- [x] **Entrenamiento y comparación de la cabeza local RLCD**: completados los datos, el entrenamiento contrastivo y la evaluación congelada (+33.0pp frente a CE en 992 puntos; 91.0% en pasos intermedios). Aún no sustituye la API externa; véase [docs/jev_rlcd.md](docs/jev_rlcd.md).
+- [ ] **Integración y mejora local**: implementar `TOOL_ROUTER=local`, reforzar los primeros pasos de cadenas compuestas (precisión inicial actual: 53.1%) y evaluar de extremo a extremo con umbral de confianza y repliegue a la política.
+- [ ] **Otros componentes discriminativos**: explorar una cabeza `result_quality` y el enrutamiento de componentes de recompensa, con inferencia determinista o uso diagnóstico para mantener la reproducibilidad de RLVR.
 
 ### P3 — Autoevolución RSI Acotada (bounded RSI)
 

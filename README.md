@@ -9,8 +9,10 @@
 > 终极目标：**端侧部署的轻量多模态论文助手**——从检索、下载、翻译到总结、识图的端到端论文阅读模型。
 
 <p align="center">
-  <img src="imgs/AgenticArXiv-RL.jpg" alt="AgenticArXiv-RL 项目介绍" width="800"/>
+  <img src="imgs/AgenticArXiv-RL-hero.png" alt="AgenticArXiv-RL 项目介绍" width="800"/>
 </p>
+
+[雷达图数据与口径](docs/edge-vlm-posttrain.md)：Qwen3-VL-8B 的 SFT / DPO / GRPO，81 任务评测；五轴均越高越好，假结束率取 `1 − rate`。
 
 ---
 
@@ -336,8 +338,10 @@ MIT License
 
 ### P2 — Jev 判别式决策组件
 
-- [ ] **Jev 式判别头**：非自回归结构化决策（choice/score，成本 ~LLM 的 1/400），候选落点：① `result_quality` 判别头替代规则 ② 奖励分量路由器（替代固定课程表）③ 工具选择的结构化解码（封闭枚举天然适合判别式）。约束：确定性推理或只作诊断信号，保持 RLVR 可复现
-- [ ] **RLCD 自训 Jev**：正/负对比信号（成功 vs 失败的工具决策轨迹，可验证奖励免标注）+ 对比损失训练判别头，替代外部 TypeSafe API。**双臂对照已验证**（[docs/jev_rlcd.md](docs/jev_rlcd.md)）：对比项对纯 CE 基线四 suite 全胜（992 冻结点，McNemar p<0.0001，Δ +33.0pp）；链中步 91.0%、0.80 门控内高准确；首步复合链 53.1% 为已知短板（门控下安全回退）。待做：首步定向增强、`TOOL_ROUTER=local` 接线
+- [x] **Jev 工具路由接入**：已实现外部 TypeSafe Jev next-tool 判别路由（`TOOL_ROUTER=jev`），支持 guided 参数解析、置信度门控及故障回退；默认关闭，仅用于推理，不接入 GRPO。集成与小样本端到端验证见 [JEV_ROUTER.md](JEV_ROUTER.md)。
+- [x] **RLCD 本地判别头训练与对照**：数据构建、对比损失训练和冻结评测已完成；对比项相比纯 CE 在 992 个评测点提升 +33.0pp，链中步准确率 91.0%。该实验尚不等于已替代外部 API，见 [docs/jev_rlcd.md](docs/jev_rlcd.md)。
+- [ ] **本地路由接线与增强**：完成 `TOOL_ROUTER=local` backend、首步复合链定向增强（当前首步准确率 53.1%），并开展带置信度门控和 policy 回退的端到端 benchmark。
+- [ ] **其他判别式落点**：探索 `result_quality` 判别头与奖励分量路由器；保持确定性推理或仅用作诊断，确保 RLVR 可复现。
 
 ### P3 — RSI 受限自进化（bounded RSI）
 
