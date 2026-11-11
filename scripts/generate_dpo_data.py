@@ -214,6 +214,7 @@ def generate_dpo_dataset(
     seed: int = 42,
     min_reward_gap: float = 0.05,
     task_set: str = "basic",
+    vision_policy: bool = False,
 ) -> None:
     """从 SFT 模型 rollout 生成 DPO 数据集"""
     sft_model_path = Path(model) if model else REPO_ROOT / "outputs" / "sft" / "final"
@@ -242,7 +243,7 @@ def generate_dpo_dataset(
         side_effect_mgr=LocalSideEffectManager(),
         env=env,
         llm_extra={"temperature": temperature},
-        vision_policy=bool(args.vision_policy),
+        vision_policy=vision_policy,
     )
 
     reward_calc = RewardCalculator()

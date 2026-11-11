@@ -31,6 +31,7 @@ class ReActAgent(BaseAgent):
         llm_extra=None,
         tool_router=_ROUTER_FROM_ENV,
         router_argument_mode=None,
+        vision_policy: bool = False,
     ):
         if tool_router is _ROUTER_FROM_ENV:
             from routing.factory import build_tool_router_from_env
@@ -41,7 +42,8 @@ class ReActAgent(BaseAgent):
         super().__init__(llm_client, side_effect_mgr=side_effect_mgr, env=env,
                          max_iterations=max_iterations, llm_extra=llm_extra,
                          tool_router=tool_router,
-                         router_argument_mode=router_argument_mode)
+                         router_argument_mode=router_argument_mode,
+                         vision_policy=vision_policy)
         # 逐个模块独立导入：四个 import 曾共用一个 try，缺任何一个第三方依赖
         # 就会让四个工具**全部**注册不上，而 registry 为空时模型不会报错，
         # 它会编工具名。详见 tools/bootstrap.py。
