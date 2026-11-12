@@ -13,13 +13,20 @@
     cd AgenticArxiv && python tests/test_dpo_pairs.py
 """
 
+import contextlib
+import io
+import json
+import runpy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import generate_dpo_data as dpo  # noqa: E402
 from generate_dpo_data import (  # noqa: E402
     _canonical_action_str,
     build_preference_pair,
@@ -194,6 +201,81 @@ class BuildPreferencePairTest(unittest.TestCase):
 
     def test_none_when_fewer_than_two_rollouts(self):
         self.assertIsNone(pair([rollout(1.5, SEARCH, "FINISH")]))
+
+
+class GenerateDpoPipelineTest(unittest.TestCase):
+    """Exercise CLI/API with the real Agent, snapshot, reward and JSONL writer."""
+
+    def test_vision_policy_argument_chain(self):
+        for cli, is_vlm, enable_vision in [
+            (True, True, False), (True, True, True), (True, False, True),
+            (False, False, False), (False, True, True),
+        ]:
+            with self.subTest(cli=cli, is_vlm=is_vlm, enable_vision=enable_vision):
+                self._assert_pipeline(cli, is_vlm, enable_vision)
+
+    def _assert_pipeline(self, cli, is_vlm, enable_vision):
+        search_args = {"aspect": "AI", "days": 1, "max_results": 3}
+        action = json.dumps({"name": "get_recently_submitted_cs_papers", "args": search_args})
+        replies = iter([f"Thought: search\nAction: {action}",
+                        "Thought: done\nAction: FINISH", "Thought: stop\nAction: FINISH"])
+        calls = []
+
+        class ScriptedClient:
+            def chat_completions(self, **kwargs):
+                calls.append(kwargs)
+                return {"choices": [{"message": {"content": next(replies)}}], "usage": {}}
+
+        client = ScriptedClient()
+        client.is_vlm = is_vlm
+        task = {
+            "id": "dpo_entrypoint_smoke",
+            "task": "检索最近1天AI论文，最多3篇。参考图：[figure:fixture.png]",
+            "expected_tools": ["get_recently_submitted_cs_papers"],
+            "expected_tool_args": [search_args],
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            model_dir = Path(scratch) / "model"
+            model_dir.mkdir()
+            output = Path(scratch) / "dpo.jsonl"
+            options = {
+                "model": str(model_dir), "output": str(output), "num_rollouts_per_task": 2,
+                "snapshot": str(REPO_ROOT / "AgenticArxiv/tests/fixtures/jev_integration_snapshot.json"),
+            }
+            with (
+                patch.object(dpo, "TransformersLLMClient", return_value=client),
+                patch("utils.llm_client.TransformersLLMClient", return_value=client),
+                patch.object(dpo, "get_all_tasks", return_value=[task]),
+                patch("benchmark.tasks.get_all_tasks", return_value=[task]),
+                patch("socket.socket.connect", side_effect=AssertionError("Network forbidden")),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                if cli:
+                    argv = [str(REPO_ROOT / "scripts/generate_dpo_data.py")]
+                    for name, value in options.items():
+                        argv.extend([f"--{name}", str(value)])
+                    if enable_vision:
+                        argv.append("--vision-policy")
+                    with patch.object(sys, "argv", argv):
+                        runpy.run_path(argv[0], run_name="__main__")
+                else:
+                    if enable_vision:
+                        options["vision_policy"] = True
+                    dpo.generate_dpo_dataset(**options)
+
+            self.assertEqual(len(calls), 3)
+            content = calls[0]["messages"][0]["content"]
+            if is_vlm and enable_vision:
+                self.assertIn({"type": "image_path", "path": "fixture.png"}, content)
+            else:
+                self.assertIsInstance(content, str)
+                self.assertIn("[figure:fixture.png]", content)
+            rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["task_id"], task["id"])
+            self.assertGreater(rows[0]["reward_gap"], 0.05)
+            self.assertIn("get_recently_submitted_cs_papers", rows[0]["chosen"])
+            self.assertEqual(rows[0]["rejected"], "Thought: stop\nAction: FINISH")
 
 
 if __name__ == "__main__":
