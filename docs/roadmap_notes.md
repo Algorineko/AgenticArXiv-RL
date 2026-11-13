@@ -58,7 +58,7 @@
 | 3 select | 只在 **train 切分** 里挑弱族的父任务（最差族优先、族内按父任务自身 strict 率升序、确定性），且父任务必须已有参数化派生 | 参数化 seed manifest 的 `tasks` 血缘（derived → parent） |
 | 4 synthesize | 子进程调用 `scripts/generate_parametric_sft_data.py --only-parents id,id`（新增参数，未知 id 直接报错，manifest 记录 `only_parents`） | 既有派生 + 离线环境执行 + manifest |
 | 5 freeze | `artifacts/self_evolve/round_N/manifest.json`：每个输入/输出的 SHA256、git revision、选择结果；`lineage_sha256` 可审计 | 与 SFT manifest 同款哈希约定 |
-| 6 gate | 新旧四切分 strict pass³ 不回退：iid / ood 永远严格（容差 0），只有 dev（n=8，噪声大）可显式给 `--dev-tolerance`（如 0.125 = 一题）且记入 `gate_result.json`；坏例数只增不减；带 `--round-dir` 时逐项核验冻结文件及留出切分。任一不满足则本轮拒绝、不晋升 | `report.py` 的 pass^k 定义（组合数口径，试验数 < k 的任务跳过） |
+| 6 gate | 新旧四切分 strict pass³ 不回退：rl_train / iid_test / ood_test 永远严格（容差 0），只有 dev（n=8，噪声大）可显式给 `--dev-tolerance`（如 0.125 = 一题）且记入 `gate_result.json`；坏例数只增不减；带 `--round-dir` 时逐项核验冻结文件及留出切分。任一不满足则本轮拒绝、不晋升 | `report.py` 的 pass^k 组合数定义；晋升时不跳过不足 k 次的任务，而是拒绝该轮 |
 
 round manifest 冻结的文件包括：评测 summary、split、snapshot、参数化 seed manifest、诊断报告和父任务选择结果；提供 traces 时还记录原始 traces 与本轮坏例文件，执行定向派生时记录生成数据及其 manifest。各文件均记录路径、字节数和 SHA256，并参与 `lineage_sha256`；未执行的可选步骤不加入对应文件。
 
@@ -70,8 +70,21 @@ python -m AgenticArxiv.rl.self_evolve diagnose --eval dev=eval_results/<run>_dev
 # 一轮：诊断 → 挖坏例 → 选父任务 → 定向派生 → 冻结 →（可选）再训练
 python -m AgenticArxiv.rl.self_evolve run --round 1 --eval dev=... --eval iid_test=... --traces traces.jsonl   --split data/splits/v3_81.json --snapshot data/mock_arxiv_snapshot.json   --parametric-manifest data/sft/sft_v2_parametric_seed.jsonl.manifest.json   --train-cmd "python -m AgenticArxiv.rl.train_sft --data artifacts/self_evolve/round_1/... --skip_data_manifest_check"
 # 闸门：新策略评测完成后
-python -m AgenticArxiv.rl.self_evolve gate --round-dir artifacts/self_evolve/round_1   --prev dev=... --prev iid_test=... --prev ood_test=... --new dev=... --new iid_test=... --new ood_test=...   --cases-before 14 --cases-after 17 --split data/splits/v3_81.json
+python -m AgenticArxiv.rl.self_evolve gate --round-dir artifacts/self_evolve/round_1 \
+  --prev rl_train=... --prev dev=... --prev iid_test=... --prev ood_test=... \
+  --new rl_train=... --new dev=... --new iid_test=... --new ood_test=... \
+  --cases-before 14 --cases-after 17 --split data/splits/v3_81.json
 ```
+
+晋升必须提供新旧两轮各四份单策略评测 summary。默认 `k=3`，每个切分的任务集合
+必须在新旧评测中一致且非空，每个任务至少评测三次。`rl_train` 指固定的 RL 训练
+任务切分，不是训练日志中的平均 reward，也不是完整的 `train` 集。训练任务上的
+strict pass³ 回退同样拒绝晋升，不能用 `--dev-tolerance` 豁免。
+
+兼容性变化：旧命令若只传 dev / iid_test / ood_test，现在返回非零状态，并记录
+`pass^3:rl_train` 缺少评测。需要为新旧模型补充同一固定 rl_train 切分的评测；不要
+把 dev 的报告复制成 rl_train。`gate_result.json` 会记录四个切分各自的分数和容差。
+这补齐了 P3 的默认晋升检查，不代表真实一轮再训练实验已完成。
 
 刻意不做：LLM-as-judge、新奖励分量、新工具/模板、自动 `open→fixed`、训练循环改动。真实一轮（Qwen2.5-1.5B-SFT 起步 + 四切分对照）待跑，结果无论闸门通过与否都如实记录。
 

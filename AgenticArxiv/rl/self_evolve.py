@@ -23,7 +23,9 @@ Usage (from the repository root)::
     python -m AgenticArxiv.rl.self_evolve run --round 1 --eval ... --split data/splits/v3_81.json \
         --snapshot data/mock_arxiv_snapshot.json --parametric-manifest data/sft/sft_v2_parametric_seed.jsonl.manifest.json
     python -m AgenticArxiv.rl.self_evolve gate --round-dir artifacts/self_evolve/round_1 \
-        --prev dev=... --new dev=... --cases-before 14 --cases-after 17
+        --prev rl_train=... --prev dev=... --prev iid_test=... --prev ood_test=... \
+        --new rl_train=... --new dev=... --new iid_test=... --new ood_test=... \
+        --cases-before 14 --cases-after 17
 """
 
 from __future__ import annotations
@@ -46,7 +48,8 @@ if PACKAGE_ROOT not in sys.path:
 
 from benchmark.splits import template_key  # noqa: E402
 
-GATE_SPLITS: Tuple[str, ...] = ("dev", "iid_test", "ood_test")
+# Promotion protects training-task capability as well as held-out performance.
+GATE_SPLITS: Tuple[str, ...] = ("rl_train", "dev", "iid_test", "ood_test")
 PASS_K = 3
 
 FAILURE_MODES: Tuple[str, ...] = (
@@ -753,8 +756,8 @@ def gate(
 ) -> GateResult:
     """Accept a round only if nothing the loop promised to protect got worse.
 
-    1. strict pass^k on every held-out split must not regress. ``iid_test`` and
-       ``ood_test`` are always strict; only ``dev`` (n=8, noisy) may be given an
+    1. strict pass^k on all four release splits must not regress. ``rl_train``,
+       ``iid_test`` and ``ood_test`` are always strict; only ``dev`` may be given an
        opt-in ``dev_tolerance`` (e.g. 0.125 = one task), which is recorded in the
        result so a relaxed gate is never silent;
     2. the badcase library may only grow;
@@ -953,7 +956,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.train_cmd:
         print("retrain:", args.train_cmd)
         subprocess.run(args.train_cmd, shell=True, cwd=str(repo_root), check=True)
-    print("next: evaluate the new policy on the held-out splits, then run "
+    print("next: evaluate the new policy on rl_train, dev, iid_test and ood_test, then run "
           f"`self_evolve gate --round-dir {round_dir} --prev ... --new ... --cases-before N --cases-after M`")
     return 0
 
@@ -999,9 +1002,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--base-dir", default=None, help="root for relative manifest paths (default: repository root)")
     p.set_defaults(func=cmd_verify)
 
-    p = sub.add_parser("gate", help="accept/reject a round against the previous one")
-    p.add_argument("--prev", action="append", required=True, metavar="SPLIT=summary.json")
-    p.add_argument("--new", action="append", required=True, metavar="SPLIT=summary.json")
+    p = sub.add_parser("gate", help="accept/reject a round using all four release splits")
+    for flag in ("--prev", "--new"):
+        p.add_argument(flag, action="append", required=True, metavar="SPLIT=summary.json",
+                       help="repeat for every required split: " + ", ".join(GATE_SPLITS))
     p.add_argument("--cases-before", type=int, required=True)
     p.add_argument("--cases-after", type=int, required=True)
     p.add_argument("--round-dir", default=None, help="round dir with manifest.json (verifies all frozen files)")
@@ -1009,7 +1013,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--split", default=None, help="current split file to compare with the frozen one")
     p.add_argument("--dev-tolerance", type=float, default=0.0,
                    help="opt-in pass^k slack for the noisy dev split only (e.g. 0.125 = one task); "
-                        "iid_test / ood_test are always strict; recorded in gate_result.json")
+                        "rl_train / iid_test / ood_test are always strict; recorded in gate_result.json")
     add_common(p)
     p.set_defaults(func=cmd_gate)
 
