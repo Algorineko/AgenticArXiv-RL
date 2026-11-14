@@ -376,7 +376,8 @@ class FreezeAndGateTest(unittest.TestCase):
     def _eval(self, dev_ok, iid_ok, ood_ok):
         def split(ok):
             return summary(*[trial("t1", ok=ok) for _ in range(3)], *[trial("t2") for _ in range(3)])
-        return {"dev": split(dev_ok), "iid_test": split(iid_ok), "ood_test": split(ood_ok)}
+        return {"rl_train": split(True), "dev": split(dev_ok),
+                "iid_test": split(iid_ok), "ood_test": split(ood_ok)}
 
     def test_gate_rejects_any_regression_and_accepts_equal_or_better(self):
         prev = self._eval(True, True, True)
@@ -433,6 +434,86 @@ class FreezeAndGateTest(unittest.TestCase):
                       cases_before=0, cases_after=0)
         self.assertTrue(res.summary().startswith("GATE PASSED"))
         self.assertEqual(res.to_dict()["kind"], "self_evolve_gate_result")
+
+
+class FourSplitPromotionTest(unittest.TestCase):
+    # Deliberately independent of GATE_SPLITS: dropping a split must fail tests.
+    required = ("rl_train", "dev", "iid_test", "ood_test")
+
+    def _evaluations(self):
+        return {name: summary(*[trial("t1", trial=i) for i in range(3)])
+                for name in self.required}
+
+    def test_all_four_splits_are_checked_and_equal_scores_pass(self):
+        evaluations = self._evaluations()
+        result = se.gate(evaluations, evaluations, cases_before=1, cases_after=1)
+        self.assertTrue(result.passed)
+        self.assertEqual([c.name for c in result.checks if c.name.startswith("pass^")],
+                         [f"pass^3:{name}" for name in self.required])
+
+    def test_missing_split_on_either_side_rejects_promotion(self):
+        complete = self._evaluations()
+        for name in self.required:
+            incomplete = {key: value for key, value in complete.items() if key != name}
+            for side in ("previous", "new"):
+                with self.subTest(split=name, side=side):
+                    prev, new = ((incomplete, complete) if side == "previous"
+                                 else (complete, incomplete))
+                    result = se.gate(prev, new, cases_before=1, cases_after=1)
+                    self.assertFalse(result.passed)
+                    failed = [c for c in result.checks if not c.passed]
+                    self.assertEqual([c.name for c in failed], [f"pass^3:{name}"])
+                    self.assertEqual(failed[0].detail["error"], "missing summary for split")
+
+    def test_training_regression_is_not_excused_by_dev_tolerance(self):
+        previous = self._evaluations()
+        changed = {**previous, "rl_train": summary(*[
+            trial("t1", ok=False, trial=i) for i in range(3)
+        ])}
+        result = se.gate(previous, changed, cases_before=1, cases_after=2,
+                         dev_tolerance=1.0)
+        self.assertFalse(result.passed)
+        failed = [c for c in result.checks if not c.passed]
+        self.assertEqual([c.name for c in failed], ["pass^3:rl_train"])
+        self.assertEqual(failed[0].detail, {"previous": 1.0, "new": 0.0, "tolerance": 0.0})
+        self.assertTrue(se.gate(changed, previous, cases_before=1, cases_after=2).passed)
+
+    def test_training_split_requires_full_task_and_trial_coverage(self):
+        complete = self._evaluations()
+        invalid = [summary(), summary(trial("t1")),
+                   summary(*[trial("replacement", trial=i) for i in range(3)])]
+        for evaluation in invalid:
+            for side in ("previous", "new"):
+                with self.subTest(evaluation=evaluation, side=side):
+                    changed = {**complete, "rl_train": evaluation}
+                    prev, new = ((changed, complete) if side == "previous"
+                                 else (complete, changed))
+                    result = se.gate(prev, new, cases_before=1, cases_after=1)
+                    self.assertFalse(result.passed)
+                    self.assertEqual([c.name for c in result.checks if not c.passed],
+                                     ["pass^3:rl_train"])
+
+    def test_cli_records_training_regression_and_returns_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            good, bad, split = root / "good.json", root / "bad.json", root / "split.json"
+            se.dump_json(good, self._evaluations()["rl_train"])
+            se.dump_json(bad, summary(*[trial("t1", ok=False, trial=i) for i in range(3)]))
+            se.dump_json(split, {"split": {}})
+            round_dir = root / "round"
+            se.freeze_round(round_dir, {"split": split}, round_id=1)
+            args = ["gate", "--round-dir", str(round_dir), "--split", str(split),
+                    "--cases-before", "1", "--cases-after", "1", "--dev-tolerance", "1"]
+            for name in self.required:
+                args.extend(["--prev", f"{name}={good}",
+                             "--new", f"{name}={bad if name == 'rl_train' else good}"])
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(se.main(args), 1)
+            self.assertIn("GATE REJECTED", output.getvalue())
+            result = se.load_json(round_dir / se.GATE_FILE_NAME)
+            self.assertFalse(result["passed"])
+            self.assertEqual([c["name"] for c in result["checks"] if not c["passed"]],
+                             ["pass^3:rl_train"])
 
 
 class CliTest(unittest.TestCase):
