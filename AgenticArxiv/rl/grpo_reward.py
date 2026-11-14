@@ -363,6 +363,7 @@ def make_grpo_reward_fn(
     reward_calc: Optional[RewardCalculator] = None,
     tracker: Any = None,
     auditor: Any = None,
+    step_credit: Any = None,
 ) -> Callable[..., List[float]]:
     """构造 TRL GRPOTrainer 用的 reward function。
 
@@ -436,6 +437,10 @@ def make_grpo_reward_fn(
                 rewards=rewards,
                 training_step=step,
             )
+        if step_credit is not None:
+            # 跨步信用分配：在奖励已算定之后做前缀树分解，结果由训练器子类取走。
+            # 不改变返回的标量奖励，因此 TRL 的轨迹级优势、日志与审计都保持原样。
+            step_credit.record_batch(ids, resolved_trajectories, rewards)
         return rewards
 
     grpo_reward_fn.__name__ = "grpo_reward_fn"
@@ -526,6 +531,9 @@ def make_multiturn_rollout_func(
         trajectory_results = []
         completion_ids = [[] for _ in expanded_prompts]
         env_masks = [[] for _ in expanded_prompts]
+        # 每一轮模型生成的 token 在 completion 中的 [start, end)，与 history 一一对应，
+        # 供跨步信用分配（rl/step_credit.py）把步优势铺回 token。
+        turn_spans = [[] for _ in expanded_prompts]
         histories = [[] for _ in expanded_prompts]
         raw_assistant_turns = [[] for _ in expanded_prompts]
         active = list(range(len(expanded_prompts)))
@@ -564,6 +572,7 @@ def make_multiturn_rollout_func(
                 # the budget itself may split the stop marker across tokens.
                 stop = raw_text.find("Observation:")
                 generated = generated[:budget]
+                span_start = len(completion_ids[index])
                 text = tokenizer.decode(generated, skip_special_tokens=True)
                 if stop >= 0:
                     assistant_text = raw_text[:stop]
@@ -580,6 +589,7 @@ def make_multiturn_rollout_func(
                         env_masks[index].append(1)
                 completion_ids[index].extend(generated)
                 env_masks[index].extend([1] * len(generated))
+                turn_spans[index].append((span_start, len(completion_ids[index])))
 
                 kind, action = parse_react_action(text)
                 thought = _thought_of(text)
@@ -640,6 +650,7 @@ def make_multiturn_rollout_func(
                 },
                 "iteration_count": len(history),
                 "raw_assistant_turns": raw_assistant_turns[index],
+                "turn_token_spans": turn_spans[index],
                 "task_id": rollout_task_ids[index],
                 "setup_actions": applied_setups[index],
                 "clipped": clipped,
